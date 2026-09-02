@@ -20,23 +20,26 @@ const (
 )
 
 type unit struct {
-	id      uint64
-	kind    string
-	role    string
-	slot    int
-	owner   uint64
-	p, v    vec
-	radius  float64
-	hp      float64
-	maxHP   float64
-	actor   unitpkg.Actor
-	inbox   chan unitpkg.Event
-	stop    chan struct{}
-	stopped bool
-	solid   bool
-	vision  float64
-	cruise  float64
-	decelT  float64
+	id        uint64
+	kind      string
+	role      string
+	slot      int
+	owner     uint64
+	p, v      vec
+	radius    float64
+	hp        float64
+	maxHP     float64
+	actor     unitpkg.Actor
+	inbox     chan unitpkg.Event
+	stop      chan struct{}
+	stopped   bool
+	solid     bool
+	vision    float64
+	cruise    float64
+	decelT    float64
+	semi      bool
+	face      vec
+	passWalls bool
 }
 
 type spawnSpot struct {
@@ -161,19 +164,23 @@ func (m *Match) SnapshotJSON() []byte {
 
 func (u *unit) snap() unitpkg.Snapshot {
 	return unitpkg.Snapshot{
-		ID:      u.id,
-		Kind:    u.kind,
-		Role:    u.role,
-		X:       u.p.X,
-		Y:       u.p.Y,
-		VX:      u.v.X,
-		VY:      u.v.Y,
-		Radius:  u.radius,
-		HP:      u.hp,
-		MaxHP:   u.maxHP,
-		Vision:  u.vision,
-		OwnerID: u.owner,
-		Slot:    u.slot,
+		ID:        u.id,
+		Kind:      u.kind,
+		Role:      u.role,
+		X:         u.p.X,
+		Y:         u.p.Y,
+		VX:        u.v.X,
+		VY:        u.v.Y,
+		Radius:    u.radius,
+		HP:        u.hp,
+		MaxHP:     u.maxHP,
+		Vision:    u.vision,
+		OwnerID:   u.owner,
+		Slot:      u.slot,
+		Semi:      u.semi,
+		FaceX:     u.face.X,
+		FaceY:     u.face.Y,
+		PassWalls: u.passWalls,
 	}
 }
 
@@ -371,28 +378,49 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 	m.nextID++
 	id := m.nextID
 	u := &unit{
-		id:     id,
-		kind:   kind,
-		role:   spec.Role,
-		slot:   slot,
-		owner:  owner,
-		p:      p,
-		v:      v,
-		radius: spec.Radius,
-		hp:     spec.MaxHP,
-		maxHP:  spec.MaxHP,
-		vision: spec.Vision,
-		cruise: spec.Speed,
-		actor:  actor,
-		inbox:  make(chan unitpkg.Event, 64),
-		stop:   make(chan struct{}),
-		solid:  true,
+		id:        id,
+		kind:      kind,
+		role:      spec.Role,
+		slot:      slot,
+		owner:     owner,
+		p:         p,
+		v:         v,
+		radius:    spec.Radius,
+		hp:        spec.MaxHP,
+		maxHP:     spec.MaxHP,
+		vision:    spec.Vision,
+		cruise:    spec.Speed,
+		actor:     actor,
+		inbox:     make(chan unitpkg.Event, 64),
+		stop:      make(chan struct{}),
+		solid:     true,
+		semi:      spec.Semi,
+		face:      vec{1, 0},
+		passWalls: spec.PassWalls,
 	}
+	u.aimFace()
 	m.units[id] = u
 	m.order = append(m.order, id)
 	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds}
 	go runActor(u, ctx)
 	return u
+}
+
+func (u *unit) aimFace() {
+	if !u.semi {
+		return
+	}
+	if u.v.len2() > 1e-8 {
+		u.face = u.v.norm()
+	}
+	if u.face.len2() < 1e-12 {
+		u.face = vec{1, 0}
+	}
+}
+
+func (u *unit) setVel(v vec) {
+	u.v = v
+	u.aimFace()
 }
 
 func runActor(u *unit, ctx unitpkg.Context) {
@@ -427,7 +455,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if u == nil || u.stopped {
 			return
 		}
-		u.v = vec{c.VX, c.VY}
+		u.setVel(vec{c.VX, c.VY})
 	case unitpkg.Damage:
 		u := m.units[c.To]
 		if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
@@ -468,6 +496,12 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		m.placeWallLocked(c)
 	case unitpkg.FX:
 		m.fx = append(m.fx, c)
+	case unitpkg.Force:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || !u.solid {
+			return
+		}
+		u.setVel(u.v.add(vec{c.AX, c.AY}.mul(DT)))
 	}
 }
 
@@ -636,25 +670,28 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 		if u == nil || !u.solid {
 			continue
 		}
-		if h, ok := sweptPointVsHex(u.p, u.v, u.radius, dt, m.hex); ok {
-			if h.t < best.t {
-				h.a = u.id
-				best = h
-				found = true
+		if !u.passWalls {
+			if h, ok := sweptShapeVsHex(u.p, u.v, u.face, u.radius, dt, m.hex, u.semi); ok {
+				if h.t < best.t {
+					h.a = u.id
+					best = h
+					found = true
+				}
 			}
-		}
-		for _, w := range m.walls {
-			if ignoreUW[uwID{u.id, w.id}] {
-				continue
-			}
-			R := u.radius + w.radius + skin
-			t, nrm, ok := sweptPointVsCapsule(u.p, u.v, dt, w.a, w.b, R)
-			if !ok {
-				continue
-			}
-			if t < best.t {
-				best = ccdHit{kind: hitBarrier, t: t, a: u.id, w: w.id, n: nrm}
-				found = true
+			cc, cr := colOf(u.p, u.face, u.radius, u.semi)
+			for _, w := range m.walls {
+				if ignoreUW[uwID{u.id, w.id}] {
+					continue
+				}
+				R := cr + w.radius + skin
+				t, nrm, ok := sweptPointVsCapsule(cc, u.v, dt, w.a, w.b, R)
+				if !ok {
+					continue
+				}
+				if t < best.t {
+					best = ccdHit{kind: hitBarrier, t: t, a: u.id, w: w.id, n: nrm}
+					found = true
+				}
 			}
 		}
 	}
@@ -672,13 +709,17 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 			if ignore[canonPair(a.id, b.id)] {
 				continue
 			}
-			if a.role == unitpkg.RoleProjectile && a.owner != 0 && a.owner == b.id {
+			if a.role == unitpkg.RoleProjectile && (a.slot == b.slot || (a.owner != 0 && a.owner == b.id)) {
 				continue
 			}
-			if b.role == unitpkg.RoleProjectile && b.owner != 0 && b.owner == a.id {
+			if b.role == unitpkg.RoleProjectile && (b.slot == a.slot || (b.owner != 0 && b.owner == a.id)) {
 				continue
 			}
-			t, nrm, ok := sweptCircles(a.p, a.v, a.radius, b.p, b.v, b.radius, dt)
+			t, nrm, ok := sweptPairShapes(
+				a.p, a.v, a.radius, a.face, a.semi,
+				b.p, b.v, b.radius, b.face, b.semi,
+				dt,
+			)
 			if !ok {
 				continue
 			}
@@ -699,31 +740,36 @@ func (m *Match) resolveLocked(h ccdHit) {
 			return
 		}
 		limit := m.hex.d[0] - u.radius - skin
+		if u.semi {
+			limit = m.hex.d[0] - semiExtent(u.face, u.radius, h.n) - skin
+		}
 		pen := u.p.dot(h.n) - limit
 		if pen > 0 {
 			u.p = u.p.sub(h.n.mul(pen))
 		}
 		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
-		u.v = reflectVelocity(u.v, h.n)
+		u.setVel(reflectVelocity(u.v, h.n))
 	case hitBarrier:
 		u := m.units[h.a]
 		w := m.wallByID(h.w)
 		if u == nil || w == nil {
 			return
 		}
-		R := u.radius + w.radius + skin
-		q := closestOnSeg(u.p, w.a, w.b)
-		d := u.p.sub(q)
+		cc, cr := colOf(u.p, u.face, u.radius, u.semi)
+		R := cr + w.radius + skin
+		q := closestOnSeg(cc, w.a, w.b)
+		d := cc.sub(q)
 		dist := d.len()
 		if dist < 1e-9 {
 			d = perp(w.b.sub(w.a))
 			dist = d.len()
 		}
 		if dist > 1e-9 && dist < R {
-			u.p = q.add(d.norm().mul(R))
+			corr := q.add(d.norm().mul(R)).sub(cc)
+			u.p = u.p.add(corr)
 		}
 		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
-		u.v = reflectVelocity(u.v, h.n)
+		u.setVel(reflectVelocity(u.v, h.n))
 		if u.role == unitpkg.RoleFighter && u.slot != w.slot && u.id != w.owner {
 			if at, ok := w.hitAt[u.id]; !ok || m.time >= at {
 				w.hitAt[u.id] = m.time + 0.1
@@ -736,19 +782,24 @@ func (m *Match) resolveLocked(h ccdHit) {
 		if a == nil || b == nil {
 			return
 		}
-		delta := a.p.sub(b.p)
-		dist := delta.len()
 		n := h.n
-		if dist > 1e-9 {
-			n = delta.norm()
+		if n.len2() < 1e-12 {
+			n = vec{1, 0}
+		} else {
+			n = n.norm()
 		}
-		target := a.radius + b.radius + skin
-		if dist < 1e-9 {
-			dist = 0
+		ca, ra := colOf(a.p, a.face, a.radius, a.semi)
+		cb, rb := colOf(b.p, b.face, b.radius, b.semi)
+		delta := ca.sub(cb)
+		dist := delta.len()
+		target := ra + rb + skin
+		pierce := a.passWalls || b.passWalls
+		if !pierce && dist > 1e-9 && dist < target {
+			pn := delta.norm()
+			push := (target - dist) / 2
+			a.p = a.p.add(pn.mul(push))
+			b.p = b.p.sub(pn.mul(push))
 		}
-		push := (target - dist) / 2
-		a.p = a.p.add(n.mul(push))
-		b.p = b.p.sub(n.mul(push))
 		m.send(a, unitpkg.Collision{Time: m.time, Other: b.snap(), NX: n.X, NY: n.Y})
 		m.send(b, unitpkg.Collision{Time: m.time, Other: a.snap(), NX: -n.X, NY: -n.Y})
 		mid := a.p.add(b.p).mul(0.5)
@@ -762,22 +813,29 @@ func (m *Match) resolveLocked(h ccdHit) {
 			slot = b.slot
 			kind = b.kind
 		}
-		m.fx = append(m.fx, unitpkg.FX{Name: name, Kind: kind, X: mid.X, Y: mid.Y, Slot: slot})
+		if !pierce {
+			m.fx = append(m.fx, unitpkg.FX{Name: name, Kind: kind, X: mid.X, Y: mid.Y, Slot: slot})
+		}
 		projA := a.role == unitpkg.RoleProjectile
 		projB := b.role == unitpkg.RoleProjectile
 		if projA || projB {
-			if projA {
+			if projA && !a.passWalls {
 				a.v = vec{0, 0}
 				a.solid = false
 			}
-			if projB {
+			if projB && !b.passWalls {
 				b.v = vec{0, 0}
 				b.solid = false
 			}
+			if a.passWalls && !projB {
+				b.setVel(n.mul(-b.v.len()))
+			} else if b.passWalls && !projA {
+				a.setVel(n.mul(a.v.len()))
+			}
 		} else {
 			sa, sb := a.v.len(), b.v.len()
-			a.v = n.mul(sa)
-			b.v = n.mul(-sb)
+			a.setVel(n.mul(sa))
+			b.setVel(n.mul(-sb))
 		}
 	}
 }
@@ -788,18 +846,26 @@ func (m *Match) constrainAllLocked() {
 		if u == nil || !u.solid {
 			continue
 		}
-		limit := m.hex.d[0] - u.radius - skin
+		if u.passWalls {
+			continue
+		}
 		for i := 0; i < 6; i++ {
 			n := m.hex.n[i]
+			ext := u.radius
+			if u.semi {
+				ext = semiExtent(u.face, u.radius, n)
+			}
+			limit := m.hex.d[0] - ext - skin
 			pen := u.p.dot(n) - limit
 			if pen > 0 {
 				u.p = u.p.sub(n.mul(pen))
 			}
 		}
+		cc, cr := colOf(u.p, u.face, u.radius, u.semi)
 		for _, w := range m.walls {
-			R := u.radius + w.radius + skin
-			q := closestOnSeg(u.p, w.a, w.b)
-			d := u.p.sub(q)
+			R := cr + w.radius + skin
+			q := closestOnSeg(cc, w.a, w.b)
+			d := cc.sub(q)
 			dist := d.len()
 			if dist >= R {
 				continue
@@ -811,7 +877,9 @@ func (m *Match) constrainAllLocked() {
 			if n.len2() < 1e-12 {
 				continue
 			}
-			u.p = q.add(n.norm().mul(R))
+			corr := q.add(n.norm().mul(R)).sub(cc)
+			u.p = u.p.add(corr)
+			cc, cr = colOf(u.p, u.face, u.radius, u.semi)
 		}
 	}
 }

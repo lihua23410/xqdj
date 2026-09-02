@@ -8,6 +8,9 @@
   --kind-ranged: #f0a050;
   --kind-doppel: #7a9bb8;
   --kind-waller: #c4a36a;
+  --kind-twin: #e24b4b;
+  --kind-twin-half: #4b7be2;
+  --kind-violet: #b44cff;
   --hex: #1c2330;
 }
 
@@ -103,15 +106,24 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   margin-left: auto;
 }
 
+#arena.panel {
+  overflow: hidden;
+}
 .stage-wrap {
   display: flex;
   justify-content: center;
-  overflow: auto;
+  overflow: visible;
+}
+.stage {
+  position: relative;
+  width: 560px;
+  height: 484.97px;
 }
 .hex {
   position: relative;
   width: 560px;
   height: 484.97px;
+  overflow: hidden;
   background:
     radial-gradient(circle at 50% 50%, #243044 0%, var(--hex) 72%);
   clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
@@ -120,8 +132,15 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .hex.hitstop {
   filter: brightness(1.18) contrast(1.12) saturate(1.15);
 }
-#fx, #units, #walls, #guides { position: absolute; inset: 0; }
-#fx, #walls, #guides { pointer-events: none; overflow: hidden; }
+#fx, #units, #walls, #guides { position: absolute; inset: 0; overflow: hidden; }
+#fx, #walls, #guides { pointer-events: none; }
+.over {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 2;
+}
 
 .ball {
   position: absolute;
@@ -135,9 +154,16 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   opacity: 0.42;
   box-shadow: 0 0 8px currentColor;
 }
+.ball.semi {
+  clip-path: inset(0 0 0 50%);
+  box-shadow: 0 0 16px currentColor, 0 0 32px currentColor;
+}
+.ball.semi .hp-float {
+  transform: translateX(-50%) rotate(calc(-1 * var(--face-ang, 0rad)));
+}
 .ball.projectile {
-  opacity: 0.9;
-  box-shadow: 0 0 8px currentColor;
+  opacity: 0.95;
+  box-shadow: 0 0 18px currentColor, 0 0 36px currentColor;
 }
 .guide {
   position: absolute;
@@ -227,8 +253,23 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   background: var(--kind);
   animation: ghost-fade 0.22s linear forwards;
 }
+.ghost.semi {
+  clip-path: inset(0 0 0 50%);
+  animation: ghost-fade-semi 0.28s linear forwards;
+}
+.ghost.trail {
+  opacity: 0.55;
+  box-shadow: 0 0 16px currentColor;
+  animation: ghost-fade 0.32s linear forwards;
+}
 @keyframes ghost-fade {
   to { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+}
+@keyframes ghost-fade-semi {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(var(--face-ang, 0rad)) scale(0.7);
+  }
 }
 
 .fx {
@@ -332,6 +373,31 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   text-shadow: 0 1px 2px #000, 0 0 6px #000;
   pointer-events: none;
   white-space: nowrap;
+}
+.field-ring {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 2px dashed currentColor;
+  color: var(--kind);
+  background: color-mix(in srgb, var(--kind) 8%, transparent);
+  pointer-events: none;
+  box-sizing: border-box;
+  opacity: 0.55;
+}
+.field-ring.pull {
+  animation: field-pull 1.1s ease-in infinite;
+}
+.field-ring.push {
+  animation: field-push 1.1s ease-out infinite;
+}
+@keyframes field-pull {
+  from { transform: translate(-50%, -50%) scale(1.15); opacity: 0.15; }
+  to { transform: translate(-50%, -50%) scale(0.55); opacity: 0.7; }
+}
+@keyframes field-push {
+  from { transform: translate(-50%, -50%) scale(0.55); opacity: 0.7; }
+  to { transform: translate(-50%, -50%) scale(1.2); opacity: 0.12; }
 }
 .seek-ring {
   position: absolute;

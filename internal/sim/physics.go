@@ -211,6 +211,165 @@ func sweptPointVsHex(p, vel vec, radius, dt float64, hex hexagon) (ccdHit, bool)
 	return ccdHit{kind: hitWall, t: bestT, n: bestN}, true
 }
 
+func semiExtent(face vec, radius float64, n vec) float64 {
+	if face.len2() < 1e-12 {
+		return radius
+	}
+	f := face.norm()
+	if n.dot(f) >= -1e-9 {
+		return radius
+	}
+	return radius * math.Abs(perp(f).dot(n))
+}
+
+func colOf(p, face vec, r float64, semi bool) (vec, float64) {
+	if !semi {
+		return p, r
+	}
+	f := face
+	if f.len2() < 1e-12 {
+		f = vec{1, 0}
+	} else {
+		f = f.norm()
+	}
+	return p.add(f.mul(r * 0.5)), r * 0.5
+}
+
+func diameterOf(p, face vec, r float64) (vec, vec) {
+	f := face
+	if f.len2() < 1e-12 {
+		f = vec{1, 0}
+	} else {
+		f = f.norm()
+	}
+	q := perp(f).mul(r)
+	return p.add(q), p.sub(q)
+}
+
+func (h hexagon) containsSemi(p, face vec, radius float64) bool {
+	for i := 0; i < 6; i++ {
+		ext := semiExtent(face, radius, h.n[i])
+		if h.n[i].dot(p) > h.d[0]-ext+1e-6 {
+			return false
+		}
+	}
+	return true
+}
+
+func sweptShapeVsHex(p, vel, face vec, radius, dt float64, hex hexagon, semi bool) (ccdHit, bool) {
+	bestT := dt + 1
+	var bestN vec
+	hit := false
+	for i := 0; i < 6; i++ {
+		n := hex.n[i]
+		ext := radius
+		if semi {
+			ext = semiExtent(face, radius, n)
+		}
+		limit := hex.d[0] - ext
+		vn := n.dot(vel)
+		if vn <= 1e-9 {
+			continue
+		}
+		dist := limit - n.dot(p)
+		t := dist / vn
+		if t < -1e-9 || t > dt {
+			continue
+		}
+		if t < 0 {
+			t = 0
+		}
+		at := p.add(vel.mul(t))
+		ok := true
+		for j := 0; j < 6; j++ {
+			if j == i {
+				continue
+			}
+			extj := radius
+			if semi {
+				extj = semiExtent(face, radius, hex.n[j])
+			}
+			if hex.n[j].dot(at) > hex.d[0]-extj+1e-4 {
+				ok = false
+				break
+			}
+		}
+		if !ok {
+			continue
+		}
+		if t < bestT {
+			bestT = t
+			bestN = n
+			hit = true
+		}
+	}
+	if !hit {
+		return ccdHit{}, false
+	}
+	return ccdHit{kind: hitWall, t: bestT, n: bestN}, true
+}
+
+func sweptPairShapes(
+	pa, va vec, ra float64, fa vec, semiA bool,
+	pb, vb vec, rb float64, fb vec, semiB bool,
+	dt float64,
+) (float64, vec, bool) {
+	ca, cra := colOf(pa, fa, ra, semiA)
+	cb, crb := colOf(pb, fb, rb, semiB)
+	bestT := dt + 1
+	var bestN vec
+	found := false
+	consider := func(t float64, n vec) {
+		if t < -1e-9 || t > dt {
+			return
+		}
+		if t < 0 {
+			t = 0
+		}
+		if n.len2() < 1e-12 {
+			return
+		}
+		if t < bestT {
+			bestT = t
+			bestN = n.norm()
+			found = true
+		}
+	}
+	if t, n, ok := sweptCircles(ca, va, cra, cb, vb, crb, dt); ok {
+		consider(t, n)
+	}
+	if semiA {
+		d1, d2 := diameterOf(pa, fa, ra)
+		if t, n, ok := sweptPointVsCapsule(cb, vb.sub(va), dt, d1, d2, crb+skin); ok {
+			at := cb.add(vb.sub(va).mul(t))
+			f := fa
+			if f.len2() < 1e-12 {
+				f = vec{1, 0}
+			}
+			if at.sub(pa).dot(f) <= 1e-4 {
+				consider(t, n)
+			}
+		}
+	}
+	if semiB {
+		d1, d2 := diameterOf(pb, fb, rb)
+		if t, n, ok := sweptPointVsCapsule(ca, va.sub(vb), dt, d1, d2, cra+skin); ok {
+			at := ca.add(va.sub(vb).mul(t))
+			f := fb
+			if f.len2() < 1e-12 {
+				f = vec{1, 0}
+			}
+			if at.sub(pb).dot(f) <= 1e-4 {
+				consider(t, n.mul(-1))
+			}
+		}
+	}
+	if !found {
+		return 0, vec{}, false
+	}
+	return bestT, bestN, true
+}
+
 func sweptCircles(pa, va vec, ra float64, pb, vb vec, rb, dt float64) (float64, vec, bool) {
 	relP := pa.sub(pb)
 	relV := va.sub(vb)

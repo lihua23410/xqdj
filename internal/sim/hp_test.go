@@ -2,6 +2,7 @@ package sim
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 	"xqdj/character"
@@ -217,6 +218,80 @@ func TestDoppelgangerSpawnsThreeClones(t *testing.T) {
 	}
 	if fighters != 1 || clones != 3 {
 		t.Fatalf("doppel fighters=%d clones=%d", fighters, clones)
+	}
+}
+
+func TestTwinSplitsIntoTwoSharingFighter(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindTwin)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 8; i++ {
+		m.Tick()
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	fighters, twins := 0, 0
+	var bodyID uint64
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil {
+			continue
+		}
+		switch u.role {
+		case unitpkg.RoleFighter:
+			if u.kind == character.KindTwin {
+				fighters++
+				bodyID = u.id
+				if !u.semi {
+					t.Fatal("body should be a semicircle")
+				}
+			}
+		case unitpkg.RoleTwin:
+			twins++
+			if u.owner != bodyID && bodyID != 0 {
+				t.Fatalf("twin owner=%d want body=%d", u.owner, bodyID)
+			}
+			if u.kind != "无下限" {
+				t.Fatalf("twin kind=%s", u.kind)
+			}
+			if !u.semi {
+				t.Fatal("half should be a semicircle")
+			}
+		}
+	}
+	if fighters != 1 || twins != 1 {
+		t.Fatalf("twin fighters=%d halves=%d", fighters, twins)
+	}
+}
+
+func TestForceAddsAcceleration(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindMelee)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var u *unit
+	for _, id := range m.order {
+		cand := m.units[id]
+		if cand != nil && cand.role == unitpkg.RoleFighter {
+			u = cand
+			break
+		}
+	}
+	if u == nil {
+		t.Fatal("no fighter")
+	}
+	before := u.v
+	m.applyCmdLocked(unitpkg.Force{UnitID: u.id, AX: 60, AY: 0})
+	got := u.v.sub(before)
+	want := 60 * DT
+	if math.Abs(got.X-want) > 1e-9 || math.Abs(got.Y) > 1e-9 {
+		t.Fatalf("dv=%+v want x=%v", got, want)
 	}
 }
 

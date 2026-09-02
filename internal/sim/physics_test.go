@@ -48,6 +48,36 @@ func TestSweptCirclesHeadOn(t *testing.T) {
 	}
 }
 
+func TestSweptPairSemiHitsFlatFace(t *testing.T) {
+	// Semi at origin, bulge +x. Circle coming from the empty side (-x).
+	t0, n, ok := sweptPairShapes(
+		vec{0, 0}, vec{0, 0}, 18, vec{1, 0}, true,
+		vec{-50, 0}, vec{20, 0}, 18, vec{1, 0}, false,
+		4,
+	)
+	if !ok {
+		t.Fatal("expected hit on flat face")
+	}
+	if t0 < 1.5 || t0 > 1.7 {
+		t.Fatalf("toi=%v", t0)
+	}
+	if n.X < 0.9 {
+		t.Fatalf("normal %+v want from circle toward semi (+x)", n)
+	}
+}
+
+func TestSweptPairComplementarySemisSeparate(t *testing.T) {
+	// Two halves of one circle, already moving apart.
+	_, _, ok := sweptPairShapes(
+		vec{0, 0}, vec{40, 0}, 18, vec{1, 0}, true,
+		vec{-2, 0}, vec{-40, 0}, 18, vec{-1, 0}, true,
+		0.05,
+	)
+	if ok {
+		t.Fatal("splitting halves should not collide")
+	}
+}
+
 func TestMatchNoOverlap(t *testing.T) {
 	m := NewMatchSeeded(7)
 	m.Start()
@@ -61,7 +91,15 @@ func TestMatchNoOverlap(t *testing.T) {
 			if ua == nil {
 				continue
 			}
-			if !m.hex.containsCenter(ua.p, ua.radius) {
+			if ua.passWalls {
+				continue
+			}
+			if ua.semi {
+				if !m.hex.containsSemi(ua.p, ua.face, ua.radius) {
+					m.mu.Unlock()
+					t.Fatalf("unit %d escaped hex at t=%v p=%+v", ua.id, m.time, ua.p)
+				}
+			} else if !m.hex.containsCenter(ua.p, ua.radius) {
 				m.mu.Unlock()
 				t.Fatalf("unit %d escaped hex at t=%v p=%+v", ua.id, m.time, ua.p)
 			}
@@ -73,13 +111,18 @@ func TestMatchNoOverlap(t *testing.T) {
 				if ua.owner == ub.id || ub.owner == ua.id {
 					continue
 				}
+				if ua.passWalls || ub.passWalls {
+					continue
+				}
 				if !ua.solid || !ub.solid {
 					continue
 				}
-				d := ua.p.sub(ub.p).len()
-				if d+1e-3 < ua.radius+ub.radius {
+				ca, ra := colOf(ua.p, ua.face, ua.radius, ua.semi)
+				cb, rb := colOf(ub.p, ub.face, ub.radius, ub.semi)
+				d := ca.sub(cb).len()
+				if d+1e-3 < ra+rb {
 					m.mu.Unlock()
-					t.Fatalf("overlap %d/%d dist=%v rsum=%v", ua.id, ub.id, d, ua.radius+ub.radius)
+					t.Fatalf("overlap %d/%d dist=%v rsum=%v", ua.id, ub.id, d, ra+rb)
 				}
 			}
 		}

@@ -1,13 +1,15 @@
 package unit
 
 type Spec struct {
-	Kind    string
-	Role    string
-	Radius  float64
-	MaxHP   float64
-	Speed   float64
-	Vision  float64
-	Fighter bool
+	Kind      string
+	Role      string
+	Radius    float64
+	MaxHP     float64
+	Speed     float64
+	Vision    float64
+	Fighter   bool
+	Semi      bool
+	PassWalls bool
 }
 
 type factory func(SpawnInfo) Actor
