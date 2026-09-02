@@ -4,8 +4,9 @@
   --line: #30363d;
   --text: #e6edf3;
   --muted: #8b949e;
-  --slot0: #3dd6c6;
-  --slot1: #f0a050;
+  --kind-melee: #3dd6c6;
+  --kind-ranged: #f0a050;
+  --kind-doppel: #7a9bb8;
   --hex: #1c2330;
 }
 
@@ -40,26 +41,23 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   border-radius: 12px;
   padding: 16px;
 }
-.slot[data-slot="0"] { box-shadow: inset 3px 0 0 var(--slot0); }
-.slot[data-slot="1"] { box-shadow: inset 3px 0 0 var(--slot1); }
+.slot[data-slot="0"] { box-shadow: inset 3px 0 0 var(--kind, var(--line)); }
+.slot[data-slot="1"] { box-shadow: inset 3px 0 0 var(--kind, var(--line)); }
 .slot h2 { margin: 0 0 12px; font-size: 16px; color: var(--muted); font-weight: 600; }
 .kinds { display: flex; flex-direction: column; gap: 8px; }
 .kinds button {
   background: #21262d;
   color: var(--text);
   border: 1px solid var(--line);
+  border-left: 3px solid var(--kind, var(--line));
   border-radius: 8px;
   padding: 10px 12px;
   cursor: pointer;
   text-align: left;
 }
-.kinds button.active[data-slot="0"] {
-  border-color: var(--slot0);
-  background: #16332f;
-}
-.kinds button.active[data-slot="1"] {
-  border-color: var(--slot1);
-  background: #332616;
+.kinds button.active {
+  border-color: var(--kind);
+  background: color-mix(in srgb, var(--kind) 22%, #21262d);
 }
 
 #btn-start, .controls button {
@@ -82,11 +80,10 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   align-items: center;
   margin-bottom: 18px;
 }
-.fighter .name { display: block; margin-bottom: 2px; font-size: 14px; }
+.fighter .name { display: block; margin-bottom: 2px; font-size: 14px; color: var(--kind, var(--text)); }
 .hp-num { display: block; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 #fighter-1 .hp-num { text-align: right; }
-#fighter-0 .name { color: var(--slot0); }
-#fighter-1 .name { color: var(--slot1); text-align: right; }
+#fighter-1 .name { text-align: right; }
 .hp {
   height: 10px;
   background: #21262d;
@@ -98,11 +95,10 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   display: block;
   height: 100%;
   width: 100%;
-  background: var(--slot0);
+  background: var(--kind, var(--kind-melee));
   transform-origin: left center;
 }
 #fighter-1 .hp i {
-  background: var(--slot1);
   margin-left: auto;
 }
 
@@ -130,10 +126,14 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   position: absolute;
   border-radius: 50%;
   transform: translate(-50%, -50%);
+  background: var(--kind);
+  color: var(--kind);
   box-shadow: 0 0 12px currentColor;
 }
-.ball.slot-0 { background: var(--slot0); color: var(--slot0); }
-.ball.slot-1 { background: var(--slot1); color: var(--slot1); }
+.ball.clone {
+  opacity: 0.42;
+  box-shadow: 0 0 8px currentColor;
+}
 .ball.projectile {
   opacity: 0.9;
   box-shadow: 0 0 8px currentColor;
@@ -147,10 +147,9 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   transform: translate(-50%, -50%);
   pointer-events: none;
   opacity: 0.5;
+  background: var(--kind);
   animation: ghost-fade 0.22s linear forwards;
 }
-.ghost.slot-0 { background: var(--slot0); }
-.ghost.slot-1 { background: var(--slot1); }
 @keyframes ghost-fade {
   to { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
 }
@@ -231,6 +230,19 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   from { transform: translate(-50%, -50%); opacity: 1; }
   to { transform: translate(-50%, -88px); opacity: 0; }
 }
+.fx-swap {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 18px currentColor, 0 0 8px #fff;
+  background: color-mix(in srgb, currentColor 55%, #fff);
+  animation: swap-pop 0.4s ease-out forwards;
+}
+@keyframes swap-pop {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+}
 .hp-float {
   position: absolute;
   left: 50%;
@@ -249,18 +261,16 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   border-radius: 50%;
   transform: translate(-50%, -50%);
   border: 1px dashed currentColor;
+  color: var(--kind);
   background: transparent;
   pointer-events: none;
   opacity: 0.45;
   box-sizing: border-box;
 }
-.seek-ring.slot-0 { color: var(--slot0); }
-.seek-ring.slot-1 { color: var(--slot1); }
 .seek-ring.alert {
-  color: #3dd6c6;
   border-style: solid;
   border-width: 2px;
-  background: #3dd6c628;
+  background: color-mix(in srgb, var(--kind) 16%, transparent);
   opacity: 0.9;
   animation: ring-alert 0.55s ease-in-out infinite alternate;
 }

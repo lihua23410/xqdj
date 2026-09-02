@@ -389,12 +389,13 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		u.v = vec{c.VX, c.VY}
 	case unitpkg.Damage:
 		u := m.units[c.To]
-		if u == nil || u.stopped {
+		if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
 			return
 		}
 		m.fx = append(m.fx, unitpkg.FX{
 			Name:   "hurt",
 			UnitID: u.id,
+			Kind:   u.kind,
 			X:      u.p.X,
 			Y:      u.p.Y,
 			Slot:   u.slot,
@@ -405,6 +406,8 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if u.hp <= 0 {
 			u.hp = 0
 			m.removeLocked(u)
+		} else {
+			m.swapOwnedLocked(u.id)
 		}
 	case unitpkg.Spawn:
 		spec, ok := unitpkg.Lookup(c.Kind)
@@ -418,22 +421,64 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		m.removeLocked(u)
+	case unitpkg.SwapOwned:
+		m.swapOwnedLocked(c.UnitID)
 	case unitpkg.FX:
 		m.fx = append(m.fx, c)
 	}
+}
+
+func (m *Match) swapOwnedLocked(bodyID uint64) {
+	body := m.units[bodyID]
+	if body == nil || body.stopped || body.role != unitpkg.RoleFighter {
+		return
+	}
+	var clones []*unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.stopped || u.owner != bodyID || u.role != unitpkg.RoleClone {
+			continue
+		}
+		clones = append(clones, u)
+	}
+	if len(clones) == 0 {
+		return
+	}
+	other := clones[m.rng.IntN(len(clones))]
+	m.fx = append(m.fx,
+		unitpkg.FX{Name: "swap", UnitID: body.id, Kind: body.kind, X: body.p.X, Y: body.p.Y, Slot: body.slot},
+		unitpkg.FX{Name: "swap", UnitID: other.id, Kind: body.kind, X: other.p.X, Y: other.p.Y, Slot: other.slot},
+	)
+	body.p, other.p = other.p, body.p
+	body.v, other.v = other.v, body.v
 }
 
 func (m *Match) removeLocked(u *unit) {
 	if u == nil || u.stopped {
 		return
 	}
+	id := u.id
+	role := u.role
 	m.killLocked(u)
 	delete(m.units, u.id)
-	for i, id := range m.order {
-		if id == u.id {
+	for i, oid := range m.order {
+		if oid == u.id {
 			m.order = append(m.order[:i], m.order[i+1:]...)
 			break
 		}
+	}
+	if role != unitpkg.RoleFighter {
+		return
+	}
+	var extras []*unit
+	for _, oid := range m.order {
+		o := m.units[oid]
+		if o != nil && o.owner == id {
+			extras = append(extras, o)
+		}
+	}
+	for _, o := range extras {
+		m.removeLocked(o)
 	}
 }
 
@@ -512,10 +557,10 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool) (ccdHit, b
 			if ignore[canonPair(a.id, b.id)] {
 				continue
 			}
-			if a.owner != 0 && a.owner == b.id {
+			if a.role == unitpkg.RoleProjectile && a.owner != 0 && a.owner == b.id {
 				continue
 			}
-			if b.owner != 0 && b.owner == a.id {
+			if b.role == unitpkg.RoleProjectile && b.owner != 0 && b.owner == a.id {
 				continue
 			}
 			t, nrm, ok := sweptCircles(a.p, a.v, a.radius, b.p, b.v, b.radius, dt)
@@ -572,24 +617,27 @@ func (m *Match) resolveLocked(h ccdHit) {
 			name = "hit"
 		}
 		slot := a.slot
+		kind := a.kind
 		if a.role == unitpkg.RoleProjectile {
 			slot = b.slot
+			kind = b.kind
 		}
-		m.fx = append(m.fx, unitpkg.FX{Name: name, X: mid.X, Y: mid.Y, Slot: slot})
-		bothFighters := a.role == unitpkg.RoleFighter && b.role == unitpkg.RoleFighter
-		if bothFighters {
-			sa, sb := a.v.len(), b.v.len()
-			a.v = n.mul(sa)
-			b.v = n.mul(-sb)
-		} else {
-			if a.role == unitpkg.RoleProjectile {
+		m.fx = append(m.fx, unitpkg.FX{Name: name, Kind: kind, X: mid.X, Y: mid.Y, Slot: slot})
+		projA := a.role == unitpkg.RoleProjectile
+		projB := b.role == unitpkg.RoleProjectile
+		if projA || projB {
+			if projA {
 				a.v = vec{0, 0}
 				a.solid = false
 			}
-			if b.role == unitpkg.RoleProjectile {
+			if projB {
 				b.v = vec{0, 0}
 				b.solid = false
 			}
+		} else {
+			sa, sb := a.v.len(), b.v.len()
+			a.v = n.mul(sa)
+			b.v = n.mul(-sb)
 		}
 	}
 }

@@ -63,9 +63,14 @@ type Despawn struct {
 	UnitID uint64
 }
 
+type SwapOwned struct {
+	UnitID uint64
+}
+
 type FX struct {
 	Name   string  `json:"name"`
 	UnitID uint64  `json:"unitId"`
+	Kind   string  `json:"kind"`
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
 	VX     float64 `json:"vx"`

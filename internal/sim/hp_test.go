@@ -183,6 +183,43 @@ func TestHitStopFreezesMotionForThreeFrames(t *testing.T) {
 	t.Fatal("no damage across seeds")
 }
 
+func TestDoppelgangerSpawnsThreeClones(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindDoppel)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 8; i++ {
+		m.Tick()
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	fighters, clones := 0, 0
+	var bodyID uint64
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil {
+			continue
+		}
+		switch u.role {
+		case unitpkg.RoleFighter:
+			if u.kind == character.KindDoppel {
+				fighters++
+				bodyID = u.id
+			}
+		case unitpkg.RoleClone:
+			clones++
+			if u.owner != bodyID && bodyID != 0 {
+				t.Fatalf("clone owner=%d want body=%d", u.owner, bodyID)
+			}
+		}
+	}
+	if fighters != 1 || clones != 3 {
+		t.Fatalf("doppel fighters=%d clones=%d", fighters, clones)
+	}
+}
+
 func joinLines(lines []string, n int) string {
 	if len(lines) > n {
 		lines = lines[:n]

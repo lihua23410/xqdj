@@ -90,6 +90,7 @@ func (m *原型机_近战) seek(ctx unit.Context, s unit.Sense) {
 	ctx.Out <- unit.FX{
 		Name:   "dash",
 		UnitID: ctx.ID,
+		Kind:   ctx.Kind,
 		X:      s.Self.X,
 		Y:      s.Self.Y,
 		VX:     vx,

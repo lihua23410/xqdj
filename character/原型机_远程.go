@@ -104,6 +104,7 @@ func (r *原型机_远程) shoot(ctx unit.Context, s unit.Sense) {
 	ctx.Out <- unit.FX{
 		Name:   "shot",
 		UnitID: ctx.ID,
+		Kind:   ctx.Kind,
 		X:      s.Self.X,
 		Y:      s.Self.Y,
 		VX:     ux * bulletSpeed,

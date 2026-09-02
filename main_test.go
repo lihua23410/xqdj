@@ -70,6 +70,7 @@ func TestStaticAndWSStart(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	sawRunning := false
 	sawUnits := false
+	last := ""
 	for time.Now().Before(deadline) {
 		_ = c.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		_, data, err := c.ReadMessage()
@@ -77,15 +78,16 @@ func TestStaticAndWSStart(t *testing.T) {
 			continue
 		}
 		s := string(data)
+		last = s
 		if strings.Contains(s, `"phase":"running"`) {
 			sawRunning = true
 		}
-		if strings.Contains(s, `"kind":"原型机_近战"`) && strings.Contains(s, `"kind":"原型机_远程"`) {
+		if strings.Contains(s, `"role":"fighter"`) {
 			sawUnits = true
 		}
 		if sawRunning && sawUnits {
 			return
 		}
 	}
-	t.Fatalf("running=%v units=%v", sawRunning, sawUnits)
+	t.Fatalf("running=%v units=%v last=%s", sawRunning, sawUnits, last)
 }

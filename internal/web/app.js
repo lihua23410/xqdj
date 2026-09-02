@@ -2,32 +2,40 @@ const fxRoot = document.getElementById("fx");
 let prevHP = new Map();
 let dashGhostAt = new Map();
 
+const KIND_COLORS = {
+  原型机_近战: "var(--kind-melee)",
+  原型机_远程: "var(--kind-ranged)",
+  分身者: "var(--kind-doppel)",
+  分身: "var(--kind-doppel)",
+  子弹: "var(--kind-ranged)",
+};
+
+function kindColor(kind) {
+  return KIND_COLORS[kind] || "var(--kind-melee)";
+}
+
 function screenPos(x, y, scale, cx, cy) {
   return [cx + x * scale, cy - y * scale];
 }
 
-function slotColor(slot) {
-  return slot === 1 ? "var(--slot1)" : "var(--slot0)";
-}
-
-function spawnFx(cls, x, y, slot, extra = {}) {
+function spawnFx(cls, x, y, kind, extra = {}) {
   if (!fxRoot) return null;
   const el = document.createElement("div");
   el.className = `fx ${cls}`;
   el.style.left = `${x}px`;
   el.style.top = `${y}px`;
-  el.style.color = slotColor(slot);
+  el.style.color = kindColor(kind);
   for (const [k, v] of Object.entries(extra)) el.style.setProperty(k, v);
   fxRoot.appendChild(el);
   el.addEventListener("animationend", () => el.remove());
   return el;
 }
 
-function burst(x, y, slot, n = 10) {
+function burst(x, y, kind, n = 10) {
   for (let i = 0; i < n; i++) {
     const a = (Math.PI * 2 * i) / n + Math.random() * 0.4;
     const d = 18 + Math.random() * 28;
-    spawnFx("fx-spark", x, y, slot, {
+    spawnFx("fx-spark", x, y, kind, {
       "--dx": `${Math.cos(a) * d}px`,
       "--dy": `${Math.sin(a) * d}px`,
     });
@@ -37,22 +45,27 @@ function burst(x, y, slot, n = 10) {
 function playEffects(effects, scale, cx, cy) {
   for (const fx of effects || []) {
     const [x, y] = screenPos(fx.x, fx.y, scale, cx, cy);
+    const kind = fx.kind;
     if (fx.name === "dash") {
-      spawnFx("fx-shock", x, y, fx.slot);
-      spawnFx("fx-ring", x, y, fx.slot);
-      burst(x, y, fx.slot, 12);
+      spawnFx("fx-shock", x, y, kind);
+      spawnFx("fx-ring", x, y, kind);
+      burst(x, y, kind, 12);
     } else if (fx.name === "shot") {
-      spawnFx("fx-flash", x, y, fx.slot);
+      spawnFx("fx-flash", x, y, kind);
       const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1) * (180 / Math.PI);
-      const beam = spawnFx("fx-beam", x, y, fx.slot);
+      const beam = spawnFx("fx-beam", x, y, kind);
       beam.style.transform = `translate(0, -50%) rotate(${ang}deg)`;
     } else if (fx.name === "hurt") {
-      const el = spawnFx("fx-dmg", x, y - 12, fx.slot);
+      const el = spawnFx("fx-dmg", x, y - 12, kind);
       if (el) el.textContent = `-${Math.round(fx.amount || 0)}`;
+    } else if (fx.name === "swap") {
+      spawnFx("fx-swap", x, y, kind);
+      spawnFx("fx-flash", x, y, kind);
+      spawnFx("fx-ring", x, y, kind);
     } else if (fx.name === "impact" || fx.name === "hit") {
-      spawnFx("fx-flash", x, y, fx.slot);
-      spawnFx("fx-shock", x, y, fx.slot);
-      burst(x, y, fx.slot, fx.name === "impact" ? 14 : 8);
+      spawnFx("fx-flash", x, y, kind);
+      spawnFx("fx-shock", x, y, kind);
+      burst(x, y, kind, fx.name === "impact" ? 14 : 8);
     }
   }
 }
@@ -89,8 +102,15 @@ document.getElementById("btn-pause").onclick = () => {
 };
 document.getElementById("btn-end").onclick = () => send({ type: "end" });
 
+let lobbyKey = "";
+
 function renderLobby() {
   const kinds = state.kinds || [];
+  const key = `${(state.slots || []).join("\0")}\n${kinds.join("\0")}`;
+  if (key === lobbyKey) {
+    return;
+  }
+  lobbyKey = key;
   for (const [el, slot] of [
     [kinds0, 0],
     [kinds1, 1],
@@ -99,11 +119,15 @@ function renderLobby() {
     for (const kind of kinds) {
       const b = document.createElement("button");
       b.textContent = kind;
+      b.type = "button";
       b.dataset.slot = String(slot);
+      b.style.setProperty("--kind", kindColor(kind));
       if (state.slots && state.slots[slot] === kind) b.classList.add("active");
       b.onclick = () => send({ type: "select", slot, kind });
       el.appendChild(b);
     }
+    const slotRoot = el.closest(".slot");
+    if (slotRoot) slotRoot.style.setProperty("--kind", kindColor(state.slots[slot]));
   }
 }
 
@@ -126,11 +150,13 @@ function renderArena() {
       name.textContent = state.slots[slot] || "";
       num.textContent = "0 / 100";
       bar.style.width = "0%";
+      root.style.setProperty("--kind", kindColor(state.slots[slot]));
       continue;
     }
     name.textContent = f.kind;
     num.textContent = `${Math.round(f.hp)} / ${Math.round(f.maxHp)}`;
     bar.style.width = `${Math.max(0, (f.hp / f.maxHp) * 100)}%`;
+    root.style.setProperty("--kind", kindColor(f.kind));
   }
 
   const pauseBtn = document.getElementById("btn-pause");
@@ -150,8 +176,8 @@ function renderArena() {
       unitsEl.appendChild(el);
     }
     el.classList.toggle("projectile", u.role === "projectile");
-    el.classList.toggle("slot-0", u.slot === 0);
-    el.classList.toggle("slot-1", u.slot === 1);
+    el.classList.toggle("clone", u.role === "clone");
+    el.style.setProperty("--kind", kindColor(u.kind));
     const speed = Math.hypot(u.vx || 0, u.vy || 0);
     const dashing = u.kind === "原型机_近战" && speed > 280;
     el.classList.toggle("dashing", dashing);
@@ -167,19 +193,19 @@ function renderArena() {
       if (now - last > 32) {
         dashGhostAt.set(u.id, now);
         const g = document.createElement("div");
-        g.className = `ghost slot-${u.slot}`;
+        g.className = "ghost";
+        g.style.setProperty("--kind", kindColor(u.kind));
         g.style.width = el.style.width;
         g.style.height = el.style.height;
         g.style.left = el.style.left;
         g.style.top = el.style.top;
-        g.style.background = getComputedStyle(el).background;
         fxRoot.appendChild(g);
         g.addEventListener("animationend", () => g.remove());
       }
     }
     const prev = prevHP.get(u.id);
     if (prev != null && u.hp < prev - 0.5) {
-      burst(sx, sy, u.slot, 8);
+      burst(sx, sy, u.kind, 8);
     }
     if (u.role === "fighter") prevHP.set(u.id, u.hp);
     let tag = el.querySelector(".hp-float");
@@ -206,8 +232,7 @@ function renderArena() {
       ring.style.height = `${vr * 2}px`;
       ring.style.left = `${cx + u.x * scale}px`;
       ring.style.top = `${cy - u.y * scale}px`;
-      ring.classList.toggle("slot-0", u.slot === 0);
-      ring.classList.toggle("slot-1", u.slot === 1);
+      ring.style.setProperty("--kind", kindColor(u.kind));
       const locked = (state.units || []).some(
         (o) =>
           o.id !== u.id &&
@@ -245,5 +270,8 @@ function render() {
     prevHP.clear();
     if (fxRoot) fxRoot.innerHTML = "";
     renderLobby();
-  } else renderArena();
+  } else {
+    lobbyKey = "";
+    renderArena();
+  }
 }
