@@ -295,6 +295,27 @@ func TestForceAddsAcceleration(t *testing.T) {
 	}
 }
 
+func TestKnightStartsAt75HP(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindKnight)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.kind != character.KindKnight {
+			continue
+		}
+		if u.maxHP != 100 || math.Abs(u.hp-75) > 1e-6 {
+			t.Fatalf("hp=%v/%v want 75/100", u.hp, u.maxHP)
+		}
+		return
+	}
+	t.Fatal("no knight")
+}
+
 func TestWallerPlacesWallAfterThreeSeconds(t *testing.T) {
 	m := NewMatchSeeded(3)
 	m.SetSlot(0, character.KindWaller)

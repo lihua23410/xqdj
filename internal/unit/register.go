@@ -10,6 +10,7 @@ type Spec struct {
 	Fighter   bool
 	Semi      bool
 	PassWalls bool
+	StartHP   float64 // 0 表示开局满血（MaxHP）
 }
 
 type factory func(SpawnInfo) Actor

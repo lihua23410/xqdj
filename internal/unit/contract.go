@@ -101,6 +101,12 @@ type Force struct {
 	AY     float64
 }
 
+type Teleport struct {
+	UnitID uint64
+	X      float64
+	Y      float64
+}
+
 type Context struct {
 	ID   uint64
 	Kind string

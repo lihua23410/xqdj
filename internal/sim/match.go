@@ -398,6 +398,9 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 		face:      vec{1, 0},
 		passWalls: spec.PassWalls,
 	}
+	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
+		u.hp = spec.StartHP
+	}
 	u.aimFace()
 	m.units[id] = u
 	m.order = append(m.order, id)
@@ -502,6 +505,13 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		u.setVel(u.v.add(vec{c.AX, c.AY}.mul(DT)))
+	case unitpkg.Teleport:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || !u.solid {
+			return
+		}
+		u.p = vec{c.X, c.Y}
+		m.constrainUnitLocked(u)
 	}
 }
 
@@ -842,45 +852,45 @@ func (m *Match) resolveLocked(h ccdHit) {
 
 func (m *Match) constrainAllLocked() {
 	for _, id := range m.order {
-		u := m.units[id]
-		if u == nil || !u.solid {
+		m.constrainUnitLocked(m.units[id])
+	}
+}
+
+func (m *Match) constrainUnitLocked(u *unit) {
+	if u == nil || !u.solid || u.passWalls {
+		return
+	}
+	for i := 0; i < 6; i++ {
+		n := m.hex.n[i]
+		ext := u.radius
+		if u.semi {
+			ext = semiExtent(u.face, u.radius, n)
+		}
+		limit := m.hex.d[0] - ext - skin
+		pen := u.p.dot(n) - limit
+		if pen > 0 {
+			u.p = u.p.sub(n.mul(pen))
+		}
+	}
+	cc, cr := colOf(u.p, u.face, u.radius, u.semi)
+	for _, w := range m.walls {
+		R := cr + w.radius + skin
+		q := closestOnSeg(cc, w.a, w.b)
+		d := cc.sub(q)
+		dist := d.len()
+		if dist >= R {
 			continue
 		}
-		if u.passWalls {
+		n := d
+		if n.len2() < 1e-12 {
+			n = perp(w.b.sub(w.a))
+		}
+		if n.len2() < 1e-12 {
 			continue
 		}
-		for i := 0; i < 6; i++ {
-			n := m.hex.n[i]
-			ext := u.radius
-			if u.semi {
-				ext = semiExtent(u.face, u.radius, n)
-			}
-			limit := m.hex.d[0] - ext - skin
-			pen := u.p.dot(n) - limit
-			if pen > 0 {
-				u.p = u.p.sub(n.mul(pen))
-			}
-		}
-		cc, cr := colOf(u.p, u.face, u.radius, u.semi)
-		for _, w := range m.walls {
-			R := cr + w.radius + skin
-			q := closestOnSeg(cc, w.a, w.b)
-			d := cc.sub(q)
-			dist := d.len()
-			if dist >= R {
-				continue
-			}
-			n := d
-			if n.len2() < 1e-12 {
-				n = perp(w.b.sub(w.a))
-			}
-			if n.len2() < 1e-12 {
-				continue
-			}
-			corr := q.add(n.norm().mul(R)).sub(cc)
-			u.p = u.p.add(corr)
-			cc, cr = colOf(u.p, u.face, u.radius, u.semi)
-		}
+		corr := q.add(n.norm().mul(R)).sub(cc)
+		u.p = u.p.add(corr)
+		cc, cr = colOf(u.p, u.face, u.radius, u.semi)
 	}
 }
 

@@ -11,6 +11,7 @@ const KIND_COLORS = {
   无下限术士: "var(--kind-twin)",
   无下限: "var(--kind-twin-half)",
   紫弹: "var(--kind-violet)",
+  小骑士: "var(--kind-knight)",
   子弹: "var(--kind-ranged)",
 };
 
@@ -409,7 +410,7 @@ function renderArena() {
     if (oldCut) oldCut.remove();
     el.style.setProperty("--kind", kindColor(u.kind));
     const speed = Math.hypot(u.vx || 0, u.vy || 0);
-    const dashing = u.kind === "原型机_近战" && speed > 280;
+    const dashing = (u.kind === "原型机_近战" && speed > 280) || (u.kind === "小骑士" && speed > 250);
     el.classList.toggle("dashing", dashing);
     const r = u.radius * scale;
     el.style.width = `${r * 2}px`;
