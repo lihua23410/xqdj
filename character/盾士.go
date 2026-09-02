@@ -21,12 +21,12 @@ const (
 	shardRadius    = 6.0
 	shardMinSpeed  = 70.0
 	shardMaxSpeed  = 250.0
-	fullShardN     = 8
-	weakShardN     = 6
-	fullShardDmg   = 5.0
-	weakShardDmg   = 4.0
+	fullShardN     = 7
+	weakShardN     = 5
+	fullShardDmg   = 4.0
+	weakShardDmg   = 3.0
 	shardWallHits  = 2 // 弹 1 次，第 2 次撞墙消失
-	shieldRefresh  = 10.0
+	shieldRefresh  = 8.0
 	shieldLostTrig = 40.0
 )
 
