@@ -39,11 +39,26 @@ type 原型机_近战 struct {
 
 func (m *原型机_近战) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
+	case unit.IncomingDamage:
+		amt := e.Amount * (1 - meleeResist(e.Speed))
+		ctx.Out <- unit.ConfirmDamage{Token: e.Token, UnitID: ctx.ID, Amount: amt}
 	case unit.Sense:
 		m.seek(ctx, e)
 	case unit.Collision:
 		m.hit(ctx, e)
 	}
+}
+
+func meleeResist(speed float64) float64 {
+	extra := speed - meleeSpeed
+	if extra < 0 {
+		extra = 0
+	}
+	r := extra / 150 * 0.05
+	if r > 0.25 {
+		r = 0.25
+	}
+	return r
 }
 
 func (m *原型机_近战) hit(ctx unit.Context, e unit.Collision) {

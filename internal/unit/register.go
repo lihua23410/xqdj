@@ -11,6 +11,7 @@ type Spec struct {
 	Semi      bool
 	PassWalls bool
 	StartHP   float64 // 0 表示开局满血（MaxHP）
+	Shell     bool    // 贴在主人身上的环，撞到东西会碎并通知主人
 }
 
 type factory func(SpawnInfo) Actor

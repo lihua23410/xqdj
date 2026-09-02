@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"math/rand/v2"
+	"runtime"
 	"sync"
 	"time"
 
@@ -40,6 +41,7 @@ type unit struct {
 	semi      bool
 	face      vec
 	passWalls bool
+	shell     bool
 }
 
 type spawnSpot struct {
@@ -71,23 +73,33 @@ type wallSnap struct {
 }
 
 type Match struct {
-	mu       sync.Mutex
-	phase    Phase
-	slots    [2]string
-	units    map[uint64]*unit
-	order    []uint64
-	cmds     chan unitpkg.Cmd
-	nextID   uint64
-	time     float64
-	hex      hexagon
-	winner   string
-	winnerID uint64
-	seq      uint64
-	rng      *rand.Rand
-	fx       []unitpkg.FX
-	hitStop  int
-	walls    []*barrier
-	pending  []unitpkg.Damage
+	mu         sync.Mutex
+	phase      Phase
+	slots      [2]string
+	units      map[uint64]*unit
+	order      []uint64
+	cmds       chan unitpkg.Cmd
+	nextID     uint64
+	time       float64
+	hex        hexagon
+	winner     string
+	winnerID   uint64
+	seq        uint64
+	rng        *rand.Rand
+	fx         []unitpkg.FX
+	hitStop    int
+	walls      []*barrier
+	pending    []unitpkg.Damage
+	dmgSeq     uint64
+	pendingDmg map[uint64]dmgOffer
+	wardAbsorb map[uint64]bool
+}
+
+type dmgOffer struct {
+	from   uint64
+	to     uint64
+	amount float64
+	absorb bool
 }
 
 func NewMatch() *Match {
@@ -101,12 +113,14 @@ func NewMatchSeeded(seed uint64) *Match {
 		slots = [2]string{kinds[0], kinds[1]}
 	}
 	return &Match{
-		phase: PhaseSelect,
-		slots: slots,
-		units: make(map[uint64]*unit),
-		cmds:  make(chan unitpkg.Cmd, 512),
-		hex:   newHexagon(HexRadius),
-		rng:   rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
+		phase:      PhaseSelect,
+		slots:      slots,
+		units:      make(map[uint64]*unit),
+		cmds:       make(chan unitpkg.Cmd, 512),
+		hex:        newHexagon(HexRadius),
+		rng:        rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
+		pendingDmg: make(map[uint64]dmgOffer),
+		wardAbsorb: make(map[uint64]bool),
 	}
 }
 
@@ -282,6 +296,7 @@ func (m *Match) Tick() {
 		m.decelerateLocked(DT)
 		m.drainCmdsLocked()
 	}
+	m.settleHitsLocked()
 	if m.hitStop > 0 {
 		m.hitStop--
 		m.seq++
@@ -295,6 +310,8 @@ func (m *Match) Tick() {
 		m.applyCmdLocked(d)
 	}
 	m.pending = m.pending[:0]
+	m.settleHitsLocked()
+	m.stickShellsLocked()
 	m.time += DT
 	m.expireWallsLocked()
 	m.seq++
@@ -343,6 +360,9 @@ func (m *Match) resetLocked() {
 	m.hitStop = 0
 	m.walls = nil
 	m.pending = nil
+	m.dmgSeq = 0
+	m.pendingDmg = make(map[uint64]dmgOffer)
+	m.wardAbsorb = make(map[uint64]bool)
 }
 
 func (m *Match) stopAllLocked() {
@@ -397,6 +417,7 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 		semi:      spec.Semi,
 		face:      vec{1, 0},
 		passWalls: spec.PassWalls,
+		shell:     spec.Shell,
 	}
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
@@ -460,27 +481,16 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		u.setVel(vec{c.VX, c.VY})
 	case unitpkg.Damage:
-		u := m.units[c.To]
-		if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
+		m.offerDamageLocked(c)
+	case unitpkg.ConfirmDamage:
+		m.confirmDamageLocked(c)
+	case unitpkg.BlockDamage:
+		off, ok := m.pendingDmg[c.Token]
+		if !ok || c.UnitID != off.to {
 			return
 		}
-		m.fx = append(m.fx, unitpkg.FX{
-			Name:   "hurt",
-			UnitID: u.id,
-			Kind:   u.kind,
-			X:      u.p.X,
-			Y:      u.p.Y,
-			Slot:   u.slot,
-			Amount: c.Amount,
-		})
-		u.hp -= c.Amount
-		m.hitStop = HitStopFrames
-		if u.hp <= 0 {
-			u.hp = 0
-			m.removeLocked(u)
-		} else {
-			m.swapOwnedLocked(u.id)
-		}
+		delete(m.pendingDmg, c.Token)
+		delete(m.wardAbsorb, off.to)
 	case unitpkg.Spawn:
 		spec, ok := unitpkg.Lookup(c.Kind)
 		if !ok || spec.Fighter {
@@ -493,6 +503,8 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		m.removeLocked(u)
+	case unitpkg.DespawnOwned:
+		m.despawnOwnedLocked(c.OwnerID, c.Kind)
 	case unitpkg.SwapOwned:
 		m.swapOwnedLocked(c.UnitID)
 	case unitpkg.PlaceWall:
@@ -512,6 +524,136 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		u.p = vec{c.X, c.Y}
 		m.constrainUnitLocked(u)
+	}
+}
+
+func (m *Match) settleHitsLocked() {
+	runtime.Gosched()
+	m.drainCmdsLocked()
+}
+
+func (m *Match) offerDamageLocked(c unitpkg.Damage) {
+	if c.Amount <= 0 {
+		return
+	}
+	u := m.units[c.To]
+	if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
+		return
+	}
+	m.dmgSeq++
+	token := m.dmgSeq
+	absorb := m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id]
+	m.pendingDmg[token] = dmgOffer{from: c.From, to: c.To, amount: c.Amount, absorb: absorb}
+	m.send(u, unitpkg.IncomingDamage{
+		Token:  token,
+		From:   c.From,
+		Amount: c.Amount,
+		Time:   m.time,
+		Speed:  u.v.len(),
+	})
+}
+
+func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
+	off, ok := m.pendingDmg[c.Token]
+	if !ok || c.UnitID != off.to {
+		return
+	}
+	delete(m.pendingDmg, c.Token)
+	u := m.units[off.to]
+	if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
+		return
+	}
+	if off.absorb || m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id] {
+		delete(m.wardAbsorb, u.id)
+		if sh := m.shellOfLocked(u.id); sh != nil {
+			m.popShellLocked(sh, off.from)
+			delete(m.wardAbsorb, u.id)
+		}
+		return
+	}
+	amt := off.amount
+	if c.Amount > 0 && c.Amount < amt {
+		amt = c.Amount
+	}
+	m.fx = append(m.fx, unitpkg.FX{
+		Name:   "hurt",
+		UnitID: u.id,
+		Kind:   u.kind,
+		X:      u.p.X,
+		Y:      u.p.Y,
+		Slot:   u.slot,
+		Amount: amt,
+	})
+	u.hp -= amt
+	m.hitStop = HitStopFrames
+	if u.hp <= 0 {
+		u.hp = 0
+		m.removeLocked(u)
+	} else {
+		m.swapOwnedLocked(u.id)
+	}
+}
+
+func (m *Match) despawnOwnedLocked(owner uint64, kind string) {
+	var dead []*unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.stopped || u.owner != owner {
+			continue
+		}
+		if kind != "" && u.kind != kind {
+			continue
+		}
+		if u.role == unitpkg.RoleFighter {
+			continue
+		}
+		dead = append(dead, u)
+	}
+	for _, u := range dead {
+		m.removeLocked(u)
+	}
+}
+
+func (m *Match) stickShellsLocked() {
+	var dead []*unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || !u.shell {
+			continue
+		}
+		owner := m.units[u.owner]
+		if owner == nil || owner.stopped {
+			dead = append(dead, u)
+			continue
+		}
+		u.p = owner.p
+		u.v = owner.v
+	}
+	for _, u := range dead {
+		m.removeLocked(u)
+	}
+}
+
+func (m *Match) shellOfLocked(owner uint64) *unit {
+	for _, id := range m.order {
+		u := m.units[id]
+		if u != nil && u.shell && u.owner == owner && !u.stopped {
+			return u
+		}
+	}
+	return nil
+}
+
+func (m *Match) popShellLocked(shell *unit, from uint64) {
+	if shell == nil || shell.stopped {
+		return
+	}
+	owner := m.units[shell.owner]
+	t := m.time
+	m.removeLocked(shell)
+	if owner != nil && !owner.stopped {
+		m.wardAbsorb[owner.id] = true
+		m.send(owner, unitpkg.GuardBreak{Time: t, From: from})
 	}
 }
 
@@ -600,6 +742,11 @@ func (m *Match) removeLocked(u *unit) {
 	role := u.role
 	m.killLocked(u)
 	delete(m.units, u.id)
+	for tok, off := range m.pendingDmg {
+		if off.to == id {
+			delete(m.pendingDmg, tok)
+		}
+	}
 	for i, oid := range m.order {
 		if oid == u.id {
 			m.order = append(m.order[:i], m.order[i+1:]...)
@@ -658,6 +805,15 @@ func (m *Match) physicsLocked(dt float64) {
 		m.resolveLocked(hit)
 		if hit.kind == hitPair {
 			ignore[canonPair(hit.a, hit.b)] = true
+			a, b := m.units[hit.a], m.units[hit.b]
+			if a != nil && a.shell {
+				ignore[canonPair(a.owner, hit.b)] = true
+				m.popShellLocked(a, hit.b)
+			}
+			if b != nil && b.shell {
+				ignore[canonPair(b.owner, hit.a)] = true
+				m.popShellLocked(b, hit.a)
+			}
 		}
 		if hit.kind == hitBarrier {
 			ignoreUW[uwID{hit.a, hit.w}] = true
@@ -680,7 +836,7 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 		if u == nil || !u.solid {
 			continue
 		}
-		if !u.passWalls {
+		if !u.passWalls && !u.shell {
 			if h, ok := sweptShapeVsHex(u.p, u.v, u.face, u.radius, dt, m.hex, u.semi); ok {
 				if h.t < best.t {
 					h.a = u.id
@@ -725,6 +881,11 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 			if b.role == unitpkg.RoleProjectile && (b.slot == a.slot || (b.owner != 0 && b.owner == a.id)) {
 				continue
 			}
+			if a.role == unitpkg.RoleFighter && b.role == unitpkg.RoleFighter {
+				if m.shellOfLocked(a.id) != nil || m.shellOfLocked(b.id) != nil {
+					continue
+				}
+			}
 			t, nrm, ok := sweptPairShapes(
 				a.p, a.v, a.radius, a.face, a.semi,
 				b.p, b.v, b.radius, b.face, b.semi,
@@ -733,7 +894,14 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 			if !ok {
 				continue
 			}
-			if t < best.t {
+			use := !found || t < best.t-1e-12
+			if !use && t <= best.t+1e-12 && (a.shell || b.shell) {
+				aa, bb := m.units[best.a], m.units[best.b]
+				if aa == nil || bb == nil || (!aa.shell && !bb.shell) {
+					use = true
+				}
+			}
+			if use {
 				best = ccdHit{kind: hitPair, t: t, a: a.id, b: b.id, n: nrm}
 				found = true
 			}
@@ -857,7 +1025,7 @@ func (m *Match) constrainAllLocked() {
 }
 
 func (m *Match) constrainUnitLocked(u *unit) {
-	if u == nil || !u.solid || u.passWalls {
+	if u == nil || !u.solid || u.passWalls || u.shell {
 		return
 	}
 	for i := 0; i < 6; i++ {

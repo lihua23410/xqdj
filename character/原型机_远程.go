@@ -52,6 +52,9 @@ type 原型机_远程 struct {
 }
 
 func (r *原型机_远程) Handle(ctx unit.Context, ev unit.Event) {
+	if unit.AcceptHit(ctx, ev) {
+		return
+	}
 	switch e := ev.(type) {
 	case unit.Sense:
 		r.shoot(ctx, e)

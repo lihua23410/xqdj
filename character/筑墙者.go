@@ -38,6 +38,9 @@ type 筑墙者 struct {
 }
 
 func (w *筑墙者) Handle(ctx unit.Context, ev unit.Event) {
+	if unit.AcceptHit(ctx, ev) {
+		return
+	}
 	s, ok := ev.(unit.Sense)
 	if !ok {
 		return

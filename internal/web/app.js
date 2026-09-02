@@ -12,6 +12,10 @@ const KIND_COLORS = {
   无下限: "var(--kind-twin-half)",
   紫弹: "var(--kind-violet)",
   小骑士: "var(--kind-knight)",
+  盾士: "var(--kind-warden)",
+  盾: "var(--kind-warden)",
+  盾碎片: "var(--kind-warden)",
+  弱化碎片: "var(--kind-warden-weak)",
   子弹: "var(--kind-ranged)",
 };
 
@@ -150,6 +154,11 @@ function playEffects(effects, scale, cx, cy) {
       const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1) * (180 / Math.PI);
       const beam = spawnFx("fx-beam", x, y, kind);
       beam.style.transform = `translate(0, -50%) rotate(${ang}deg)`;
+    } else if (fx.name === "shatter") {
+      spawnFx("fx-flash", x, y, kind);
+      spawnFx("fx-ring", x, y, kind);
+      spawnFx("fx-shock", x, y, kind);
+      burst(x, y, kind, 14);
     } else if (fx.name === "hurt") {
       const el = spawnFx("fx-dmg", x, y - 12, kind);
       if (el) el.textContent = `-${Math.round(fx.amount || 0)}`;
@@ -402,10 +411,12 @@ function renderArena() {
     } else if (el.parentNode !== layer) {
       layer.appendChild(el);
     }
-    el.classList.toggle("projectile", u.role === "projectile");
+    el.classList.toggle("projectile", u.role === "projectile" && u.kind !== "盾");
     el.classList.toggle("clone", u.role === "clone");
     el.classList.toggle("semi", !!u.semi);
     el.classList.toggle("void", u.kind === "紫弹");
+    el.classList.toggle("ring", u.kind === "盾");
+    el.classList.toggle("fighter", u.role === "fighter");
     const oldCut = el.querySelector(".cut");
     if (oldCut) oldCut.remove();
     el.style.setProperty("--kind", kindColor(u.kind));

@@ -43,6 +43,9 @@ type 小骑士 struct {
 }
 
 func (k *小骑士) Handle(ctx unit.Context, ev unit.Event) {
+	if unit.AcceptHit(ctx, ev) {
+		return
+	}
 	switch e := ev.(type) {
 	case unit.Sense:
 		k.tryRam(ctx, e)

@@ -184,6 +184,302 @@ func TestHitStopFreezesMotionForThreeFrames(t *testing.T) {
 	t.Fatal("no damage across seeds")
 }
 
+func TestWardenSpawnsShieldRing(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindWarden)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 8; i++ {
+		m.Tick()
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	shells := 0
+	for _, id := range m.order {
+		u := m.units[id]
+		if u != nil && u.kind == "盾" && u.shell {
+			shells++
+			owner := m.units[u.owner]
+			if owner == nil || owner.kind != character.KindWarden {
+				t.Fatalf("shield owner=%v", u.owner)
+			}
+			if u.p.sub(owner.p).len() > 1 {
+				t.Fatalf("shield not stuck dist=%v", u.p.sub(owner.p).len())
+			}
+		}
+	}
+	if shells != 1 {
+		t.Fatalf("shields=%d want 1", shells)
+	}
+}
+
+func TestWardenShieldBlocksDamage(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindWarden)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 8; i++ {
+		m.Tick()
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.mu.Lock()
+	var warden *unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u != nil && u.kind == character.KindWarden {
+			warden = u
+			break
+		}
+	}
+	if warden == nil {
+		m.mu.Unlock()
+		t.Fatal("no warden")
+	}
+	hp0 := warden.hp
+	id := warden.id
+	m.applyCmdLocked(unitpkg.Damage{From: 0, To: id, Amount: 14})
+	m.settleHitsLocked()
+	m.mu.Unlock()
+	time.Sleep(3 * time.Millisecond)
+	m.mu.Lock()
+	m.drainCmdsLocked()
+	m.settleHitsLocked()
+	u := m.units[id]
+	if u == nil {
+		m.mu.Unlock()
+		t.Fatal("warden gone")
+	}
+	if u.hp != hp0 {
+		m.mu.Unlock()
+		t.Fatalf("hp %.1f -> %.1f with shield", hp0, u.hp)
+	}
+	m.mu.Unlock()
+}
+
+func TestMeleeSpeedReducesIncoming(t *testing.T) {
+	hit := func(speed, wantDrop float64) {
+		t.Helper()
+		m := NewMatchSeeded(1)
+		m.SetSlot(0, character.KindMelee)
+		m.SetSlot(1, character.KindRanged)
+		m.Start()
+		defer m.End()
+		for i := 0; i < 4; i++ {
+			m.Tick()
+			time.Sleep(2 * time.Millisecond)
+		}
+		m.mu.Lock()
+		var melee *unit
+		for _, id := range m.order {
+			u := m.units[id]
+			if u != nil && u.kind == character.KindMelee {
+				melee = u
+				break
+			}
+		}
+		if melee == nil {
+			m.mu.Unlock()
+			t.Fatal("no melee")
+		}
+		hp0 := melee.hp
+		id := melee.id
+		melee.setVel(vec{speed, 0})
+		m.applyCmdLocked(unitpkg.Damage{To: id, Amount: 10})
+		m.settleHitsLocked()
+		m.mu.Unlock()
+		time.Sleep(3 * time.Millisecond)
+		m.mu.Lock()
+		m.drainCmdsLocked()
+		m.settleHitsLocked()
+		u := m.units[id]
+		if u == nil {
+			m.mu.Unlock()
+			t.Fatal("melee gone")
+		}
+		drop := hp0 - u.hp
+		m.mu.Unlock()
+		if math.Abs(drop-wantDrop) > 0.05 {
+			t.Fatalf("speed=%.0f drop=%.2f want %.2f", speed, drop, wantDrop)
+		}
+	}
+	hit(200, 10)
+	hit(350, 9.5)
+	hit(500, 9)
+	hit(950, 7.5)
+	hit(2000, 7.5)
+}
+
+func TestWardenBreakingHitDoesNotDamage(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindWarden)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 8; i++ {
+		m.Tick()
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.mu.Lock()
+	var warden, shell *unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil {
+			continue
+		}
+		if u.kind == character.KindWarden {
+			warden = u
+		}
+		if u.shell {
+			shell = u
+		}
+	}
+	if warden == nil || shell == nil {
+		m.mu.Unlock()
+		t.Fatal("need warden and shield")
+	}
+	hp0 := warden.hp
+	id := warden.id
+	m.popShellLocked(shell, 0)
+	m.applyCmdLocked(unitpkg.Damage{From: 0, To: id, Amount: 14})
+	m.settleHitsLocked()
+	m.mu.Unlock()
+	time.Sleep(3 * time.Millisecond)
+	m.mu.Lock()
+	m.drainCmdsLocked()
+	m.settleHitsLocked()
+	u := m.units[id]
+	if u == nil {
+		m.mu.Unlock()
+		t.Fatal("warden gone")
+	}
+	if u.hp != hp0 {
+		m.mu.Unlock()
+		t.Fatalf("breaking hit dropped hp %.1f -> %.1f", hp0, u.hp)
+	}
+	m.mu.Unlock()
+}
+
+func TestWardenCombatNoBleedWithShield(t *testing.T) {
+	foes := []string{character.KindMelee, character.KindRanged, character.KindKnight, character.KindDoppel}
+	for seed := uint64(1); seed <= 12; seed++ {
+		for _, foe := range foes {
+			m := NewMatchSeeded(seed)
+			m.SetSlot(0, character.KindWarden)
+			m.SetSlot(1, foe)
+			m.Start()
+			var prevHP float64
+			var prevID uint64
+			for i := 0; i < 120; i++ {
+				m.mu.Lock()
+				var warden *unit
+				shells := 0
+				for _, id := range m.order {
+					u := m.units[id]
+					if u == nil {
+						continue
+					}
+					if u.kind == character.KindWarden {
+						warden = u
+					}
+					if u.shell && u.kind == "盾" {
+						shells++
+					}
+				}
+				hadShell := shells > 0
+				id := uint64(0)
+				if warden != nil {
+					id = warden.id
+				}
+				m.mu.Unlock()
+				m.Tick()
+				time.Sleep(time.Millisecond)
+				m.mu.Lock()
+				u := m.units[id]
+				if prevID != 0 && u != nil && u.hp < prevHP-0.05 && hadShell {
+					kind := foe
+					m.mu.Unlock()
+					m.End()
+					t.Fatalf("seed %d vs %s t=%.2f hp %.1f->%.1f with shield", seed, kind, m.time, prevHP, u.hp)
+				}
+				if u != nil {
+					prevHP, prevID = u.hp, id
+				}
+				ended := m.phase == PhaseEnded
+				m.mu.Unlock()
+				if ended {
+					break
+				}
+			}
+			m.End()
+		}
+	}
+}
+
+func TestWardenDoesNotChase(t *testing.T) {
+	m := NewMatchSeeded(3)
+	m.SetSlot(0, character.KindWarden)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	locked := 0
+	samples := 0
+	var prevBear, prevHead float64
+	for i := 0; i < 90; i++ {
+		m.Tick()
+		time.Sleep(time.Millisecond)
+		m.mu.Lock()
+		var warden, enemy *unit
+		for _, id := range m.order {
+			u := m.units[id]
+			if u == nil || u.role != unitpkg.RoleFighter {
+				continue
+			}
+			if u.kind == character.KindWarden {
+				warden = u
+			} else {
+				enemy = u
+			}
+		}
+		if warden != nil && enemy != nil && warden.v.len() > 1 {
+			to := enemy.p.sub(warden.p)
+			if to.len() > 1 {
+				bear := math.Atan2(to.Y, to.X)
+				head := math.Atan2(warden.v.Y, warden.v.X)
+				if samples > 0 {
+					dBear := angleDiff(bear, prevBear)
+					dHead := angleDiff(head, prevHead)
+					if math.Abs(dBear) > 0.02 && math.Abs(dHead-dBear) < 0.05 {
+						locked++
+					}
+				}
+				prevBear, prevHead = bear, head
+				samples++
+			}
+		}
+		m.mu.Unlock()
+	}
+	if samples < 20 {
+		t.Fatalf("too few samples %d", samples)
+	}
+	if locked*100/samples > 40 {
+		t.Fatalf("chasing: locked=%d/%d", locked, samples)
+	}
+}
+
+func angleDiff(a, b float64) float64 {
+	d := a - b
+	for d > math.Pi {
+		d -= 2 * math.Pi
+	}
+	for d < -math.Pi {
+		d += 2 * math.Pi
+	}
+	return d
+}
+
 func TestDoppelgangerSpawnsThreeClones(t *testing.T) {
 	m := NewMatchSeeded(1)
 	m.SetSlot(0, character.KindDoppel)

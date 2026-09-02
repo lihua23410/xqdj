@@ -12,6 +12,8 @@
   --kind-twin-half: #4b7be2;
   --kind-violet: #b44cff;
   --kind-knight: #ff2a2a;
+  --kind-warden: #8b9cb3;
+  --kind-warden-weak: #c47a4a;
   --hex: #1c2330;
 }
 
@@ -161,6 +163,18 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .ball.projectile {
   opacity: 0.95;
   box-shadow: 0 0 18px currentColor, 0 0 36px currentColor;
+}
+.ball.ring {
+  background: transparent;
+  border: 3px solid var(--kind);
+  box-sizing: content-box;
+  box-shadow: 0 0 10px var(--kind);
+  opacity: 1;
+  z-index: 0;
+  pointer-events: none;
+}
+.ball.fighter {
+  z-index: 1;
 }
 .guide {
   position: absolute;

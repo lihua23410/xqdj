@@ -79,6 +79,9 @@ type 无下限术士 struct {
 }
 
 func (d *无下限术士) Handle(ctx unit.Context, ev unit.Event) {
+	if unit.AcceptHit(ctx, ev) {
+		return
+	}
 	switch e := ev.(type) {
 	case unit.Sense:
 		if !d.spawned {

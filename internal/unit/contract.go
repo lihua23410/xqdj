@@ -53,6 +53,49 @@ type Damage struct {
 	Amount float64
 }
 
+// IncomingDamage 引擎准备扣血。战斗机必须回 ConfirmDamage 才会真正掉 HP；回 BlockDamage 则整包取消。
+type IncomingDamage struct {
+	Token  uint64
+	From   uint64
+	Amount float64
+	Time   float64
+	Speed  float64
+}
+
+type ConfirmDamage struct {
+	Token  uint64
+	UnitID uint64
+	Amount float64
+}
+
+type BlockDamage struct {
+	Token  uint64
+	UnitID uint64
+}
+
+// GuardBreak 壳（Spec.Shell）被物理撞碎时通知主人。DespawnOwned 摘壳不会发这个。
+type GuardBreak struct {
+	Time float64
+	From uint64
+}
+
+func ConfirmHit(ctx Context, d IncomingDamage) {
+	ctx.Out <- ConfirmDamage{Token: d.Token, UnitID: ctx.ID, Amount: d.Amount}
+}
+
+func BlockHit(ctx Context, d IncomingDamage) {
+	ctx.Out <- BlockDamage{Token: d.Token, UnitID: ctx.ID}
+}
+
+func AcceptHit(ctx Context, ev Event) bool {
+	d, ok := ev.(IncomingDamage)
+	if !ok {
+		return false
+	}
+	ConfirmHit(ctx, d)
+	return true
+}
+
 type Spawn struct {
 	Kind    string
 	X       float64
@@ -65,6 +108,11 @@ type Spawn struct {
 
 type Despawn struct {
 	UnitID uint64
+}
+
+type DespawnOwned struct {
+	OwnerID uint64
+	Kind    string
 }
 
 type SwapOwned struct {
