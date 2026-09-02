@@ -9,11 +9,11 @@ const KindMelee = "原型机_近战"
 
 const (
 	meleeRadius    = 18.0
-	meleeSpeed     = 200.0
+	meleeSpeed     = 195.0
 	meleeVision    = 185.0
 	meleeHP        = 100.0
 	meleeDamage    = 7.0
-	meleeSeekBoost = 155.0
+	meleeSeekBoost = 140.0
 	meleeSeekTurn  = 15 * math.Pi / 180
 	meleeHitCD     = 0.1
 )

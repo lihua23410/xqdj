@@ -9,14 +9,14 @@ const KindWaller = "筑墙者"
 
 const (
 	wallerRadius = 18.0
-	wallerSpeed  = 150.0
+	wallerSpeed  = 155.0
 	wallerHP     = 100.0
 	wallerVision = 9999.0
-	wallEvery    = 3.0
-	wallLife     = 7.0
-	wallLen      = 150.0
+	wallEvery    = 2.7
+	wallLife     = 7.5
+	wallLen      = 155.0
 	wallRadius   = 6.0
-	wallDamage   = 3.0
+	wallDamage   = 3.5
 )
 
 func init() {

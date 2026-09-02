@@ -319,6 +319,24 @@ func (m *Match) Tick() {
 	m.checkWinLocked()
 }
 
+func (m *Match) Play(maxTicks int) (winner string, ticks int) {
+	for t := 0; t < maxTicks; t++ {
+		m.Tick()
+		m.mu.Lock()
+		ended := m.phase == PhaseEnded
+		w := m.winner
+		m.mu.Unlock()
+		if ended {
+			if w == "" {
+				w = "平局"
+			}
+			return w, t + 1
+		}
+		runtime.Gosched()
+	}
+	return "平局", maxTicks
+}
+
 func (m *Match) decelerateLocked(dt float64) {
 	const step = 0.2
 	const drop = 10.0

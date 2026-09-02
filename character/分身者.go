@@ -9,10 +9,10 @@ const KindDoppel = "分身者"
 
 const (
 	doppelRadius = 18.0
-	doppelSpeed  = 160.0
+	doppelSpeed  = 175.0
 	doppelHP     = 100.0
 	cloneKind    = "分身"
-	cloneDamage  = 5.0
+	cloneDamage  = 6.0
 	cloneHitCD   = 0.1
 	cloneCount   = 3
 	cloneGap     = 48.0

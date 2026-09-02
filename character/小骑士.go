@@ -10,15 +10,15 @@ const KindKnight = "小骑士"
 
 const (
 	knightRadius   = 18.0
-	knightSpeed    = 175.0
+	knightSpeed    = 178.0
 	knightHP       = 100.0
-	knightStartHP  = 75.0
+	knightStartHP  = 85.0
 	knightVision   = 9999.0
-	knightDamage   = 10.0
+	knightDamage   = 9.0
 	knightHitCD    = 0.1
-	knightCD       = 7.0
+	knightCD       = 6.0
 	knightChainGap = 0.5
-	ramSpeed       = 340.0
+	ramSpeed       = 350.0
 	hexCircum      = 280.0
 )
 

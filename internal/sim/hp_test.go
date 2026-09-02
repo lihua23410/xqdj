@@ -305,10 +305,10 @@ func TestMeleeSpeedReducesIncoming(t *testing.T) {
 			t.Fatalf("speed=%.0f drop=%.2f want %.2f", speed, drop, wantDrop)
 		}
 	}
-	hit(200, 10)
-	hit(350, 9.5)
-	hit(500, 9)
-	hit(950, 7.5)
+	hit(195, 10)
+	hit(345, 9.5)
+	hit(495, 9)
+	hit(945, 7.5)
 	hit(2000, 7.5)
 }
 
@@ -591,7 +591,7 @@ func TestForceAddsAcceleration(t *testing.T) {
 	}
 }
 
-func TestKnightStartsAt75HP(t *testing.T) {
+func TestKnightStartsAt85HP(t *testing.T) {
 	m := NewMatchSeeded(1)
 	m.SetSlot(0, character.KindKnight)
 	m.SetSlot(1, character.KindRanged)
@@ -604,15 +604,15 @@ func TestKnightStartsAt75HP(t *testing.T) {
 		if u == nil || u.kind != character.KindKnight {
 			continue
 		}
-		if u.maxHP != 100 || math.Abs(u.hp-75) > 1e-6 {
-			t.Fatalf("hp=%v/%v want 75/100", u.hp, u.maxHP)
+		if u.maxHP != 100 || math.Abs(u.hp-85) > 1e-6 {
+			t.Fatalf("hp=%v/%v want 85/100", u.hp, u.maxHP)
 		}
 		return
 	}
 	t.Fatal("no knight")
 }
 
-func TestWallerPlacesWallAfterThreeSeconds(t *testing.T) {
+func TestWallerPlacesWallAfterDelay(t *testing.T) {
 	m := NewMatchSeeded(3)
 	m.SetSlot(0, character.KindWaller)
 	m.SetSlot(1, character.KindRanged)
@@ -626,7 +626,7 @@ func TestWallerPlacesWallAfterThreeSeconds(t *testing.T) {
 		tm := m.time
 		m.mu.Unlock()
 		if n > 0 {
-			if tm < 2.9 {
+			if tm < 2.2 {
 				t.Fatalf("wall at t=%.3f too early", tm)
 			}
 			return

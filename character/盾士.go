@@ -10,7 +10,7 @@ const KindWarden = "盾士"
 
 const (
 	wardenRadius = 18.0
-	wardenSpeed  = 155.0
+	wardenSpeed  = 165.0
 	wardenHP     = 100.0
 	wardenVision = 9999.0
 
@@ -19,12 +19,12 @@ const (
 	kindWeakShard  = "弱化碎片"
 	shieldRadius   = 20.0
 	shardRadius    = 6.0
-	shardMinSpeed  = 70.0
-	shardMaxSpeed  = 250.0
-	fullShardN     = 7
-	weakShardN     = 5
-	fullShardDmg   = 4.0
-	weakShardDmg   = 3.0
+	shardMinSpeed  = 90.0
+	shardMaxSpeed  = 280.0
+	fullShardN     = 8
+	weakShardN     = 6
+	fullShardDmg   = 6.0
+	weakShardDmg   = 4.0
 	shardWallHits  = 2 // 弹 1 次，第 2 次撞墙消失
 	shieldRefresh  = 8.0
 	shieldLostTrig = 40.0

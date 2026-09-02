@@ -11,7 +11,7 @@ const (
 	twinRadius = 18.0
 	twinSpeed  = 200.0
 	twinHP     = 100.0
-	twinDamage = 6.0
+	twinDamage = 7.0
 	twinHitCD  = 0.1
 	twinGap    = 2.0
 	twinKind   = "无下限"
@@ -21,9 +21,9 @@ const (
 
 	purpleKind      = "紫弹"
 	purpleRadius    = 32.0 // 约 5.6 倍体积（相对 r=18）
-	purpleSpeed     = 320.0
-	purpleDamage    = 14.0
-	purpleCD        = 0.45
+	purpleSpeed     = 300.0
+	purpleDamage    = 12.0
+	purpleCD        = 0.5
 	purpleOffscreen = 640.0
 )
 

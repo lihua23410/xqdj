@@ -9,16 +9,16 @@ const KindRanged = "原型机_远程"
 
 const (
 	rangedRadius       = 18.0
-	rangedSpeed        = 140.0
+	rangedSpeed        = 148.0
 	rangedVision       = 9999.0
 	rangedHP           = 100.0
-	rangedFireInterval = 2
+	rangedFireInterval = 1.6
 
 	kindBullet    = "子弹"
 	bulletRadius  = 6.0
-	bulletSpeed   = 160.0
+	bulletSpeed   = 185.0
 	bulletHP      = 1.0
-	bulletDamage  = 8.0
+	bulletDamage  = 9.0
 	bulletBounces = 3
 )
 
