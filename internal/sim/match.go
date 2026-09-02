@@ -44,6 +44,29 @@ type spawnSpot struct {
 	r float64
 }
 
+type barrier struct {
+	id     uint64
+	owner  uint64
+	slot   int
+	kind   string
+	a, b   vec
+	radius float64
+	until  float64
+	amount float64
+	hitAt  map[uint64]float64
+}
+
+type wallSnap struct {
+	ID     uint64  `json:"id"`
+	X1     float64 `json:"x1"`
+	Y1     float64 `json:"y1"`
+	X2     float64 `json:"x2"`
+	Y2     float64 `json:"y2"`
+	Radius float64 `json:"radius"`
+	Kind   string  `json:"kind"`
+	Slot   int     `json:"slot"`
+}
+
 type Match struct {
 	mu       sync.Mutex
 	phase    Phase
@@ -60,6 +83,8 @@ type Match struct {
 	rng      *rand.Rand
 	fx       []unitpkg.FX
 	hitStop  int
+	walls    []*barrier
+	pending  []unitpkg.Damage
 }
 
 func NewMatch() *Match {
@@ -100,6 +125,7 @@ func (m *Match) SnapshotJSON() []byte {
 		HexR     float64            `json:"hexRadius"`
 		HitStop  int                `json:"hitStop"`
 		Units    []unitpkg.Snapshot `json:"units"`
+		Walls    []wallSnap         `json:"walls"`
 		Effects  []unitpkg.FX       `json:"effects"`
 	}{
 		Type:     "state",
@@ -113,6 +139,7 @@ func (m *Match) SnapshotJSON() []byte {
 		HexR:     HexRadius,
 		HitStop:  m.hitStop,
 		Units:    make([]unitpkg.Snapshot, 0, len(m.order)),
+		Walls:    make([]wallSnap, 0, len(m.walls)),
 		Effects:  append([]unitpkg.FX(nil), m.fx...),
 	}
 	for _, id := range m.order {
@@ -121,6 +148,12 @@ func (m *Match) SnapshotJSON() []byte {
 			continue
 		}
 		msg.Units = append(msg.Units, u.snap())
+	}
+	for _, w := range m.walls {
+		msg.Walls = append(msg.Walls, wallSnap{
+			ID: w.id, X1: w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
+			Radius: w.radius, Kind: w.kind, Slot: w.slot,
+		})
 	}
 	b, _ := json.Marshal(msg)
 	return b
@@ -251,7 +284,12 @@ func (m *Match) Tick() {
 		return
 	}
 	m.physicsLocked(DT)
+	for _, d := range m.pending {
+		m.applyCmdLocked(d)
+	}
+	m.pending = m.pending[:0]
 	m.time += DT
+	m.expireWallsLocked()
 	m.seq++
 	m.emitLocked()
 	m.checkWinLocked()
@@ -296,6 +334,8 @@ func (m *Match) resetLocked() {
 	m.winnerID = 0
 	m.seq = 0
 	m.hitStop = 0
+	m.walls = nil
+	m.pending = nil
 }
 
 func (m *Match) stopAllLocked() {
@@ -304,6 +344,7 @@ func (m *Match) stopAllLocked() {
 	}
 	m.units = make(map[uint64]*unit)
 	m.order = nil
+	m.walls = nil
 }
 
 func (m *Match) killLocked(u *unit) {
@@ -423,9 +464,63 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		m.removeLocked(u)
 	case unitpkg.SwapOwned:
 		m.swapOwnedLocked(c.UnitID)
+	case unitpkg.PlaceWall:
+		m.placeWallLocked(c)
 	case unitpkg.FX:
 		m.fx = append(m.fx, c)
 	}
+}
+
+func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
+	if c.Life <= 0 || c.Radius <= 0 {
+		return
+	}
+	a, b := vec{c.X1, c.Y1}, vec{c.X2, c.Y2}
+	if a.sub(b).len2() < 1 {
+		return
+	}
+	m.nextID++
+	m.fx = append(m.fx, unitpkg.FX{
+		Name: "wall-spawn", Kind: c.Kind, Slot: c.Slot,
+		X: a.X, Y: a.Y, VX: b.X, VY: b.Y,
+	})
+	m.walls = append(m.walls, &barrier{
+		id:     m.nextID,
+		owner:  c.OwnerID,
+		slot:   c.Slot,
+		kind:   c.Kind,
+		a:      a,
+		b:      b,
+		radius: c.Radius,
+		until:  m.time + c.Life,
+		amount: c.Amount,
+		hitAt:  map[uint64]float64{},
+	})
+}
+
+func (m *Match) expireWallsLocked() {
+	n := 0
+	for _, w := range m.walls {
+		if m.time < w.until {
+			m.walls[n] = w
+			n++
+			continue
+		}
+		m.fx = append(m.fx, unitpkg.FX{
+			Name: "wall-fade", Kind: w.kind, Slot: w.slot,
+			X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
+		})
+	}
+	m.walls = m.walls[:n]
+}
+
+func (m *Match) wallByID(id uint64) *barrier {
+	for _, w := range m.walls {
+		if w.id == id {
+			return w
+		}
+	}
+	return nil
 }
 
 func (m *Match) swapOwnedLocked(bodyID uint64) {
@@ -495,8 +590,9 @@ func (m *Match) physicsLocked(dt float64) {
 	const maxIter = 24
 	remain := dt
 	ignore := map[pairID]bool{}
+	ignoreUW := map[uwID]bool{}
 	for iter := 0; iter < maxIter && remain > 1e-8; iter++ {
-		hit, ok := m.earliestHitLocked(remain, ignore)
+		hit, ok := m.earliestHitLocked(remain, ignore, ignoreUW)
 		if !ok {
 			for _, id := range m.order {
 				u := m.units[id]
@@ -519,6 +615,9 @@ func (m *Match) physicsLocked(dt float64) {
 		if hit.kind == hitPair {
 			ignore[canonPair(hit.a, hit.b)] = true
 		}
+		if hit.kind == hitBarrier {
+			ignoreUW[uwID{hit.a, hit.w}] = true
+		}
 		remain -= hit.t
 		if remain < 0 {
 			remain = 0
@@ -527,18 +626,34 @@ func (m *Match) physicsLocked(dt float64) {
 	m.constrainAllLocked()
 }
 
-func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool) (ccdHit, bool) {
+type uwID struct{ u, w uint64 }
+
+func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW map[uwID]bool) (ccdHit, bool) {
 	best := ccdHit{t: dt + 1}
 	found := false
 	for _, id := range m.order {
 		u := m.units[id]
-		if !u.solid {
+		if u == nil || !u.solid {
 			continue
 		}
 		if h, ok := sweptPointVsHex(u.p, u.v, u.radius, dt, m.hex); ok {
 			if h.t < best.t {
 				h.a = u.id
 				best = h
+				found = true
+			}
+		}
+		for _, w := range m.walls {
+			if ignoreUW[uwID{u.id, w.id}] {
+				continue
+			}
+			R := u.radius + w.radius + skin
+			t, nrm, ok := sweptPointVsCapsule(u.p, u.v, dt, w.a, w.b, R)
+			if !ok {
+				continue
+			}
+			if t < best.t {
+				best = ccdHit{kind: hitBarrier, t: t, a: u.id, w: w.id, n: nrm}
 				found = true
 			}
 		}
@@ -590,6 +705,31 @@ func (m *Match) resolveLocked(h ccdHit) {
 		}
 		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
 		u.v = reflectVelocity(u.v, h.n)
+	case hitBarrier:
+		u := m.units[h.a]
+		w := m.wallByID(h.w)
+		if u == nil || w == nil {
+			return
+		}
+		R := u.radius + w.radius + skin
+		q := closestOnSeg(u.p, w.a, w.b)
+		d := u.p.sub(q)
+		dist := d.len()
+		if dist < 1e-9 {
+			d = perp(w.b.sub(w.a))
+			dist = d.len()
+		}
+		if dist > 1e-9 && dist < R {
+			u.p = q.add(d.norm().mul(R))
+		}
+		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
+		u.v = reflectVelocity(u.v, h.n)
+		if u.role == unitpkg.RoleFighter && u.slot != w.slot && u.id != w.owner {
+			if at, ok := w.hitAt[u.id]; !ok || m.time >= at {
+				w.hitAt[u.id] = m.time + 0.1
+				m.pending = append(m.pending, unitpkg.Damage{From: w.owner, To: u.id, Amount: w.amount})
+			}
+		}
 	case hitPair:
 		a := m.units[h.a]
 		b := m.units[h.b]
@@ -645,7 +785,7 @@ func (m *Match) resolveLocked(h ccdHit) {
 func (m *Match) constrainAllLocked() {
 	for _, id := range m.order {
 		u := m.units[id]
-		if !u.solid {
+		if u == nil || !u.solid {
 			continue
 		}
 		limit := m.hex.d[0] - u.radius - skin
@@ -655,6 +795,23 @@ func (m *Match) constrainAllLocked() {
 			if pen > 0 {
 				u.p = u.p.sub(n.mul(pen))
 			}
+		}
+		for _, w := range m.walls {
+			R := u.radius + w.radius + skin
+			q := closestOnSeg(u.p, w.a, w.b)
+			d := u.p.sub(q)
+			dist := d.len()
+			if dist >= R {
+				continue
+			}
+			n := d
+			if n.len2() < 1e-12 {
+				n = perp(w.b.sub(w.a))
+			}
+			if n.len2() < 1e-12 {
+				continue
+			}
+			u.p = q.add(n.norm().mul(R))
 		}
 	}
 }

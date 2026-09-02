@@ -7,6 +7,7 @@ const KIND_COLORS = {
   原型机_远程: "var(--kind-ranged)",
   分身者: "var(--kind-doppel)",
   分身: "var(--kind-doppel)",
+  筑墙者: "var(--kind-waller)",
   子弹: "var(--kind-ranged)",
 };
 
@@ -42,6 +43,59 @@ function burst(x, y, kind, n = 10) {
   }
 }
 
+function wallSeg(fx, scale, cx, cy) {
+  const [x1, y1] = screenPos(fx.x, fx.y, scale, cx, cy);
+  const [x2, y2] = screenPos(fx.vx, fx.vy, scale, cx, cy);
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  return {
+    x1, y1, x2, y2,
+    mx: (x1 + x2) / 2,
+    my: (y1 + y2) / 2,
+    dx, dy,
+    len: Math.hypot(dx, dy),
+    ang: Math.atan2(dy, dx),
+  };
+}
+
+function dustAlong(s, kind, n, spread) {
+  for (let i = 0; i < n; i++) {
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const x = s.x1 + s.dx * t;
+    const y = s.y1 + s.dy * t;
+    const a = s.ang + Math.PI / 2 + (Math.random() - 0.5) * 0.8;
+    const d = (Math.random() - 0.5) * spread;
+    spawnFx("fx-wall-dust", x, y, kind, {
+      "--dx": `${Math.cos(a) * d}px`,
+      "--dy": `${Math.sin(a) * d}px`,
+    });
+  }
+}
+
+function playWallFx(fx, scale, cx, cy, fading) {
+  const s = wallSeg(fx, scale, cx, cy);
+  const kind = fx.kind;
+  const slash = spawnFx(fading ? "fx-wall-slash out" : "fx-wall-slash", s.mx, s.my, kind, {
+    "--len": `${Math.max(24, s.len)}px`,
+    "--ang": `${s.ang}rad`,
+  });
+  if (slash) {
+    slash.style.width = `${Math.max(24, s.len)}px`;
+  }
+  spawnFx("fx-flash", s.x1, s.y1, kind);
+  spawnFx("fx-flash", s.x2, s.y2, kind);
+  spawnFx("fx-ring", s.mx, s.my, kind);
+  if (fading) {
+    burst(s.mx, s.my, kind, 16);
+    burst(s.x1, s.y1, kind, 8);
+    burst(s.x2, s.y2, kind, 8);
+    dustAlong(s, kind, 14, 46);
+  } else {
+    spawnFx("fx-shock", s.mx, s.my, kind);
+    dustAlong(s, kind, 10, 22);
+  }
+}
+
 function playEffects(effects, scale, cx, cy) {
   for (const fx of effects || []) {
     const [x, y] = screenPos(fx.x, fx.y, scale, cx, cy);
@@ -62,6 +116,13 @@ function playEffects(effects, scale, cx, cy) {
       spawnFx("fx-swap", x, y, kind);
       spawnFx("fx-flash", x, y, kind);
       spawnFx("fx-ring", x, y, kind);
+    } else if (fx.name === "wall-spawn") {
+      playWallFx(fx, scale, cx, cy, false);
+    } else if (fx.name === "wall-fade") {
+      playWallFx(fx, scale, cx, cy, true);
+    } else if (fx.name === "wall") {
+      spawnFx("fx-flash", x, y, kind);
+      spawnFx("fx-shock", x, y, kind);
     } else if (fx.name === "impact" || fx.name === "hit") {
       spawnFx("fx-flash", x, y, kind);
       spawnFx("fx-shock", x, y, kind);
@@ -73,6 +134,8 @@ const lobby = document.getElementById("lobby");
 const arena = document.getElementById("arena");
 const hex = document.getElementById("hex");
 const unitsEl = document.getElementById("units");
+const wallsEl = document.getElementById("walls");
+const guidesEl = document.getElementById("guides");
 const banner = document.getElementById("banner");
 const kinds0 = document.getElementById("kinds-0");
 const kinds1 = document.getElementById("kinds-1");
@@ -131,6 +194,97 @@ function renderLobby() {
   }
 }
 
+const WALL_GUIDE_LEN = 150;
+
+function placeSeg(el, x1, y1, x2, y2, kind) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  el.style.width = `${Math.hypot(dx, dy)}px`;
+  el.style.left = `${(x1 + x2) / 2}px`;
+  el.style.top = `${(y1 + y2) / 2}px`;
+  el.style.setProperty("--ang", `${Math.atan2(dy, dx)}rad`);
+  el.style.setProperty("--kind", kindColor(kind));
+}
+
+function ensureGuide(id, cls) {
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement("div");
+    el.id = id;
+    el.className = `guide ${cls}`;
+    guidesEl.appendChild(el);
+  }
+  return el;
+}
+
+function renderGuides(fighters, scale, cx, cy) {
+  if (!guidesEl) return;
+  const seen = new Set();
+  const wallers = (fighters || []).filter((u) => u.kind === "筑墙者");
+  const drawn = new Set();
+  for (const w of wallers) {
+    const enemy = (fighters || []).find((u) => u.id !== w.id);
+    if (!enemy) continue;
+    const pair = w.id < enemy.id ? `${w.id}-${enemy.id}` : `${enemy.id}-${w.id}`;
+    if (drawn.has(pair)) continue;
+    drawn.add(pair);
+    const [ax, ay] = screenPos(w.x, w.y, scale, cx, cy);
+    const [bx, by] = screenPos(enemy.x, enemy.y, scale, cx, cy);
+    const link = ensureGuide(`guide-link-${pair}`, "link");
+    placeSeg(link, ax, ay, bx, by, "筑墙者");
+    seen.add(link.id);
+
+    const dx = enemy.x - w.x;
+    const dy = enemy.y - w.y;
+    const n = Math.hypot(dx, dy);
+    if (n < 1e-6) continue;
+    const px = -dy / n;
+    const py = dx / n;
+    const half = WALL_GUIDE_LEN / 2;
+    const mx = (w.x + enemy.x) / 2;
+    const my = (w.y + enemy.y) / 2;
+    const [g1x, g1y] = screenPos(mx + px * half, my + py * half, scale, cx, cy);
+    const [g2x, g2y] = screenPos(mx - px * half, my - py * half, scale, cx, cy);
+    const hint = ensureGuide(`guide-wall-${pair}`, "hint");
+    placeSeg(hint, g1x, g1y, g2x, g2y, "筑墙者");
+    seen.add(hint.id);
+  }
+  for (const child of [...guidesEl.children]) {
+    if (!seen.has(child.id)) child.remove();
+  }
+}
+
+function renderWalls(scale, cx, cy) {
+  if (!wallsEl) return;
+  const seen = new Set();
+  for (const w of state.walls || []) {
+    seen.add(String(w.id));
+    let el = document.getElementById(`wall-${w.id}`);
+    if (!el) {
+      el = document.createElement("div");
+      el.id = `wall-${w.id}`;
+      el.className = "wall";
+      wallsEl.appendChild(el);
+    }
+    const [x1, y1] = screenPos(w.x1, w.y1, scale, cx, cy);
+    const [x2, y2] = screenPos(w.x2, w.y2, scale, cx, cy);
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    const thick = 2 * (w.radius || 6) * scale;
+    el.style.width = `${len}px`;
+    el.style.height = `${thick}px`;
+    el.style.left = `${(x1 + x2) / 2}px`;
+    el.style.top = `${(y1 + y2) / 2}px`;
+    el.style.setProperty("--ang", `${Math.atan2(dy, dx)}rad`);
+    el.style.setProperty("--kind", kindColor(w.kind));
+  }
+  for (const child of [...wallsEl.children]) {
+    const id = child.id.slice("wall-".length);
+    if (!seen.has(id)) child.remove();
+  }
+}
+
 function renderArena() {
   const w = hex.clientWidth;
   const h = hex.clientHeight;
@@ -162,6 +316,8 @@ function renderArena() {
   const pauseBtn = document.getElementById("btn-pause");
   pauseBtn.textContent = state.phase === "paused" ? "继续" : "暂停";
 
+  renderGuides(fighters, scale, cx, cy);
+  renderWalls(scale, cx, cy);
   playEffects(state.effects, scale, cx, cy);
 
   const seen = new Set();
@@ -269,6 +425,8 @@ function render() {
   if (inLobby) {
     prevHP.clear();
     if (fxRoot) fxRoot.innerHTML = "";
+    if (wallsEl) wallsEl.innerHTML = "";
+    if (guidesEl) guidesEl.innerHTML = "";
     renderLobby();
   } else {
     lobbyKey = "";

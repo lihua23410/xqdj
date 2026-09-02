@@ -7,6 +7,7 @@
   --kind-melee: #3dd6c6;
   --kind-ranged: #f0a050;
   --kind-doppel: #7a9bb8;
+  --kind-waller: #c4a36a;
   --hex: #1c2330;
 }
 
@@ -119,8 +120,8 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .hex.hitstop {
   filter: brightness(1.18) contrast(1.12) saturate(1.15);
 }
-#fx, #units { position: absolute; inset: 0; }
-#fx { pointer-events: none; overflow: hidden; }
+#fx, #units, #walls, #guides { position: absolute; inset: 0; }
+#fx, #walls, #guides { pointer-events: none; overflow: hidden; }
 
 .ball {
   position: absolute;
@@ -137,6 +138,82 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .ball.projectile {
   opacity: 0.9;
   box-shadow: 0 0 8px currentColor;
+}
+.guide {
+  position: absolute;
+  height: 0;
+  border-top: 2px dashed currentColor;
+  color: var(--kind);
+  transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
+  transform-origin: center center;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+.guide.link {
+  opacity: 0.45;
+  border-top-width: 2px;
+}
+.guide.hint {
+  opacity: 0.75;
+  border-top-width: 3px;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+.wall {
+  position: absolute;
+  border-radius: 999px;
+  background: var(--kind);
+  color: var(--kind);
+  box-shadow: 0 0 14px currentColor, 0 0 4px #fff8;
+  transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
+  transform-origin: center center;
+  pointer-events: none;
+  opacity: 0.92;
+  animation: wall-grow 0.32s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+}
+@keyframes wall-grow {
+  from {
+    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.06);
+    opacity: 0;
+    filter: brightness(2.4);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1);
+    opacity: 0.92;
+    filter: brightness(1);
+  }
+}
+.fx-wall-slash {
+  height: 8px;
+  width: var(--len, 80px);
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, #fff, currentColor, #fff, transparent);
+  box-shadow: 0 0 16px currentColor, 0 0 28px #fff8;
+  animation: wall-slash-in 0.38s ease-out forwards;
+}
+@keyframes wall-slash-in {
+  0% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.05); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1); opacity: 0; }
+}
+.fx-wall-slash.out {
+  animation: wall-slash-out 0.42s ease-in forwards;
+}
+@keyframes wall-slash-out {
+  0% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1); opacity: 1; filter: brightness(2); }
+  100% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.08); opacity: 0; }
+}
+.fx-wall-dust {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  animation: wall-dust 0.5s ease-out forwards;
+}
+@keyframes wall-dust {
+  to {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(40deg);
+    opacity: 0;
+  }
 }
 .ball.dashing {
   box-shadow: 0 0 28px currentColor, 0 0 56px currentColor;

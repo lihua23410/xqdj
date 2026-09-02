@@ -25,6 +25,19 @@ func TestHexagonContainsCenter(t *testing.T) {
 	}
 }
 
+func TestSweptPointVsCapsuleHeadOn(t *testing.T) {
+	t0, n, ok := sweptPointVsCapsule(vec{-20, 0}, vec{10, 0}, 2, vec{0, -100}, vec{0, 100}, 6)
+	if !ok {
+		t.Fatal("expected hit")
+	}
+	if t0 < 1.3 || t0 > 1.5 {
+		t.Fatalf("toi=%v", t0)
+	}
+	if n.X < 0.9 {
+		t.Fatalf("normal %+v", n)
+	}
+}
+
 func TestSweptCirclesHeadOn(t *testing.T) {
 	t0, _, ok := sweptCircles(vec{-20, 0}, vec{10, 0}, 5, vec{20, 0}, vec{-10, 0}, 5, 2)
 	if !ok {

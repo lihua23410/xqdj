@@ -68,13 +68,102 @@ const (
 	hitNone hitKind = iota
 	hitWall
 	hitPair
+	hitBarrier
 )
 
 type ccdHit struct {
 	kind hitKind
 	t    float64
 	a, b uint64
+	w    uint64
 	n    vec
+}
+
+func perp(v vec) vec { return vec{-v.Y, v.X} }
+
+func closestOnSeg(p, a, b vec) vec {
+	ab := b.sub(a)
+	ab2 := ab.len2()
+	if ab2 < 1e-12 {
+		return a
+	}
+	t := p.sub(a).dot(ab) / ab2
+	if t < 0 {
+		t = 0
+	} else if t > 1 {
+		t = 1
+	}
+	return a.add(ab.mul(t))
+}
+
+func sweptPointVsCapsule(p, vel vec, dt float64, a, b vec, R float64) (float64, vec, bool) {
+	q := closestOnSeg(p, a, b)
+	d := p.sub(q)
+	dist := d.len()
+	if dist < R-1e-8 {
+		n := q.sub(p)
+		if n.len2() < 1e-12 {
+			n = perp(b.sub(a))
+		}
+		return 0, n.norm(), true
+	}
+	bestT := dt + 1
+	var bestN vec
+	found := false
+	consider := func(t float64, at vec) {
+		if t < -1e-9 || t > dt {
+			return
+		}
+		if t < 0 {
+			t = 0
+		}
+		qq := closestOnSeg(at, a, b)
+		n := qq.sub(at)
+		if n.len2() < 1e-12 {
+			return
+		}
+		if t < bestT {
+			bestT = t
+			bestN = n.norm()
+			found = true
+		}
+	}
+	if t, _, ok := sweptCircles(p, vel, 0, a, vec{}, R, dt); ok {
+		consider(t, p.add(vel.mul(t)))
+	}
+	if t, _, ok := sweptCircles(p, vel, 0, b, vec{}, R, dt); ok {
+		consider(t, p.add(vel.mul(t)))
+	}
+	ab := b.sub(a)
+	alen := ab.len()
+	if alen > 1e-9 {
+		u := ab.norm()
+		n0 := perp(u)
+		for _, s := range []vec{n0, n0.mul(-1)} {
+			limit := a.dot(s) + R
+			vn := s.dot(vel)
+			if vn >= -1e-9 {
+				continue
+			}
+			t := (limit - s.dot(p)) / vn
+			if t < -1e-9 || t > dt {
+				continue
+			}
+			if t < 0 {
+				t = 0
+			}
+			at := p.add(vel.mul(t))
+			pr := at.sub(a).dot(u)
+			if pr < 0 || pr > alen {
+				continue
+			}
+			consider(t, at)
+		}
+	}
+	if !found {
+		return 0, vec{}, false
+	}
+	return bestT, bestN, true
 }
 
 func sweptPointVsHex(p, vel vec, radius, dt float64, hex hexagon) (ccdHit, bool) {

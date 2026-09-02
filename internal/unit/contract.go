@@ -67,6 +67,17 @@ type SwapOwned struct {
 	UnitID uint64
 }
 
+type PlaceWall struct {
+	OwnerID uint64
+	Slot    int
+	Kind    string
+	X1, Y1  float64
+	X2, Y2  float64
+	Radius  float64
+	Life    float64
+	Amount  float64
+}
+
 type FX struct {
 	Name   string  `json:"name"`
 	UnitID uint64  `json:"unitId"`

@@ -220,6 +220,29 @@ func TestDoppelgangerSpawnsThreeClones(t *testing.T) {
 	}
 }
 
+func TestWallerPlacesWallAfterThreeSeconds(t *testing.T) {
+	m := NewMatchSeeded(3)
+	m.SetSlot(0, character.KindWaller)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 200; i++ {
+		m.Tick()
+		time.Sleep(time.Millisecond)
+		m.mu.Lock()
+		n := len(m.walls)
+		tm := m.time
+		m.mu.Unlock()
+		if n > 0 {
+			if tm < 2.9 {
+				t.Fatalf("wall at t=%.3f too early", tm)
+			}
+			return
+		}
+	}
+	t.Fatal("no wall after 200 ticks")
+}
+
 func joinLines(lines []string, n int) string {
 	if len(lines) > n {
 		lines = lines[:n]
