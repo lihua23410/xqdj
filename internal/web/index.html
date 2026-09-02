@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>小球对战</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <section id="lobby" class="panel">
+    <h1>小球对战</h1>
+    <p class="sub">六边形场地 · 1v1 · 选两只原型机</p>
+    <div class="slots">
+      <div class="slot" data-slot="0">
+        <h2>左槽</h2>
+        <div class="kinds" id="kinds-0"></div>
+      </div>
+      <div class="slot" data-slot="1">
+        <h2>右槽</h2>
+        <div class="kinds" id="kinds-1"></div>
+      </div>
+    </div>
+    <button id="btn-start" type="button">开始</button>
+  </section>
+
+  <section id="arena" class="panel hidden">
+    <header class="hud">
+      <div class="fighter" id="fighter-0">
+        <span class="name"></span>
+        <span class="hp-num"></span>
+        <div class="hp"><i></i></div>
+      </div>
+      <div class="controls">
+        <button id="btn-pause" type="button">暂停</button>
+        <button id="btn-end" type="button">结束</button>
+      </div>
+      <div class="fighter" id="fighter-1">
+        <span class="name"></span>
+        <span class="hp-num"></span>
+        <div class="hp"><i></i></div>
+      </div>
+    </header>
+    <div class="stage-wrap">
+      <div id="hex" class="hex">
+        <div id="fx"></div>
+        <div id="units"></div>
+      </div>
+    </div>
+    <div id="banner" class="banner hidden"></div>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>
