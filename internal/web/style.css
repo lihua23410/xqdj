@@ -156,10 +156,6 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 }
 .ball.semi {
   clip-path: inset(0 0 0 50%);
-  box-shadow: 0 0 16px currentColor, 0 0 32px currentColor;
-}
-.ball.semi .hp-float {
-  transform: translateX(-50%) rotate(calc(-1 * var(--face-ang, 0rad)));
 }
 .ball.projectile {
   opacity: 0.95;
@@ -183,6 +179,12 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   opacity: 0.75;
   border-top-width: 3px;
   filter: drop-shadow(0 0 4px currentColor);
+}
+.guide.bond {
+  opacity: 0.42;
+  border-top-width: 2px;
+  border-top-style: dashed;
+  filter: drop-shadow(0 0 6px currentColor);
 }
 .wall {
   position: absolute;
@@ -258,9 +260,9 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   animation: ghost-fade-semi 0.28s linear forwards;
 }
 .ghost.trail {
-  opacity: 0.55;
-  box-shadow: 0 0 16px currentColor;
-  animation: ghost-fade 0.32s linear forwards;
+  opacity: 0.5;
+  box-shadow: 0 0 18px currentColor;
+  animation: ghost-fade 0.36s linear forwards;
 }
 @keyframes ghost-fade {
   to { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
@@ -324,6 +326,39 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 @keyframes beam {
   to { width: 72px; opacity: 0; }
 }
+.fx-beam.void {
+  height: 7px;
+  width: 56px;
+  background: linear-gradient(90deg, transparent, currentColor, #fff 70%, currentColor);
+  box-shadow: 0 0 16px currentColor, 0 0 28px #fff6;
+  animation: beam-void 0.28s ease-out forwards;
+}
+@keyframes beam-void {
+  to { width: 96px; opacity: 0; }
+}
+.fx-split-slash {
+  height: 6px;
+  width: 52px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, #fff, currentColor, #fff, transparent);
+  box-shadow: 0 0 14px currentColor, 0 0 22px #fff8;
+  animation: split-slash 0.36s ease-out forwards;
+}
+@keyframes split-slash {
+  0% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.12); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1.6); opacity: 0; }
+}
+.fx-void-core {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 18px currentColor, 0 0 32px #fff;
+  animation: void-core 0.4s ease-out forwards;
+}
+@keyframes void-core {
+  to { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+}
 .fx-ring {
   width: 36px;
   height: 36px;
@@ -363,9 +398,6 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 }
 .hp-float {
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + 4px);
-  transform: translateX(-50%);
   color: #fff;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
@@ -373,31 +405,41 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   text-shadow: 0 1px 2px #000, 0 0 6px #000;
   pointer-events: none;
   white-space: nowrap;
+  z-index: 3;
+  transform: translate(-50%, -100%);
 }
 .field-ring {
   position: absolute;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  border: 2px dashed currentColor;
+  border: 1px dashed currentColor;
   color: var(--kind);
-  background: color-mix(in srgb, var(--kind) 8%, transparent);
+  background: color-mix(in srgb, var(--kind) 10%, transparent);
   pointer-events: none;
   box-sizing: border-box;
-  opacity: 0.55;
+  opacity: 0.5;
+}
+.field-ring i {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  opacity: 0.45;
+  box-shadow: 0 0 10px currentColor;
 }
 .field-ring.pull {
-  animation: field-pull 1.1s ease-in infinite;
+  animation: field-pull 1.35s ease-in-out infinite;
 }
 .field-ring.push {
-  animation: field-push 1.1s ease-out infinite;
+  animation: field-push 1.35s ease-in-out infinite;
 }
 @keyframes field-pull {
-  from { transform: translate(-50%, -50%) scale(1.15); opacity: 0.15; }
-  to { transform: translate(-50%, -50%) scale(0.55); opacity: 0.7; }
+  from { transform: translate(-50%, -50%) scale(1.06); opacity: 0.22; }
+  to { transform: translate(-50%, -50%) scale(0.78); opacity: 0.62; }
 }
 @keyframes field-push {
-  from { transform: translate(-50%, -50%) scale(0.55); opacity: 0.7; }
-  to { transform: translate(-50%, -50%) scale(1.2); opacity: 0.12; }
+  from { transform: translate(-50%, -50%) scale(0.78); opacity: 0.62; }
+  to { transform: translate(-50%, -50%) scale(1.08); opacity: 0.18; }
 }
 .seek-ring {
   position: absolute;
