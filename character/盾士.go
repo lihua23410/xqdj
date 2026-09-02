@@ -27,7 +27,7 @@ const (
 	weakShardDmg   = 4.0
 	shardWallHits  = 2 // 弹 1 次，第 2 次撞墙消失
 	shieldRefresh  = 10.0
-	shieldLostTrig = 20.0
+	shieldLostTrig = 40.0
 )
 
 func init() {
