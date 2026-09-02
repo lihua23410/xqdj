@@ -39,6 +39,7 @@ func init() {
 		Speed:   wardenSpeed,
 		Vision:  wardenVision,
 		Fighter: true,
+		Look:    unit.Look{Color: "#8b9cb3"},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &盾士{refreshAt: shieldRefresh}
 	})
@@ -51,6 +52,7 @@ func init() {
 		Vision:  0,
 		Fighter: false,
 		Shell:   true,
+		Look:    unit.Look{Color: "#8b9cb3", Ring: true},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &盾{}
 	})
@@ -62,6 +64,7 @@ func init() {
 		Speed:   shardMaxSpeed,
 		Vision:  0,
 		Fighter: false,
+		Look:    unit.Look{Color: "#8b9cb3"},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &盾碎片{owner: info.OwnerID, dmg: fullShardDmg}
 	})
@@ -73,6 +76,7 @@ func init() {
 		Speed:   shardMaxSpeed,
 		Vision:  0,
 		Fighter: false,
+		Look:    unit.Look{Color: "#c47a4a"},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &盾碎片{owner: info.OwnerID, dmg: weakShardDmg}
 	})

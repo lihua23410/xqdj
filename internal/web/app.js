@@ -2,40 +2,119 @@ const fxRoot = document.getElementById("fx");
 let prevHP = new Map();
 let dashGhostAt = new Map();
 
-const KIND_COLORS = {
-  原型机_近战: "var(--kind-melee)",
-  原型机_远程: "var(--kind-ranged)",
-  分身者: "var(--kind-doppel)",
-  分身: "var(--kind-doppel)",
-  筑墙者: "var(--kind-waller)",
-  无下限术士: "var(--kind-twin)",
-  无下限: "var(--kind-twin-half)",
-  紫弹: "var(--kind-violet)",
-  小骑士: "var(--kind-knight)",
-  盾士: "var(--kind-warden)",
-  盾: "var(--kind-warden)",
-  盾碎片: "var(--kind-warden)",
-  弱化碎片: "var(--kind-warden-weak)",
-  子弹: "var(--kind-ranged)",
-};
+const FALLBACK_COLOR = "#3dd6c6";
+
+function lookOf(kind) {
+  const looks = (state && state.looks) || {};
+  return looks[kind] || {};
+}
 
 function kindColor(kind) {
-  return KIND_COLORS[kind] || "var(--kind-melee)";
+  if (FACTION_COLORS[kind]) return FACTION_COLORS[kind];
+  return lookOf(kind).color || FALLBACK_COLOR;
+}
+
+function isChroma(kind) {
+  return !!lookOf(kind).chroma;
+}
+
+function paintKind(el, kind) {
+  const on = isChroma(kind);
+  el.classList.toggle("chroma", on);
+  if (on) el.style.removeProperty("--kind");
+  else el.style.setProperty("--kind", kindColor(kind));
+}
+
+const FACTION_COLORS = {
+  青: "#3ec8e0",
+  红: "#ff3b3b",
+  紫: "#b44cff",
+  苍: "#8dffb0",
+};
+const FACTION_FILES = {
+  青: "/faction/qing.png",
+  红: "/faction/hong.png",
+  紫: "/faction/zi.png",
+  苍: "/faction/cang.png",
+};
+const FACTION_ORDER = ["青", "红", "紫", "苍"];
+
+function fillFactionHud(root, u) {
+  if (!root) return;
+  root.innerHTML = "";
+  if (!u || !u.faction) return;
+  const now = document.createElement("img");
+  now.className = "now";
+  now.src = FACTION_FILES[u.faction];
+  now.alt = u.faction;
+  root.appendChild(now);
+  if (!u.seen) return;
+  const got = new Set(u.seen || []);
+  for (const f of FACTION_ORDER) {
+    const pip = document.createElement("img");
+    pip.className = `pip${got.has(f) ? " on" : ""}`;
+    pip.src = FACTION_FILES[f];
+    pip.alt = f;
+    root.appendChild(pip);
+  }
+}
+
+function placeFactionBadge(u, sx, sy, r) {
+  const badgeId = `fac-${u.id}`;
+  const pipsId = `pips-${u.id}`;
+  if (u.role !== "fighter" || !u.faction) {
+    document.getElementById(badgeId)?.remove();
+    document.getElementById(pipsId)?.remove();
+    return;
+  }
+  let badge = document.getElementById(badgeId);
+  if (!badge) {
+    badge = document.createElement("img");
+    badge.id = badgeId;
+    badge.className = "faction-badge";
+    unitsEl.appendChild(badge);
+  }
+  badge.src = FACTION_FILES[u.faction];
+  badge.alt = u.faction;
+  badge.style.left = `${sx}px`;
+  badge.style.top = `${sy}px`;
+  if (!u.seen) {
+    document.getElementById(pipsId)?.remove();
+    return;
+  }
+  let pips = document.getElementById(pipsId);
+  if (!pips) {
+    pips = document.createElement("div");
+    pips.id = pipsId;
+    pips.className = "faction-pips";
+    unitsEl.appendChild(pips);
+  }
+  const got = new Set(u.seen || []);
+  pips.innerHTML = "";
+  for (const f of FACTION_ORDER) {
+    const img = document.createElement("img");
+    img.src = FACTION_FILES[f];
+    img.alt = f;
+    img.className = got.has(f) ? "on" : "";
+    pips.appendChild(img);
+  }
+  pips.style.left = `${sx}px`;
+  pips.style.top = `${sy - r - 16}px`;
 }
 
 function screenPos(x, y, scale, cx, cy) {
   return [cx + x * scale, cy - y * scale];
 }
 
-function spawnFx(cls, x, y, kind, extra = {}) {
-  if (!fxRoot) return null;
+function spawnFx(cls, x, y, kind, extra = {}, root = fxRoot) {
+  if (!root) return null;
   const el = document.createElement("div");
   el.className = `fx ${cls}`;
   el.style.left = `${x}px`;
   el.style.top = `${y}px`;
   el.style.color = kindColor(kind);
   for (const [k, v] of Object.entries(extra)) el.style.setProperty(k, v);
-  fxRoot.appendChild(el);
+  root.appendChild(el);
   el.addEventListener("animationend", () => el.remove());
   return el;
 }
@@ -159,6 +238,12 @@ function playEffects(effects, scale, cx, cy) {
       spawnFx("fx-ring", x, y, kind);
       spawnFx("fx-shock", x, y, kind);
       burst(x, y, kind, 14);
+    } else if (fx.name === "heal") {
+      const el = spawnFx("fx-dmg heal", x, y - 12, kind);
+      if (el) el.textContent = `+${Math.round(fx.amount || 0)}`;
+    } else if (fx.name === "faction") {
+      spawnFx("fx-flash", x, y, kind);
+      spawnFx("fx-ring", x, y, kind);
     } else if (fx.name === "hurt") {
       const el = spawnFx("fx-dmg", x, y - 12, kind);
       if (el) el.textContent = `-${Math.round(fx.amount || 0)}`;
@@ -235,17 +320,17 @@ function renderLobby() {
       b.textContent = kind;
       b.type = "button";
       b.dataset.slot = String(slot);
-      b.style.setProperty("--kind", kindColor(kind));
+      paintKind(b, kind);
       if (state.slots && state.slots[slot] === kind) b.classList.add("active");
       b.onclick = () => send({ type: "select", slot, kind });
       el.appendChild(b);
     }
     const slotRoot = el.closest(".slot");
-    if (slotRoot) slotRoot.style.setProperty("--kind", kindColor(state.slots[slot]));
+    if (slotRoot) {
+      paintKind(slotRoot, state.slots[slot]);
+    }
   }
 }
-
-const WALL_GUIDE_LEN = 150;
 
 function placeSeg(el, x1, y1, x2, y2, kind) {
   const dx = x2 - x1;
@@ -271,7 +356,7 @@ function ensureGuide(id, cls) {
 function renderGuides(fighters, scale, cx, cy) {
   if (!guidesEl) return;
   const seen = new Set();
-  const wallers = (fighters || []).filter((u) => u.kind === "筑墙者");
+  const wallers = (fighters || []).filter((u) => (lookOf(u.kind).wallGuide || 0) > 0);
   const drawn = new Set();
   for (const w of wallers) {
     const enemy = (fighters || []).find((u) => u.id !== w.id);
@@ -282,7 +367,7 @@ function renderGuides(fighters, scale, cx, cy) {
     const [ax, ay] = screenPos(w.x, w.y, scale, cx, cy);
     const [bx, by] = screenPos(enemy.x, enemy.y, scale, cx, cy);
     const link = ensureGuide(`guide-link-${pair}`, "link");
-    placeSeg(link, ax, ay, bx, by, "筑墙者");
+    placeSeg(link, ax, ay, bx, by, w.kind);
     seen.add(link.id);
 
     const dx = enemy.x - w.x;
@@ -291,13 +376,13 @@ function renderGuides(fighters, scale, cx, cy) {
     if (n < 1e-6) continue;
     const px = -dy / n;
     const py = dx / n;
-    const half = WALL_GUIDE_LEN / 2;
+    const half = lookOf(w.kind).wallGuide / 2;
     const mx = (w.x + enemy.x) / 2;
     const my = (w.y + enemy.y) / 2;
     const [g1x, g1y] = screenPos(mx + px * half, my + py * half, scale, cx, cy);
     const [g2x, g2y] = screenPos(mx - px * half, my - py * half, scale, cx, cy);
     const hint = ensureGuide(`guide-wall-${pair}`, "hint");
-    placeSeg(hint, g1x, g1y, g2x, g2y, "筑墙者");
+    placeSeg(hint, g1x, g1y, g2x, g2y, w.kind);
     seen.add(hint.id);
   }
   renderTwinBonds(scale, cx, cy, seen);
@@ -309,22 +394,24 @@ function renderGuides(fighters, scale, cx, cy) {
 function renderTwinBonds(scale, cx, cy, seen) {
   const bySlot = new Map();
   for (const u of state.units || []) {
-    if (u.kind !== "无下限术士" && u.kind !== "无下限") continue;
-    let pair = bySlot.get(u.slot);
-    if (!pair) {
-      pair = {};
-      bySlot.set(u.slot, pair);
+    if (!lookOf(u.kind).bond) continue;
+    let list = bySlot.get(u.slot);
+    if (!list) {
+      list = [];
+      bySlot.set(u.slot, list);
     }
-    pair[u.kind] = u;
+    list.push(u);
   }
-  for (const [slot, pair] of bySlot) {
-    const a = pair["无下限术士"];
-    const b = pair["无下限"];
-    if (!a || !b) continue;
+  for (const [slot, list] of bySlot) {
+    if (list.length < 2) continue;
+    const a = list[0];
+    const b = list[1];
     const [x1, y1] = screenPos(a.x, a.y, scale, cx, cy);
     const [x2, y2] = screenPos(b.x, b.y, scale, cx, cy);
     const el = ensureGuide(`guide-bond-${slot}`, "bond");
-    placeSeg(el, x1, y1, x2, y2, "紫弹");
+    placeSeg(el, x1, y1, x2, y2, a.kind);
+    const tint = lookOf(a.kind).bondColor || lookOf(b.kind).bondColor || kindColor(a.kind);
+    el.style.setProperty("--kind", tint);
     const dist = Math.hypot(a.x - b.x, a.y - b.y);
     el.style.opacity = dist < 56 ? "0.9" : "0.42";
     seen.add(el.id);
@@ -377,17 +464,20 @@ function renderArena() {
     const name = root.querySelector(".name");
     const num = root.querySelector(".hp-num");
     const bar = root.querySelector("i");
+    const hudFac = root.querySelector(".faction-hud");
     if (!f) {
       name.textContent = state.slots[slot] || "";
       num.textContent = "0 / 100";
       bar.style.width = "0%";
-      root.style.setProperty("--kind", kindColor(state.slots[slot]));
+      paintKind(root, state.slots[slot]);
+      fillFactionHud(hudFac, null);
       continue;
     }
     name.textContent = f.kind;
     num.textContent = `${Math.round(f.hp)} / ${Math.round(f.maxHp)}`;
     bar.style.width = `${Math.max(0, (f.hp / f.maxHp) * 100)}%`;
-    root.style.setProperty("--kind", kindColor(f.kind));
+    paintKind(root, f.kind);
+    fillFactionHud(hudFac, f);
   }
 
   const pauseBtn = document.getElementById("btn-pause");
@@ -401,8 +491,9 @@ function renderArena() {
   const now = performance.now();
   for (const u of state.units || []) {
     seen.add(String(u.id));
+    const look = lookOf(u.kind);
     let el = document.getElementById(`u-${u.id}`);
-    const layer = u.passWalls && overEl ? overEl : unitsEl;
+    const layer = (u.passWalls || look.ring) && overEl ? overEl : unitsEl;
     if (!el) {
       el = document.createElement("div");
       el.id = `u-${u.id}`;
@@ -414,14 +505,16 @@ function renderArena() {
     el.classList.toggle("projectile", u.role === "projectile" && u.kind !== "盾");
     el.classList.toggle("clone", u.role === "clone");
     el.classList.toggle("semi", !!u.semi);
-    el.classList.toggle("void", u.kind === "紫弹");
-    el.classList.toggle("ring", u.kind === "盾");
+    el.classList.toggle("void", !!look.glow);
+    el.classList.toggle("ring", !!look.ring || u.kind === "盾");
     el.classList.toggle("fighter", u.role === "fighter");
     const oldCut = el.querySelector(".cut");
     if (oldCut) oldCut.remove();
-    el.style.setProperty("--kind", kindColor(u.kind));
+    if (look.chroma) el.style.removeProperty("--kind");
+    else el.style.setProperty("--kind", kindColor(u.kind));
+    el.classList.toggle("chroma", !!look.chroma);
     const speed = Math.hypot(u.vx || 0, u.vy || 0);
-    const dashing = (u.kind === "原型机_近战" && speed > 280) || (u.kind === "小骑士" && speed > 250);
+    const dashing = look.ghost > 0 && speed > look.ghost;
     el.classList.toggle("dashing", dashing);
     const r = u.radius * scale;
     el.style.width = `${r * 2}px`;
@@ -441,7 +534,7 @@ function renderArena() {
     let ghostCls = "";
     if (dashing) {
       ghostGap = 32;
-    } else if (u.kind === "紫弹") {
+    } else if (look.trail) {
       ghostGap = 16;
       ghostLayer = overEl || fxRoot;
       ghostCls = "trail";
@@ -478,8 +571,9 @@ function renderArena() {
     }
     const nested = el.querySelector(".hp-float");
     if (nested) nested.remove();
+    placeFactionBadge(u, sx, sy, r);
     let ring = document.getElementById(`ring-${u.id}`);
-    if (u.kind === "原型机_近战" && u.vision > 0) {
+    if (look.visionRing && u.vision > 0) {
       if (!ring) {
         ring = document.createElement("div");
         ring.id = `ring-${u.id}`;
@@ -504,7 +598,7 @@ function renderArena() {
       ring = null;
     }
     let field = document.getElementById(`field-${u.id}`);
-    if (u.semi && (u.kind === "无下限术士" || u.kind === "无下限")) {
+    if (look.field) {
       if (!field) {
         field = document.createElement("div");
         field.id = `field-${u.id}`;
@@ -513,8 +607,8 @@ function renderArena() {
         field.appendChild(core);
         unitsEl.appendChild(field);
       }
-      field.classList.toggle("pull", u.kind === "无下限术士");
-      field.classList.toggle("push", u.kind === "无下限");
+      field.classList.toggle("pull", look.field === "pull");
+      field.classList.toggle("push", look.field === "push");
       const fr = 72 * scale;
       field.style.width = `${fr * 2}px`;
       field.style.height = `${fr * 2}px`;
@@ -531,6 +625,16 @@ function renderArena() {
       if (child.classList.contains("ghost")) continue;
       if (child.classList.contains("seek-ring") || child.classList.contains("field-ring")) {
         const id = child.id.replace(/^(ring|field)-/, "");
+        if (!seen.has(id)) child.remove();
+        continue;
+      }
+      if (child.classList.contains("faction-badge")) {
+        const id = child.id.slice("fac-".length);
+        if (!seen.has(id)) child.remove();
+        continue;
+      }
+      if (child.classList.contains("faction-pips")) {
+        const id = child.id.slice("pips-".length);
         if (!seen.has(id)) child.remove();
         continue;
       }

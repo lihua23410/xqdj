@@ -27,6 +27,7 @@ func init() {
 		Speed:   meleeSpeed,
 		Vision:  meleeVision,
 		Fighter: true,
+		Look:    unit.Look{Color: "#3dd6c6", Ghost: 280, VisionRing: true},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &原型机_近战{}
 	})

@@ -27,6 +27,7 @@ func init() {
 		Speed:   doppelSpeed,
 		Vision:  0,
 		Fighter: true,
+		Look:    unit.Look{Color: "#7a9bb8"},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &分身者{}
 	})
@@ -38,6 +39,7 @@ func init() {
 		Speed:   doppelSpeed,
 		Vision:  0,
 		Fighter: false,
+		Look:    unit.Look{Color: "#7a9bb8"},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &分身{owner: info.OwnerID, slot: info.Slot}
 	})

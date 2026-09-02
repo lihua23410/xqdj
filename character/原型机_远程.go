@@ -31,6 +31,7 @@ func init() {
 		Speed:   rangedSpeed,
 		Vision:  rangedVision,
 		Fighter: true,
+		Look:    unit.Look{Color: "#f0a050"},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &原型机_远程{}
 	})
@@ -42,6 +43,7 @@ func init() {
 		Speed:   bulletSpeed,
 		Vision:  0,
 		Fighter: false,
+		Look:    unit.Look{Color: "#f0a050"},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &远程子弹{owner: info.OwnerID}
 	})

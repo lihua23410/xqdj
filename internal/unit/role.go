@@ -5,4 +5,5 @@ const (
 	RoleProjectile = "projectile"
 	RoleClone      = "clone"
 	RoleTwin       = "twin"
+	RoleHelper     = "helper"
 )

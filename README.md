@@ -48,26 +48,28 @@ PLAN.md             尚未做的混战 / 分队
 
 | Kind | 巡航 | 视野 | 行为概要 |
 | --- | --- | --- | --- |
-| `原型机_近战` | 200 | 185 | 敌方进入视野边沿时朝对方最多转 15°，沿当前朝向 +155；碰撞伤 7，0.1s CD |
+| `原型机_近战` | 200 | 185 | 敌方进入视野边沿时朝对方最多转 15°，沿当前朝向 +155；碰撞伤 7，0.1s CD。挨打时按超出巡航的速度减伤，最多 25% |
 | `原型机_远程` | 140 | 9999 | 每 2s 射一发；子弹速 160、伤 8、撞墙 3 次后消失；开火后自身速度反向 |
 | `分身者` | 160 | 0 | 本体碰撞伤 0；3 个分身各伤 5；本体挨打且未死时与随机分身换位置 |
 | `筑墙者` | 150 | 9999 | 第 3 秒起每 3s 在与敌方中点砌一段长 150 的胶囊墙，存活 7s，伤 3 |
 | `无下限术士` | 155 | 9999 | 开局裂成红蓝两个半圆；红吸引、蓝推开。红蓝相撞时朝敌人打一发紫弹（体积约 5.6 倍、速 320、伤 14），穿透敌人可反复结算，穿出六边形后飞出屏幕才消失 |
 | `小骑士` | 175 | 9999 | 开局 75 血；碰撞伤 10。每 7s 瞬移到敌人身边（不出六边形）再朝对方冲撞。放完有 50% 概率 0.5s 后再瞬移撞一次 |
+| `盾士` | 155 | 9999 | 贴身盾环挡住伤害；盾碎或自己格挡时炸出碎片。满盾 8 片伤 5，弱化 6 片伤 4。10s 补盾，或累计挨打 20 后补弱盾 |
+| `面灵气` | 150 | 9999 | 球色自己渐变，不改别人颜色。开局给自己和敌人各一个派系图标（青/红/紫/苍）。撞墙（不是撞人）时随机换成另一个。对异派系伤害 +25%，受同派系伤害 −25%。自身：红攻高、紫回血（每秒 1）、青射弹、苍加速（同时只生效当前派系）。凑齐四种后朝四周打出青/红/紫/苍四发弹幕 |
 
-非可选单位（不进选人列表，`Fighter: false`）：`子弹`、`分身`、`无下限`、`紫弹`。
+非可选单位（不进选人列表，`Fighter: false`）：`子弹`、`分身`、`无下限`、`紫弹`、`青弹`、`面具青`、`面具红`、`面具紫`、`面具苍`、`盾`、`盾碎片`、`弱化碎片`。
 
-颜色绑在 **kind** 上，不绑槽位。新 kind 要在 `internal/web/app.js` 的 `KIND_COLORS` 和 `style.css` 的 `--kind-*` 各加一项，否则会落到近战的青色。
+颜色绑在 **kind** 上，不绑槽位。写在 `Spec.Look`（`Color`、`Chroma`、残影阈值等），引擎随快照的 `looks` 发给页面。不要为了换色去改 `app.js` / `style.css`。
 
-筑墙者的墙长在 Go 里是 `wallLen`，前端瞄准虚线是 `WALL_GUIDE_LEN`，改一边必须改另一边。
+墙的瞄准虚线长度是 `Look.WallGuide`，和砌墙长度用同一个常量。
 
 ## 加一只新球
 
 1. 在 `character/` 新建 `名字.go`，`package character`。
 2. `init()` 里 `unit.Register`。要出现在选人页就必须 `Fighter: true`、`Role: unit.RoleFighter`。
-3. 实现 `unit.Actor`：`Handle(ctx, ev)` 里根据事件发指令，不要改别人的内存。
-4. 需要子弹 / 分身 / 别的随从：再 `Register` 一个 `Fighter: false` 的 kind，用 `Spawn` 拉出来。`Spawn` **不能**生成 fighter。
-5. 前端补颜色。有新 FX 名字就在 `app.js` 里接；没有的话引擎仍会跑，只是看不见特效。
+3. 实现 `unit.Actor`：`Handle(ctx, ev)` 里根据事件发指令，不要改别人的内存。战斗机必须处理 `IncomingDamage`（可直接 `unit.AcceptHit`）。
+4. 需要子弹 / 分身 / 特效 helper：再 `Register` 一个 `Fighter: false` 的 kind。helper 用 `RoleHelper`，不碰撞，可设 `Look.Ring` 画成圈，由角色自己计时 `Despawn`。
+5. 外观写 `Spec.Look`。只有发明了新的 FX **名字**才要在 `app.js` 里加一段；通用的 dash / shot / hurt / heal / faction / shatter 已经有了。
 6. 新文件会随 `_ "xqdj/character"` 自动编进去，不用改 `main.go`。
 
 最小骨架：
@@ -79,9 +81,10 @@ func init() {
         Role:    unit.RoleFighter,
         Radius:  18,
         MaxHP:   100,
-        Speed:   160,   // 巡航速度；冲刺后引擎会往回减速
-        Vision:  200,   // 感知半径；0 表示 Sense.Nearby 恒为空
+        Speed:   160,
+        Vision:  200,
         Fighter: true,
+        Look:    unit.Look{Color: "#7ad0ff"},
     }, func(unit.SpawnInfo) unit.Actor {
         return &新球{}
     })
@@ -95,13 +98,19 @@ func init() {
 | Cmd | 作用 |
 | --- | --- |
 | `SetVelocity` | 改自己的速度向量 |
-| `Damage` | 对 `To` 造成伤害；引擎只让 `role=fighter` 扣血 |
+| `Damage` | 向战斗机报价伤害；引擎发 `IncomingDamage`，必须 `ConfirmDamage` 才会扣血 |
+| `ConfirmDamage` | 确认一笔报价；`Amount` 可比原值更小（近战超速减伤） |
+| `BlockDamage` | 取消一笔报价 |
 | `Spawn` | 生成非 fighter 单位（子弹、分身等） |
 | `Despawn` | 删掉指定单位 |
+| `DespawnOwned` | 按主人 + kind 清掉随从（摘盾不会发 `GuardBreak`） |
 | `SwapOwned` | 本体与随机己方分身交换位置和速度（受伤时引擎也会自动做一次） |
 | `PlaceWall` | 砌一段胶囊墙 |
 | `Force` | 给目标加加速度 `(AX,AY)`，引擎做 `v += a·dt`。不是改写速度，快的球仍能撞上 |
 | `Teleport` | 把自己挪到 `(X,Y)`，引擎会夹回六边形内 |
+| `MarkFaction` | 给战斗机打派系。`Cycle` 时撞墙换派系；`AmpOut`/`AmpIn` 是角色自己给的倍率；`Collect` 凑齐四种时按 `Barrage` 的 kind 朝四周各生成一发（速度用该 kind 的 `Spec.Speed`） |
+| `ClearFactionSeen` | 清空 `Collect` 记录，当前派系仍算已出现 |
+| `Heal` | 给战斗机回血，不超过 MaxHP，不触发 hit-stop |
 | `FX` | 给前端的一次性特效；不参与物理 |
 
 ### 事件
@@ -109,6 +118,8 @@ func init() {
 - `Sense`：当前时刻、自己、视野内快照。
 - `Collision`：与另一单位相撞（法线指向对方）。
 - `WallHit`：撞上六边形边界或场上的墙。
+- `IncomingDamage`：引擎准备扣血。战斗机回 `ConfirmDamage` 或 `BlockDamage`；快捷函数 `AcceptHit` / `ConfirmHit` / `BlockHit`。
+- `GuardBreak`：`Spec.Shell` 的壳被物理撞碎时通知主人。
 
 ## 引擎会替你做的事
 
@@ -118,7 +129,7 @@ func init() {
 - 撞边和撞墙：入射角 = 反射角。战斗机和子弹一样弹。
 - 非弹体互撞：沿法线各保留自己的速率，`a.v = n·|va|`，`b.v = −n·|vb|`。不要改回速度均分。
 - 战斗机速率高于 `Spec.Speed` 时，每 0.2s 减 10，减到巡航为止。减速发生在消化指令之后，所以冲刺当帧能顶住。
-- 血量 100；`HP <= 0` 由引擎移除。只有 `RoleFighter` 吃 `Damage`。
+- 血量 100；`HP <= 0` 由引擎移除。只有 `RoleFighter` 吃伤害，且必须确认 `IncomingDamage`。
 - 受伤打 3 帧 hit-stop（物理 / 时间 / 感知都停）。致死不换位；胜负等到 hit-stop 结束再判。
 - 子弹与主人不做 CCD。分身会和本体相撞。只有弹体穿主人，分身不穿。
 - 弹体撞上战斗机后 `solid=false`，等角色自己 `Despawn`。
@@ -130,7 +141,7 @@ func init() {
 
 - 选人按钮只在槽位 / 种类变化时重建。不要每帧清空 DOM，否则点不中。
 - 战场图层顺序：`#guides` → `#walls` → `#fx` → `#units`。
-- 快照里的 `kinds` 来自 `unit.FighterKinds()`，注册顺序就是按钮顺序。
+- 快照里的 `kinds` 来自 `unit.FighterKinds()`，注册顺序就是按钮顺序。`looks` 是全部已注册 kind 的外观。
 
 ## 还没做
 

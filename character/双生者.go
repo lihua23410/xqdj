@@ -37,6 +37,12 @@ func init() {
 		Vision:  twinVision,
 		Fighter: true,
 		Semi:    true,
+		Look: unit.Look{
+			Color:     "#e24b4b",
+			Field:     "pull",
+			Bond:      true,
+			BondColor: "#b44cff",
+		},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &无下限术士{slot: info.Slot}
 	})
@@ -49,6 +55,7 @@ func init() {
 		Vision:  twinVision,
 		Fighter: false,
 		Semi:    true,
+		Look:    unit.Look{Color: "#4b7be2", Field: "push", Bond: true, BondColor: "#b44cff"},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &双生{owner: info.OwnerID, slot: info.Slot}
 	})
@@ -61,6 +68,7 @@ func init() {
 		Vision:    0,
 		Fighter:   false,
 		PassWalls: true,
+		Look:      unit.Look{Color: "#b44cff", Glow: true, Trail: true},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &紫弹{slot: info.Slot}
 	})

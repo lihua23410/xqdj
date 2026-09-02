@@ -1,23 +1,25 @@
 package unit
 
 type Snapshot struct {
-	ID        uint64  `json:"id"`
-	Kind      string  `json:"kind"`
-	Role      string  `json:"role"`
-	X         float64 `json:"x"`
-	Y         float64 `json:"y"`
-	VX        float64 `json:"vx"`
-	VY        float64 `json:"vy"`
-	Radius    float64 `json:"radius"`
-	HP        float64 `json:"hp"`
-	MaxHP     float64 `json:"maxHp"`
-	Vision    float64 `json:"vision"`
-	OwnerID   uint64  `json:"ownerId"`
-	Slot      int     `json:"slot"`
-	Semi      bool    `json:"semi"`
-	FaceX     float64 `json:"faceX"`
-	FaceY     float64 `json:"faceY"`
-	PassWalls bool    `json:"passWalls"`
+	ID        uint64   `json:"id"`
+	Kind      string   `json:"kind"`
+	Role      string   `json:"role"`
+	X         float64  `json:"x"`
+	Y         float64  `json:"y"`
+	VX        float64  `json:"vx"`
+	VY        float64  `json:"vy"`
+	Radius    float64  `json:"radius"`
+	HP        float64  `json:"hp"`
+	MaxHP     float64  `json:"maxHp"`
+	Vision    float64  `json:"vision"`
+	OwnerID   uint64   `json:"ownerId"`
+	Slot      int      `json:"slot"`
+	Semi      bool     `json:"semi"`
+	FaceX     float64  `json:"faceX"`
+	FaceY     float64  `json:"faceY"`
+	PassWalls bool     `json:"passWalls"`
+	Faction   string   `json:"faction,omitempty"`
+	Seen      []string `json:"seen,omitempty"`
 }
 
 type Sense struct {

@@ -32,6 +32,7 @@ func init() {
 		Speed:   knightSpeed,
 		Vision:  knightVision,
 		Fighter: true,
+		Look:    unit.Look{Color: "#ff2a2a", Ghost: 250},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &小骑士{readyAt: knightCD}
 	})

@@ -21,27 +21,35 @@ const (
 )
 
 type unit struct {
-	id        uint64
-	kind      string
-	role      string
-	slot      int
-	owner     uint64
-	p, v      vec
-	radius    float64
-	hp        float64
-	maxHP     float64
-	actor     unitpkg.Actor
-	inbox     chan unitpkg.Event
-	stop      chan struct{}
-	stopped   bool
-	solid     bool
-	vision    float64
-	cruise    float64
-	decelT    float64
-	semi      bool
-	face      vec
-	passWalls bool
-	shell     bool
+	id             uint64
+	kind           string
+	role           string
+	slot           int
+	owner          uint64
+	p, v           vec
+	radius         float64
+	hp             float64
+	maxHP          float64
+	actor          unitpkg.Actor
+	inbox          chan unitpkg.Event
+	stop           chan struct{}
+	stopped        bool
+	solid          bool
+	vision         float64
+	cruise         float64
+	decelT         float64
+	semi           bool
+	face           vec
+	passWalls      bool
+	shell          bool
+	faction        string
+	factionCycle   bool
+	factionAmpOut  float64
+	factionAmpIn   float64
+	factionCollect bool
+	factionSeen    map[string]bool
+	factionNext    float64
+	factionBarrage []string
 }
 
 type spawnSpot struct {
@@ -131,24 +139,26 @@ func (m *Match) SnapshotJSON() []byte {
 		unitpkg.Snapshot
 	}
 	msg := struct {
-		Type     string             `json:"type"`
-		Phase    Phase              `json:"phase"`
-		Slots    [2]string          `json:"slots"`
-		Kinds    []string           `json:"kinds"`
-		Winner   string             `json:"winner"`
-		WinnerID uint64             `json:"winnerId"`
-		Time     float64            `json:"time"`
-		Seq      uint64             `json:"seq"`
-		HexR     float64            `json:"hexRadius"`
-		HitStop  int                `json:"hitStop"`
-		Units    []unitpkg.Snapshot `json:"units"`
-		Walls    []wallSnap         `json:"walls"`
-		Effects  []unitpkg.FX       `json:"effects"`
+		Type     string                  `json:"type"`
+		Phase    Phase                   `json:"phase"`
+		Slots    [2]string               `json:"slots"`
+		Kinds    []string                `json:"kinds"`
+		Looks    map[string]unitpkg.Look `json:"looks"`
+		Winner   string                  `json:"winner"`
+		WinnerID uint64                  `json:"winnerId"`
+		Time     float64                 `json:"time"`
+		Seq      uint64                  `json:"seq"`
+		HexR     float64                 `json:"hexRadius"`
+		HitStop  int                     `json:"hitStop"`
+		Units    []unitpkg.Snapshot      `json:"units"`
+		Walls    []wallSnap              `json:"walls"`
+		Effects  []unitpkg.FX            `json:"effects"`
 	}{
 		Type:     "state",
 		Phase:    m.phase,
 		Slots:    m.slots,
 		Kinds:    unitpkg.FighterKinds(),
+		Looks:    unitpkg.Looks(),
 		Winner:   m.winner,
 		WinnerID: m.winnerID,
 		Time:     m.time,
@@ -161,7 +171,7 @@ func (m *Match) SnapshotJSON() []byte {
 	}
 	for _, id := range m.order {
 		u := m.units[id]
-		if u == nil || u.stopped || !u.solid {
+		if u == nil || u.stopped || !u.inSnapshot() {
 			continue
 		}
 		msg.Units = append(msg.Units, u.snap())
@@ -195,7 +205,39 @@ func (u *unit) snap() unitpkg.Snapshot {
 		FaceX:     u.face.X,
 		FaceY:     u.face.Y,
 		PassWalls: u.passWalls,
+		Faction:   u.faction,
+		Seen:      u.seenList(),
 	}
+}
+
+func (u *unit) inSnapshot() bool {
+	if u == nil || u.stopped {
+		return false
+	}
+	return u.solid || u.role == unitpkg.RoleHelper
+}
+
+func (u *unit) seenList() []string {
+	if !u.factionCollect || len(u.factionSeen) == 0 {
+		return nil
+	}
+	out := make([]string, 0, 4)
+	for _, f := range unitpkg.AllFactions() {
+		if u.factionSeen[f] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func (u *unit) noteFaction(f string) {
+	if !u.factionCollect || f == "" {
+		return
+	}
+	if u.factionSeen == nil {
+		u.factionSeen = map[string]bool{}
+	}
+	u.factionSeen[f] = true
 }
 
 func (m *Match) SetSlot(slot int, kind string) {
@@ -431,7 +473,7 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 		actor:     actor,
 		inbox:     make(chan unitpkg.Event, 64),
 		stop:      make(chan struct{}),
-		solid:     true,
+		solid:     spec.Role != unitpkg.RoleHelper,
 		semi:      spec.Semi,
 		face:      vec{1, 0},
 		passWalls: spec.PassWalls,
@@ -509,6 +551,32 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		delete(m.pendingDmg, c.Token)
 		delete(m.wardAbsorb, off.to)
+	case unitpkg.Heal:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || u.role != unitpkg.RoleFighter || c.Amount <= 0 {
+			return
+		}
+		before := u.hp
+		u.hp += c.Amount
+		if u.hp > u.maxHP {
+			u.hp = u.maxHP
+		}
+		got := u.hp - before
+		if got >= 0.5 {
+			m.fx = append(m.fx, unitpkg.FX{
+				Name: "heal", UnitID: u.id, Kind: u.kind,
+				X: u.p.X, Y: u.p.Y, Slot: u.slot, Amount: got,
+			})
+		}
+	case unitpkg.MarkFaction:
+		m.markFactionLocked(c)
+	case unitpkg.ClearFactionSeen:
+		u := m.units[c.UnitID]
+		if u == nil {
+			return
+		}
+		u.factionSeen = map[string]bool{}
+		u.noteFaction(u.faction)
 	case unitpkg.Spawn:
 		spec, ok := unitpkg.Lookup(c.Kind)
 		if !ok || spec.Fighter {
@@ -593,6 +661,8 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	if c.Amount > 0 && c.Amount < amt {
 		amt = c.Amount
 	}
+	from := m.units[off.from]
+	amt = m.scaleDamage(m.factionBearer(from), u, amt)
 	m.fx = append(m.fx, unitpkg.FX{
 		Name:   "hurt",
 		UnitID: u.id,
@@ -945,6 +1015,7 @@ func (m *Match) resolveLocked(h ccdHit) {
 		}
 		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
 		u.setVel(reflectVelocity(u.v, h.n))
+		m.cycleFactionLocked(u)
 	case hitBarrier:
 		u := m.units[h.a]
 		w := m.wallByID(h.w)
@@ -966,6 +1037,7 @@ func (m *Match) resolveLocked(h ccdHit) {
 		}
 		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
 		u.setVel(reflectVelocity(u.v, h.n))
+		m.cycleFactionLocked(u)
 		if u.role == unitpkg.RoleFighter && u.slot != w.slot && u.id != w.owner {
 			if at, ok := w.hitAt[u.id]; !ok || m.time >= at {
 				w.hitAt[u.id] = m.time + 0.1

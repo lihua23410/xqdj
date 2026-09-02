@@ -28,6 +28,7 @@ func init() {
 		Speed:   wallerSpeed,
 		Vision:  wallerVision,
 		Fighter: true,
+		Look:    unit.Look{Color: "#c4a36a", WallGuide: wallLen},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &筑墙者{nextBuild: wallEvery}
 	})
