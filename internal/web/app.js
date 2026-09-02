@@ -41,6 +41,7 @@ function spawnGhostFrom(el, kind, layer, extraClass = "") {
   const g = document.createElement("div");
   g.className = `ghost${extraClass ? ` ${extraClass}` : ""}`;
   if (el.classList.contains("semi")) g.classList.add("semi");
+  if (el.classList.contains("void")) g.classList.add("void");
   g.style.setProperty("--kind", kindColor(kind));
   g.style.setProperty("--face-ang", el.style.getPropertyValue("--face-ang") || "0rad");
   g.style.width = el.style.width;
@@ -125,20 +126,29 @@ function playEffects(effects, scale, cx, cy) {
       spawnFx("fx-ring", x, y, kind);
       burst(x, y, kind, 12);
     } else if (fx.name === "split") {
+      const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1);
       spawnFx("fx-flash", x, y, kind);
-      spawnFx("fx-shock", x, y, kind);
       spawnFx("fx-ring", x, y, kind);
-      burst(x, y, kind, 14);
+      spawnFx("fx-split-slash", x, y, kind, { "--ang": `${ang}rad` });
+      burst(x, y, kind, 8);
+    } else if (fx.name === "void-shot") {
+      const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1);
+      spawnFx("fx-flash", x, y, kind);
+      spawnFx("fx-void-core", x, y, kind);
+      spawnFx("fx-ring", x, y, kind);
+      const beam = spawnFx("fx-beam void", x, y, kind);
+      if (beam) beam.style.transform = `translate(0, -50%) rotate(${ang * (180 / Math.PI)}deg)`;
+      burst(x, y, kind, 8);
+    } else if (fx.name === "void-hit") {
+      spawnFx("fx-flash", x, y, kind);
+      spawnFx("fx-void-core", x, y, kind);
+      spawnFx("fx-shock", x, y, kind);
+      burst(x, y, kind, 10);
     } else if (fx.name === "shot") {
       spawnFx("fx-flash", x, y, kind);
       const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1) * (180 / Math.PI);
       const beam = spawnFx("fx-beam", x, y, kind);
       beam.style.transform = `translate(0, -50%) rotate(${ang}deg)`;
-      if (kind === "紫弹") {
-        spawnFx("fx-shock", x, y, kind);
-        spawnFx("fx-ring", x, y, kind);
-        burst(x, y, kind, 16);
-      }
     } else if (fx.name === "hurt") {
       const el = spawnFx("fx-dmg", x, y - 12, kind);
       if (el) el.textContent = `-${Math.round(fx.amount || 0)}`;
@@ -280,8 +290,34 @@ function renderGuides(fighters, scale, cx, cy) {
     placeSeg(hint, g1x, g1y, g2x, g2y, "筑墙者");
     seen.add(hint.id);
   }
+  renderTwinBonds(scale, cx, cy, seen);
   for (const child of [...guidesEl.children]) {
     if (!seen.has(child.id)) child.remove();
+  }
+}
+
+function renderTwinBonds(scale, cx, cy, seen) {
+  const bySlot = new Map();
+  for (const u of state.units || []) {
+    if (u.kind !== "无下限术士" && u.kind !== "无下限") continue;
+    let pair = bySlot.get(u.slot);
+    if (!pair) {
+      pair = {};
+      bySlot.set(u.slot, pair);
+    }
+    pair[u.kind] = u;
+  }
+  for (const [slot, pair] of bySlot) {
+    const a = pair["无下限术士"];
+    const b = pair["无下限"];
+    if (!a || !b) continue;
+    const [x1, y1] = screenPos(a.x, a.y, scale, cx, cy);
+    const [x2, y2] = screenPos(b.x, b.y, scale, cx, cy);
+    const el = ensureGuide(`guide-bond-${slot}`, "bond");
+    placeSeg(el, x1, y1, x2, y2, "紫弹");
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    el.style.opacity = dist < 56 ? "0.9" : "0.42";
+    seen.add(el.id);
   }
 }
 
@@ -368,6 +404,9 @@ function renderArena() {
     el.classList.toggle("projectile", u.role === "projectile");
     el.classList.toggle("clone", u.role === "clone");
     el.classList.toggle("semi", !!u.semi);
+    el.classList.toggle("void", u.kind === "紫弹");
+    const oldCut = el.querySelector(".cut");
+    if (oldCut) oldCut.remove();
     el.style.setProperty("--kind", kindColor(u.kind));
     const speed = Math.hypot(u.vx || 0, u.vy || 0);
     const dashing = u.kind === "原型机_近战" && speed > 280;
@@ -394,8 +433,6 @@ function renderArena() {
       ghostGap = 16;
       ghostLayer = overEl || fxRoot;
       ghostCls = "trail";
-    } else if (u.semi && speed > 40) {
-      ghostGap = 40;
     }
     if (ghostGap) {
       const last = dashGhostAt.get(u.id) || 0;
@@ -413,17 +450,22 @@ function renderArena() {
       burst(sx, sy, u.kind, 8);
     }
     if (u.role === "fighter" || u.role === "twin") prevHP.set(u.id, shownHP);
-    let tag = el.querySelector(".hp-float");
+    let tag = document.getElementById(`hp-${u.id}`);
     if (u.role === "fighter" || u.role === "twin") {
       if (!tag) {
         tag = document.createElement("span");
+        tag.id = `hp-${u.id}`;
         tag.className = "hp-float";
-        el.appendChild(tag);
+        unitsEl.appendChild(tag);
       }
       tag.textContent = String(Math.round(shownHP));
+      tag.style.left = `${sx}px`;
+      tag.style.top = `${sy - r - 4}px`;
     } else if (tag) {
       tag.remove();
     }
+    const nested = el.querySelector(".hp-float");
+    if (nested) nested.remove();
     let ring = document.getElementById(`ring-${u.id}`);
     if (u.kind === "原型机_近战" && u.vision > 0) {
       if (!ring) {
@@ -455,6 +497,8 @@ function renderArena() {
         field = document.createElement("div");
         field.id = `field-${u.id}`;
         field.className = "field-ring";
+        const core = document.createElement("i");
+        field.appendChild(core);
         unitsEl.appendChild(field);
       }
       field.classList.toggle("pull", u.kind === "无下限术士");
@@ -475,6 +519,11 @@ function renderArena() {
       if (child.classList.contains("ghost")) continue;
       if (child.classList.contains("seek-ring") || child.classList.contains("field-ring")) {
         const id = child.id.replace(/^(ring|field)-/, "");
+        if (!seen.has(id)) child.remove();
+        continue;
+      }
+      if (child.classList.contains("hp-float")) {
+        const id = child.id.slice("hp-".length);
         if (!seen.has(id)) child.remove();
         continue;
       }

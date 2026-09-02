@@ -125,11 +125,11 @@ func (d *无下限术士) split(ctx unit.Context, s unit.Sense) {
 	}
 	ctx.Out <- unit.FX{
 		Name: "split", Kind: KindTwin,
-		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot,
+		X: s.Self.X, Y: s.Self.Y, VX: vx, VY: vy, Slot: s.Self.Slot,
 	}
 	ctx.Out <- unit.FX{
 		Name: "split", Kind: twinKind,
-		X: s.Self.X - px*twinGap, Y: s.Self.Y - py*twinGap, Slot: s.Self.Slot,
+		X: s.Self.X - px*twinGap, Y: s.Self.Y - py*twinGap, VX: -vx, VY: -vy, Slot: s.Self.Slot,
 	}
 }
 
@@ -171,7 +171,7 @@ func (d *无下限术士) tryShot(ctx unit.Context, e unit.Collision) {
 		Slot:    d.slot,
 	}
 	ctx.Out <- unit.FX{
-		Name:   "shot",
+		Name:   "void-shot",
 		UnitID: ctx.ID,
 		Kind:   purpleKind,
 		X:      mx,
@@ -240,7 +240,7 @@ func (b *紫弹) Handle(ctx unit.Context, ev unit.Event) {
 		}
 		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: purpleDamage}
 		ctx.Out <- unit.FX{
-			Name: "hit", Kind: purpleKind,
+			Name: "void-hit", Kind: purpleKind,
 			X: e.Other.X, Y: e.Other.Y, Slot: e.Other.Slot,
 		}
 		b.hitReadyAt = e.Time + twinHitCD
