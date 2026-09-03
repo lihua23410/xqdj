@@ -105,10 +105,13 @@ type Match struct {
 }
 
 type dmgOffer struct {
-	from   uint64
-	to     uint64
-	amount float64
-	absorb bool
+	from      uint64
+	to        uint64
+	amount    float64
+	absorb    bool
+	markKind  string
+	markDelta int
+	markIcon  string
 }
 
 func NewMatch() *Match {
@@ -635,7 +638,15 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 	m.dmgSeq++
 	token := m.dmgSeq
 	absorb := m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id]
-	m.pendingDmg[token] = dmgOffer{from: c.From, to: c.To, amount: c.Amount, absorb: absorb}
+	m.pendingDmg[token] = dmgOffer{
+		from:      c.From,
+		to:        c.To,
+		amount:    c.Amount,
+		absorb:    absorb,
+		markKind:  c.MarkKind,
+		markDelta: c.MarkDelta,
+		markIcon:  c.MarkIcon,
+	}
 	m.send(u, unitpkg.IncomingDamage{
 		Token:  token,
 		From:   c.From,
@@ -679,6 +690,18 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 		Amount: amt,
 	})
 	u.hp -= amt
+	if off.markKind != "" && amt > 0 {
+		delta := off.markDelta
+		if delta == 0 {
+			delta = 1
+		}
+		m.stackMarkLocked(unitpkg.StackMark{
+			UnitID: u.id,
+			Kind:   off.markKind,
+			Delta:  delta,
+			Icon:   off.markIcon,
+		})
+	}
 	m.hitStop = HitStopFrames
 	if u.hp <= 0 {
 		u.hp = 0

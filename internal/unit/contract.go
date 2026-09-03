@@ -51,9 +51,12 @@ type SetVelocity struct {
 }
 
 type Damage struct {
-	From   uint64
-	To     uint64
-	Amount float64
+	From      uint64
+	To        uint64
+	Amount    float64
+	MarkKind  string
+	MarkDelta int
+	MarkIcon  string
 }
 
 // IncomingDamage 引擎准备扣血。战斗机必须回 ConfirmDamage 才会真正掉 HP；回 BlockDamage 则整包取消。

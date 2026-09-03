@@ -79,10 +79,53 @@ func TestGlitchCollisionAppliesSwordMark(t *testing.T) {
 	m.mu.Lock()
 	m.drainCmdsLocked()
 	m.settleHitsLocked()
+	m.drainCmdsLocked()
+	m.settleHitsLocked()
 	marks := o.markList()
 	m.mu.Unlock()
 	if len(marks) != 1 || marks[0].Kind != "剑痕" || marks[0].Stacks != 1 {
 		t.Fatalf("marks=%+v", marks)
+	}
+}
+
+func TestGlitchMarkSkippedWhenHitBlocked(t *testing.T) {
+	m := NewMatchSeeded(21)
+	m.SetSlot(0, character.KindGlitch)
+	m.SetSlot(1, character.KindGlitch)
+	m.Start()
+	defer m.End()
+	waitTicks(m, 4)
+	m.mu.Lock()
+	var atk, def *unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.role != unitpkg.RoleFighter {
+			continue
+		}
+		if u.slot == 0 {
+			atk = u
+		} else {
+			def = u
+		}
+	}
+	if atk == nil || def == nil {
+		m.mu.Unlock()
+		t.Fatal("missing fighters")
+	}
+	atk.p = vec{-120, 0}
+	def.p = vec{120, 0}
+	m.send(atk, unitpkg.Collision{Time: m.time, Other: def.snap(), NX: 1, NY: 0})
+	m.mu.Unlock()
+	time.Sleep(4 * time.Millisecond)
+	m.mu.Lock()
+	m.drainCmdsLocked()
+	m.settleHitsLocked()
+	m.drainCmdsLocked()
+	m.settleHitsLocked()
+	marks := def.markList()
+	m.mu.Unlock()
+	if len(marks) != 0 {
+		t.Fatalf("blocked hit still marked %+v", marks)
 	}
 }
 

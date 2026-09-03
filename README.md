@@ -99,7 +99,7 @@ func init() {
 | Cmd | 作用 |
 | --- | --- |
 | `SetVelocity` | 改自己的速度向量 |
-| `Damage` | 向战斗机报价伤害；引擎发 `IncomingDamage`，必须 `ConfirmDamage` 才会扣血 |
+| `Damage` | 向战斗机报价伤害；引擎发 `IncomingDamage`，必须 `ConfirmDamage` 才会扣血。带 `MarkKind` 时，真正掉血那一拍才叠状态；格挡 / 吸收不叠 |
 | `ConfirmDamage` | 确认一笔报价；`Amount` 可比原值更小（近战超速减伤） |
 | `BlockDamage` | 取消一笔报价 |
 | `Spawn` | 生成非 fighter 单位（子弹、分身等） |

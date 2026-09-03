@@ -20,7 +20,7 @@ const (
 
 	glitchMarkKind  = "剑痕"
 	glitchMarkIcon  = "/status/jianhen.png"
-	glitchGhostOdds = 0.10
+	glitchGhostOdds = 0.20
 	glitchDodgeCD   = 12.0
 	glitchSlashCD   = 20.0
 	glitchSlashLife = 1.25
@@ -145,12 +145,13 @@ func (g *地慧星) hit(ctx unit.Context, e unit.Collision) {
 	if e.Time < g.hitReadyAt {
 		return
 	}
-	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: glitchDamage}
-	ctx.Out <- unit.StackMark{
-		UnitID: e.Other.ID,
-		Kind:   glitchMarkKind,
-		Delta:  1,
-		Icon:   glitchMarkIcon,
+	ctx.Out <- unit.Damage{
+		From:      ctx.ID,
+		To:        e.Other.ID,
+		Amount:    glitchDamage,
+		MarkKind:  glitchMarkKind,
+		MarkDelta: 1,
+		MarkIcon:  glitchMarkIcon,
 	}
 	if rand.Float64() < glitchGhostOdds {
 		g.dropGhost(ctx, g.x, g.y)
