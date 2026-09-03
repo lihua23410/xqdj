@@ -20,6 +20,7 @@ type Snapshot struct {
 	PassWalls bool     `json:"passWalls"`
 	Faction   string   `json:"faction,omitempty"`
 	Seen      []string `json:"seen,omitempty"`
+	Marks     []Mark   `json:"marks,omitempty"`
 }
 
 type Sense struct {

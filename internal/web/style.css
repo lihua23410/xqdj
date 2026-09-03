@@ -114,6 +114,32 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   filter: grayscale(1);
 }
 .faction-hud .pip.on { opacity: 1; filter: none; }
+.status-hud {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.status-mark {
+  position: relative;
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+}
+.status-mark img {
+  width: 22px;
+  height: 22px;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+.status-mark b {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 1px 2px #000, 0 0 6px #000;
+}
 .hp-num { display: block; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 #fighter-1 .hp-num { text-align: right; }
 #fighter-1 .name { text-align: right; }
@@ -178,6 +204,9 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   background: var(--kind);
   color: var(--kind);
   box-shadow: 0 0 12px currentColor;
+}
+.ball.helper {
+  pointer-events: none;
 }
 .chroma {
   --kind: hsl(var(--hue), 90%, 58%);
@@ -503,15 +532,15 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .fx-dmg {
   color: #ff6b6b;
   font-weight: 700;
-  font-size: 18px;
+  font-size: var(--dmg-size, 18px);
   font-variant-numeric: tabular-nums;
   text-shadow: 0 1px 2px #000, 0 0 8px #0008;
   white-space: nowrap;
-  animation: dmg-float 0.75s ease-out forwards;
+  animation: dmg-float var(--dmg-dur, 0.75s) ease-out forwards;
 }
 @keyframes dmg-float {
   from { transform: translate(-50%, -50%); opacity: 1; }
-  to { transform: translate(-50%, -88px); opacity: 0; }
+  to { transform: translate(-50%, var(--dmg-rise, -88px)); opacity: 0; }
 }
 .fx-swap {
   width: 22px;
@@ -564,6 +593,60 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .faction-pips img.on {
   opacity: 1;
   filter: none;
+}
+.status-marks {
+  position: absolute;
+  display: flex;
+  gap: 2px;
+  transform: translate(0, -50%);
+  pointer-events: none;
+  z-index: 5;
+}
+.fx-arena-slash {
+  height: 28px;
+  width: var(--len, 420px);
+  border-radius: 99px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    #fff 8%,
+    currentColor 30%,
+    #fff 50%,
+    currentColor 70%,
+    #fff 92%,
+    transparent 100%
+  );
+  box-shadow: 0 0 16px #fff, 0 0 36px currentColor, 0 0 64px currentColor;
+  transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
+  animation: arena-slash 5s linear forwards;
+  pointer-events: none;
+  z-index: 20;
+}
+.fx-arena-slash::after {
+  content: "";
+  position: absolute;
+  inset: 34% 5%;
+  border-radius: 99px;
+  background: #fff;
+  box-shadow: 0 0 16px #fff;
+}
+@keyframes arena-slash {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.04) scaleY(0.5);
+    opacity: 1;
+  }
+  3% {
+    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1) scaleY(1.15);
+    opacity: 1;
+  }
+  88% {
+    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1) scaleY(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1) scaleY(0.6);
+    opacity: 0;
+  }
 }
 .fx-dmg.heal { color: #7dff9a; }
 .field-ring {

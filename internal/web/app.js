@@ -19,10 +19,66 @@ function isChroma(kind) {
 }
 
 function paintKind(el, kind) {
-  const on = isChroma(kind);
+  const look = lookOf(kind);
+  const on = !!look.chroma;
   el.classList.toggle("chroma", on);
+  applyLookFX(el, kind);
   if (on) el.style.removeProperty("--kind");
   else el.style.setProperty("--kind", kindColor(kind));
+}
+
+const loadedFX = new Set();
+
+function fxID(name) {
+  if (typeof name !== "string" || !name) return "";
+  const m = name.match(/^(?:\/fx\/)?([a-zA-Z0-9_-]+)(?:\.css)?$/);
+  return m ? m[1] : "";
+}
+
+function ensureLookFX() {
+  const looks = (state && state.looks) || {};
+  for (const look of Object.values(looks)) {
+    for (const name of look.fx || []) {
+      const id = fxID(name);
+      if (!id || loadedFX.has(id)) continue;
+      loadedFX.add(id);
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = `/fx/${id}.css`;
+      link.dataset.fx = id;
+      document.head.appendChild(link);
+      const script = document.createElement("script");
+      script.src = `/fx/${id}.js`;
+      script.dataset.fx = id;
+      document.head.appendChild(script);
+    }
+  }
+}
+
+function applyLookFX(el, kind) {
+  const want = new Set();
+  for (const name of lookOf(kind).fx || []) {
+    const id = fxID(name);
+    if (id) want.add("look-" + id);
+  }
+  for (const c of [...el.classList]) {
+    if (c.startsWith("look-") && !want.has(c)) el.classList.remove(c);
+  }
+  for (const c of want) el.classList.add(c);
+  if (!want.has("look-glitch") && !want.has("look-glitch-still")) {
+    el.querySelector(":scope > .look-glitch-slices")?.remove();
+    delete el.dataset.glitchStill;
+  }
+}
+
+function runLookFX(el, u, ctx) {
+  const hooks = window.lookFX;
+  if (!hooks) return;
+  for (const name of lookOf(u.kind).fx || []) {
+    const id = fxID(name);
+    const hook = id && hooks[id];
+    if (hook && typeof hook.tick === "function") hook.tick(el, u, ctx);
+  }
 }
 
 const FACTION_COLORS = {
@@ -102,8 +158,60 @@ function placeFactionBadge(u, sx, sy, r) {
   pips.style.top = `${sy - r - 16}px`;
 }
 
+function fillMarksHud(root, u) {
+  if (!root) return;
+  root.innerHTML = "";
+  const marks = (u && u.marks) || [];
+  for (const m of marks) {
+    if (!m || m.stacks <= 0) continue;
+    const wrap = document.createElement("span");
+    wrap.className = "status-mark";
+    wrap.title = m.kind || "";
+    if (m.icon) {
+      const img = document.createElement("img");
+      img.src = m.icon;
+      img.alt = m.kind || "";
+      wrap.appendChild(img);
+    }
+    const n = document.createElement("b");
+    n.textContent = String(m.stacks);
+    wrap.appendChild(n);
+    root.appendChild(wrap);
+  }
+}
+
+function placeMarks(u, sx, sy, r) {
+  const id = `marks-${u.id}`;
+  const marks = u.marks || [];
+  if (!marks.length) {
+    document.getElementById(id)?.remove();
+    return;
+  }
+  let root = document.getElementById(id);
+  if (!root) {
+    root = document.createElement("div");
+    root.id = id;
+    root.className = "status-marks";
+    unitsEl.appendChild(root);
+  }
+  root.innerHTML = "";
+  fillMarksHud(root, u);
+  root.style.left = `${sx + r + 10}px`;
+  root.style.top = `${sy}px`;
+}
+
 function screenPos(x, y, scale, cx, cy) {
   return [cx + x * scale, cy - y * scale];
+}
+
+function dmgPop(amount) {
+  const amt = Math.max(0, Number(amount) || 0);
+  const t = Math.min(1, amt / 48);
+  return {
+    "--dmg-size": `${(14 + t * 30).toFixed(1)}px`,
+    "--dmg-dur": `${(0.5 + t * 1.3).toFixed(2)}s`,
+    "--dmg-rise": `${(-56 - t * 72).toFixed(0)}px`,
+  };
 }
 
 function spawnFx(cls, x, y, kind, extra = {}, root = fxRoot) {
@@ -115,7 +223,10 @@ function spawnFx(cls, x, y, kind, extra = {}, root = fxRoot) {
   el.style.color = kindColor(kind);
   for (const [k, v] of Object.entries(extra)) el.style.setProperty(k, v);
   root.appendChild(el);
-  el.addEventListener("animationend", () => el.remove());
+  el.addEventListener("animationend", (ev) => {
+    if (ev.target !== el) return;
+    el.remove();
+  });
   return el;
 }
 
@@ -135,6 +246,7 @@ function spawnGhostFrom(el, kind, layer, extraClass = "") {
   g.style.transform = el.style.transform;
   root.appendChild(g);
   g.addEventListener("animationend", () => g.remove());
+  return g;
 }
 
 function burst(x, y, kind, n = 10) {
@@ -175,6 +287,24 @@ function dustAlong(s, kind, n, spread) {
       "--dy": `${Math.sin(a) * d}px`,
     });
   }
+}
+
+function playArenaSlash(fx, scale, cx, cy) {
+  const s = wallSeg(fx, scale, cx, cy);
+  const kind = fx.kind;
+  const root = overEl || fxRoot;
+  const slash = spawnFx(
+    "fx-arena-slash",
+    s.mx,
+    s.my,
+    kind,
+    { "--ang": `${s.ang}rad`, "--len": `${Math.max(80, s.len)}px` },
+    root
+  );
+  if (slash) slash.style.width = `${Math.max(80, s.len)}px`;
+  spawnFx("fx-flash", s.mx, s.my, kind, {}, root);
+  spawnFx("fx-shock", s.mx, s.my, kind, {}, root);
+  burst(s.mx, s.my, kind, 12);
 }
 
 function playWallFx(fx, scale, cx, cy, fading) {
@@ -239,14 +369,16 @@ function playEffects(effects, scale, cx, cy) {
       spawnFx("fx-shock", x, y, kind);
       burst(x, y, kind, 14);
     } else if (fx.name === "heal") {
-      const el = spawnFx("fx-dmg heal", x, y - 12, kind);
-      if (el) el.textContent = `+${Math.round(fx.amount || 0)}`;
+      const n = Math.round(fx.amount || 0);
+      const el = spawnFx("fx-dmg heal", x, y - 12, kind, dmgPop(n));
+      if (el) el.textContent = `+${n}`;
     } else if (fx.name === "faction") {
       spawnFx("fx-flash", x, y, kind);
       spawnFx("fx-ring", x, y, kind);
     } else if (fx.name === "hurt") {
-      const el = spawnFx("fx-dmg", x, y - 12, kind);
-      if (el) el.textContent = `-${Math.round(fx.amount || 0)}`;
+      const n = Math.round(fx.amount || 0);
+      const el = spawnFx("fx-dmg", x, y - 12, kind, dmgPop(n));
+      if (el) el.textContent = `-${n}`;
     } else if (fx.name === "swap") {
       spawnFx("fx-swap", x, y, kind);
       spawnFx("fx-flash", x, y, kind);
@@ -258,6 +390,8 @@ function playEffects(effects, scale, cx, cy) {
     } else if (fx.name === "wall") {
       spawnFx("fx-flash", x, y, kind);
       spawnFx("fx-shock", x, y, kind);
+    } else if (fx.name === "slash") {
+      playArenaSlash(fx, scale, cx, cy);
     } else if (fx.name === "impact" || fx.name === "hit") {
       spawnFx("fx-flash", x, y, kind);
       spawnFx("fx-shock", x, y, kind);
@@ -465,12 +599,14 @@ function renderArena() {
     const num = root.querySelector(".hp-num");
     const bar = root.querySelector("i");
     const hudFac = root.querySelector(".faction-hud");
+    const hudMarks = root.querySelector(".status-hud");
     if (!f) {
       name.textContent = state.slots[slot] || "";
       num.textContent = "0 / 100";
       bar.style.width = "0%";
       paintKind(root, state.slots[slot]);
       fillFactionHud(hudFac, null);
+      fillMarksHud(hudMarks, null);
       continue;
     }
     name.textContent = f.kind;
@@ -478,6 +614,7 @@ function renderArena() {
     bar.style.width = `${Math.max(0, (f.hp / f.maxHp) * 100)}%`;
     paintKind(root, f.kind);
     fillFactionHud(hudFac, f);
+    fillMarksHud(hudMarks, f);
   }
 
   const pauseBtn = document.getElementById("btn-pause");
@@ -493,7 +630,11 @@ function renderArena() {
     seen.add(String(u.id));
     const look = lookOf(u.kind);
     let el = document.getElementById(`u-${u.id}`);
-    const layer = (u.passWalls || look.ring) && overEl ? overEl : unitsEl;
+    const overlayLook = (look.fx || []).some((n) => fxID(n) === "slash");
+    const layer =
+      (overlayLook || (u.role !== "helper" && (u.passWalls || look.ring))) && overEl
+        ? overEl
+        : unitsEl;
     if (!el) {
       el = document.createElement("div");
       el.id = `u-${u.id}`;
@@ -508,11 +649,13 @@ function renderArena() {
     el.classList.toggle("void", !!look.glow);
     el.classList.toggle("ring", !!look.ring || u.kind === "盾");
     el.classList.toggle("fighter", u.role === "fighter");
+    el.classList.toggle("helper", u.role === "helper");
     const oldCut = el.querySelector(".cut");
     if (oldCut) oldCut.remove();
     if (look.chroma) el.style.removeProperty("--kind");
     else el.style.setProperty("--kind", kindColor(u.kind));
     el.classList.toggle("chroma", !!look.chroma);
+    applyLookFX(el, u.kind);
     const speed = Math.hypot(u.vx || 0, u.vy || 0);
     const dashing = look.ghost > 0 && speed > look.ghost;
     el.classList.toggle("dashing", dashing);
@@ -546,6 +689,7 @@ function renderArena() {
         spawnGhostFrom(el, u.kind, ghostLayer, ghostCls);
       }
     }
+    runLookFX(el, u, { now, fxRoot: overEl || fxRoot, spawnGhost: spawnGhostFrom });
     const shownHP =
       u.role === "twin"
         ? fighters.find((f) => f.slot === u.slot)?.hp ?? u.hp
@@ -572,6 +716,7 @@ function renderArena() {
     const nested = el.querySelector(".hp-float");
     if (nested) nested.remove();
     placeFactionBadge(u, sx, sy, r);
+    placeMarks(u, sx, sy, r);
     let ring = document.getElementById(`ring-${u.id}`);
     if (look.visionRing && u.vision > 0) {
       if (!ring) {
@@ -638,6 +783,11 @@ function renderArena() {
         if (!seen.has(id)) child.remove();
         continue;
       }
+      if (child.classList.contains("status-marks")) {
+        const id = child.id.slice("marks-".length);
+        if (!seen.has(id)) child.remove();
+        continue;
+      }
       if (child.classList.contains("hp-float")) {
         const id = child.id.slice("hp-".length);
         if (!seen.has(id)) child.remove();
@@ -657,6 +807,7 @@ function renderArena() {
 }
 
 function render() {
+  ensureLookFX();
   const inLobby = state.phase === "select";
   lobby.classList.toggle("hidden", !inLobby);
   arena.classList.toggle("hidden", inLobby);

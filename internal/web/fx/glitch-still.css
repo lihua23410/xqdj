@@ -1,0 +1,25 @@
+.ball.look-glitch-still {
+  isolation: isolate;
+  overflow: hidden;
+  opacity: 0.58;
+}
+.ball.look-glitch-still > .look-glitch-slices {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 50%;
+}
+.ball.look-glitch-still > .look-glitch-slices i {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--kind);
+  box-shadow: 0 0 10px currentColor;
+  display: none;
+}
+.kinds button.look-glitch-still,
+.slot.look-glitch-still {
+  opacity: 0.7;
+  box-shadow: 2px 0 0 #0ff6, -2px 0 0 #f0f6;
+}

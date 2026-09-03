@@ -56,10 +56,11 @@ PLAN.md             尚未做的混战 / 分队
 | `小骑士` | 175 | 9999 | 开局 75 血；碰撞伤 10。每 7s 瞬移到敌人身边（不出六边形）再朝对方冲撞。放完有 50% 概率 0.5s 后再瞬移撞一次 |
 | `盾士` | 155 | 9999 | 贴身盾环挡住伤害；盾碎或自己格挡时炸出碎片。满盾 8 片伤 5，弱化 6 片伤 4。10s 补盾，或累计挨打 20 后补弱盾 |
 | `面灵气` | 150 | 9999 | 球色自己渐变，不改别人颜色。开局给自己和敌人各一个派系图标（青/红/紫/苍）。撞墙（不是撞人）时随机换成另一个。对异派系伤害 +25%，受同派系伤害 −25%。自身：红攻高、紫回血（每秒 1）、青射弹、苍加速（同时只生效当前派系）。凑齐四种后朝四周打出青/红/紫/苍四发弹幕 |
+| `地慧星` | 165 | 9999 | 天蓝色球，常驻每帧故障切片。碰撞伤 6 并叠【剑痕】，10% 留下可穿过的静止故障残影。受击时无效该次攻击并随机瞬移（12s CD，开局可用），原地留残影。每次撞墙像近战进视野那样给当前速度 +12，可叠加，真正掉血时拉回巡航。20s 后斩击穿越场地，伤害 `(6+剑痕×2)×(1+残影)`，然后清掉剑痕和残影 |
 
-非可选单位（不进选人列表，`Fighter: false`）：`子弹`、`分身`、`无下限`、`紫弹`、`青弹`、`面具青`、`面具红`、`面具紫`、`面具苍`、`盾`、`盾碎片`、`弱化碎片`。
+非可选单位（不进选人列表，`Fighter: false`）：`子弹`、`分身`、`无下限`、`紫弹`、`青弹`、`面具青`、`面具红`、`面具紫`、`面具苍`、`盾`、`盾碎片`、`弱化碎片`、`地慧星残影`、`地慧星斩击`。
 
-颜色绑在 **kind** 上，不绑槽位。写在 `Spec.Look`（`Color`、`Chroma`、残影阈值等），引擎随快照的 `looks` 发给页面。不要为了换色去改 `app.js` / `style.css`。
+颜色绑在 **kind** 上，不绑槽位。写在 `Spec.Look`（`Color`、`Chroma`、残影阈值等），引擎随快照的 `looks` 发给页面。常驻皮肤特效写 `Look.FX`（例如 `"glitch"`），对应 `internal/web/fx/glitch.css`，可选同名 `glitch.js` 用 `lookFX.glitch.tick` 做每帧逻辑。前端收到 looks 后动态插入 stylesheet 和 script。不要为了换色或加一层皮肤特效去改 `app.js` / `style.css`。只有会改 DOM 行为的引擎能力（残影阈值、拖尾、chroma）才需要新的 Look 字段。
 
 墙的瞄准虚线长度是 `Look.WallGuide`，和砌墙长度用同一个常量。
 
@@ -69,7 +70,7 @@ PLAN.md             尚未做的混战 / 分队
 2. `init()` 里 `unit.Register`。要出现在选人页就必须 `Fighter: true`、`Role: unit.RoleFighter`。
 3. 实现 `unit.Actor`：`Handle(ctx, ev)` 里根据事件发指令，不要改别人的内存。战斗机必须处理 `IncomingDamage`（可直接 `unit.AcceptHit`）。
 4. 需要子弹 / 分身 / 特效 helper：再 `Register` 一个 `Fighter: false` 的 kind。helper 用 `RoleHelper`，不碰撞，可设 `Look.Ring` 画成圈，由角色自己计时 `Despawn`。
-5. 外观写 `Spec.Look`。只有发明了新的 FX **名字**才要在 `app.js` 里加一段；通用的 dash / shot / hurt / heal / faction / shatter 已经有了。
+5. 外观写 `Spec.Look`。常驻特效丢进 `internal/web/fx/`（css，需要动起来再加同名 js），名字填进 `Look.FX`。一次性 FX **名字**（dash / shot / hurt 等）才要在 `app.js` 里接。
 6. 新文件会随 `_ "xqdj/character"` 自动编进去，不用改 `main.go`。
 
 最小骨架：
@@ -111,6 +112,8 @@ func init() {
 | `MarkFaction` | 给战斗机打派系。`Cycle` 时撞墙换派系；`AmpOut`/`AmpIn` 是角色自己给的倍率；`Collect` 凑齐四种时按 `Barrage` 的 kind 朝四周各生成一发（速度用该 kind 的 `Spec.Speed`） |
 | `ClearFactionSeen` | 清空 `Collect` 记录，当前派系仍算已出现 |
 | `Heal` | 给战斗机回血，不超过 MaxHP，不触发 hit-stop |
+| `StackMark` | 给单位叠一层状态（Kind / Icon 由角色定）。`Delta` 可为负 |
+| `ClearMarks` | 清掉该单位指定 Kind 的状态；Kind 为空则全清 |
 | `FX` | 给前端的一次性特效；不参与物理 |
 
 ### 事件

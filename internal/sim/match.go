@@ -50,6 +50,7 @@ type unit struct {
 	factionSeen    map[string]bool
 	factionNext    float64
 	factionBarrage []string
+	marks          map[string]*stackMark
 }
 
 type spawnSpot struct {
@@ -207,6 +208,7 @@ func (u *unit) snap() unitpkg.Snapshot {
 		PassWalls: u.passWalls,
 		Faction:   u.faction,
 		Seen:      u.seenList(),
+		Marks:     u.markList(),
 	}
 }
 
@@ -551,6 +553,10 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		delete(m.pendingDmg, c.Token)
 		delete(m.wardAbsorb, off.to)
+	case unitpkg.StackMark:
+		m.stackMarkLocked(c)
+	case unitpkg.ClearMarks:
+		m.clearMarksLocked(c)
 	case unitpkg.Heal:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped || u.role != unitpkg.RoleFighter || c.Amount <= 0 {
@@ -921,7 +927,7 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 	found := false
 	for _, id := range m.order {
 		u := m.units[id]
-		if u == nil || !u.solid {
+		if u == nil || !u.solid || u.role == unitpkg.RoleHelper {
 			continue
 		}
 		if !u.passWalls && !u.shell {
@@ -952,12 +958,12 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 	n := len(m.order)
 	for i := 0; i < n; i++ {
 		a := m.units[m.order[i]]
-		if !a.solid {
+		if a == nil || !a.solid || a.role == unitpkg.RoleHelper {
 			continue
 		}
 		for j := i + 1; j < n; j++ {
 			b := m.units[m.order[j]]
-			if !b.solid {
+			if b == nil || !b.solid || b.role == unitpkg.RoleHelper {
 				continue
 			}
 			if ignore[canonPair(a.id, b.id)] {
