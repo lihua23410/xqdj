@@ -439,7 +439,8 @@ function playEffects(effects, scale, cx, cy) {
   }
 }
 const lobby = document.getElementById("lobby");
-const arena = document.getElementById("arena");
+// 不要叫 arena：经典脚本顶层 const 会盖住 window.arena，包里的 arena.registerShot 会变成对 DOM 节点的调用。
+const arenaEl = document.getElementById("arena");
 const hex = document.getElementById("hex");
 const unitsEl = document.getElementById("units");
 const overEl = document.getElementById("over");
@@ -812,7 +813,7 @@ function render() {
   ensurePacks();
   const inLobby = state.phase === "select";
   lobby.classList.toggle("hidden", !inLobby);
-  arena.classList.toggle("hidden", inLobby);
+  arenaEl.classList.toggle("hidden", inLobby);
   if (inLobby) {
     prevHP.clear();
     if (fxRoot) fxRoot.innerHTML = "";
