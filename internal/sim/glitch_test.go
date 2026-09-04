@@ -48,7 +48,7 @@ func TestStackMarkAccumulatesAndClears(t *testing.T) {
 		t.Fatal("missing fighters")
 	}
 	for i := 0; i < 3; i++ {
-		m.stackMarkLocked(unitpkg.StackMark{UnitID: o.id, Kind: "剑痕", Delta: 1, Icon: "/status/jianhen.png"})
+		m.stackMarkLocked(unitpkg.StackMark{UnitID: o.id, Kind: "剑痕", Delta: 1, Icon: "/ball/地慧星/status/jianhen.png"})
 	}
 	got := o.markList()
 	if len(got) != 1 || got[0].Stacks != 3 || got[0].Kind != "剑痕" {
@@ -79,6 +79,9 @@ func TestGlitchCollisionAppliesSwordMark(t *testing.T) {
 	m.mu.Lock()
 	m.drainCmdsLocked()
 	m.settleHitsLocked()
+	m.mu.Unlock()
+	time.Sleep(4 * time.Millisecond)
+	m.mu.Lock()
 	m.drainCmdsLocked()
 	m.settleHitsLocked()
 	marks := o.markList()
@@ -345,7 +348,7 @@ func TestGlitchSlashUsesMarksAndGhostsThenClears(t *testing.T) {
 	m.despawnOwnedLocked(g.id, character.KindGlitchGhost)
 	m.clearMarksLocked(unitpkg.ClearMarks{UnitID: o.id, Kind: "剑痕"})
 	for i := 0; i < 3; i++ {
-		m.stackMarkLocked(unitpkg.StackMark{UnitID: o.id, Kind: "剑痕", Delta: 1, Icon: "/status/jianhen.png"})
+		m.stackMarkLocked(unitpkg.StackMark{UnitID: o.id, Kind: "剑痕", Delta: 1, Icon: "/ball/地慧星/status/jianhen.png"})
 	}
 	m.applyCmdLocked(unitpkg.Spawn{Kind: character.KindGlitchGhost, X: -40, Y: 10, OwnerID: g.id, Slot: 0})
 	m.applyCmdLocked(unitpkg.Spawn{Kind: character.KindGlitchGhost, X: -30, Y: -8, OwnerID: g.id, Slot: 0})

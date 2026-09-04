@@ -1,10 +1,14 @@
-package character
+package 盾士
 
 import (
+	"embed"
 	"math"
 	"math/rand/v2"
 	"xqdj/internal/unit"
 )
+
+//go:embed fx
+var assets embed.FS
 
 const KindWarden = "盾士"
 
@@ -31,7 +35,8 @@ const (
 )
 
 func init() {
-	unit.Register(unit.Spec{
+	p := unit.NewPack(KindWarden, assets)
+	p.Register(unit.Spec{
 		Kind:    KindWarden,
 		Role:    unit.RoleFighter,
 		Radius:  wardenRadius,
@@ -43,7 +48,7 @@ func init() {
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &盾士{refreshAt: shieldRefresh}
 	})
-	unit.Register(unit.Spec{
+	p.Register(unit.Spec{
 		Kind:    kindShield,
 		Role:    unit.RoleProjectile,
 		Radius:  shieldRadius,
@@ -52,11 +57,11 @@ func init() {
 		Vision:  0,
 		Fighter: false,
 		Shell:   true,
-		Look:    unit.Look{Color: "#8b9cb3", Ring: true},
+		Look:    unit.Look{Color: "#8b9cb3", Ring: true, Overlay: true},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &盾{}
 	})
-	unit.Register(unit.Spec{
+	p.Register(unit.Spec{
 		Kind:    kindShard,
 		Role:    unit.RoleProjectile,
 		Radius:  shardRadius,
@@ -68,7 +73,7 @@ func init() {
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &盾碎片{owner: info.OwnerID, dmg: fullShardDmg}
 	})
-	unit.Register(unit.Spec{
+	p.Register(unit.Spec{
 		Kind:    kindWeakShard,
 		Role:    unit.RoleProjectile,
 		Radius:  shardRadius,

@@ -1,0 +1,15 @@
+.chroma,
+.look-chroma {
+  --kind: hsl(var(--hue), 90%, 58%);
+  animation: chroma-spin 2.2s linear infinite;
+}
+@keyframes chroma-spin {
+  from { --hue: 0; }
+  to { --hue: 360; }
+}
+.ball.look-chroma {
+  animation: chroma-spin 2.2s linear infinite, chroma-hue 2.2s linear infinite;
+}
+@keyframes chroma-hue {
+  to { filter: hue-rotate(360deg); }
+}

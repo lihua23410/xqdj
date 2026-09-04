@@ -1,0 +1,41 @@
+.guide.bond {
+  opacity: 0.42;
+  border-top-width: 2px;
+  border-top-style: dashed;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+.field-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px dashed currentColor;
+  color: var(--kind);
+  background: color-mix(in srgb, var(--kind) 10%, transparent);
+  pointer-events: none;
+  box-sizing: border-box;
+  opacity: 0.5;
+}
+.field-ring i {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  opacity: 0.45;
+  box-shadow: 0 0 10px currentColor;
+}
+.field-ring.pull {
+  animation: field-pull 1.35s ease-in-out infinite;
+}
+.field-ring.push {
+  animation: field-push 1.35s ease-in-out infinite;
+}
+@keyframes field-pull {
+  from { transform: translate(-50%, -50%) scale(1.06); opacity: 0.22; }
+  to { transform: translate(-50%, -50%) scale(0.78); opacity: 0.62; }
+}
+@keyframes field-push {
+  from { transform: translate(-50%, -50%) scale(0.78); opacity: 0.62; }
+  to { transform: translate(-50%, -50%) scale(1.08); opacity: 0.18; }
+}

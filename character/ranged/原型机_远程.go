@@ -1,9 +1,13 @@
-package character
+package 原型机_远程
 
 import (
+	"embed"
 	"math"
 	"xqdj/internal/unit"
 )
+
+//go:embed fx
+var assets embed.FS
 
 const KindRanged = "原型机_远程"
 
@@ -23,7 +27,8 @@ const (
 )
 
 func init() {
-	unit.Register(unit.Spec{
+	p := unit.NewPack(KindRanged, assets)
+	p.Register(unit.Spec{
 		Kind:    KindRanged,
 		Role:    unit.RoleFighter,
 		Radius:  rangedRadius,
@@ -35,7 +40,7 @@ func init() {
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &原型机_远程{}
 	})
-	unit.Register(unit.Spec{
+	p.Register(unit.Spec{
 		Kind:    kindBullet,
 		Role:    unit.RoleProjectile,
 		Radius:  bulletRadius,

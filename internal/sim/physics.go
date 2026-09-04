@@ -1,6 +1,9 @@
 package sim
 
-import "math"
+import (
+	"math"
+	unitpkg "xqdj/internal/unit"
+)
 
 type vec struct {
 	X, Y float64
@@ -22,7 +25,7 @@ func (v vec) norm() vec {
 }
 
 const (
-	HexRadius     = 280.0
+	HexRadius     = unitpkg.HexRadius
 	TickHz        = 60
 	DT            = 1.0 / TickHz
 	HitStopFrames = 3

@@ -1,9 +1,13 @@
-package character
+package 无下限术士
 
 import (
+	"embed"
 	"math"
 	"xqdj/internal/unit"
 )
+
+//go:embed fx
+var assets embed.FS
 
 const KindTwin = "无下限术士"
 
@@ -28,7 +32,8 @@ const (
 )
 
 func init() {
-	unit.Register(unit.Spec{
+	p := unit.NewPack(KindTwin, assets)
+	p.Register(unit.Spec{
 		Kind:    KindTwin,
 		Role:    unit.RoleFighter,
 		Radius:  twinRadius,
@@ -37,16 +42,11 @@ func init() {
 		Vision:  twinVision,
 		Fighter: true,
 		Semi:    true,
-		Look: unit.Look{
-			Color:     "#e24b4b",
-			Field:     "pull",
-			Bond:      true,
-			BondColor: "#b44cff",
-		},
+		Look:    unit.Look{Color: "#e24b4b", FX: []string{"pull", "bond"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &无下限术士{slot: info.Slot}
 	})
-	unit.Register(unit.Spec{
+	p.Register(unit.Spec{
 		Kind:    twinKind,
 		Role:    unit.RoleTwin,
 		Radius:  twinRadius,
@@ -55,11 +55,11 @@ func init() {
 		Vision:  twinVision,
 		Fighter: false,
 		Semi:    true,
-		Look:    unit.Look{Color: "#4b7be2", Field: "push", Bond: true, BondColor: "#b44cff"},
+		Look:    unit.Look{Color: "#4b7be2", FX: []string{"push", "bond"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &双生{owner: info.OwnerID, slot: info.Slot}
 	})
-	unit.Register(unit.Spec{
+	p.Register(unit.Spec{
 		Kind:      purpleKind,
 		Role:      unit.RoleProjectile,
 		Radius:    purpleRadius,
@@ -68,7 +68,7 @@ func init() {
 		Vision:    0,
 		Fighter:   false,
 		PassWalls: true,
-		Look:      unit.Look{Color: "#b44cff", Glow: true, Trail: true},
+		Look:      unit.Look{Color: "#b44cff", Glow: true, Trail: true, Overlay: true},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &紫弹{slot: info.Slot}
 	})

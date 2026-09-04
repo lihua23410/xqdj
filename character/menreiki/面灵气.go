@@ -1,10 +1,14 @@
-package character
+package 面灵气
 
 import (
+	"embed"
 	"math"
 	"math/rand/v2"
 	"xqdj/internal/unit"
 )
+
+//go:embed fx faction
+var assets embed.FS
 
 const KindMenreiki = "面灵气"
 
@@ -50,7 +54,8 @@ var maskLooks = []struct {
 }
 
 func init() {
-	unit.Register(unit.Spec{
+	p := unit.NewPack(KindMenreiki, assets)
+	p.Register(unit.Spec{
 		Kind:    KindMenreiki,
 		Role:    unit.RoleFighter,
 		Radius:  menreikiRadius,
@@ -58,11 +63,11 @@ func init() {
 		Speed:   menreikiSpeed,
 		Vision:  menreikiVision,
 		Fighter: true,
-		Look:    unit.Look{Color: "hsl(200 92% 60%)", Chroma: true, Ghost: 220},
+		Look:    unit.Look{Color: "hsl(200 92% 60%)", Ghost: 220, FX: []string{"chroma"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &面灵气{}
 	})
-	unit.Register(unit.Spec{
+	p.Register(unit.Spec{
 		Kind:    cyanKind,
 		Role:    unit.RoleProjectile,
 		Radius:  cyanRadius,
@@ -76,7 +81,7 @@ func init() {
 	})
 	for _, shot := range maskLooks {
 		shot := shot
-		unit.Register(unit.Spec{
+		p.Register(unit.Spec{
 			Kind:    shot.kind,
 			Role:    unit.RoleProjectile,
 			Radius:  maskRadius,

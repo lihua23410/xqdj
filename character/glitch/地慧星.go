@@ -1,6 +1,7 @@
-package character
+package 地慧星
 
 import (
+	"embed"
 	"math"
 	"math/rand/v2"
 	"xqdj/internal/unit"
@@ -19,17 +20,20 @@ const (
 	glitchHitCD  = 0.1
 
 	glitchMarkKind  = "剑痕"
-	glitchMarkIcon  = "/status/jianhen.png"
+	glitchMarkIcon  = "/ball/地慧星/status/jianhen.png"
 	glitchGhostOdds = 0.20
 	glitchDodgeCD   = 12.0
 	glitchSlashCD   = 20.0
 	glitchSlashLife = 1.25
 	glitchWallBoost = 50.0
-	glitchHexCircum = 280.0
 )
 
+//go:embed fx status
+var assets embed.FS
+
 func init() {
-	unit.Register(unit.Spec{
+	p := unit.NewPack(KindGlitch, assets)
+	p.Register(unit.Spec{
 		Kind:    KindGlitch,
 		Role:    unit.RoleFighter,
 		Radius:  glitchRadius,
@@ -41,7 +45,7 @@ func init() {
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &地慧星{slashReadyAt: glitchSlashCD}
 	})
-	unit.Register(unit.Spec{
+	p.Register(unit.Spec{
 		Kind:    KindGlitchGhost,
 		Role:    unit.RoleHelper,
 		Radius:  glitchRadius,
@@ -53,7 +57,7 @@ func init() {
 	}, func(unit.SpawnInfo) unit.Actor {
 		return 地慧星残影{}
 	})
-	unit.Register(unit.Spec{
+	p.Register(unit.Spec{
 		Kind:    KindGlitchSlash,
 		Role:    unit.RoleHelper,
 		Radius:  1,
@@ -61,7 +65,7 @@ func init() {
 		Speed:   0,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: "#4ec4ff", FX: []string{"slash"}},
+		Look:    unit.Look{Color: "#4ec4ff", Overlay: true, FX: []string{"slash"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &地慧星斩击{}
 	})
@@ -240,10 +244,10 @@ func (g *地慧星) dropGhost(ctx unit.Context, x, y float64) {
 func (g *地慧星) randomSpot() (float64, float64) {
 	for i := 0; i < 24; i++ {
 		ang := rand.Float64() * 2 * math.Pi
-		r := rand.Float64() * (glitchHexCircum - glitchRadius - 16)
+		r := rand.Float64() * (unit.HexRadius - glitchRadius - 16)
 		x := math.Cos(ang) * r
 		y := math.Sin(ang) * r
-		if !insideGlitchHex(x, y, glitchRadius+4) {
+		if !unit.HexContains(x, y, glitchRadius+4) {
 			continue
 		}
 		if g.booted && math.Hypot(x-g.x, y-g.y) < 48 {
@@ -252,18 +256,6 @@ func (g *地慧星) randomSpot() (float64, float64) {
 		return x, y
 	}
 	return 0, 0
-}
-
-func insideGlitchHex(x, y, radius float64) bool {
-	ap := glitchHexCircum * math.Sqrt(3) / 2
-	limit := ap - radius
-	for i := 0; i < 6; i++ {
-		a := (float64(i) + 0.5) * math.Pi / 3
-		if math.Cos(a)*x+math.Sin(a)*y > limit+1e-6 {
-			return false
-		}
-	}
-	return true
 }
 
 func markStacks(u unit.Snapshot, kind string) int {

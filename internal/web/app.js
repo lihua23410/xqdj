@@ -3,6 +3,17 @@ let prevHP = new Map();
 let dashGhostAt = new Map();
 
 const FALLBACK_COLOR = "#3dd6c6";
+const ENGINE_FX = new Set([
+  "hurt",
+  "heal",
+  "swap",
+  "wall-spawn",
+  "wall-fade",
+  "wall",
+  "impact",
+  "hit",
+  "faction",
+]);
 
 function lookOf(kind) {
   const looks = (state && state.looks) || {};
@@ -10,24 +21,17 @@ function lookOf(kind) {
 }
 
 function kindColor(kind) {
-  if (FACTION_COLORS[kind]) return FACTION_COLORS[kind];
+  const fac = factionById[kind];
+  if (fac && fac.color) return fac.color;
   return lookOf(kind).color || FALLBACK_COLOR;
 }
 
-function isChroma(kind) {
-  return !!lookOf(kind).chroma;
-}
-
 function paintKind(el, kind) {
-  const look = lookOf(kind);
-  const on = !!look.chroma;
-  el.classList.toggle("chroma", on);
   applyLookFX(el, kind);
-  if (on) el.style.removeProperty("--kind");
-  else el.style.setProperty("--kind", kindColor(kind));
+  el.style.setProperty("--kind", kindColor(kind));
 }
 
-const loadedFX = new Set();
+const loadedPackFiles = new Set();
 
 function fxID(name) {
   if (typeof name !== "string" || !name) return "";
@@ -35,22 +39,77 @@ function fxID(name) {
   return m ? m[1] : "";
 }
 
-function ensureLookFX() {
-  const looks = (state && state.looks) || {};
-  for (const look of Object.values(looks)) {
-    for (const name of look.fx || []) {
-      const id = fxID(name);
-      if (!id || loadedFX.has(id)) continue;
-      loadedFX.add(id);
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = `/fx/${id}.css`;
-      link.dataset.fx = id;
-      document.head.appendChild(link);
-      const script = document.createElement("script");
-      script.src = `/fx/${id}.js`;
-      script.dataset.fx = id;
-      document.head.appendChild(script);
+function packBaseFromScript() {
+  const src = document.currentScript && document.currentScript.src;
+  if (!src) return "";
+  try {
+    const path = new URL(src, location.origin).pathname;
+    const m = path.match(/^(\/ball\/[^/]+)\//);
+    return m ? m[1] : "";
+  } catch {
+    return "";
+  }
+}
+
+window.shotFX = window.shotFX || {};
+
+function registerShot(name, fn) {
+  const base = packBaseFromScript();
+  if (!base || typeof fn !== "function") return;
+  window.shotFX[base] = window.shotFX[base] || {};
+  window.shotFX[base][name] = fn;
+}
+
+const factions = [];
+const factionById = {};
+
+function registerFactions(list) {
+  const base = packBaseFromScript();
+  if (!base || !Array.isArray(list)) return;
+  for (const item of list) {
+    if (!item || !item.id) continue;
+    const icon = item.icon || (item.file ? `${base}/${item.file}` : "");
+    const entry = { id: item.id, icon, color: item.color || "" };
+    const prev = factionById[item.id];
+    if (prev) {
+      factions[factions.indexOf(prev)] = entry;
+    } else {
+      factions.push(entry);
+    }
+    factionById[item.id] = entry;
+  }
+}
+
+window.arena = {
+  lookOf,
+  kindColor,
+  screenPos,
+  spawnFx,
+  burst,
+  spawnGhostFrom,
+  registerShot,
+  registerFactions,
+};
+
+function ensurePacks() {
+  const packs = (state && state.packs) || {};
+  for (const pack of Object.values(packs)) {
+    const base = pack.base || "";
+    for (const file of pack.files || []) {
+      const url = `${base}/${file}`;
+      if (loadedPackFiles.has(url)) continue;
+      loadedPackFiles.add(url);
+      if (file.endsWith(".css")) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = url;
+        document.head.appendChild(link);
+      } else if (file.endsWith(".js")) {
+        const script = document.createElement("script");
+        script.src = url;
+        script.async = false;
+        document.head.appendChild(script);
+      }
     }
   }
 }
@@ -59,16 +118,17 @@ function applyLookFX(el, kind) {
   const want = new Set();
   for (const name of lookOf(kind).fx || []) {
     const id = fxID(name);
-    if (id) want.add("look-" + id);
+    if (id) want.add(id);
   }
   for (const c of [...el.classList]) {
-    if (c.startsWith("look-") && !want.has(c)) el.classList.remove(c);
+    if (!c.startsWith("look-")) continue;
+    const id = c.slice("look-".length);
+    if (want.has(id)) continue;
+    el.classList.remove(c);
+    const hook = window.lookFX && window.lookFX[id];
+    if (hook && typeof hook.unmount === "function") hook.unmount(el);
   }
-  for (const c of want) el.classList.add(c);
-  if (!want.has("look-glitch") && !want.has("look-glitch-still")) {
-    el.querySelector(":scope > .look-glitch-slices")?.remove();
-    delete el.dataset.glitchStill;
-  }
+  for (const id of want) el.classList.add("look-" + id);
 }
 
 function runLookFX(el, u, ctx) {
@@ -81,36 +141,44 @@ function runLookFX(el, u, ctx) {
   }
 }
 
-const FACTION_COLORS = {
-  青: "#3ec8e0",
-  红: "#ff3b3b",
-  紫: "#b44cff",
-  苍: "#8dffb0",
-};
-const FACTION_FILES = {
-  青: "/faction/qing.png",
-  红: "/faction/hong.png",
-  紫: "/faction/zi.png",
-  苍: "/faction/cang.png",
-};
-const FACTION_ORDER = ["青", "红", "紫", "苍"];
+function runLookGuides(scale, cx, cy, seen) {
+  const hooks = window.lookFX;
+  if (!hooks) return;
+  const ctx = {
+    scale,
+    cx,
+    cy,
+    units: state.units || [],
+    ensureGuide,
+    placeSeg,
+    seenGuides: seen,
+  };
+  for (const u of state.units || []) {
+    for (const name of lookOf(u.kind).fx || []) {
+      const hook = hooks[fxID(name)];
+      if (hook && typeof hook.guide === "function") hook.guide(u, ctx);
+    }
+  }
+}
 
 function fillFactionHud(root, u) {
   if (!root) return;
   root.innerHTML = "";
-  if (!u || !u.faction) return;
+  const nowFac = u && u.faction && factionById[u.faction];
+  if (!nowFac || !nowFac.icon) return;
   const now = document.createElement("img");
   now.className = "now";
-  now.src = FACTION_FILES[u.faction];
+  now.src = nowFac.icon;
   now.alt = u.faction;
   root.appendChild(now);
   if (!u.seen) return;
   const got = new Set(u.seen || []);
-  for (const f of FACTION_ORDER) {
+  for (const f of factions) {
+    if (!f.icon) continue;
     const pip = document.createElement("img");
-    pip.className = `pip${got.has(f) ? " on" : ""}`;
-    pip.src = FACTION_FILES[f];
-    pip.alt = f;
+    pip.className = `pip${got.has(f.id) ? " on" : ""}`;
+    pip.src = f.icon;
+    pip.alt = f.id;
     root.appendChild(pip);
   }
 }
@@ -118,7 +186,8 @@ function fillFactionHud(root, u) {
 function placeFactionBadge(u, sx, sy, r) {
   const badgeId = `fac-${u.id}`;
   const pipsId = `pips-${u.id}`;
-  if (u.role !== "fighter" || !u.faction) {
+  const nowFac = u.role === "fighter" && u.faction && factionById[u.faction];
+  if (!nowFac || !nowFac.icon) {
     document.getElementById(badgeId)?.remove();
     document.getElementById(pipsId)?.remove();
     return;
@@ -130,7 +199,7 @@ function placeFactionBadge(u, sx, sy, r) {
     badge.className = "faction-badge";
     unitsEl.appendChild(badge);
   }
-  badge.src = FACTION_FILES[u.faction];
+  badge.src = nowFac.icon;
   badge.alt = u.faction;
   badge.style.left = `${sx}px`;
   badge.style.top = `${sy}px`;
@@ -147,11 +216,12 @@ function placeFactionBadge(u, sx, sy, r) {
   }
   const got = new Set(u.seen || []);
   pips.innerHTML = "";
-  for (const f of FACTION_ORDER) {
+  for (const f of factions) {
+    if (!f.icon) continue;
     const img = document.createElement("img");
-    img.src = FACTION_FILES[f];
-    img.alt = f;
-    img.className = got.has(f) ? "on" : "";
+    img.src = f.icon;
+    img.alt = f.id;
+    img.className = got.has(f.id) ? "on" : "";
     pips.appendChild(img);
   }
   pips.style.left = `${sx}px`;
@@ -235,8 +305,8 @@ function spawnGhostFrom(el, kind, layer, extraClass = "") {
   if (!root || !el) return;
   const g = document.createElement("div");
   g.className = `ghost${extraClass ? ` ${extraClass}` : ""}`;
-  if (el.classList.contains("semi")) g.classList.add("semi");
-  if (el.classList.contains("void")) g.classList.add("void");
+    if (el.classList.contains("semi")) g.classList.add("semi");
+    if (el.classList.contains("glow")) g.classList.add("glow");
   g.style.setProperty("--kind", kindColor(kind));
   g.style.setProperty("--face-ang", el.style.getPropertyValue("--face-ang") || "0rad");
   g.style.width = el.style.width;
@@ -289,24 +359,6 @@ function dustAlong(s, kind, n, spread) {
   }
 }
 
-function playArenaSlash(fx, scale, cx, cy) {
-  const s = wallSeg(fx, scale, cx, cy);
-  const kind = fx.kind;
-  const root = overEl || fxRoot;
-  const slash = spawnFx(
-    "fx-arena-slash",
-    s.mx,
-    s.my,
-    kind,
-    { "--ang": `${s.ang}rad`, "--len": `${Math.max(80, s.len)}px` },
-    root
-  );
-  if (slash) slash.style.width = `${Math.max(80, s.len)}px`;
-  spawnFx("fx-flash", s.mx, s.my, kind, {}, root);
-  spawnFx("fx-shock", s.mx, s.my, kind, {}, root);
-  burst(s.mx, s.my, kind, 12);
-}
-
 function playWallFx(fx, scale, cx, cy, fading) {
   const s = wallSeg(fx, scale, cx, cy);
   const kind = fx.kind;
@@ -335,40 +387,8 @@ function playEffects(effects, scale, cx, cy) {
   for (const fx of effects || []) {
     const [x, y] = screenPos(fx.x, fx.y, scale, cx, cy);
     const kind = fx.kind;
-    if (fx.name === "dash") {
-      spawnFx("fx-shock", x, y, kind);
-      spawnFx("fx-ring", x, y, kind);
-      burst(x, y, kind, 12);
-    } else if (fx.name === "split") {
-      const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1);
-      spawnFx("fx-flash", x, y, kind);
-      spawnFx("fx-ring", x, y, kind);
-      spawnFx("fx-split-slash", x, y, kind, { "--ang": `${ang}rad` });
-      burst(x, y, kind, 8);
-    } else if (fx.name === "void-shot") {
-      const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1);
-      spawnFx("fx-flash", x, y, kind);
-      spawnFx("fx-void-core", x, y, kind);
-      spawnFx("fx-ring", x, y, kind);
-      const beam = spawnFx("fx-beam void", x, y, kind);
-      if (beam) beam.style.transform = `translate(0, -50%) rotate(${ang * (180 / Math.PI)}deg)`;
-      burst(x, y, kind, 8);
-    } else if (fx.name === "void-hit") {
-      spawnFx("fx-flash", x, y, kind);
-      spawnFx("fx-void-core", x, y, kind);
-      spawnFx("fx-shock", x, y, kind);
-      burst(x, y, kind, 10);
-    } else if (fx.name === "shot") {
-      spawnFx("fx-flash", x, y, kind);
-      const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1) * (180 / Math.PI);
-      const beam = spawnFx("fx-beam", x, y, kind);
-      beam.style.transform = `translate(0, -50%) rotate(${ang}deg)`;
-    } else if (fx.name === "shatter") {
-      spawnFx("fx-flash", x, y, kind);
-      spawnFx("fx-ring", x, y, kind);
-      spawnFx("fx-shock", x, y, kind);
-      burst(x, y, kind, 14);
-    } else if (fx.name === "heal") {
+    const ctx = { x, y, kind, scale, cx, cy };
+    if (fx.name === "heal") {
       const n = Math.round(fx.amount || 0);
       const el = spawnFx("fx-dmg heal", x, y - 12, kind, dmgPop(n));
       if (el) el.textContent = `+${n}`;
@@ -390,12 +410,18 @@ function playEffects(effects, scale, cx, cy) {
     } else if (fx.name === "wall") {
       spawnFx("fx-flash", x, y, kind);
       spawnFx("fx-shock", x, y, kind);
-    } else if (fx.name === "slash") {
-      playArenaSlash(fx, scale, cx, cy);
     } else if (fx.name === "impact" || fx.name === "hit") {
       spawnFx("fx-flash", x, y, kind);
       spawnFx("fx-shock", x, y, kind);
       burst(x, y, kind, fx.name === "impact" ? 14 : 8);
+    } else if (!ENGINE_FX.has(fx.name)) {
+      const base = lookOf(kind).base;
+      const hook = base && window.shotFX && window.shotFX[base] && window.shotFX[base][fx.name];
+      if (typeof hook === "function") {
+        hook(fx, ctx);
+      } else if (fx.name) {
+        spawnFx(`fx-${fx.name}`, x, y, kind);
+      }
     }
   }
 }
@@ -519,36 +545,9 @@ function renderGuides(fighters, scale, cx, cy) {
     placeSeg(hint, g1x, g1y, g2x, g2y, w.kind);
     seen.add(hint.id);
   }
-  renderTwinBonds(scale, cx, cy, seen);
+  runLookGuides(scale, cx, cy, seen);
   for (const child of [...guidesEl.children]) {
     if (!seen.has(child.id)) child.remove();
-  }
-}
-
-function renderTwinBonds(scale, cx, cy, seen) {
-  const bySlot = new Map();
-  for (const u of state.units || []) {
-    if (!lookOf(u.kind).bond) continue;
-    let list = bySlot.get(u.slot);
-    if (!list) {
-      list = [];
-      bySlot.set(u.slot, list);
-    }
-    list.push(u);
-  }
-  for (const [slot, list] of bySlot) {
-    if (list.length < 2) continue;
-    const a = list[0];
-    const b = list[1];
-    const [x1, y1] = screenPos(a.x, a.y, scale, cx, cy);
-    const [x2, y2] = screenPos(b.x, b.y, scale, cx, cy);
-    const el = ensureGuide(`guide-bond-${slot}`, "bond");
-    placeSeg(el, x1, y1, x2, y2, a.kind);
-    const tint = lookOf(a.kind).bondColor || lookOf(b.kind).bondColor || kindColor(a.kind);
-    el.style.setProperty("--kind", tint);
-    const dist = Math.hypot(a.x - b.x, a.y - b.y);
-    el.style.opacity = dist < 56 ? "0.9" : "0.42";
-    seen.add(el.id);
   }
 }
 
@@ -630,11 +629,7 @@ function renderArena() {
     seen.add(String(u.id));
     const look = lookOf(u.kind);
     let el = document.getElementById(`u-${u.id}`);
-    const overlayLook = (look.fx || []).some((n) => fxID(n) === "slash");
-    const layer =
-      (overlayLook || (u.role !== "helper" && (u.passWalls || look.ring))) && overEl
-        ? overEl
-        : unitsEl;
+    const layer = look.overlay && overEl ? overEl : unitsEl;
     if (!el) {
       el = document.createElement("div");
       el.id = `u-${u.id}`;
@@ -643,18 +638,16 @@ function renderArena() {
     } else if (el.parentNode !== layer) {
       layer.appendChild(el);
     }
-    el.classList.toggle("projectile", u.role === "projectile" && u.kind !== "盾");
+    el.classList.toggle("projectile", u.role === "projectile" && !look.ring);
     el.classList.toggle("clone", u.role === "clone");
     el.classList.toggle("semi", !!u.semi);
-    el.classList.toggle("void", !!look.glow);
-    el.classList.toggle("ring", !!look.ring || u.kind === "盾");
+    el.classList.toggle("glow", !!look.glow);
+    el.classList.toggle("ring", !!look.ring);
     el.classList.toggle("fighter", u.role === "fighter");
     el.classList.toggle("helper", u.role === "helper");
     const oldCut = el.querySelector(".cut");
     if (oldCut) oldCut.remove();
-    if (look.chroma) el.style.removeProperty("--kind");
-    else el.style.setProperty("--kind", kindColor(u.kind));
-    el.classList.toggle("chroma", !!look.chroma);
+    el.style.setProperty("--kind", kindColor(u.kind));
     applyLookFX(el, u.kind);
     const speed = Math.hypot(u.vx || 0, u.vy || 0);
     const dashing = look.ghost > 0 && speed > look.ghost;
@@ -689,7 +682,14 @@ function renderArena() {
         spawnGhostFrom(el, u.kind, ghostLayer, ghostCls);
       }
     }
-    runLookFX(el, u, { now, fxRoot: overEl || fxRoot, spawnGhost: spawnGhostFrom });
+    runLookFX(el, u, {
+      now,
+      scale,
+      cx,
+      cy,
+      fxRoot: overEl || fxRoot,
+      spawnGhost: spawnGhostFrom,
+    });
     const shownHP =
       u.role === "twin"
         ? fighters.find((f) => f.slot === u.slot)?.hp ?? u.hp
@@ -742,33 +742,12 @@ function renderArena() {
       ring.remove();
       ring = null;
     }
-    let field = document.getElementById(`field-${u.id}`);
-    if (look.field) {
-      if (!field) {
-        field = document.createElement("div");
-        field.id = `field-${u.id}`;
-        field.className = "field-ring";
-        const core = document.createElement("i");
-        field.appendChild(core);
-        unitsEl.appendChild(field);
-      }
-      field.classList.toggle("pull", look.field === "pull");
-      field.classList.toggle("push", look.field === "push");
-      const fr = 72 * scale;
-      field.style.width = `${fr * 2}px`;
-      field.style.height = `${fr * 2}px`;
-      field.style.left = `${sx}px`;
-      field.style.top = `${sy}px`;
-      field.style.setProperty("--kind", kindColor(u.kind));
-    } else if (field) {
-      field.remove();
-    }
   }
   for (const root of [unitsEl, overEl]) {
     if (!root) continue;
     for (const child of [...root.children]) {
       if (child.classList.contains("ghost")) continue;
-      if (child.classList.contains("seek-ring") || child.classList.contains("field-ring")) {
+      if (child.classList.contains("seek-ring")) {
         const id = child.id.replace(/^(ring|field)-/, "");
         if (!seen.has(id)) child.remove();
         continue;
@@ -807,7 +786,7 @@ function renderArena() {
 }
 
 function render() {
-  ensureLookFX();
+  ensurePacks();
   const inLobby = state.phase === "select";
   lobby.classList.toggle("hidden", !inLobby);
   arena.classList.toggle("hidden", inLobby);

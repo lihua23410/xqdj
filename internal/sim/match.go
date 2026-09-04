@@ -143,26 +143,28 @@ func (m *Match) SnapshotJSON() []byte {
 		unitpkg.Snapshot
 	}
 	msg := struct {
-		Type     string                  `json:"type"`
-		Phase    Phase                   `json:"phase"`
-		Slots    [2]string               `json:"slots"`
-		Kinds    []string                `json:"kinds"`
-		Looks    map[string]unitpkg.Look `json:"looks"`
-		Winner   string                  `json:"winner"`
-		WinnerID uint64                  `json:"winnerId"`
-		Time     float64                 `json:"time"`
-		Seq      uint64                  `json:"seq"`
-		HexR     float64                 `json:"hexRadius"`
-		HitStop  int                     `json:"hitStop"`
-		Units    []unitpkg.Snapshot      `json:"units"`
-		Walls    []wallSnap              `json:"walls"`
-		Effects  []unitpkg.FX            `json:"effects"`
+		Type     string                      `json:"type"`
+		Phase    Phase                       `json:"phase"`
+		Slots    [2]string                   `json:"slots"`
+		Kinds    []string                    `json:"kinds"`
+		Looks    map[string]unitpkg.Look     `json:"looks"`
+		Packs    map[string]unitpkg.PackInfo `json:"packs"`
+		Winner   string                      `json:"winner"`
+		WinnerID uint64                      `json:"winnerId"`
+		Time     float64                     `json:"time"`
+		Seq      uint64                      `json:"seq"`
+		HexR     float64                     `json:"hexRadius"`
+		HitStop  int                         `json:"hitStop"`
+		Units    []unitpkg.Snapshot          `json:"units"`
+		Walls    []wallSnap                  `json:"walls"`
+		Effects  []unitpkg.FX                `json:"effects"`
 	}{
 		Type:     "state",
 		Phase:    m.phase,
 		Slots:    m.slots,
 		Kinds:    unitpkg.FighterKinds(),
 		Looks:    unitpkg.Looks(),
+		Packs:    unitpkg.Packs(),
 		Winner:   m.winner,
 		WinnerID: m.winnerID,
 		Time:     m.time,

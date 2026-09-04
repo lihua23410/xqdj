@@ -100,10 +100,10 @@ func TestHealClampsToMaxHP(t *testing.T) {
 	if u == nil {
 		t.Fatal("no menreiki")
 	}
-	u.hp = 90
+	u.hp = u.maxHP - 10
 	m.applyCmdLocked(unitpkg.Heal{UnitID: u.id, Amount: 25})
-	if math.Abs(u.hp-100) > 1e-6 {
-		t.Fatalf("hp=%v want 100", u.hp)
+	if math.Abs(u.hp-u.maxHP) > 1e-6 {
+		t.Fatalf("hp=%v want %v", u.hp, u.maxHP)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestMenreikiMarksBothFighters(t *testing.T) {
 	if src == nil || dst == nil {
 		t.Fatal("missing fighters")
 	}
-	if !unitpkg.ValidFaction(src.faction) || !src.factionCollect || src.factionAmpOut != 1.25 {
+	if !unitpkg.ValidFaction(src.faction) || !src.factionCollect || src.factionAmpOut != 1.15 {
 		t.Fatalf("self mark %+v collect=%v amp=%v", src.faction, src.factionCollect, src.factionAmpOut)
 	}
 	if !unitpkg.ValidFaction(dst.faction) || !dst.factionCycle || dst.factionAmpOut != 0 {

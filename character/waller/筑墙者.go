@@ -1,4 +1,4 @@
-package character
+package 筑墙者
 
 import (
 	"math"
@@ -20,7 +20,8 @@ const (
 )
 
 func init() {
-	unit.Register(unit.Spec{
+	p := unit.NewPack(KindWaller, nil)
+	p.Register(unit.Spec{
 		Kind:    KindWaller,
 		Role:    unit.RoleFighter,
 		Radius:  wallerRadius,

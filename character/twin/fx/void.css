@@ -1,0 +1,33 @@
+.fx-beam.void {
+  height: 7px;
+  width: 56px;
+  background: linear-gradient(90deg, transparent, currentColor, #fff 70%, currentColor);
+  box-shadow: 0 0 16px currentColor, 0 0 28px #fff6;
+  animation: beam-void 0.28s ease-out forwards;
+}
+@keyframes beam-void {
+  to { width: 96px; opacity: 0; }
+}
+.fx-split-slash {
+  height: 6px;
+  width: 52px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, #fff, currentColor, #fff, transparent);
+  box-shadow: 0 0 14px currentColor, 0 0 22px #fff8;
+  animation: split-slash 0.36s ease-out forwards;
+}
+@keyframes split-slash {
+  0% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.12); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1.6); opacity: 0; }
+}
+.fx-void-core {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 18px currentColor, 0 0 32px #fff;
+  animation: void-core 0.4s ease-out forwards;
+}
+@keyframes void-core {
+  to { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+}

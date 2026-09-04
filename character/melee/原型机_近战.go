@@ -1,9 +1,13 @@
-package character
+package 原型机_近战
 
 import (
+	"embed"
 	"math"
 	"xqdj/internal/unit"
 )
+
+//go:embed fx
+var assets embed.FS
 
 const KindMelee = "原型机_近战"
 
@@ -19,7 +23,8 @@ const (
 )
 
 func init() {
-	unit.Register(unit.Spec{
+	p := unit.NewPack(KindMelee, assets)
+	p.Register(unit.Spec{
 		Kind:    KindMelee,
 		Role:    unit.RoleFighter,
 		Radius:  meleeRadius,

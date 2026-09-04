@@ -24,6 +24,12 @@ var (
 )
 
 func Register(s Spec, fn func(SpawnInfo) Actor) {
+	if s.Kind == "" {
+		panic("unit: empty kind")
+	}
+	if _, ok := specs[s.Kind]; ok {
+		panic("unit: duplicate kind " + s.Kind)
+	}
 	specs[s.Kind] = s
 	factories[s.Kind] = fn
 	if s.Fighter {

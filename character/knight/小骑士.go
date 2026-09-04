@@ -1,10 +1,14 @@
-package character
+package 小骑士
 
 import (
+	"embed"
 	"math"
 	"math/rand/v2"
 	"xqdj/internal/unit"
 )
+
+//go:embed fx
+var assets embed.FS
 
 const KindKnight = "小骑士"
 
@@ -19,11 +23,11 @@ const (
 	knightCD       = 6.0
 	knightChainGap = 0.5
 	ramSpeed       = 350.0
-	hexCircum      = 280.0
 )
 
 func init() {
-	unit.Register(unit.Spec{
+	p := unit.NewPack(KindKnight, assets)
+	p.Register(unit.Spec{
 		Kind:    KindKnight,
 		Role:    unit.RoleFighter,
 		Radius:  knightRadius,
@@ -84,7 +88,7 @@ func (k *小骑士) tryRam(ctx unit.Context, sense unit.Sense) {
 	}
 	tx, ty := beside(sense.Self, *enemy)
 	ctx.Out <- unit.FX{
-		Name: "swap", Kind: ctx.Kind,
+		Name: "blink", Kind: ctx.Kind,
 		X: sense.Self.X, Y: sense.Self.Y, Slot: sense.Self.Slot,
 	}
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: tx, Y: ty}
@@ -115,21 +119,9 @@ func beside(self, enemy unit.Snapshot) (float64, float64) {
 		ang := base + extra
 		x := ex + math.Cos(ang)*gap
 		y := ey + math.Sin(ang)*gap
-		if insideHex(x, y, self.Radius+4) {
+		if unit.HexContains(x, y, self.Radius+4) {
 			return x, y
 		}
 	}
 	return 0, 0
-}
-
-func insideHex(x, y, radius float64) bool {
-	ap := hexCircum * math.Sqrt(3) / 2
-	limit := ap - radius
-	for i := 0; i < 6; i++ {
-		a := (float64(i) + 0.5) * math.Pi / 3
-		if math.Cos(a)*x+math.Sin(a)*y > limit+1e-6 {
-			return false
-		}
-	}
-	return true
 }

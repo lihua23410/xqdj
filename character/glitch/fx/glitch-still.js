@@ -11,6 +11,10 @@ window.lookFX["glitch-still"] = {
     "color-dodge",
     "multiply",
   ],
+  unmount(el) {
+    el?.querySelector(":scope > .look-glitch-slices")?.remove();
+    if (el) delete el.dataset.glitchStill;
+  },
   tick(el) {
     if (!el || !el.classList.contains("look-glitch-still")) return;
     if (el.dataset.glitchStill === "1") return;

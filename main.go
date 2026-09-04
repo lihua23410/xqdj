@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 	"xqdj/internal/sim"
+	"xqdj/internal/unit"
 	"xqdj/internal/web"
 
 	_ "xqdj/character"
@@ -74,6 +75,7 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(static)))
+	mux.Handle("/ball/", http.StripPrefix("/ball/", http.FileServer(http.FS(unit.BallFS()))))
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {

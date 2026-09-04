@@ -11,6 +11,9 @@ window.lookFX.glitch = {
     "color-dodge",
     "multiply",
   ],
+  unmount(el) {
+    el?.querySelector(":scope > .look-glitch-slices")?.remove();
+  },
   tick(el) {
     if (!el || !el.classList.contains("look-glitch")) return;
     let host = el.querySelector(":scope > .look-glitch-slices");

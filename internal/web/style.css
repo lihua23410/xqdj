@@ -208,19 +208,8 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .ball.helper {
   pointer-events: none;
 }
-.chroma {
-  --kind: hsl(var(--hue), 90%, 58%);
-  animation: chroma-spin 2.2s linear infinite;
-}
-@keyframes chroma-spin {
-  from { --hue: 0; }
-  to { --hue: 360; }
-}
-.ball.chroma {
-  animation: chroma-spin 2.2s linear infinite, chroma-hue 2.2s linear infinite;
-}
-@keyframes chroma-hue {
-  to { filter: hue-rotate(360deg); }
+.ball.glow {
+  box-shadow: 0 0 22px currentColor, 0 0 48px currentColor;
 }
 .ball.ring {
   background: radial-gradient(
@@ -274,12 +263,6 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   opacity: 0.75;
   border-top-width: 3px;
   filter: drop-shadow(0 0 4px currentColor);
-}
-.guide.bond {
-  opacity: 0.42;
-  border-top-width: 2px;
-  border-top-style: dashed;
-  filter: drop-shadow(0 0 6px currentColor);
 }
 .wall {
   position: absolute;
@@ -485,39 +468,6 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 @keyframes beam {
   to { width: 72px; opacity: 0; }
 }
-.fx-beam.void {
-  height: 7px;
-  width: 56px;
-  background: linear-gradient(90deg, transparent, currentColor, #fff 70%, currentColor);
-  box-shadow: 0 0 16px currentColor, 0 0 28px #fff6;
-  animation: beam-void 0.28s ease-out forwards;
-}
-@keyframes beam-void {
-  to { width: 96px; opacity: 0; }
-}
-.fx-split-slash {
-  height: 6px;
-  width: 52px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, transparent, #fff, currentColor, #fff, transparent);
-  box-shadow: 0 0 14px currentColor, 0 0 22px #fff8;
-  animation: split-slash 0.36s ease-out forwards;
-}
-@keyframes split-slash {
-  0% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.12); opacity: 1; }
-  100% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1.6); opacity: 0; }
-}
-.fx-void-core {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 18px currentColor, 0 0 32px #fff;
-  animation: void-core 0.4s ease-out forwards;
-}
-@keyframes void-core {
-  to { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
-}
 .fx-ring {
   width: 36px;
   height: 36px;
@@ -602,86 +552,7 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   pointer-events: none;
   z-index: 5;
 }
-.fx-arena-slash {
-  height: 28px;
-  width: var(--len, 420px);
-  border-radius: 99px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    #fff 8%,
-    currentColor 30%,
-    #fff 50%,
-    currentColor 70%,
-    #fff 92%,
-    transparent 100%
-  );
-  box-shadow: 0 0 16px #fff, 0 0 36px currentColor, 0 0 64px currentColor;
-  transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
-  animation: arena-slash 5s linear forwards;
-  pointer-events: none;
-  z-index: 20;
-}
-.fx-arena-slash::after {
-  content: "";
-  position: absolute;
-  inset: 34% 5%;
-  border-radius: 99px;
-  background: #fff;
-  box-shadow: 0 0 16px #fff;
-}
-@keyframes arena-slash {
-  0% {
-    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.04) scaleY(0.5);
-    opacity: 1;
-  }
-  3% {
-    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1) scaleY(1.15);
-    opacity: 1;
-  }
-  88% {
-    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1) scaleY(1);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1) scaleY(0.6);
-    opacity: 0;
-  }
-}
 .fx-dmg.heal { color: #7dff9a; }
-.field-ring {
-  position: absolute;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  border: 1px dashed currentColor;
-  color: var(--kind);
-  background: color-mix(in srgb, var(--kind) 10%, transparent);
-  pointer-events: none;
-  box-sizing: border-box;
-  opacity: 0.5;
-}
-.field-ring i {
-  position: absolute;
-  inset: 22%;
-  border-radius: 50%;
-  border: 1px solid currentColor;
-  opacity: 0.45;
-  box-shadow: 0 0 10px currentColor;
-}
-.field-ring.pull {
-  animation: field-pull 1.35s ease-in-out infinite;
-}
-.field-ring.push {
-  animation: field-push 1.35s ease-in-out infinite;
-}
-@keyframes field-pull {
-  from { transform: translate(-50%, -50%) scale(1.06); opacity: 0.22; }
-  to { transform: translate(-50%, -50%) scale(0.78); opacity: 0.62; }
-}
-@keyframes field-push {
-  from { transform: translate(-50%, -50%) scale(0.78); opacity: 0.62; }
-  to { transform: translate(-50%, -50%) scale(1.08); opacity: 0.18; }
-}
 .seek-ring {
   position: absolute;
   border-radius: 50%;

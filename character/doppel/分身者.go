@@ -1,4 +1,4 @@
-package character
+package 分身者
 
 import (
 	"math"
@@ -19,7 +19,8 @@ const (
 )
 
 func init() {
-	unit.Register(unit.Spec{
+	p := unit.NewPack(KindDoppel, nil)
+	p.Register(unit.Spec{
 		Kind:    KindDoppel,
 		Role:    unit.RoleFighter,
 		Radius:  doppelRadius,
@@ -31,7 +32,7 @@ func init() {
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &分身者{}
 	})
-	unit.Register(unit.Spec{
+	p.Register(unit.Spec{
 		Kind:    cloneKind,
 		Role:    unit.RoleClone,
 		Radius:  doppelRadius,
