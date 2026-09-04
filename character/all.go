@@ -12,6 +12,7 @@ import (
 	"xqdj/character/twin"
 	"xqdj/character/waller"
 	"xqdj/character/warden"
+	"xqdj/character/wolf"
 )
 
 const (
@@ -34,4 +35,8 @@ const (
 	KindTwinBlueArc = 无下限术士.KindTwinBlueArc
 	KindWaller      = 筑墙者.KindWaller
 	KindWarden      = 盾士.KindWarden
+	KindMoon        = 狼人.KindMoon
+	KindWolf        = 狼人.KindWolf
+	KindWolfArc     = 狼人.KindWolfArc
+	KindWolfBite    = 狼人.KindWolfBite
 )

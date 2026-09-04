@@ -1,0 +1,30 @@
+.ball.look-moon {
+  background: #141a24 !important;
+  overflow: hidden;
+  box-shadow: 0 0 16px #e8d9a0, 0 0 36px color-mix(in srgb, #e8d9a0 45%, transparent);
+}
+.ball.look-moon > .moon-face,
+.ball.look-moon > .moon-shade {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.ball.look-moon > .moon-face {
+  inset: 0;
+  background: radial-gradient(circle at 35% 32%, #fff6da, #e8d9a0 55%, #c4b27a);
+}
+.ball.look-moon > .moon-shade {
+  inset: 0;
+  background: #141a24;
+  transform: translateX(var(--moon-shift, 0%));
+  opacity: var(--moon-shade, 1);
+}
+.ball.look-moon[data-moon="0"] {
+  box-shadow: 0 0 10px color-mix(in srgb, #e8d9a0 55%, transparent), inset 0 0 0 2px #c4b896;
+}
+.ball.look-moon[data-moon="0"] > .moon-face {
+  opacity: 0;
+}
+.ball.look-moon[data-moon="4"] {
+  box-shadow: 0 0 22px #fff3c4, 0 0 48px #e8d9a0;
+}

@@ -1,0 +1,25 @@
+.ball.look-wolf.wolf-rage {
+  box-shadow: 0 0 18px #fff, 0 0 42px #ff6a4a, 0 0 70px #ff2a2a;
+  filter: contrast(1.12) saturate(1.15);
+}
+
+.wolf-cutin {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: wolf-cutin-fade 1.6s ease-out forwards;
+}
+.wolf-cutin img {
+  display: block;
+  width: min(100vw, calc(100vh * 972 / 1145));
+  height: min(100vh, calc(100vw * 1145 / 972));
+  object-fit: contain;
+}
+@keyframes wolf-cutin-fade {
+  0%, 62.5% { opacity: 1; }
+  100% { opacity: 0; }
+}
