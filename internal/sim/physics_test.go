@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"math"
 	"testing"
 
 	_ "xqdj/character"
@@ -51,8 +52,8 @@ func TestSweptCirclesHeadOn(t *testing.T) {
 func TestSweptPairSemiHitsFlatFace(t *testing.T) {
 	// Semi at origin, bulge +x. Circle coming from the empty side (-x).
 	t0, n, ok := sweptPairShapes(
-		vec{0, 0}, vec{0, 0}, 18, vec{1, 0}, true,
-		vec{-50, 0}, vec{20, 0}, 18, vec{1, 0}, false,
+		ccdShape{p: vec{0, 0}, v: vec{0, 0}, r: 18, face: vec{1, 0}, semi: true},
+		ccdShape{p: vec{-50, 0}, v: vec{20, 0}, r: 18, face: vec{1, 0}},
 		4,
 	)
 	if !ok {
@@ -69,12 +70,67 @@ func TestSweptPairSemiHitsFlatFace(t *testing.T) {
 func TestSweptPairComplementarySemisSeparate(t *testing.T) {
 	// Two halves of one circle, already moving apart.
 	_, _, ok := sweptPairShapes(
-		vec{0, 0}, vec{40, 0}, 18, vec{1, 0}, true,
-		vec{-2, 0}, vec{-40, 0}, 18, vec{-1, 0}, true,
+		ccdShape{p: vec{0, 0}, v: vec{40, 0}, r: 18, face: vec{1, 0}, semi: true},
+		ccdShape{p: vec{-2, 0}, v: vec{-40, 0}, r: 18, face: vec{-1, 0}, semi: true},
 		0.05,
 	)
 	if ok {
 		t.Fatal("splitting halves should not collide")
+	}
+}
+
+func TestSweptArcHitsFront(t *testing.T) {
+	arc := ccdShape{
+		p: vec{0, 0}, v: vec{0, 0}, face: vec{1, 0},
+		r: 20, arcInner: 18, arcSpan: math.Pi / 2,
+	}
+	ball := ccdShape{p: vec{50, 0}, v: vec{-20, 0}, r: 18}
+	t0, n, ok := sweptPairShapes(arc, ball, 2)
+	if !ok {
+		t.Fatal("expected frontal arc hit")
+	}
+	if t0 < 0.5 || t0 > 0.7 {
+		t.Fatalf("toi=%v", t0)
+	}
+	if n.X > -0.9 {
+		t.Fatalf("normal %+v want toward ball (+x from arc, so n from ball to arc is -x)", n)
+	}
+}
+
+func TestSweptArcMissesBack(t *testing.T) {
+	arc := ccdShape{
+		p: vec{0, 0}, v: vec{0, 0}, face: vec{1, 0},
+		r: 20, arcInner: 18, arcSpan: math.Pi / 2,
+	}
+	ball := ccdShape{p: vec{-50, 0}, v: vec{20, 0}, r: 18}
+	if _, _, ok := sweptPairShapes(arc, ball, 2); ok {
+		t.Fatal("90° arc should not hit from behind")
+	}
+}
+
+func TestSweptArcFullRingHitsBack(t *testing.T) {
+	arc := ccdShape{
+		p: vec{0, 0}, v: vec{0, 0}, face: vec{1, 0},
+		r: 20, arcInner: 18, arcSpan: 2 * math.Pi,
+	}
+	ball := ccdShape{p: vec{-50, 0}, v: vec{20, 0}, r: 18}
+	t0, _, ok := sweptPairShapes(arc, ball, 2)
+	if !ok {
+		t.Fatal("360° ring should hit from behind")
+	}
+	if t0 < 0.5 || t0 > 0.7 {
+		t.Fatalf("toi=%v", t0)
+	}
+}
+
+func TestSweptArcIgnoresSemiEmptyHalf(t *testing.T) {
+	arc := ccdShape{
+		p: vec{-30, 0}, v: vec{0, 0}, face: vec{1, 0},
+		r: 20, arcInner: 18, arcSpan: 2 * math.Pi,
+	}
+	semi := ccdShape{p: vec{0, 0}, v: vec{0, 0}, face: vec{1, 0}, r: 18, semi: true}
+	if _, _, ok := sweptPairShapes(arc, semi, 0.05); ok {
+		t.Fatal("arc in the empty half of a semi should not hit a full disk")
 	}
 }
 
@@ -91,7 +147,7 @@ func TestMatchNoOverlap(t *testing.T) {
 			if ua == nil {
 				continue
 			}
-			if ua.passWalls {
+			if ua.passWalls || ua.attach {
 				continue
 			}
 			if ua.semi {
@@ -111,7 +167,7 @@ func TestMatchNoOverlap(t *testing.T) {
 				if ua.owner == ub.id || ub.owner == ua.id {
 					continue
 				}
-				if ua.passWalls || ub.passWalls {
+				if ua.passWalls || ub.passWalls || ua.attach || ub.attach {
 					continue
 				}
 				if !ua.solid || !ub.solid {

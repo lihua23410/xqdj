@@ -11,6 +11,7 @@ import (
 var assets embed.FS
 
 const KindKnight = "小骑士"
+const KindKnightArc = "小骑士弧"
 
 const (
 	knightRadius   = 18.0
@@ -23,6 +24,10 @@ const (
 	knightCD       = 6.0
 	knightChainGap = 0.5
 	ramSpeed       = 350.0
+	knightArcInner = knightRadius
+	knightArcOuter = knightRadius + 2
+	knightArcSpan  = 120.0
+	knightColor    = "#ff2a2a"
 )
 
 func init() {
@@ -36,38 +41,57 @@ func init() {
 		Speed:   knightSpeed,
 		Vision:  knightVision,
 		Fighter: true,
-		Look:    unit.Look{Color: "#ff2a2a", Ghost: 250},
+		Look:    unit.Look{Color: knightColor, Ghost: 250},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &小骑士{readyAt: knightCD}
+	})
+	p.Register(unit.Spec{
+		Kind:     KindKnightArc,
+		Role:     unit.RoleProjectile,
+		Radius:   knightArcOuter,
+		MaxHP:    1,
+		Speed:    knightSpeed,
+		Vision:   0,
+		Fighter:  false,
+		Attach:   true,
+		ArcSpan:  unit.Deg(knightArcSpan),
+		ArcInner: knightArcInner,
+		Look:     unit.Look{Color: knightColor, Overlay: true},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &骑士弧{slot: info.Slot}
 	})
 }
 
 type 小骑士 struct {
-	readyAt    float64
-	hitReadyAt float64
+	readyAt float64
+	arc     unit.AttachState
 }
 
 func (k *小骑士) Handle(ctx unit.Context, ev unit.Event) {
 	if unit.AcceptHit(ctx, ev) {
 		return
 	}
-	switch e := ev.(type) {
-	case unit.Sense:
-		k.tryRam(ctx, e)
-	case unit.Collision:
-		k.hit(ctx, e)
-	}
-}
-
-func (k *小骑士) hit(ctx unit.Context, e unit.Collision) {
-	if e.Other.Role != unit.RoleFighter {
+	s, ok := ev.(unit.Sense)
+	if !ok {
 		return
 	}
-	if e.Time < k.hitReadyAt {
+	if unit.RearmAttach(s, ctx.ID, KindKnightArc, knightHitCD, &k.arc) {
+		unit.SpawnAttach(ctx, s, KindKnightArc)
+	}
+	k.tryRam(ctx, s)
+}
+
+type 骑士弧 struct {
+	slot int
+}
+
+func (a *骑士弧) Handle(ctx unit.Context, ev unit.Event) {
+	e, ok := ev.(unit.Collision)
+	if !ok || !unit.EnemyFighter(e, a.slot) {
 		return
 	}
 	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: knightDamage}
-	k.hitReadyAt = e.Time + knightHitCD
+	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }
 
 func (k *小骑士) tryRam(ctx unit.Context, sense unit.Sense) {

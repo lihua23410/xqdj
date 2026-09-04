@@ -7,10 +7,10 @@ import (
 
 func TestHitQuotesSwordMark(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
-	g := &地慧星{}
-	g.Handle(unit.Context{ID: 1, Kind: KindGlitch, Out: out}, unit.Collision{
+	g := &地慧星弧{slot: 0, booted: true}
+	g.Handle(unit.Context{ID: 1, Kind: KindGlitchArc, Out: out}, unit.Collision{
 		Time:  1,
-		Other: unit.Snapshot{ID: 2, Role: unit.RoleFighter},
+		Other: unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1},
 	})
 	select {
 	case cmd := <-out:

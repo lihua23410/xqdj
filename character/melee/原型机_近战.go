@@ -10,6 +10,7 @@ import (
 var assets embed.FS
 
 const KindMelee = "原型机_近战"
+const KindMeleeArc = "原型机_近战弧"
 
 const (
 	meleeRadius    = 18.0
@@ -20,6 +21,11 @@ const (
 	meleeSeekBoost = 140.0
 	meleeSeekTurn  = 15 * math.Pi / 180
 	meleeHitCD     = 0.1
+	meleeArcInner  = meleeRadius
+	meleeArcOuter  = meleeRadius + 2
+	meleeArcMin    = 90.0
+	meleeArcMax    = 180.0
+	meleeColor     = "#3dd6c6"
 )
 
 func init() {
@@ -32,14 +38,29 @@ func init() {
 		Speed:   meleeSpeed,
 		Vision:  meleeVision,
 		Fighter: true,
-		Look:    unit.Look{Color: "#3dd6c6", Ghost: 280, VisionRing: true},
+		Look:    unit.Look{Color: meleeColor, Ghost: 280, VisionRing: true},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &原型机_近战{}
+	})
+	p.Register(unit.Spec{
+		Kind:     KindMeleeArc,
+		Role:     unit.RoleProjectile,
+		Radius:   meleeArcOuter,
+		MaxHP:    1,
+		Speed:    meleeSpeed,
+		Vision:   0,
+		Fighter:  false,
+		Attach:   true,
+		ArcSpan:  unit.Deg(meleeArcMin),
+		ArcInner: meleeArcInner,
+		Look:     unit.Look{Color: meleeColor, Overlay: true},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &近战弧{slot: info.Slot}
 	})
 }
 
 type 原型机_近战 struct {
-	hitReadyAt  float64
+	arc         unit.AttachState
 	enemyInside bool
 }
 
@@ -49,9 +70,10 @@ func (m *原型机_近战) Handle(ctx unit.Context, ev unit.Event) {
 		amt := e.Amount * (1 - meleeResist(e.Speed))
 		ctx.Out <- unit.ConfirmDamage{Token: e.Token, UnitID: ctx.ID, Amount: amt}
 	case unit.Sense:
+		if unit.RearmAttach(e, ctx.ID, KindMeleeArc, meleeHitCD, &m.arc) {
+			unit.SpawnAttach(ctx, e, KindMeleeArc)
+		}
 		m.seek(ctx, e)
-	case unit.Collision:
-		m.hit(ctx, e)
 	}
 }
 
@@ -67,15 +89,26 @@ func meleeResist(speed float64) float64 {
 	return r
 }
 
-func (m *原型机_近战) hit(ctx unit.Context, e unit.Collision) {
-	if e.Other.Role != unit.RoleFighter {
-		return
+func meleeArcSpan(speed float64) float64 {
+	r := meleeResist(speed)
+	return unit.Deg(meleeArcMin + (meleeArcMax-meleeArcMin)*(r/0.25))
+}
+
+type 近战弧 struct {
+	slot int
+}
+
+func (a *近战弧) Handle(ctx unit.Context, ev unit.Event) {
+	switch e := ev.(type) {
+	case unit.Sense:
+		ctx.Out <- unit.SetArcSpan{UnitID: ctx.ID, Span: meleeArcSpan(math.Hypot(e.Self.VX, e.Self.VY))}
+	case unit.Collision:
+		if !unit.EnemyFighter(e, a.slot) {
+			return
+		}
+		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: meleeDamage}
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
-	if e.Time < m.hitReadyAt {
-		return
-	}
-	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: meleeDamage}
-	m.hitReadyAt = e.Time + meleeHitCD
 }
 
 func (m *原型机_近战) seek(ctx unit.Context, s unit.Sense) {

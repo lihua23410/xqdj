@@ -15,15 +15,23 @@ import (
 )
 
 const (
+	KindClone       = 分身者.KindClone
+	KindCloneArc    = 分身者.KindCloneArc
 	KindDoppel      = 分身者.KindDoppel
 	KindGlitch      = 地慧星.KindGlitch
+	KindGlitchArc   = 地慧星.KindGlitchArc
 	KindGlitchGhost = 地慧星.KindGlitchGhost
 	KindGlitchSlash = 地慧星.KindGlitchSlash
 	KindKnight      = 小骑士.KindKnight
+	KindKnightArc   = 小骑士.KindKnightArc
 	KindMelee       = 原型机_近战.KindMelee
+	KindMeleeArc    = 原型机_近战.KindMeleeArc
 	KindMenreiki    = 面灵气.KindMenreiki
+	KindMenreikiArc = 面灵气.KindMenreikiArc
 	KindRanged      = 原型机_远程.KindRanged
 	KindTwin        = 无下限术士.KindTwin
+	KindTwinArc     = 无下限术士.KindTwinArc
+	KindTwinBlueArc = 无下限术士.KindTwinBlueArc
 	KindWaller      = 筑墙者.KindWaller
 	KindWarden      = 盾士.KindWarden
 )

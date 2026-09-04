@@ -10,18 +10,25 @@ import (
 var assets embed.FS
 
 const KindTwin = "无下限术士"
+const KindTwinArc = "无下限术士弧"
+const KindTwinBlueArc = "无下限弧"
 
 const (
-	twinRadius = 18.0
-	twinSpeed  = 200.0
-	twinHP     = 100.0
-	twinDamage = 7.0
-	twinHitCD  = 0.1
-	twinGap    = 2.0
-	twinKind   = "无下限"
-	twinVision = 9999.0
-	twinPull   = 300.0
-	twinPush   = -100.0
+	twinRadius    = 18.0
+	twinSpeed     = 200.0
+	twinHP        = 100.0
+	twinDamage    = 7.0
+	twinHitCD     = 0.1
+	twinGap       = 2.0
+	twinKind      = "无下限"
+	twinVision    = 9999.0
+	twinPull      = 300.0
+	twinPush      = -100.0
+	twinArcInner  = twinRadius
+	twinArcOuter  = twinRadius + 2
+	twinArcSpan   = 90.0
+	twinRedColor  = "#e24b4b"
+	twinBlueColor = "#4b7be2"
 
 	purpleKind      = "紫弹"
 	purpleRadius    = 32.0 // 约 5.6 倍体积（相对 r=18）
@@ -42,9 +49,25 @@ func init() {
 		Vision:  twinVision,
 		Fighter: true,
 		Semi:    true,
-		Look:    unit.Look{Color: "#e24b4b", FX: []string{"pull", "bond"}},
+		Look:    unit.Look{Color: twinRedColor, FX: []string{"pull", "bond"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &无下限术士{slot: info.Slot}
+	})
+	p.Register(unit.Spec{
+		Kind:     KindTwinArc,
+		Role:     unit.RoleProjectile,
+		Radius:   twinArcOuter,
+		MaxHP:    1,
+		Speed:    twinSpeed,
+		Vision:   0,
+		Fighter:  false,
+		Semi:     true,
+		Attach:   true,
+		ArcSpan:  unit.Deg(twinArcSpan),
+		ArcInner: twinArcInner,
+		Look:     unit.Look{Color: twinRedColor, Overlay: true},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &术士弧{slot: info.Slot, dmg: twinDamage}
 	})
 	p.Register(unit.Spec{
 		Kind:    twinKind,
@@ -55,9 +78,25 @@ func init() {
 		Vision:  twinVision,
 		Fighter: false,
 		Semi:    true,
-		Look:    unit.Look{Color: "#4b7be2", FX: []string{"push", "bond"}},
+		Look:    unit.Look{Color: twinBlueColor, FX: []string{"push", "bond"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &双生{owner: info.OwnerID, slot: info.Slot}
+	})
+	p.Register(unit.Spec{
+		Kind:     KindTwinBlueArc,
+		Role:     unit.RoleProjectile,
+		Radius:   twinArcOuter,
+		MaxHP:    1,
+		Speed:    twinSpeed,
+		Vision:   0,
+		Fighter:  false,
+		Semi:     true,
+		Attach:   true,
+		ArcSpan:  unit.Deg(twinArcSpan),
+		ArcInner: twinArcInner,
+		Look:     unit.Look{Color: twinBlueColor, Overlay: true},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &术士弧{slot: info.Slot, dmg: twinDamage}
 	})
 	p.Register(unit.Spec{
 		Kind:      purpleKind,
@@ -77,7 +116,7 @@ func init() {
 type 无下限术士 struct {
 	slot        int
 	spawned     bool
-	hitReadyAt  float64
+	arc         unit.AttachState
 	shotReadyAt float64
 	selfX       float64
 	selfY       float64
@@ -96,10 +135,15 @@ func (d *无下限术士) Handle(ctx unit.Context, ev unit.Event) {
 			d.spawned = true
 			d.split(ctx, e)
 		}
+		if unit.RearmAttach(e, ctx.ID, KindTwinArc, twinHitCD, &d.arc) {
+			unit.SpawnAttach(ctx, e, KindTwinArc)
+		}
 		d.remember(e)
 		twinField(ctx, e, twinPull)
 	case unit.Collision:
-		d.hit(ctx, e)
+		if e.Other.Role == unit.RoleTwin && e.Other.Slot == d.slot {
+			d.tryShot(ctx, e)
+		}
 	}
 }
 
@@ -144,21 +188,6 @@ func (d *无下限术士) split(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-func (d *无下限术士) hit(ctx unit.Context, e unit.Collision) {
-	if e.Other.Role == unit.RoleTwin && e.Other.Slot == d.slot {
-		d.tryShot(ctx, e)
-		return
-	}
-	if e.Other.Role != unit.RoleFighter {
-		return
-	}
-	if e.Time < d.hitReadyAt {
-		return
-	}
-	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: twinDamage}
-	d.hitReadyAt = e.Time + twinHitCD
-}
-
 func (d *无下限术士) tryShot(ctx unit.Context, e unit.Collision) {
 	if !d.hasEnemy || e.Time < d.shotReadyAt {
 		return
@@ -195,37 +224,33 @@ func (d *无下限术士) tryShot(ctx unit.Context, e unit.Collision) {
 }
 
 type 双生 struct {
-	owner      uint64
-	slot       int
-	hitReadyAt float64
+	owner uint64
+	slot  int
+	arc   unit.AttachState
 }
 
 func (c *双生) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.Sense:
+		if unit.RearmAttach(e, ctx.ID, KindTwinBlueArc, twinHitCD, &c.arc) {
+			unit.SpawnAttach(ctx, e, KindTwinBlueArc)
+		}
 		twinField(ctx, e, twinPush)
-	case unit.Collision:
-		c.hit(ctx, e)
 	}
 }
 
-func (c *双生) hit(ctx unit.Context, e unit.Collision) {
-	if e.Other.ID == c.owner || e.Other.Slot == c.slot {
+type 术士弧 struct {
+	slot int
+	dmg  float64
+}
+
+func (a *术士弧) Handle(ctx unit.Context, ev unit.Event) {
+	e, ok := ev.(unit.Collision)
+	if !ok || !unit.EnemyFighter(e, a.slot) {
 		return
 	}
-	if e.Time < c.hitReadyAt {
-		return
-	}
-	switch e.Other.Role {
-	case unit.RoleFighter:
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: twinDamage}
-		ctx.Out <- unit.Damage{From: ctx.ID, To: c.owner, Amount: twinDamage}
-	case unit.RoleProjectile, unit.RoleClone, unit.RoleTwin:
-		ctx.Out <- unit.Damage{From: ctx.ID, To: c.owner, Amount: twinDamage}
-	default:
-		return
-	}
-	c.hitReadyAt = e.Time + twinHitCD
+	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: a.dmg}
+	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }
 
 type 紫弹 struct {

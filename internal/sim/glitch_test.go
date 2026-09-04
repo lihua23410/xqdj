@@ -35,6 +35,16 @@ func glitchCruise(u *unit) float64 {
 	return u.cruise
 }
 
+func ownedKind(m *Match, owner uint64, kind string) *unit {
+	for _, id := range m.order {
+		u := m.units[id]
+		if u != nil && u.kind == kind && u.owner == owner {
+			return u
+		}
+	}
+	return nil
+}
+
 func TestStackMarkAccumulatesAndClears(t *testing.T) {
 	m := NewMatchSeeded(1)
 	m.SetSlot(0, character.KindGlitch)
@@ -73,7 +83,12 @@ func TestGlitchCollisionAppliesSwordMark(t *testing.T) {
 		m.mu.Unlock()
 		t.Fatal("missing fighters")
 	}
-	m.send(g, unitpkg.Collision{Time: m.time, Other: o.snap(), NX: 1, NY: 0})
+	arc := ownedKind(m, g.id, character.KindGlitchArc)
+	if arc == nil {
+		m.mu.Unlock()
+		t.Fatal("missing glitch arc")
+	}
+	m.send(arc, unitpkg.Collision{Time: m.time, Other: o.snap(), NX: 1, NY: 0})
 	m.mu.Unlock()
 	time.Sleep(4 * time.Millisecond)
 	m.mu.Lock()
@@ -117,7 +132,12 @@ func TestGlitchMarkSkippedWhenHitBlocked(t *testing.T) {
 	}
 	atk.p = vec{-120, 0}
 	def.p = vec{120, 0}
-	m.send(atk, unitpkg.Collision{Time: m.time, Other: def.snap(), NX: 1, NY: 0})
+	arc := ownedKind(m, atk.id, character.KindGlitchArc)
+	if arc == nil {
+		m.mu.Unlock()
+		t.Fatal("missing glitch arc")
+	}
+	m.send(arc, unitpkg.Collision{Time: m.time, Other: def.snap(), NX: 1, NY: 0})
 	m.mu.Unlock()
 	time.Sleep(4 * time.Millisecond)
 	m.mu.Lock()

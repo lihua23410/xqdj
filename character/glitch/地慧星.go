@@ -10,6 +10,7 @@ import (
 const KindGlitch = "地慧星"
 const KindGlitchGhost = "地慧星残影"
 const KindGlitchSlash = "地慧星斩击"
+const KindGlitchArc = "地慧星弧"
 
 const (
 	glitchRadius = 18.0
@@ -26,6 +27,10 @@ const (
 	glitchSlashCD   = 20.0
 	glitchSlashLife = 1.25
 	glitchWallBoost = 50.0
+	glitchArcInner  = glitchRadius
+	glitchArcOuter  = glitchRadius + 2
+	glitchArcSpan   = 60.0
+	glitchColor     = "#4ec4ff"
 )
 
 //go:embed fx status
@@ -41,9 +46,24 @@ func init() {
 		Speed:   glitchSpeed,
 		Vision:  glitchVision,
 		Fighter: true,
-		Look:    unit.Look{Color: "#4ec4ff", FX: []string{"glitch"}},
+		Look:    unit.Look{Color: glitchColor, FX: []string{"glitch"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &地慧星{slashReadyAt: glitchSlashCD}
+	})
+	p.Register(unit.Spec{
+		Kind:     KindGlitchArc,
+		Role:     unit.RoleProjectile,
+		Radius:   glitchArcOuter,
+		MaxHP:    1,
+		Speed:    glitchSpeed,
+		Vision:   0,
+		Fighter:  false,
+		Attach:   true,
+		ArcSpan:  unit.Deg(glitchArcSpan),
+		ArcInner: glitchArcInner,
+		Look:     unit.Look{Color: glitchColor, Overlay: true},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &地慧星弧{owner: info.OwnerID, slot: info.Slot}
 	})
 	p.Register(unit.Spec{
 		Kind:    KindGlitchGhost,
@@ -53,7 +73,7 @@ func init() {
 		Speed:   0,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: "#4ec4ff", FX: []string{"glitch-still"}},
+		Look:    unit.Look{Color: glitchColor, FX: []string{"glitch-still"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return 地慧星残影{}
 	})
@@ -65,14 +85,14 @@ func init() {
 		Speed:   0,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: "#4ec4ff", Overlay: true, FX: []string{"slash"}},
+		Look:    unit.Look{Color: glitchColor, Overlay: true, FX: []string{"slash"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &地慧星斩击{}
 	})
 }
 
 type 地慧星 struct {
-	hitReadyAt   float64
+	arc          unit.AttachState
 	dodgeReadyAt float64
 	slashReadyAt float64
 	boostPending int
@@ -109,14 +129,15 @@ func (g *地慧星) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
 		g.onIncoming(ctx, e)
-	case unit.Collision:
-		g.hit(ctx, e)
-	case unit.WallHit:
-		g.boostPending++
 	case unit.Sense:
 		g.remember(e)
+		if unit.RearmAttach(e, ctx.ID, KindGlitchArc, glitchHitCD, &g.arc) {
+			unit.SpawnAttach(ctx, e, KindGlitchArc)
+		}
 		g.applyBoost(ctx, e)
 		g.maybeSlash(ctx, e)
+	case unit.WallHit:
+		g.boostPending++
 	}
 }
 
@@ -142,25 +163,41 @@ func (g *地慧星) onIncoming(ctx unit.Context, d unit.IncomingDamage) {
 	g.clampCruise(ctx)
 }
 
-func (g *地慧星) hit(ctx unit.Context, e unit.Collision) {
-	if e.Other.Role != unit.RoleFighter {
-		return
+type 地慧星弧 struct {
+	owner  uint64
+	slot   int
+	x, y   float64
+	booted bool
+}
+
+func (a *地慧星弧) Handle(ctx unit.Context, ev unit.Event) {
+	switch e := ev.(type) {
+	case unit.Sense:
+		a.x, a.y = e.Self.X, e.Self.Y
+		a.booted = true
+	case unit.Collision:
+		if !unit.EnemyFighter(e, a.slot) {
+			return
+		}
+		ctx.Out <- unit.Damage{
+			From:      ctx.ID,
+			To:        e.Other.ID,
+			Amount:    glitchDamage,
+			MarkKind:  glitchMarkKind,
+			MarkDelta: 1,
+			MarkIcon:  glitchMarkIcon,
+		}
+		if a.booted && rand.Float64() < glitchGhostOdds {
+			ctx.Out <- unit.Spawn{
+				Kind:    KindGlitchGhost,
+				X:       a.x,
+				Y:       a.y,
+				OwnerID: a.owner,
+				Slot:    a.slot,
+			}
+		}
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
-	if e.Time < g.hitReadyAt {
-		return
-	}
-	ctx.Out <- unit.Damage{
-		From:      ctx.ID,
-		To:        e.Other.ID,
-		Amount:    glitchDamage,
-		MarkKind:  glitchMarkKind,
-		MarkDelta: 1,
-		MarkIcon:  glitchMarkIcon,
-	}
-	if rand.Float64() < glitchGhostOdds {
-		g.dropGhost(ctx, g.x, g.y)
-	}
-	g.hitReadyAt = e.Time + glitchHitCD
 }
 
 func (g *地慧星) maybeSlash(ctx unit.Context, s unit.Sense) {

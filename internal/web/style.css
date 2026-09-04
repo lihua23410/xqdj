@@ -229,6 +229,25 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .ball.semi {
   clip-path: inset(0 0 0 50%);
 }
+.ball.arc {
+  box-sizing: border-box;
+  background: transparent;
+  border: var(--arc-thick, 2px) solid var(--kind);
+  opacity: 0.95;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: none;
+  -webkit-mask-image: conic-gradient(
+    from var(--arc-from, 45deg),
+    #000 0 var(--arc-span, 90deg),
+    transparent 0
+  );
+  mask-image: conic-gradient(
+    from var(--arc-from, 45deg),
+    #000 0 var(--arc-span, 90deg),
+    transparent 0
+  );
+}
 .ball.projectile {
   opacity: 0.95;
   box-shadow: 0 0 18px currentColor, 0 0 36px currentColor;

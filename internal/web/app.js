@@ -638,9 +638,11 @@ function renderArena() {
     } else if (el.parentNode !== layer) {
       layer.appendChild(el);
     }
-    el.classList.toggle("projectile", u.role === "projectile" && !look.ring);
+    el.classList.toggle("projectile", u.role === "projectile" && !look.ring && !(u.arcSpan > 0));
     el.classList.toggle("clone", u.role === "clone");
     el.classList.toggle("semi", !!u.semi);
+    const isArc = (u.arcSpan || 0) > 1e-6;
+    el.classList.toggle("arc", isArc);
     el.classList.toggle("glow", !!look.glow);
     el.classList.toggle("ring", !!look.ring);
     el.classList.toggle("fighter", u.role === "fighter");
@@ -658,11 +660,19 @@ function renderArena() {
     const [sx, sy] = screenPos(u.x, u.y, scale, cx, cy);
     el.style.left = `${sx}px`;
     el.style.top = `${sy}px`;
-    const faceX = u.faceX || u.vx || 1;
-    const faceY = u.faceY || u.vy || 0;
-    const faceAng = u.semi ? Math.atan2(-faceY, faceX) : 0;
+    const hasFace = Math.abs(u.faceX) > 1e-9 || Math.abs(u.faceY) > 1e-9;
+    const faceX = hasFace ? u.faceX : (u.vx || 1);
+    const faceY = hasFace ? u.faceY : (u.vy || 0);
+    const faceAng = (u.semi || isArc) ? Math.atan2(-faceY, faceX) : 0;
     el.style.setProperty("--face-ang", `${faceAng}rad`);
-    el.style.transform = u.semi
+    if (isArc) {
+      const outer = u.radius || 1;
+      const inner = u.arcInner || 0;
+      el.style.setProperty("--arc-span", `${u.arcSpan}rad`);
+      el.style.setProperty("--arc-from", `${Math.PI / 2 - u.arcSpan / 2}rad`);
+      el.style.setProperty("--arc-thick", `${Math.max(1.5, r * (1 - inner / outer))}px`);
+    }
+    el.style.transform = (u.semi || isArc)
       ? `translate(-50%, -50%) rotate(${faceAng}rad)`
       : "translate(-50%, -50%)";
     let ghostGap = 0;

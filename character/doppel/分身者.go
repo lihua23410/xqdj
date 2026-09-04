@@ -6,16 +6,21 @@ import (
 )
 
 const KindDoppel = "分身者"
+const KindClone = "分身"
+const KindCloneArc = "分身弧"
 
 const (
-	doppelRadius = 18.0
-	doppelSpeed  = 175.0
-	doppelHP     = 100.0
-	cloneKind    = "分身"
-	cloneDamage  = 6.0
-	cloneHitCD   = 0.1
-	cloneCount   = 3
-	cloneGap     = 48.0
+	doppelRadius  = 18.0
+	doppelSpeed   = 175.0
+	doppelHP      = 100.0
+	cloneKind     = KindClone
+	cloneDamage   = 6.0
+	cloneHitCD    = 0.1
+	cloneCount    = 3
+	cloneGap      = 48.0
+	cloneArcInner = doppelRadius
+	cloneArcOuter = doppelRadius + 2
+	cloneColor    = "#7a9bb8"
 )
 
 func init() {
@@ -28,7 +33,7 @@ func init() {
 		Speed:   doppelSpeed,
 		Vision:  0,
 		Fighter: true,
-		Look:    unit.Look{Color: "#7a9bb8"},
+		Look:    unit.Look{Color: cloneColor},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &分身者{}
 	})
@@ -40,9 +45,24 @@ func init() {
 		Speed:   doppelSpeed,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: "#7a9bb8"},
+		Look:    unit.Look{Color: cloneColor},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &分身{owner: info.OwnerID, slot: info.Slot}
+		return &分身{slot: info.Slot}
+	})
+	p.Register(unit.Spec{
+		Kind:     KindCloneArc,
+		Role:     unit.RoleProjectile,
+		Radius:   cloneArcOuter,
+		MaxHP:    1,
+		Speed:    doppelSpeed,
+		Vision:   0,
+		Fighter:  false,
+		Attach:   true,
+		ArcSpan:  2 * math.Pi,
+		ArcInner: cloneArcInner,
+		Look:     unit.Look{Color: cloneColor, Overlay: true},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &分身弧{slot: info.Slot}
 	})
 }
 
@@ -97,25 +117,29 @@ func rotate2(vx, vy, ang float64) (float64, float64) {
 }
 
 type 分身 struct {
-	owner      uint64
-	slot       int
-	hitReadyAt float64
+	slot int
+	arc  unit.AttachState
 }
 
 func (c *分身) Handle(ctx unit.Context, ev unit.Event) {
-	e, ok := ev.(unit.Collision)
+	s, ok := ev.(unit.Sense)
 	if !ok {
 		return
 	}
-	if e.Other.Role != unit.RoleFighter {
-		return
+	if unit.RearmAttach(s, ctx.ID, KindCloneArc, cloneHitCD, &c.arc) {
+		unit.SpawnAttach(ctx, s, KindCloneArc)
 	}
-	if e.Other.ID == c.owner || e.Other.Slot == c.slot {
-		return
-	}
-	if e.Time < c.hitReadyAt {
+}
+
+type 分身弧 struct {
+	slot int
+}
+
+func (a *分身弧) Handle(ctx unit.Context, ev unit.Event) {
+	e, ok := ev.(unit.Collision)
+	if !ok || !unit.EnemyFighter(e, a.slot) {
 		return
 	}
 	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: cloneDamage}
-	c.hitReadyAt = e.Time + cloneHitCD
+	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }

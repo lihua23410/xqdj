@@ -18,6 +18,8 @@ type Snapshot struct {
 	FaceX     float64  `json:"faceX"`
 	FaceY     float64  `json:"faceY"`
 	PassWalls bool     `json:"passWalls"`
+	ArcSpan   float64  `json:"arcSpan,omitempty"`
+	ArcInner  float64  `json:"arcInner,omitempty"`
 	Faction   string   `json:"faction,omitempty"`
 	Seen      []string `json:"seen,omitempty"`
 	Marks     []Mark   `json:"marks,omitempty"`
@@ -48,6 +50,12 @@ type SetVelocity struct {
 	UnitID uint64
 	VX     float64
 	VY     float64
+}
+
+// SetArcSpan 改自己这发扇环弹的张角（弧度）。只有 Spec.Attach 的单位吃。
+type SetArcSpan struct {
+	UnitID uint64
+	Span   float64
 }
 
 type Damage struct {

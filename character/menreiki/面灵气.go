@@ -11,13 +11,13 @@ import (
 var assets embed.FS
 
 const KindMenreiki = "面灵气"
+const KindMenreikiArc = "面灵气弧"
 
 const (
 	menreikiRadius    = 18.0
 	menreikiSpeed     = 150.0
 	menreikiHP        = 75.0
 	menreikiVision    = 9999.0
-	menreikiDamage    = 5.0
 	menreikiRedDamage = 8.0
 	menreikiHitCD     = 0.1
 	menreikiRegen     = 1.0
@@ -26,6 +26,10 @@ const (
 	menreikiPaleSpeed = 250.0
 	menreikiAmpOut    = 1.15
 	menreikiAmpIn     = 0.85
+	menreikiArcInner  = menreikiRadius
+	menreikiArcOuter  = menreikiRadius + 2
+	menreikiArcSpan   = 150.0
+	menreikiArcColor  = "#ff3b3b"
 	cyanKind          = "青弹"
 	cyanRadius        = 6.0
 	cyanSpeed         = 170.0
@@ -68,6 +72,21 @@ func init() {
 		return &面灵气{}
 	})
 	p.Register(unit.Spec{
+		Kind:     KindMenreikiArc,
+		Role:     unit.RoleProjectile,
+		Radius:   menreikiArcOuter,
+		MaxHP:    1,
+		Speed:    menreikiSpeed,
+		Vision:   0,
+		Fighter:  false,
+		Attach:   true,
+		ArcSpan:  unit.Deg(menreikiArcSpan),
+		ArcInner: menreikiArcInner,
+		Look:     unit.Look{Color: menreikiArcColor, Overlay: true},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &面灵气弧{slot: info.Slot}
+	})
+	p.Register(unit.Spec{
 		Kind:    cyanKind,
 		Role:    unit.RoleProjectile,
 		Radius:  cyanRadius,
@@ -100,7 +119,7 @@ type 面灵气 struct {
 	selfMarked  bool
 	enemyMarked bool
 	faction     string
-	hitReadyAt  float64
+	arc         unit.AttachState
 	fireReady   float64
 	regenReady  float64
 }
@@ -109,11 +128,19 @@ func (m *面灵气) Handle(ctx unit.Context, ev unit.Event) {
 	if unit.AcceptHit(ctx, ev) {
 		return
 	}
-	switch e := ev.(type) {
-	case unit.Sense:
-		m.sense(ctx, e)
-	case unit.Collision:
-		m.hit(ctx, e)
+	s, ok := ev.(unit.Sense)
+	if !ok {
+		return
+	}
+	m.sense(ctx, s)
+	if m.faction == unit.FactionRed {
+		if unit.RearmAttach(s, ctx.ID, KindMenreikiArc, menreikiHitCD, &m.arc) {
+			unit.SpawnAttach(ctx, s, KindMenreikiArc)
+		}
+	} else if m.arc.Armed || unit.HasOwned(s, ctx.ID, KindMenreikiArc) {
+		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindMenreikiArc}
+		m.arc.Armed = false
+		m.arc.ReadyAt = 0
 	}
 }
 
@@ -164,19 +191,17 @@ func (m *面灵气) grant(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-func (m *面灵气) hit(ctx unit.Context, e unit.Collision) {
-	if e.Other.Role != unit.RoleFighter {
+type 面灵气弧 struct {
+	slot int
+}
+
+func (a *面灵气弧) Handle(ctx unit.Context, ev unit.Event) {
+	e, ok := ev.(unit.Collision)
+	if !ok || !unit.EnemyFighter(e, a.slot) {
 		return
 	}
-	if e.Time < m.hitReadyAt {
-		return
-	}
-	amt := menreikiDamage
-	if m.faction == unit.FactionRed {
-		amt = menreikiRedDamage
-	}
-	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: amt}
-	m.hitReadyAt = e.Time + menreikiHitCD
+	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: menreikiRedDamage}
+	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }
 
 func (m *面灵气) shoot(ctx unit.Context, s unit.Sense) {

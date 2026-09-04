@@ -42,6 +42,9 @@ type unit struct {
 	face           vec
 	passWalls      bool
 	shell          bool
+	attach         bool
+	arcSpan        float64
+	arcInner       float64
 	faction        string
 	factionCycle   bool
 	factionAmpOut  float64
@@ -211,9 +214,19 @@ func (u *unit) snap() unitpkg.Snapshot {
 		FaceX:     u.face.X,
 		FaceY:     u.face.Y,
 		PassWalls: u.passWalls,
+		ArcSpan:   u.arcSpan,
+		ArcInner:  u.arcInner,
 		Faction:   u.faction,
 		Seen:      u.seenList(),
 		Marks:     u.markList(),
+	}
+}
+
+func (u *unit) shape() ccdShape {
+	return ccdShape{
+		p: u.p, v: u.v, face: u.face,
+		r: u.radius, semi: u.semi,
+		arcSpan: u.arcSpan, arcInner: u.arcInner,
 	}
 }
 
@@ -360,7 +373,8 @@ func (m *Match) Tick() {
 	}
 	m.pending = m.pending[:0]
 	m.settleHitsLocked()
-	m.stickShellsLocked()
+	m.reapAttachLocked()
+	m.stickFollowersLocked()
 	m.time += DT
 	m.expireWallsLocked()
 	m.seq++
@@ -485,6 +499,9 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 		face:      vec{1, 0},
 		passWalls: spec.PassWalls,
 		shell:     spec.Shell,
+		attach:    spec.Attach,
+		arcSpan:   spec.ArcSpan,
+		arcInner:  spec.ArcInner,
 	}
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
@@ -547,6 +564,16 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		u.setVel(vec{c.VX, c.VY})
+	case unitpkg.SetArcSpan:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || !u.attach {
+			return
+		}
+		span := c.Span
+		if span < 0 {
+			span = 0
+		}
+		u.arcSpan = span
 	case unitpkg.Damage:
 		m.offerDamageLocked(c)
 	case unitpkg.ConfirmDamage:
@@ -733,11 +760,11 @@ func (m *Match) despawnOwnedLocked(owner uint64, kind string) {
 	}
 }
 
-func (m *Match) stickShellsLocked() {
+func (m *Match) stickFollowersLocked() {
 	var dead []*unit
 	for _, id := range m.order {
 		u := m.units[id]
-		if u == nil || !u.shell {
+		if u == nil || (!u.shell && !u.attach) {
 			continue
 		}
 		owner := m.units[u.owner]
@@ -747,6 +774,28 @@ func (m *Match) stickShellsLocked() {
 		}
 		u.p = owner.p
 		u.v = owner.v
+		if u.attach {
+			if u.v.len2() > 1e-8 {
+				u.face = u.v.norm()
+			} else if owner.face.len2() > 1e-12 {
+				u.face = owner.face
+			} else if u.face.len2() < 1e-12 {
+				u.face = vec{1, 0}
+			}
+		}
+	}
+	for _, u := range dead {
+		m.removeLocked(u)
+	}
+}
+
+func (m *Match) reapAttachLocked() {
+	var dead []*unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u != nil && u.attach && !u.solid && !u.stopped {
+			dead = append(dead, u)
+		}
 	}
 	for _, u := range dead {
 		m.removeLocked(u)
@@ -955,7 +1004,7 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 		if u == nil || !u.solid || u.role == unitpkg.RoleHelper {
 			continue
 		}
-		if !u.passWalls && !u.shell {
+		if !u.passWalls && !u.shell && !u.attach {
 			if h, ok := sweptShapeVsHex(u.p, u.v, u.face, u.radius, dt, m.hex, u.semi); ok {
 				if h.t < best.t {
 					h.a = u.id
@@ -1000,16 +1049,23 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 			if b.role == unitpkg.RoleProjectile && (b.slot == a.slot || (b.owner != 0 && b.owner == a.id)) {
 				continue
 			}
+			if a.attach || b.attach {
+				if a.attach && b.attach {
+					continue
+				}
+				if a.attach && (b.role != unitpkg.RoleFighter || b.slot == a.slot || b.id == a.owner) {
+					continue
+				}
+				if b.attach && (a.role != unitpkg.RoleFighter || a.slot == b.slot || a.id == b.owner) {
+					continue
+				}
+			}
 			if a.role == unitpkg.RoleFighter && b.role == unitpkg.RoleFighter {
 				if m.shellOfLocked(a.id) != nil || m.shellOfLocked(b.id) != nil {
 					continue
 				}
 			}
-			t, nrm, ok := sweptPairShapes(
-				a.p, a.v, a.radius, a.face, a.semi,
-				b.p, b.v, b.radius, b.face, b.semi,
-				dt,
-			)
+			t, nrm, ok := sweptPairShapes(a.shape(), b.shape(), dt)
 			if !ok {
 				continue
 			}
@@ -1146,7 +1202,7 @@ func (m *Match) constrainAllLocked() {
 }
 
 func (m *Match) constrainUnitLocked(u *unit) {
-	if u == nil || !u.solid || u.passWalls || u.shell {
+	if u == nil || !u.solid || u.passWalls || u.shell || u.attach {
 		return
 	}
 	for i := 0; i < 6; i++ {
@@ -1204,7 +1260,7 @@ func (m *Match) emitLocked() {
 			}
 			dx := o.X - u.p.X
 			dy := o.Y - u.p.Y
-			if dx*dx+dy*dy <= vr2 {
+			if dx*dx+dy*dy <= vr2 || o.OwnerID == u.id {
 				sense.Nearby = append(sense.Nearby, o)
 			}
 		}

@@ -12,6 +12,9 @@ type Spec struct {
 	PassWalls bool
 	StartHP   float64 // 0 表示开局满血（MaxHP）
 	Shell     bool    // 贴在主人身上的环，撞到东西会碎并通知主人
+	Attach    bool    // 每帧贴主人；不挡伤、不碎。不撞墙。只和敌方战斗机做 CCD
+	ArcSpan   float64 // 扇环张角（弧度）。0 = 不是扇环。2π = 整圈细环
+	ArcInner  float64 // 扇环内径。外径用 Radius。角色自己填
 	Look      Look
 }
 

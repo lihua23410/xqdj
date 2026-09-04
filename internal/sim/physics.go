@@ -312,7 +312,117 @@ func sweptShapeVsHex(p, vel, face vec, radius, dt float64, hex hexagon, semi boo
 	return ccdHit{kind: hitWall, t: bestT, n: bestN}, true
 }
 
-func sweptPairShapes(
+type ccdShape struct {
+	p, v, face vec
+	r          float64
+	semi       bool
+	arcSpan    float64
+	arcInner   float64
+}
+
+func (s ccdShape) isArc() bool { return s.arcSpan > 1e-9 }
+
+func rotateVec(v vec, ang float64) vec {
+	c, s := math.Cos(ang), math.Sin(ang)
+	return vec{v.X*c - v.Y*s, v.X*s + v.Y*c}
+}
+
+func inArcSpan(dir, face vec, half float64) bool {
+	if dir.len2() < 1e-16 {
+		return true
+	}
+	if half >= math.Pi-1e-9 {
+		return true
+	}
+	d := dir.norm()
+	f := face
+	if f.len2() < 1e-12 {
+		f = vec{1, 0}
+	} else {
+		f = f.norm()
+	}
+	return d.dot(f) >= math.Cos(half)-1e-8
+}
+
+func sweptArcVsCircle(arc, ball ccdShape, dt float64) (float64, vec, bool) {
+	half := arc.arcSpan / 2
+	if half < 0 {
+		half = 0
+	}
+	full := arc.arcSpan >= 2*math.Pi-1e-6
+	face := arc.face
+	if face.len2() < 1e-12 {
+		face = vec{1, 0}
+	} else {
+		face = face.norm()
+	}
+	ri, ro := arc.arcInner, arc.r
+	if ri < 0 {
+		ri = 0
+	}
+	if ri > ro {
+		ri = ro
+	}
+	bp, br := ball.p, ball.r
+	if ball.semi {
+		bp, br = colOf(ball.p, ball.face, ball.r, true)
+	}
+	bestT := dt + 1
+	var bestN vec
+	found := false
+	consider := func(t float64, n vec) {
+		if t < -1e-9 || t > dt || n.len2() < 1e-12 {
+			return
+		}
+		if t < 0 {
+			t = 0
+		}
+		if t < bestT {
+			bestT = t
+			bestN = n.norm()
+			found = true
+		}
+	}
+	if t, n, ok := sweptCircles(arc.p, arc.v, ro, bp, ball.v, br, dt); ok {
+		ap := arc.p.add(arc.v.mul(t))
+		at := bp.add(ball.v.mul(t))
+		if full || inArcSpan(at.sub(ap), face, half) {
+			consider(t, n)
+		}
+	}
+	if !full {
+		relV := ball.v.sub(arc.v)
+		R := br + skin
+		for _, ang := range []float64{half, -half} {
+			u := rotateVec(face, ang)
+			a := arc.p.add(u.mul(ri))
+			b := arc.p.add(u.mul(ro))
+			if t, n, ok := sweptPointVsCapsule(bp, relV, dt, a, b, R); ok {
+				consider(t, n.mul(-1))
+			}
+		}
+	}
+	if !found {
+		return 0, vec{}, false
+	}
+	return bestT, bestN, true
+}
+
+func sweptPairShapes(a, b ccdShape, dt float64) (float64, vec, bool) {
+	if a.isArc() && !b.isArc() {
+		return sweptArcVsCircle(a, b, dt)
+	}
+	if b.isArc() && !a.isArc() {
+		t, n, ok := sweptArcVsCircle(b, a, dt)
+		if !ok {
+			return 0, vec{}, false
+		}
+		return t, n.mul(-1), true
+	}
+	return sweptPairCircles(a.p, a.v, a.r, a.face, a.semi, b.p, b.v, b.r, b.face, b.semi, dt)
+}
+
+func sweptPairCircles(
 	pa, va vec, ra float64, fa vec, semiA bool,
 	pb, vb vec, rb float64, fb vec, semiB bool,
 	dt float64,
