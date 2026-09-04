@@ -40,10 +40,17 @@ function fxID(name) {
 }
 
 function packBaseFromScript() {
-  const src = document.currentScript && document.currentScript.src;
+  const el = document.currentScript;
+  if (el && el.dataset && el.dataset.pack) return el.dataset.pack;
+  let src = (el && el.src) || "";
+  if (!src) {
+    const stack = String((new Error()).stack || "");
+    const found = stack.match(/https?:\/\/[^)\s"']*\/ball\/[^)\s"']+/);
+    if (found) src = found[0];
+  }
   if (!src) return "";
   try {
-    const path = new URL(src, location.origin).pathname;
+    const path = decodeURIComponent(new URL(src, location.origin).pathname);
     const m = path.match(/^(\/ball\/[^/]+)\//);
     return m ? m[1] : "";
   } catch {
@@ -63,12 +70,12 @@ function registerShot(name, fn) {
 const factions = [];
 const factionById = {};
 
-function registerFactions(list) {
-  const base = packBaseFromScript();
-  if (!base || !Array.isArray(list)) return;
+function ingestFactions(list, base) {
+  if (!Array.isArray(list)) return;
   for (const item of list) {
     if (!item || !item.id) continue;
-    const icon = item.icon || (item.file ? `${base}/${item.file}` : "");
+    const icon = item.icon || (item.file && base ? `${base}/${item.file}` : "");
+    if (!icon) continue;
     const entry = { id: item.id, icon, color: item.color || "" };
     const prev = factionById[item.id];
     if (prev) {
@@ -78,6 +85,10 @@ function registerFactions(list) {
     }
     factionById[item.id] = entry;
   }
+}
+
+function registerFactions(list) {
+  ingestFactions(list, packBaseFromScript());
 }
 
 window.arena = {
@@ -95,6 +106,7 @@ function ensurePacks() {
   const packs = (state && state.packs) || {};
   for (const pack of Object.values(packs)) {
     const base = pack.base || "";
+    ingestFactions(pack.factions, base);
     for (const file of pack.files || []) {
       const url = `${base}/${file}`;
       if (loadedPackFiles.has(url)) continue;
@@ -108,6 +120,7 @@ function ensurePacks() {
         const script = document.createElement("script");
         script.src = url;
         script.async = false;
+        if (base) script.dataset.pack = base;
         document.head.appendChild(script);
       }
     }

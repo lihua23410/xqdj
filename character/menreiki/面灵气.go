@@ -59,6 +59,12 @@ var maskLooks = []struct {
 
 func init() {
 	p := unit.NewPack(KindMenreiki, assets)
+	p.RegisterFactions([]unit.FactionLook{
+		{ID: unit.FactionCyan, File: "faction/qing.png", Color: "#3ec8e0"},
+		{ID: unit.FactionRed, File: "faction/hong.png", Color: "#ff3b3b"},
+		{ID: unit.FactionPurple, File: "faction/zi.png", Color: "#b44cff"},
+		{ID: unit.FactionPale, File: "faction/cang.png", Color: "#8dffb0"},
+	})
 	p.Register(unit.Spec{
 		Kind:    KindMenreiki,
 		Role:    unit.RoleFighter,

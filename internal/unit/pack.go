@@ -8,13 +8,23 @@ import (
 )
 
 type Pack struct {
-	Name string
-	FS   fs.FS
+	Name     string
+	FS       fs.FS
+	factions []FactionLook
 }
 
 type PackInfo struct {
-	Base  string   `json:"base"`
-	Files []string `json:"files,omitempty"`
+	Base     string        `json:"base"`
+	Files    []string      `json:"files,omitempty"`
+	Factions []FactionLook `json:"factions,omitempty"`
+}
+
+// FactionLook 是派系图标/颜色。Icon 用绝对路径，和状态图一样：/ball/<Kind>/faction/qing.png
+type FactionLook struct {
+	ID    string `json:"id"`
+	Icon  string `json:"icon,omitempty"`
+	Color string `json:"color,omitempty"`
+	File  string `json:"-"`
 }
 
 var packs = map[string]*Pack{}
@@ -36,10 +46,30 @@ func (p *Pack) Register(s Spec, fn func(SpawnInfo) Actor) {
 	Register(s, fn)
 }
 
+// RegisterFactions 登记本包派系图。File 相对包根；引擎拼成 /ball/<Kind>/… 发给页面。
+func (p *Pack) RegisterFactions(list []FactionLook) {
+	if p == nil {
+		return
+	}
+	base := "/ball/" + p.Name
+	out := make([]FactionLook, 0, len(list))
+	for _, item := range list {
+		if item.ID == "" {
+			continue
+		}
+		icon := item.Icon
+		if icon == "" && item.File != "" {
+			icon = path.Join(base, item.File)
+		}
+		out = append(out, FactionLook{ID: item.ID, Icon: icon, Color: item.Color})
+	}
+	p.factions = out
+}
+
 func Packs() map[string]PackInfo {
 	out := make(map[string]PackInfo, len(packs))
 	for name, p := range packs {
-		info := PackInfo{Base: "/ball/" + name, Files: listPackFiles(p.FS)}
+		info := PackInfo{Base: "/ball/" + name, Files: listPackFiles(p.FS), Factions: p.factions}
 		out[name] = info
 	}
 	return out

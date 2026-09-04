@@ -42,6 +42,25 @@ func TestLooksComeFromCharacterSpecs(t *testing.T) {
 			t.Fatalf("面灵气 pack missing %s in %v", f, pack.Files)
 		}
 	}
+	if len(pack.Factions) != 4 {
+		t.Fatalf("面灵气 factions=%+v", pack.Factions)
+	}
+	wantIcon := map[string]string{
+		"青": "/ball/面灵气/faction/qing.png",
+		"红": "/ball/面灵气/faction/hong.png",
+		"紫": "/ball/面灵气/faction/zi.png",
+		"苍": "/ball/面灵气/faction/cang.png",
+	}
+	for _, f := range pack.Factions {
+		if wantIcon[f.ID] != f.Icon || f.Color == "" {
+			t.Fatalf("面灵气 faction %+v", f)
+		}
+	}
+	f, err := unitpkg.BallFS().Open("面灵气/faction/qing.png")
+	if err != nil {
+		t.Fatalf("open faction icon: %v", err)
+	}
+	_ = f.Close()
 	g, ok := looks[character.KindGlitch]
 	if !ok || g.Color == "" || g.Base == "" || len(g.FX) == 0 || g.FX[0] != "glitch" {
 		t.Fatalf("地慧星 look=%+v", g)
