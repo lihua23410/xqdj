@@ -73,7 +73,24 @@ func TestLooksComeFromCharacterSpecs(t *testing.T) {
 	if !ok || !sl.Overlay || len(sl.FX) == 0 || sl.FX[0] != "slash" {
 		t.Fatalf("地慧星斩击 look=%+v", sl)
 	}
+	shot, ok := looks[character.KindGlitchShot]
+	if !ok || shot.Color == "" || !shot.Trail || len(shot.FX) == 0 || shot.FX[0] != "crescent" {
+		t.Fatalf("地慧星弹 look=%+v", shot)
+	}
 	if looks["紫弹"].Overlay == false {
 		t.Fatalf("紫弹 should overlay=%+v", looks["紫弹"])
+	}
+	gp, ok := unitpkg.Packs()[character.KindGlitch]
+	if !ok {
+		t.Fatal("missing glitch pack")
+	}
+	have = map[string]bool{}
+	for _, f := range gp.Files {
+		have[f] = true
+	}
+	for _, f := range []string{"fx/shot.js", "fx/iai.mp3"} {
+		if !have[f] {
+			t.Fatalf("地慧星 pack missing %s in %v", f, gp.Files)
+		}
 	}
 }

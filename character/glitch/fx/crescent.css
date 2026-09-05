@@ -1,0 +1,21 @@
+/* 地慧星弹：月牙。凸边朝飞行方向。改完重启 go run . 再强刷。 */
+.ball.look-crescent {
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.ball.look-crescent > .crescent-blade {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220%;
+  height: 220%;
+  transform: translate(-50%, -50%) rotate(var(--crescent-ang, 0rad));
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle at 72% 38%, #fff 0 8%, #8ee8ff 22%, #4ec4ff 58%, #1a6aa8 100%);
+  /* 缺口在后，鼓面朝 +x；JS 再转到速度方向 */
+  -webkit-mask: radial-gradient(circle at 26% 50%, transparent 47%, #000 49%);
+  mask: radial-gradient(circle at 26% 50%, transparent 47%, #000 49%);
+  filter: drop-shadow(0 0 3px #4ec4ff) drop-shadow(0 0 8px #4ec4ff);
+}

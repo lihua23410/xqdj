@@ -168,6 +168,11 @@ func TestGlitchDodgeBlocksAndLeavesGhost(t *testing.T) {
 	hp0 := g.hp
 	x0, y0 := g.p.X, g.p.Y
 	id := g.id
+	m.send(g, unitpkg.Sense{Time: m.time, Self: g.snap(), Nearby: []unitpkg.Snapshot{o.snap()}})
+	m.mu.Unlock()
+	time.Sleep(4 * time.Millisecond)
+	m.mu.Lock()
+	m.drainCmdsLocked()
 	m.applyCmdLocked(unitpkg.Damage{From: o.id, To: id, Amount: 14})
 	m.settleHitsLocked()
 	m.mu.Unlock()
@@ -185,6 +190,11 @@ func TestGlitchDodgeBlocksAndLeavesGhost(t *testing.T) {
 		t.Fatalf("dodged hit still dropped hp %.1f -> %.1f", hp0, u.hp)
 	}
 	moved := math.Hypot(u.p.X-x0, u.p.Y-y0) > 1
+	if u.p.X >= -80 {
+		m.mu.Unlock()
+		t.Fatalf("dodge dest %+v want far left cage corner", u.p)
+	}
+	shot := ownedKind(m, id, character.KindGlitchShot)
 	ghosts := 0
 	for _, oid := range m.order {
 		h := m.units[oid]
@@ -199,6 +209,12 @@ func TestGlitchDodgeBlocksAndLeavesGhost(t *testing.T) {
 	m.mu.Unlock()
 	if !moved {
 		t.Fatal("dodge did not teleport")
+	}
+	if shot == nil {
+		t.Fatal("missing dodge shot")
+	}
+	if shot.v.X <= 0 {
+		t.Fatalf("shot vx=%v want toward enemy +x", shot.v.X)
 	}
 	if ghosts != 1 {
 		t.Fatalf("ghosts=%d want 1", ghosts)
@@ -381,7 +397,8 @@ func TestGlitchSlashUsesMarksAndGhostsThenClears(t *testing.T) {
 	}
 	hp0 := o.hp
 	oid := o.id
-	m.send(g, unitpkg.Sense{Time: 20, Self: g.snap(), Nearby: nearby})
+	self := g.snap()
+	m.send(g, unitpkg.Sense{Time: 20, Self: self, Nearby: nearby})
 	m.mu.Unlock()
 	time.Sleep(4 * time.Millisecond)
 	m.mu.Lock()
@@ -395,10 +412,16 @@ func TestGlitchSlashUsesMarksAndGhostsThenClears(t *testing.T) {
 			break
 		}
 	}
-	m.mu.Unlock()
 	if !found {
+		m.mu.Unlock()
 		t.Fatal("missing slash helper")
 	}
+	if math.Abs((hp0 - m.units[oid].hp)) > 1e-6 {
+		m.mu.Unlock()
+		t.Fatal("damage should wait until the slash expands")
+	}
+	m.send(g, unitpkg.Sense{Time: 22, Self: g.snap(), Nearby: nearby})
+	m.mu.Unlock()
 	time.Sleep(4 * time.Millisecond)
 	m.mu.Lock()
 	m.drainCmdsLocked()

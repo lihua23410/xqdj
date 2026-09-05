@@ -22,6 +22,7 @@ const (
 	KindGlitch      = 地慧星.KindGlitch
 	KindGlitchArc   = 地慧星.KindGlitchArc
 	KindGlitchGhost = 地慧星.KindGlitchGhost
+	KindGlitchShot  = 地慧星.KindGlitchShot
 	KindGlitchSlash = 地慧星.KindGlitchSlash
 	KindKnight      = 小骑士.KindKnight
 	KindKnightArc   = 小骑士.KindKnightArc
