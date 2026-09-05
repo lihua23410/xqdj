@@ -1,6 +1,5 @@
-/* 居合刀光（改完重启 go run . 再强刷）
- * 时间轴 3s：0–2s 短刃蓄力，2s 拉满条纹，2–3s 收宽消失。百分比 66.66% = 2/3。
- * 改时长时：animation 的 3s、关键帧 66.66%、Go 里 glitchSlashWindup/Fade/Life 一起改。
+/* 居合：0–2s 短刃蓄力，2s 起抄良秀天杀刀光（canvas 画）。
+ * 改时长时：下面 animation 的 3s / 66.66%、Go 里 Windup/Fade/Life 一起改。
  */
 .ball.look-slash {
   background: transparent !important;
@@ -13,15 +12,13 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: var(--slash-short, 54px);
-  height: var(--slash-max, 180px);
+  width: var(--slash-short, 84px);
+  height: 12px;
   transform: translate(-50%, -50%) rotate(var(--slash-ang, 0rad));
   pointer-events: none;
   overflow: visible;
-  animation: look-iai-len 3s linear forwards; /* 总时长，和 glitchSlashLife 一致 */
 }
 .ball.look-slash .iai-glow,
-.ball.look-slash .iai-blade,
 .ball.look-slash .iai-core {
   position: absolute;
   left: 0;
@@ -31,89 +28,63 @@
   pointer-events: none;
 }
 .ball.look-slash .iai-glow {
-  height: 12px; /* 蓄力时深蓝光晕厚度 */
+  height: 12px;
   background: linear-gradient(
     90deg,
     transparent 0%,
-    #0a3a8c 18%, /* 深蓝，两端淡出 */
+    #0a3a8c 18%,
     #0a3a8c 82%,
     transparent 100%
   );
-  filter: blur(5px); /* 光晕虚化 */
-  animation: look-iai-halo 3s linear forwards;
-}
-.ball.look-slash .iai-blade {
-  top: 0;
-  height: 100%;
-  transform: scaleY(0);
-  transform-origin: center center; /* 收宽从中线往两边对折，不要往一边塌 */
-  /* 拉满条纹：天蓝 5px + 空 5px + 深蓝 5px + 空 5px */
-  background: repeating-linear-gradient(
-    to bottom,
-    #4ec4ff 0 5px,
-    transparent 5px 10px,
-    #0a3a8c 10px 15px,
-    transparent 15px 20px
-  );
-  background-position: center;
-  animation: look-iai-thick 3s linear forwards;
+  filter: blur(5px);
+  opacity: 0.2;
 }
 .ball.look-slash .iai-core {
-  height: 1px; /* 蓄力天蓝芯 */
-  border-radius: 0;
+  height: 1px;
   background: #4ec4ff;
   box-shadow: 0 0 1px #4ec4ff;
-  animation: look-iai-core 3s linear forwards;
 }
 .ball.look-slash .iai-flare {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 22px; /* 球心亮斑大小 */
+  width: 22px;
   height: 10px;
   transform: translate(-50%, -50%);
   pointer-events: none;
   background: radial-gradient(ellipse 55% 80% at 50% 50%, #fff 0%, #8ee8ff 28%, transparent 72%);
   mix-blend-mode: screen;
-  animation: look-iai-flare 3s linear forwards;
 }
 .ball.look-slash .iai-flare::after {
   content: "";
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 7px; /* 菱形爆点 */
+  width: 7px;
   height: 7px;
   transform: translate(-50%, -50%) rotate(45deg);
   background: #fff;
   box-shadow: 0 0 6px #4ec4ff, 0 0 12px #4ec4ff;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
-@keyframes look-iai-len {
-  0%, 66.66% { width: var(--slash-short, 84px); } /* 蓄力：短 */
-  66.67%, 100% { width: var(--slash-len, 1230px); } /* 拉满：全屏长 */
+.ball.look-slash > .slash-ryo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: none;
 }
-@keyframes look-iai-halo {
-  0%, 66.66% { opacity: 0.2; } /* 蓄力时深蓝光晕透明度 */
-  66.67%, 100% { opacity: 0; }
+.slash-flash {
+  position: absolute;
+  inset: -48px;
+  background: #4ec4ff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 40;
+  animation: slash-flash 0.18s ease-out forwards;
 }
-@keyframes look-iai-core {
-  0%, 66.66% { opacity: 1; }
-  66.67%, 100% { height: 0; opacity: 0; box-shadow: none; }
-}
-@keyframes look-iai-flare {
-  0%, 66.66% { opacity: 1; }
-  66.67%, 100% { opacity: 0; }
-}
-@keyframes look-iai-thick {
-  0%, 66.66% { transform: scaleY(0); opacity: 0; }
-  66.67% { transform: scaleY(1); opacity: 1; } /* 拉满宽度 */
-  /* 1/(1+3u) 再归一化到 0：前面收得快，后面慢慢没。改手感就改 3。 */
-  70% { transform: scaleY(0.692); }
-  75% { transform: scaleY(0.429); }
-  80% { transform: scaleY(0.273); }
-  85% { transform: scaleY(0.170); }
-  90% { transform: scaleY(0.097); }
-  95% { transform: scaleY(0.042); }
-  100% { transform: scaleY(0); opacity: 1; }
+@keyframes slash-flash {
+  0% { opacity: 0.47; }
+  100% { opacity: 0; }
 }
