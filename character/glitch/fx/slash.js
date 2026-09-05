@@ -168,10 +168,13 @@ window.lookFX.slash = {
   tick(el, u) {
     if (!el || !el.classList.contains("look-slash")) return;
     const hexEl = document.getElementById("hex");
-    const scale = (hexEl ? hexEl.clientWidth : 560) / 560;
+    const stageW = hexEl ? hexEl.clientWidth : 560;
+    const stageH = hexEl ? hexEl.clientHeight : 485;
+    const scale = stageW / 560;
     const diam = 36 * scale;
-    const len = (hexEl ? hexEl.clientWidth : 560) * 2.2;
-    const maxW = diam * 5;
+    const grow = Math.hypot(stageW, stageH) / stageW; // 斜向铺满时的等比例放大
+    const len = Math.hypot(stageW, stageH) * 2.2;
+    const maxW = diam * 5 * grow;
     const ang = Math.atan2(-(u.vy || 0), u.vx || 1);
 
     let host = el.querySelector(":scope > .look-iai");
@@ -216,8 +219,8 @@ window.lookFX.slash = {
     const fadeU = (t - SLASH_WINDUP) / SLASH_FADE;
     const bladeScale = invScale(fadeU);
     const dpr = window.devicePixelRatio || 1;
-    const cw = Math.ceil(len + 80);
-    const ch = Math.ceil(maxW * 2 + 220);
+    const cw = Math.ceil(len + maxW + 80);
+    const ch = cw;
     canvas.style.width = `${cw}px`;
     canvas.style.height = `${ch}px`;
     if (canvas.width !== Math.ceil(cw * dpr) || canvas.height !== Math.ceil(ch * dpr)) {

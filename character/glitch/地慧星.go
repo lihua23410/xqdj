@@ -25,11 +25,11 @@ const (
 	glitchMarkIcon    = "/ball/地慧星/status/jianhen.png"
 	glitchGhostOdds   = 0.20
 	glitchDodgeCD     = 12.0
-	glitchSlashCD     = 20.0             // 居合冷却：打中
-	glitchSlashMissCD = 10.0             // 居合冷却：没打中
-	glitchSlashWindup = 2.0              // 蓄力时长；到点出刀并结算伤害
-	glitchSlashFade   = 1.0              // 出刀后刀光再收宽的时间（只影响特效）
-	glitchSlashLife   = 3.0              // 刀光单位存活；应 = 蓄力+收宽
+	glitchSlashCD     = 20.0                 // 居合冷却：打中
+	glitchSlashMissCD = 10.0                 // 居合冷却：没打中
+	glitchSlashWindup = 2.0                  // 蓄力时长；到点出刀并结算伤害
+	glitchSlashFade   = 1.0                  // 出刀后刀光再收宽的时间（只影响特效）
+	glitchSlashLife   = 3.0                  // 刀光单位存活；应 = 蓄力+收宽
 	glitchSlashBox    = 5 * 2 * glitchRadius // 判定盒宽度 = 5 倍球直径；长度无限
 	glitchWallBoost   = 50.0
 	glitchArcInner    = glitchRadius
