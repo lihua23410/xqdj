@@ -7,10 +7,18 @@
   howl.preload = "auto";
   howl.load();
 
+  let howlGen = 0;
+  let howling = false;
+
   function unlock() {
+    const gen = howlGen;
     howl.muted = true;
     howl.play()
       .then(() => {
+        if (gen !== howlGen || howling) {
+          howl.muted = false;
+          return;
+        }
         howl.pause();
         howl.currentTime = 0;
         howl.muted = false;
@@ -22,11 +30,27 @@
   document.addEventListener("pointerdown", unlock, { once: true });
 
   function playHowl() {
+    const gen = ++howlGen;
+    howling = true;
     howl.pause();
     howl.muted = false;
     howl.currentTime = 0;
     const start = howl.play();
-    if (start && typeof start.catch === "function") start.catch(() => {});
+    if (start && typeof start.then === "function") {
+      start.then(() => {
+        if (gen !== howlGen || !howling) {
+          howl.pause();
+          howl.currentTime = 0;
+        }
+      }).catch(() => {});
+    }
+  }
+
+  function stopHowl() {
+    howlGen++;
+    howling = false;
+    howl.pause();
+    howl.currentTime = 0;
   }
 
   function showCutin() {
@@ -46,16 +70,24 @@
   }
 
   window.wolfMoonPhase = window.wolfMoonPhase || {};
-  window.wolfRageUntil = window.wolfRageUntil || {};
 
   arena.registerShot("phase", (fx, ctx) => {
     window.wolfMoonPhase[fx.slot] = fx.amount | 0;
     arena.spawnFx("fx-ring", ctx.x, ctx.y, fx.kind);
   });
 
+  window.wolfRaging = window.wolfRaging || {};
+
   arena.registerShot("rage", (fx) => {
-    window.wolfRageUntil[fx.unitId] = performance.now() + 5000;
-    playHowl();
-    showCutin();
+    if (fx.amount > 0) {
+      window.wolfRaging[fx.unitId] = true;
+      playHowl();
+      showCutin();
+      return;
+    }
+    if (fx.amount !== 0) return;
+    window.wolfRaging[fx.unitId] = false;
+    const still = Object.keys(window.wolfRaging).some((id) => window.wolfRaging[id]);
+    if (!still) stopHowl();
   });
 })();

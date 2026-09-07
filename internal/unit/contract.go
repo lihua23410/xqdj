@@ -169,6 +169,12 @@ type Teleport struct {
 	Y      float64
 }
 
+// Pass 令牌。Hold 时与其他单位相撞不改双方速度；墙和胶囊墙仍弹。Hold=false 放下。
+type Pass struct {
+	UnitID uint64
+	Hold   bool
+}
+
 type Context struct {
 	ID   uint64
 	Kind string

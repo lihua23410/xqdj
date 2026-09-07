@@ -167,7 +167,7 @@ func TestMatchNoOverlap(t *testing.T) {
 				if ua.owner == ub.id || ub.owner == ua.id {
 					continue
 				}
-				if ua.passWalls || ub.passWalls || ua.attach || ub.attach {
+				if ua.passWalls || ub.passWalls || ua.pass || ub.pass || ua.attach || ub.attach {
 					continue
 				}
 				if !ua.solid || !ub.solid {

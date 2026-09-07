@@ -41,6 +41,7 @@ type unit struct {
 	semi           bool
 	face           vec
 	passWalls      bool
+	pass           bool
 	shell          bool
 	attach         bool
 	arcSpan        float64
@@ -648,6 +649,12 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		u.p = vec{c.X, c.Y}
 		m.constrainUnitLocked(u)
+	case unitpkg.Pass:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		u.pass = c.Hold
 	}
 }
 
@@ -1148,7 +1155,8 @@ func (m *Match) resolveLocked(h ccdHit) {
 		delta := ca.sub(cb)
 		dist := delta.len()
 		target := ra + rb + skin
-		pierce := a.passWalls || b.passWalls
+		pass := a.pass || b.pass
+		pierce := a.passWalls || b.passWalls || pass
 		if !pierce && dist > 1e-9 && dist < target {
 			pn := delta.norm()
 			push := (target - dist) / 2
@@ -1170,6 +1178,9 @@ func (m *Match) resolveLocked(h ccdHit) {
 		}
 		if !pierce {
 			m.fx = append(m.fx, unitpkg.FX{Name: name, Kind: kind, X: mid.X, Y: mid.Y, Slot: slot})
+		}
+		if pass {
+			return
 		}
 		projA := a.role == unitpkg.RoleProjectile
 		projB := b.role == unitpkg.RoleProjectile

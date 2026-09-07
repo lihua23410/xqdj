@@ -1,14 +1,12 @@
 window.lookFX = window.lookFX || {};
-window.wolfRageUntil = window.wolfRageUntil || {};
+window.wolfRaging = window.wolfRaging || {};
 
 window.lookFX.wolf = {
   unmount(el) {
     el?.classList.remove("wolf-rage");
   },
-  tick(el, u, ctx) {
+  tick(el, u) {
     if (!el || !el.classList.contains("look-wolf")) return;
-    const until = window.wolfRageUntil[u.id] || 0;
-    const on = (ctx && ctx.now || performance.now()) < until;
-    el.classList.toggle("wolf-rage", on);
+    el.classList.toggle("wolf-rage", !!window.wolfRaging[u.id]);
   },
 };

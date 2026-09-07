@@ -220,7 +220,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 | `DespawnOwned` | 按主人 + kind 清掉随从（摘盾不会发 `GuardBreak`） |
 | `SwapOwned` | 本体与随机己方分身交换位置和速度（受伤时引擎也会自动做一次） |
 | `PlaceWall` | 砌一段胶囊墙。`Kind` 填 `ctx.Kind` 以便墙色跟主人。瞄准虚线用 `Look.WallGuide`（和墙长同一个常量） |
-| `Force` | 给目标加加速度 `(AX,AY)`，引擎做 `v += a·dt`。不是改写速度，快的球仍能撞上 |
+| `Pass` | 令牌。`Hold: true` 时与其他单位相撞不改双方速度；墙仍弹。`Hold: false` 放下 |
 | `Teleport` | 把自己挪到 `(X,Y)`，引擎会夹回六边形内 |
 | `MarkFaction` | 给战斗机打派系。`Cycle` 时撞墙（非单位）换派系；`AmpOut`/`AmpIn` 是角色自己给的倍率（0 = 不改）；`Collect` 凑齐四种时按 `Barrage` 的 kind 朝四周各生成一发（速度用该 kind 的 `Spec.Speed`） |
 | `ClearFactionSeen` | 清空 `Collect` 记录，当前派系仍算已出现 |
@@ -438,7 +438,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 
 - 平顶六边形，外接圆半径 `HexRadius = 280`。扫掠 CCD，提交后的状态不允许重叠。
 - 撞边和撞墙：入射角 = 反射角。战斗机和子弹一样弹。
-- 非弹体互撞：沿法线各保留自己的速率，`a.v = n·|va|`，`b.v = −n·|vb|`。不要改回速度均分。
+- 非弹体互撞：沿法线各保留自己的速率，`a.v = n·|va|`，`b.v = −n·|vb|`。不要改回速度均分。任一方持有 `Pass` 时双方速度都不改，也不做位置分离（Collision 仍发）。墙不受 Pass 影响。
 - 战斗机速率高于 `Spec.Speed` 时，每 0.2s 减 10，减到巡航为止。减速发生在消化指令之后，所以冲刺当帧能顶住。
 - 血量默认 100；`HP <= 0` 由引擎移除。只有 `RoleFighter` 吃伤害，且必须确认 `IncomingDamage`。
 - 受伤打 3 帧 hit-stop（物理 / 时间 / 感知都停）。致死不换位；胜负等到 hit-stop 结束再判。

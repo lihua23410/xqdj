@@ -26,10 +26,12 @@ const (
 	wolfArcOuter  = wolfRadius + 6
 	wolfArcSpan   = 110.0
 	wolfBiteDmg   = 13.0
-	wolfBiteCD    = 0.08
+	wolfBiteCD    = 0.3
 	wolfBiteSpan  = 150.0
-	wolfRageSpeed = 310.0
-	wolfRageTime  = 3.0
+	wolfDashSpeed = 640.0
+	wolfDashLock  = 0.1
+	wolfDashSeek  = 0.35
+	wolfDashCount = 5
 
 	moonRadius = 34.0
 	phaseCount = 8
@@ -85,7 +87,7 @@ func init() {
 		Role:     unit.RoleProjectile,
 		Radius:   wolfArcOuter,
 		MaxHP:    1,
-		Speed:    wolfRageSpeed,
+		Speed:    wolfDashSpeed,
 		Vision:   0,
 		Fighter:  false,
 		Attach:   true,
@@ -97,11 +99,22 @@ func init() {
 	})
 }
 
+// biteNone 游荡积月相；biteLock 站定锁敌（开撕咬 0.1s，撞墙后 0.35s）；biteDash 沿锁定方向冲到墙。
+const (
+	biteNone = iota
+	biteLock
+	biteDash
+)
+
 type 狼人 struct {
 	arc         unit.AttachState
 	phase       int
-	raging      bool
-	rageUntil   float64
+	bite        int
+	dashesLeft  int
+	lockUntil   float64
+	aimX, aimY  float64
+	slot        int
+	x, y        float64
 	selfInMoon  bool
 	enemyInMoon bool
 	booted      bool
@@ -129,21 +142,20 @@ func (w *狼人) Handle(ctx unit.Context, ev unit.Event) {
 	if unit.AcceptHit(ctx, ev) {
 		return
 	}
-	s, ok := ev.(unit.Sense)
-	if !ok {
-		return
-	}
-	w.bootMoon(ctx, s)
-	if w.raging && s.Time+1e-9 >= w.rageUntil {
-		w.raging = false
-		w.advance(ctx, s)
-	}
-	w.checkTouches(ctx, s)
-	w.syncArc(ctx, s)
-	if w.raging {
-		w.chase(ctx, s)
+	switch e := ev.(type) {
+	case unit.WallHit:
+		w.onWall(ctx, e)
+	case unit.Sense:
+		w.slot = e.Self.Slot
+		w.x, w.y = e.Self.X, e.Self.Y
+		w.bootMoon(ctx, e)
+		w.checkTouches(ctx, e)
+		w.tickBite(ctx, e)
+		w.syncArc(ctx, e)
 	}
 }
+
+func (w *狼人) biting() bool { return w.bite != biteNone }
 
 func (w *狼人) bootMoon(ctx unit.Context, s unit.Sense) {
 	if w.booted {
@@ -157,7 +169,7 @@ func (w *狼人) bootMoon(ctx unit.Context, s unit.Sense) {
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
 	}
-	w.emitPhase(ctx, s)
+	w.emitPhase(ctx)
 }
 
 func (w *狼人) checkTouches(ctx unit.Context, s unit.Sense) {
@@ -177,7 +189,7 @@ func (w *狼人) checkTouches(ctx unit.Context, s unit.Sense) {
 }
 
 func (w *狼人) onTouch(ctx unit.Context, s unit.Sense) {
-	if w.raging {
+	if w.biting() {
 		return
 	}
 	w.advance(ctx, s)
@@ -185,15 +197,17 @@ func (w *狼人) onTouch(ctx unit.Context, s unit.Sense) {
 
 func (w *狼人) advance(ctx unit.Context, s unit.Sense) {
 	w.phase = (w.phase + 1) % phaseCount
-	w.emitPhase(ctx, s)
+	w.emitPhase(ctx)
 	if w.phase == fullMoon {
-		w.startRage(ctx, s)
+		w.startBite(ctx, s)
 	}
 }
 
-func (w *狼人) startRage(ctx unit.Context, s unit.Sense) {
-	w.raging = true
-	w.rageUntil = s.Time + wolfRageTime
+func (w *狼人) startBite(ctx unit.Context, s unit.Sense) {
+	w.bite = biteLock
+	w.dashesLeft = wolfDashCount
+	w.lockUntil = s.Time + wolfDashLock
+	w.updateAim(s)
 	ctx.Out <- unit.FX{
 		Name:   "rage",
 		Kind:   ctx.Kind,
@@ -201,36 +215,88 @@ func (w *狼人) startRage(ctx unit.Context, s unit.Sense) {
 		X:      s.Self.X,
 		Y:      s.Self.Y,
 		Slot:   s.Self.Slot,
+		Amount: 1,
 	}
 }
 
-func (w *狼人) emitPhase(ctx unit.Context, s unit.Sense) {
+func (w *狼人) beginLock(t float64) {
+	w.bite = biteLock
+	w.lockUntil = t + wolfDashSeek
+}
+
+func (w *狼人) onWall(ctx unit.Context, e unit.WallHit) {
+	if w.bite != biteDash {
+		return
+	}
+	w.dashesLeft--
+	if w.dashesLeft > 0 {
+		w.beginLock(e.Time)
+		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+		return
+	}
+	w.finishBite(ctx, e)
+}
+
+func (w *狼人) finishBite(ctx unit.Context, e unit.WallHit) {
+	w.bite = biteNone
+	w.dashesLeft = 0
+	w.phase = 0
+	w.emitPhase(ctx)
+	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
+	vx, vy := cruiseOffWall(w.aimX, w.aimY, e.NX, e.NY)
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
+	ctx.Out <- unit.FX{
+		Name:   "rage",
+		Kind:   ctx.Kind,
+		UnitID: ctx.ID,
+		X:      w.x,
+		Y:      w.y,
+		Slot:   w.slot,
+		Amount: 0,
+	}
+}
+
+func (w *狼人) emitPhase(ctx unit.Context) {
 	ctx.Out <- unit.FX{
 		Name:   "phase",
 		Kind:   ctx.Kind,
-		Slot:   s.Self.Slot,
+		Slot:   w.slot,
 		Amount: float64(w.phase),
 		X:      0,
 		Y:      0,
 	}
 }
 
-func (w *狼人) syncArc(ctx unit.Context, s unit.Sense) {
-	want, drop, cd := KindWolfArc, KindWolfBite, wolfHitCD
-	if w.raging {
-		want, drop, cd = KindWolfBite, KindWolfArc, wolfBiteCD
+func (w *狼人) tickBite(ctx unit.Context, s unit.Sense) {
+	if !w.biting() {
+		return
 	}
-	if unit.HasOwned(s, ctx.ID, drop) {
-		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: drop}
+	if w.bite == biteLock {
+		w.updateAim(s)
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+		if s.Time+1e-9 >= w.lockUntil {
+			w.bite = biteDash
+			ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: w.aimX * wolfDashSpeed, VY: w.aimY * wolfDashSpeed}
+		}
+		return
 	}
-	if unit.RearmAttach(s, ctx.ID, want, cd, &w.arc) {
-		unit.SpawnAttach(ctx, s, want)
-	}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: w.aimX * wolfDashSpeed, VY: w.aimY * wolfDashSpeed}
 }
 
-func (w *狼人) chase(ctx unit.Context, s unit.Sense) {
+func (w *狼人) updateAim(s unit.Sense) {
 	en := enemyOf(s)
 	if en == nil {
+		if math.Hypot(w.aimX, w.aimY) >= 1e-6 {
+			return
+		}
+		dx, dy := s.Self.VX, s.Self.VY
+		if n := math.Hypot(dx, dy); n >= 1e-6 {
+			w.aimX, w.aimY = dx/n, dy/n
+			return
+		}
+		w.aimX, w.aimY = 1, 0
 		return
 	}
 	dx := en.X - s.Self.X
@@ -239,7 +305,20 @@ func (w *狼人) chase(ctx unit.Context, s unit.Sense) {
 	if n < 1e-6 {
 		return
 	}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * wolfRageSpeed, VY: dy / n * wolfRageSpeed}
+	w.aimX, w.aimY = dx/n, dy/n
+}
+
+func (w *狼人) syncArc(ctx unit.Context, s unit.Sense) {
+	want, drop, cd := KindWolfArc, KindWolfBite, wolfHitCD
+	if w.biting() {
+		want, drop, cd = KindWolfBite, KindWolfArc, wolfBiteCD
+	}
+	if unit.HasOwned(s, ctx.ID, drop) {
+		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: drop}
+	}
+	if unit.RearmAttach(s, ctx.ID, want, cd, &w.arc) {
+		unit.SpawnAttach(ctx, s, want)
+	}
 }
 
 func findMoon(s unit.Sense, owner uint64) *unit.Snapshot {
@@ -264,4 +343,22 @@ func enemyOf(s unit.Sense) *unit.Snapshot {
 
 func touching(a, b unit.Snapshot) bool {
 	return math.Hypot(a.X-b.X, a.Y-b.Y) <= a.Radius+b.Radius+1e-6
+}
+
+func cruiseOffWall(ax, ay, nx, ny float64) (float64, float64) {
+	nn := math.Hypot(nx, ny)
+	if nn < 1e-6 {
+		nx, ny, nn = 1, 0, 1
+	}
+	nx, ny = nx/nn, ny/nn
+	if math.Hypot(ax, ay) < 1e-6 {
+		ax, ay = -nx, -ny
+	}
+	dot := ax*nx + ay*ny
+	rx, ry := ax-2*dot*nx, ay-2*dot*ny
+	n := math.Hypot(rx, ry)
+	if n < 1e-6 {
+		rx, ry, n = -nx, -ny, 1
+	}
+	return rx / n * wolfSpeed, ry / n * wolfSpeed
 }
