@@ -20,40 +20,94 @@ func TestBootAppliesGearOneStats(t *testing.T) {
 	if !hasNoFrameFreeze(cmds) {
 		t.Fatalf("boot missing NoFrameFreeze: %v", cmds)
 	}
-	if heat := lastHeat(cmds); heat == nil || heat.Amount != 1 {
+	if heat := lastHeat(cmds); heat == nil || heat.Amount != 1 || heat.VX != 0 {
 		t.Fatalf("heat=%v", heat)
 	}
 }
 
-func TestWallHitRaisesGearAndStats(t *testing.T) {
+func TestWallHitDoesNotRaiseGear(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	e := booted(out)
 	e.Handle(unit.Context{ID: 1, Kind: KindEngine, Out: out}, unit.WallHit{
 		Time: 1, NX: -1, NY: 0,
 	})
 	cmds := drain(out)
-	if e.gear != 2 {
+	if e.gear != 1 {
 		t.Fatalf("gear=%d", e.gear)
+	}
+	if hasCruise(cmds, 156) {
+		t.Fatalf("wall should not change cruise: %v", cmds)
+	}
+}
+
+func TestHeatFillsAndRaisesGearWithoutSnappingVelocity(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	e := booted(out)
+	ctx := unit.Context{ID: 1, Kind: KindEngine, Out: out}
+	e.Handle(ctx, unit.Sense{Time: 2, Self: selfAt(0, 0, 120, 0)})
+	cmds := drain(out)
+	if e.gear != 2 || e.heat != 0 {
+		t.Fatalf("gear=%d heat=%v", e.gear, e.heat)
 	}
 	if !hasCruise(cmds, 156) || !hasVision(cmds, 120) {
 		t.Fatalf("cmds=%v", cmds)
 	}
-	vel := lastVel(cmds)
-	if vel == nil || math.Abs(math.Hypot(vel.VX, vel.VY)-156) > 1e-6 {
-		t.Fatalf("vel=%v", vel)
+	if lastVel(cmds) != nil {
+		t.Fatalf("升档 must not snap velocity: %v", cmds)
 	}
 }
 
-func TestWallHitCapsAtSix(t *testing.T) {
+func TestHeatFillTimes(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	e := booted(out)
 	ctx := unit.Context{ID: 1, Kind: KindEngine, Out: out}
-	for i := 0; i < 8; i++ {
-		e.Handle(ctx, unit.WallHit{Time: float64(i) + 1, NX: -1, NY: 0})
-		_ = drain(out)
+
+	e.Handle(ctx, unit.Sense{Time: 1.9, Self: selfAt(0, 0, 120, 0)})
+	_ = drain(out)
+	if e.gear != 1 {
+		t.Fatalf("before 2s gear=%d", e.gear)
 	}
+
+	e.Handle(ctx, unit.Sense{Time: 2, Self: selfAt(0, 0, 120, 0)})
+	_ = drain(out)
+	if e.gear != 2 {
+		t.Fatalf("t=2 gear=%d", e.gear)
+	}
+
+	e.Handle(ctx, unit.Sense{Time: 4, Self: selfAt(0, 0, 120, 0)})
+	_ = drain(out)
+	e.Handle(ctx, unit.Sense{Time: 6, Self: selfAt(0, 0, 120, 0)})
+	_ = drain(out)
+	e.Handle(ctx, unit.Sense{Time: 8, Self: selfAt(0, 0, 120, 0)})
+	_ = drain(out)
+	if e.gear != 5 {
+		t.Fatalf("t=8 gear=%d want 5", e.gear)
+	}
+
+	e.Handle(ctx, unit.Sense{Time: 11.9, Self: selfAt(0, 0, 120, 0)})
+	_ = drain(out)
+	if e.gear != 5 {
+		t.Fatalf("5档 4秒未满 gear=%d", e.gear)
+	}
+	e.Handle(ctx, unit.Sense{Time: 12, Self: selfAt(0, 0, 120, 0)})
+	_ = drain(out)
 	if e.gear != 6 {
-		t.Fatalf("gear=%d", e.gear)
+		t.Fatalf("t=12 gear=%d want 6", e.gear)
+	}
+}
+
+func TestIncomingDamageDoesNotFillHeat(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	e := booted(out)
+	e.heat = 0.4
+	e.Handle(unit.Context{ID: 1, Kind: KindEngine, Out: out}, unit.IncomingDamage{
+		Token: 1, Amount: 30, Time: 1,
+	})
+	if e.heat != 0.4 || e.gear != 1 || e.frail {
+		t.Fatalf("heat=%v gear=%d frail=%v", e.heat, e.gear, e.frail)
+	}
+	if _, ok := drain(out)[0].(unit.ConfirmDamage); !ok {
+		t.Fatal("should still confirm hp loss")
 	}
 }
 
@@ -101,45 +155,48 @@ func TestGearSixTickDamagesThree(t *testing.T) {
 	}
 }
 
-func TestWeaknessBreakStallsThenBlastsThenResets(t *testing.T) {
+func TestGearSixHeatBreaksThenBlastsThenResets(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	e := booted(out)
 	ctx := unit.Context{ID: 1, Kind: KindEngine, Out: out}
-	e.gear = 3
+	e.gear = 6
 	e.hx, e.hy = 1, 0
-	e.Handle(ctx, unit.IncomingDamage{Token: 1, Amount: 40, Time: 2})
+	e.Handle(ctx, unit.Sense{Time: 6, Self: selfAt(0, 0, 300, 0)})
 	cmds := drain(out)
-	if !e.frail || e.gear != 3 || e.weakness != 0 {
-		t.Fatalf("frail=%v gear=%d weak=%v", e.frail, e.gear, e.weakness)
+	if !e.frail || e.gear != 6 || e.heat != 0 {
+		t.Fatalf("frail=%v gear=%d heat=%v", e.frail, e.gear, e.heat)
 	}
 	if vel := lastVel(cmds); vel == nil || vel.VX != 0 || vel.VY != 0 {
 		t.Fatalf("stall vel=%v", vel)
 	}
 	e.Handle(ctx, unit.Sense{
-		Time:   2.5,
+		Time:   6.5,
 		Self:   selfAt(0, 0, 0, 0),
 		Nearby: []unit.Snapshot{enemyAt(40, 0)},
 	})
 	if lastDamage(drain(out)) != nil {
 		t.Fatal("虚弱 should not 普通攻击")
 	}
+	if e.heat != 0 {
+		t.Fatalf("虚弱 heat=%v", e.heat)
+	}
 	e.Handle(ctx, unit.Sense{
-		Time:   3.0,
+		Time:   7.0,
 		Self:   selfAt(0, 0, 0, 0),
 		Nearby: []unit.Snapshot{enemyAt(40, 0)},
 	})
 	cmds = drain(out)
 	d := lastDamage(cmds)
-	if d == nil || d.Amount != 15 {
+	if d == nil || d.Amount != 30 {
 		t.Fatalf("blast=%v", d)
 	}
 	if lastNamed(cmds, "blast") == nil {
 		t.Fatal("missing blast fx")
 	}
-	e.Handle(ctx, unit.Sense{Time: 4.0, Self: selfAt(0, 0, 0, 0)})
+	e.Handle(ctx, unit.Sense{Time: 8.0, Self: selfAt(0, 0, 0, 0)})
 	cmds = drain(out)
-	if e.frail || e.gear != 1 {
-		t.Fatalf("after frail gear=%d frail=%v", e.gear, e.frail)
+	if e.frail || e.gear != 1 || e.heat != 0 {
+		t.Fatalf("after frail gear=%d frail=%v heat=%v", e.gear, e.frail, e.heat)
 	}
 	if !hasCruise(cmds, 120) || !hasVision(cmds, 96) {
 		t.Fatalf("reset cmds=%v", cmds)
@@ -150,29 +207,15 @@ func TestWeaknessBreakStallsThenBlastsThenResets(t *testing.T) {
 	}
 }
 
-func TestGearUpOverflowBreaks(t *testing.T) {
-	out := make(chan unit.Cmd, 32)
-	e := booted(out)
-	e.gear = 3
-	e.weakness = 40
-	e.hx, e.hy = 1, 0
-	e.Handle(unit.Context{ID: 1, Kind: KindEngine, Out: out}, unit.WallHit{
-		Time: 1, NX: -1, NY: 0,
-	})
-	if e.gear != 4 || !e.frail {
-		t.Fatalf("gear=%d frail=%v", e.gear, e.frail)
-	}
-}
-
-func TestFrailIncomingDoesNotFillWeakness(t *testing.T) {
+func TestFrailIncomingStillConfirms(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	e := booted(out)
 	e.frail = true
 	e.Handle(unit.Context{ID: 1, Kind: KindEngine, Out: out}, unit.IncomingDamage{
 		Token: 9, Amount: 12, Time: 1,
 	})
-	if e.weakness != 0 {
-		t.Fatalf("weakness=%v", e.weakness)
+	if e.heat != 0 {
+		t.Fatalf("heat=%v", e.heat)
 	}
 	if _, ok := drain(out)[0].(unit.ConfirmDamage); !ok {
 		t.Fatal("should still confirm hp loss")
