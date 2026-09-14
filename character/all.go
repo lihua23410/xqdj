@@ -4,6 +4,7 @@ package character
 
 import (
 	"xqdj/character/doppel"
+	"xqdj/character/engine"
 	"xqdj/character/glitch"
 	"xqdj/character/knight"
 	"xqdj/character/melee"
@@ -19,6 +20,7 @@ const (
 	KindClone       = 分身者.KindClone
 	KindCloneArc    = 分身者.KindCloneArc
 	KindDoppel      = 分身者.KindDoppel
+	KindEngine      = 内燃机.KindEngine
 	KindGlitch      = 地慧星.KindGlitch
 	KindGlitchArc   = 地慧星.KindGlitchArc
 	KindGlitchGhost = 地慧星.KindGlitchGhost

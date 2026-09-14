@@ -404,13 +404,14 @@ func (m *Match) Play(maxTicks int) (winner string, ticks int) {
 func (m *Match) decelerateLocked(dt float64) {
 	const step = 0.2
 	const drop = 10.0
+	const rise = drop / 2
 	for _, id := range m.order {
 		u := m.units[id]
 		if u == nil || !u.solid || u.role != unitpkg.RoleFighter {
 			continue
 		}
 		sp := u.v.len()
-		if sp <= u.cruise+1e-6 {
+		if sp < 1e-6 || math.Abs(sp-u.cruise) <= 1e-6 {
 			u.decelT = 0
 			continue
 		}
@@ -418,14 +419,26 @@ func (m *Match) decelerateLocked(dt float64) {
 		for u.decelT >= step-1e-12 {
 			u.decelT -= step
 			sp = u.v.len()
-			if sp <= u.cruise+1e-6 {
+			if sp < 1e-6 {
 				break
 			}
-			ns := sp - drop
-			if ns < u.cruise {
-				ns = u.cruise
+			if sp > u.cruise+1e-6 {
+				ns := sp - drop
+				if ns < u.cruise {
+					ns = u.cruise
+				}
+				u.v = u.v.norm().mul(ns)
+				continue
 			}
-			u.v = u.v.norm().mul(ns)
+			if sp < u.cruise-1e-6 {
+				ns := sp + rise
+				if ns > u.cruise {
+					ns = u.cruise
+				}
+				u.v = u.v.norm().mul(ns)
+				continue
+			}
+			break
 		}
 	}
 }
@@ -565,6 +578,26 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		u.setVel(vec{c.VX, c.VY})
+	case unitpkg.SetCruise:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		if c.Speed < 0 {
+			u.cruise = 0
+		} else {
+			u.cruise = c.Speed
+		}
+	case unitpkg.SetVision:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		if c.Vision < 0 {
+			u.vision = 0
+		} else {
+			u.vision = c.Vision
+		}
 	case unitpkg.SetArcSpan:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped || !u.attach {

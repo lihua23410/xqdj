@@ -22,6 +22,10 @@ func TestLooksComeFromCharacterSpecs(t *testing.T) {
 	if looks[character.KindMelee].VisionRing == false {
 		t.Fatalf("近战 look=%+v", looks[character.KindMelee])
 	}
+	eng, ok := looks[character.KindEngine]
+	if !ok || eng.Color == "" || eng.VisionRing || len(eng.FX) == 0 || eng.FX[0] != "engine" {
+		t.Fatalf("内燃机 look=%+v", eng)
+	}
 	if looks["面具青"].Color != "#3ec8e0" || looks["面具红"].Color != "#ff3b3b" {
 		t.Fatalf("mask looks 青=%+v 红=%+v", looks["面具青"], looks["面具红"])
 	}
@@ -91,6 +95,19 @@ func TestLooksComeFromCharacterSpecs(t *testing.T) {
 	for _, f := range []string{"fx/shot.js", "fx/iai.mp3"} {
 		if !have[f] {
 			t.Fatalf("地慧星 pack missing %s in %v", f, gp.Files)
+		}
+	}
+	ep, ok := unitpkg.Packs()[character.KindEngine]
+	if !ok {
+		t.Fatal("missing engine pack")
+	}
+	have = map[string]bool{}
+	for _, f := range ep.Files {
+		have[f] = true
+	}
+	for _, f := range []string{"fx/engine.css", "fx/engine.js", "fx/shot.js"} {
+		if !have[f] {
+			t.Fatalf("内燃机 pack missing %s in %v", f, ep.Files)
 		}
 	}
 }

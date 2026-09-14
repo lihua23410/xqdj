@@ -52,6 +52,18 @@ type SetVelocity struct {
 	VY     float64
 }
 
+// SetCruise 改自己的巡航。不改当前速度。快于巡航会被拉回；慢于巡航但仍在动会沿当前方向被推上去。
+type SetCruise struct {
+	UnitID uint64
+	Speed  float64
+}
+
+// SetVision 改自己的感知半径。视野为 0 则看不见场上其它单位（自己的随从仍能进感知）。
+type SetVision struct {
+	UnitID uint64
+	Vision float64
+}
+
 // SetArcSpan 改自己这发扇环弹的张角（弧度）。只有 Spec.Attach 的单位吃。
 type SetArcSpan struct {
 	UnitID uint64
