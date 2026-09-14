@@ -126,7 +126,7 @@ func (m *Match) harmLocked(fromID, toID uint64, amount float64) {
 		X: to.p.X, Y: to.p.Y, Slot: to.slot, Amount: amount,
 	})
 	to.hp -= amount
-	m.hitStop = HitStopFrames
+	m.hitStopIfNeeded(from)
 	if to.hp <= 0 {
 		to.hp = 0
 		m.removeLocked(to)

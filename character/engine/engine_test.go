@@ -17,6 +17,9 @@ func TestBootAppliesGearOneStats(t *testing.T) {
 	if !hasCruise(cmds, 120) || !hasVision(cmds, 96) {
 		t.Fatalf("boot cmds=%v", cmds)
 	}
+	if !hasNoFrameFreeze(cmds) {
+		t.Fatalf("boot missing NoFrameFreeze: %v", cmds)
+	}
 	if heat := lastHeat(cmds); heat == nil || heat.Amount != 1 {
 		t.Fatalf("heat=%v", heat)
 	}
@@ -221,6 +224,15 @@ func hasCruise(cmds []unit.Cmd, speed float64) bool {
 func hasVision(cmds []unit.Cmd, vis float64) bool {
 	for _, c := range cmds {
 		if v, ok := c.(unit.SetVision); ok && math.Abs(v.Vision-vis) < 1e-9 {
+			return true
+		}
+	}
+	return false
+}
+
+func hasNoFrameFreeze(cmds []unit.Cmd) bool {
+	for _, c := range cmds {
+		if v, ok := c.(unit.NoFrameFreeze); ok && v.Hold {
 			return true
 		}
 	}

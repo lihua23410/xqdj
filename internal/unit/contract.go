@@ -187,6 +187,12 @@ type Pass struct {
 	Hold   bool
 }
 
+// NoFrameFreeze 令牌。Hold 时该单位（及其随从）造成的伤害不停帧。Hold=false 放下。
+type NoFrameFreeze struct {
+	UnitID uint64
+	Hold   bool
+}
+
 type Context struct {
 	ID   uint64
 	Kind string

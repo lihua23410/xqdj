@@ -97,6 +97,7 @@ func (e *内燃机) onSense(ctx unit.Context, s unit.Sense) {
 	if !e.booted {
 		e.booted = true
 		e.applyStats(ctx)
+		ctx.Out <- unit.NoFrameFreeze{UnitID: ctx.ID, Hold: true}
 		e.emitHeat(ctx)
 	}
 	if e.frail {

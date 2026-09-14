@@ -42,6 +42,7 @@ type unit struct {
 	face           vec
 	passWalls      bool
 	pass           bool
+	noFrameFreeze  bool
 	shell          bool
 	attach         bool
 	arcSpan        float64
@@ -688,6 +689,12 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		u.pass = c.Hold
+	case unitpkg.NoFrameFreeze:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		u.noFrameFreeze = c.Hold
 	}
 }
 
@@ -771,13 +778,34 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 			Icon:   off.markIcon,
 		})
 	}
-	m.hitStop = HitStopFrames
+	m.hitStopIfNeeded(from)
 	if u.hp <= 0 {
 		u.hp = 0
 		m.removeLocked(u)
 	} else {
 		m.swapOwnedLocked(u.id)
 	}
+}
+
+func (m *Match) hitStopIfNeeded(from *unit) {
+	if m.holdsNoFrameFreeze(from) {
+		return
+	}
+	m.hitStop = HitStopFrames
+}
+
+func (m *Match) holdsNoFrameFreeze(u *unit) bool {
+	if u == nil {
+		return false
+	}
+	if u.noFrameFreeze {
+		return true
+	}
+	if u.owner == 0 {
+		return false
+	}
+	o := m.units[u.owner]
+	return o != nil && o.noFrameFreeze
 }
 
 func (m *Match) despawnOwnedLocked(owner uint64, kind string) {
