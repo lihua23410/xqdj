@@ -127,6 +127,25 @@
   100% { transform: scale(1.15); opacity: 0; }
 }
 
+.ball.look-fisher-flood {
+  background: radial-gradient(
+    circle,
+    rgba(70, 170, 230, 0.2) 0%,
+    rgba(35, 110, 190, 0.16) 55%,
+    rgba(18, 64, 130, 0.12) 100%
+  );
+  box-shadow: none;
+  opacity: 1;
+}
+.ball.look-fisher-flood > .pond-ripple {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  border: 2px solid rgba(180, 230, 255, 0.28);
+  pointer-events: none;
+  animation: pond-ripple 3.2s ease-out infinite;
+}
+
 .ball.look-fisher-fish {
   background: transparent !important;
   box-shadow: none !important;
