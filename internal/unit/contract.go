@@ -193,6 +193,12 @@ type NoFrameFreeze struct {
 	Hold   bool
 }
 
+// Stun 令牌。Hold 时引擎不发 Sense（自身攻击停在冷却），IncomingDamage / 撞墙仍到。
+type Stun struct {
+	UnitID uint64
+	Hold   bool
+}
+
 type Context struct {
 	ID   uint64
 	Kind string

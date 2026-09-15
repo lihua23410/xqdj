@@ -22,7 +22,7 @@ const (
 	sickleRadius = 18.0
 	reapRadius   = 36.0
 	sickleDamage = 6.0
-	sickleHitCD  = 0.4
+	sickleHitCD  = 1
 	sickleAccel  = 40.0
 	sickleColor  = "#c43d6e"
 	sickleVision = 9999.0

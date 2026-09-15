@@ -517,6 +517,51 @@ func TestDoppelgangerSpawnsThreeClones(t *testing.T) {
 	}
 }
 
+func TestStunSwapDoesNotStopClone(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindDoppel)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 8; i++ {
+		m.Tick()
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	body := fighterByKind(m, character.KindDoppel)
+	if body == nil {
+		t.Fatal("missing 分身者")
+	}
+	var clones []*unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u != nil && u.role == unitpkg.RoleClone && u.owner == body.id {
+			clones = append(clones, u)
+		}
+	}
+	if len(clones) != 3 {
+		t.Fatalf("clones=%d", len(clones))
+	}
+	for _, c := range clones {
+		if c.v.len() < 1 {
+			t.Fatalf("clone already stopped id=%d v=%+v", c.id, c.v)
+		}
+	}
+	body.stun = true
+	body.setVel(vec{})
+	m.swapOwnedLocked(body.id)
+	stopped := 0
+	for _, c := range clones {
+		if c.v.len() < 1 {
+			stopped++
+		}
+	}
+	if stopped != 0 {
+		t.Fatalf("stunned swap stopped %d clone(s)", stopped)
+	}
+}
+
 func TestTwinSplitsIntoTwoSharingFighter(t *testing.T) {
 	m := NewMatchSeeded(1)
 	m.SetSlot(0, character.KindTwin)

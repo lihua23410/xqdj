@@ -127,6 +127,35 @@ func TestLooksComeFromCharacterSpecs(t *testing.T) {
 			t.Fatalf("雷达 pack missing %s in %v", f, rp.Files)
 		}
 	}
+	pr, ok := looks[character.KindPrisoner]
+	if !ok || pr.Color == "" || len(pr.FX) == 0 || pr.FX[0] != "prisoner" {
+		t.Fatalf("囚徒 look=%+v", pr)
+	}
+	pp, ok := unitpkg.Packs()[character.KindPrisoner]
+	if !ok {
+		t.Fatal("missing prisoner pack")
+	}
+	have = map[string]bool{}
+	for _, f := range pp.Files {
+		have[f] = true
+	}
+	for _, f := range []string{"fx/prisoner.css", "fx/prisoner.js", "fx/shot.js", "fx/gallows.png", "fx/chair.svg"} {
+		if !have[f] {
+			t.Fatalf("囚徒 pack missing %s in %v", f, pp.Files)
+		}
+	}
+	cg, ok := looks[character.KindCage]
+	if !ok || !cg.Overlay || len(cg.FX) == 0 || cg.FX[0] != "cage" {
+		t.Fatalf("囚笼 look=%+v", cg)
+	}
+	gl, ok := looks[character.KindGallows]
+	if !ok || !gl.Overlay || len(gl.FX) == 0 || gl.FX[0] != "gallows" {
+		t.Fatalf("绞刑架 look=%+v", gl)
+	}
+	ch, ok := looks[character.KindChair]
+	if !ok || !ch.Overlay || len(ch.FX) == 0 || ch.FX[0] != "chair" {
+		t.Fatalf("电椅 look=%+v", ch)
+	}
 	rp2, ok := looks[character.KindReaper]
 	if !ok || rp2.Color == "" || len(rp2.FX) == 0 || rp2.FX[0] != "reaper" {
 		t.Fatalf("收割者 look=%+v", rp2)

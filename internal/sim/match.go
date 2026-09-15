@@ -42,6 +42,7 @@ type unit struct {
 	face           vec
 	passWalls      bool
 	pass           bool
+	stun           bool
 	noFrameFreeze  bool
 	shell          bool
 	attach         bool
@@ -695,6 +696,12 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		u.noFrameFreeze = c.Hold
+	case unitpkg.Stun:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		u.stun = c.Hold
 	}
 }
 
@@ -967,7 +974,9 @@ func (m *Match) swapOwnedLocked(bodyID uint64) {
 		unitpkg.FX{Name: "swap", UnitID: other.id, Kind: body.kind, X: other.p.X, Y: other.p.Y, Slot: other.slot},
 	)
 	body.p, other.p = other.p, body.p
-	body.v, other.v = other.v, body.v
+	if !body.stun {
+		body.v, other.v = other.v, body.v
+	}
 }
 
 func (m *Match) removeLocked(u *unit) {
@@ -1321,7 +1330,7 @@ func (m *Match) emitLocked() {
 	}
 	for _, id := range m.order {
 		u := m.units[id]
-		if u == nil || u.stopped {
+		if u == nil || u.stopped || u.stun {
 			continue
 		}
 		sense := unitpkg.Sense{Time: m.time, Self: u.snap()}

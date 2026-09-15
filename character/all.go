@@ -10,6 +10,7 @@ import (
 	"xqdj/character/knight"
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
+	"xqdj/character/prisoner"
 	"xqdj/character/radar"
 	"xqdj/character/ranged"
 	"xqdj/character/reaper"
@@ -42,6 +43,11 @@ const (
 	KindMeleeArc    = 原型机_近战.KindMeleeArc
 	KindMenreiki    = 面灵气.KindMenreiki
 	KindMenreikiArc = 面灵气.KindMenreikiArc
+	KindCage        = 囚徒.KindCage
+	KindChair       = 囚徒.KindChair
+	KindGallows     = 囚徒.KindGallows
+	KindHook        = 囚徒.KindHook
+	KindPrisoner    = 囚徒.KindPrisoner
 	KindRadar       = 雷达.KindRadar
 	KindRanged      = 原型机_远程.KindRanged
 	KindReap        = 收割者.KindReap
