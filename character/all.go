@@ -11,6 +11,7 @@ import (
 	"xqdj/character/menreiki"
 	"xqdj/character/radar"
 	"xqdj/character/ranged"
+	"xqdj/character/reaper"
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
 	"xqdj/character/waller"
@@ -36,12 +37,16 @@ const (
 	KindMenreikiArc = 面灵气.KindMenreikiArc
 	KindRadar       = 雷达.KindRadar
 	KindRanged      = 原型机_远程.KindRanged
+	KindReap        = 收割者.KindReap
+	KindReaper      = 收割者.KindReaper
+	KindSickle      = 收割者.KindSickle
 	KindTwin        = 无下限术士.KindTwin
 	KindTwinArc     = 无下限术士.KindTwinArc
 	KindTwinBlueArc = 无下限术士.KindTwinBlueArc
 	KindAspect      = 优昙华院.KindAspect
 	KindAspectShot  = 优昙华院.KindAspectShot
 	KindCrown       = 优昙华院.KindCrown
+	KindGas         = 优昙华院.KindGas
 	KindLaser       = 优昙华院.KindLaser
 	KindMindShard   = 优昙华院.KindMindShard
 	KindMindShot    = 优昙华院.KindMindShot

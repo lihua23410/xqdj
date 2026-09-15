@@ -1,0 +1,36 @@
+.ball.look-sickle {
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  filter: none;
+}
+.ball.look-sickle > .sickle-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: sickle-spin 0.6s linear infinite;
+}
+.ball.look-sickle > .sickle-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.ball.look-sickle.is-blood svg path:first-of-type {
+  fill: #e01018;
+}
+.ball.look-sickle.is-blood svg path:last-of-type {
+  stroke: #ff3b3b;
+}
+@keyframes sickle-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}

@@ -127,4 +127,25 @@ func TestLooksComeFromCharacterSpecs(t *testing.T) {
 			t.Fatalf("雷达 pack missing %s in %v", f, rp.Files)
 		}
 	}
+	rp2, ok := looks[character.KindReaper]
+	if !ok || rp2.Color == "" || len(rp2.FX) == 0 || rp2.FX[0] != "reaper" {
+		t.Fatalf("收割者 look=%+v", rp2)
+	}
+	sk, ok := looks[character.KindSickle]
+	if !ok || !sk.Overlay || len(sk.FX) == 0 || sk.FX[0] != "sickle" {
+		t.Fatalf("收割者镰刀 look=%+v", sk)
+	}
+	rpk, ok := unitpkg.Packs()[character.KindReaper]
+	if !ok {
+		t.Fatal("missing reaper pack")
+	}
+	have = map[string]bool{}
+	for _, f := range rpk.Files {
+		have[f] = true
+	}
+	for _, f := range []string{"fx/reaper.css", "fx/sickle.css", "fx/sickle.js", "fx/shot.js"} {
+		if !have[f] {
+			t.Fatalf("收割者 pack missing %s in %v", f, rpk.Files)
+		}
+	}
 }

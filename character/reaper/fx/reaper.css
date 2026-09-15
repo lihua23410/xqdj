@@ -1,0 +1,7 @@
+.ball.look-reaper {
+  overflow: visible;
+  border: 3px solid #14080e;
+  background: radial-gradient(circle at 34% 30%, #7a4060 0 28%, #4a2438 55%, #2a121c 100%);
+  box-shadow: none;
+  box-sizing: border-box;
+}
