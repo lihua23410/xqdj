@@ -481,16 +481,35 @@ func TestFishingDamageReduction(t *testing.T) {
 }
 
 func TestUnlockRodOnThirdMiss(t *testing.T) {
-	out := make(chan unit.Cmd, 8)
-	a := &钓鱼佬{booted: true, misses: 2, draw: seq(0)}
+	resetFishQ()
+	out := make(chan unit.Cmd, 64)
+	a := &钓鱼佬{booted: true, misses: 2, draw: seq(0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4)}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
 	pond := pondAt(0, 0)
-	a.Handle(ctx, unit.Sense{Time: 0, Self: selfAt(0, 0), Nearby: []unit.Snapshot{pond}})
+	a.Handle(ctx, unit.Sense{
+		Time: 0, Self: selfAt(0, 0),
+		Nearby: []unit.Snapshot{pond, enemyAt(80, 0)},
+	})
 	_ = drain(out)
-	a.Handle(ctx, unit.Sense{Time: 3, Self: selfAt(0, 0), Nearby: []unit.Snapshot{pond}})
-	_ = drain(out)
+	a.Handle(ctx, unit.Sense{
+		Time: 3, Self: selfAt(0, 0),
+		Nearby: []unit.Snapshot{pond, enemyAt(80, 0)},
+	})
+	cmds := drain(out)
 	if a.misses != 3 || !a.rod {
 		t.Fatalf("misses=%d rod=%v", a.misses, a.rod)
+	}
+	n := 0
+	for _, c := range cmds {
+		if s, ok := c.(unit.Spawn); ok && isFishKind(s.Kind) {
+			n++
+		}
+	}
+	if n != 10 {
+		t.Fatalf("第3次空军应当场10连, spawned %d: %v", n, cmds)
+	}
+	if hasDespawn(cmds, pond.ID) {
+		t.Fatal("10连有鱼时不应作废鱼塘")
 	}
 }
 

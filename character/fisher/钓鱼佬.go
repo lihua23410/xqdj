@@ -221,23 +221,20 @@ func (a *钓鱼佬) startFish(ctx unit.Context, s unit.Sense, pond unit.Snapshot
 func (a *钓鱼佬) finish(ctx unit.Context, s unit.Sense) {
 	a.fishing = false
 	n := 1
-	if a.rod {
+	if a.rod || a.misses >= rodUnlock {
 		n = rodRolls
 	}
 	bonus := catchBonus(a.misses, a.rod)
-	var got []float64
-	for i := 0; i < n; i++ {
-		y := catchWeight(a.roll(), bonus)
-		if y > 0 {
-			got = append(got, y)
-		}
-	}
+	got := a.rolls(n, bonus)
 	enemy := enemyOf(s)
 	if len(got) == 0 {
 		a.misses++
-		if a.misses >= rodUnlock {
+		if a.misses >= rodUnlock && !a.rod {
 			a.rod = true
+			got = a.rolls(rodRolls, missBonus3)
 		}
+	}
+	if len(got) == 0 {
 		if a.pondID != 0 {
 			ctx.Out <- unit.Despawn{UnitID: a.pondID}
 		}
@@ -246,32 +243,47 @@ func (a *钓鱼佬) finish(ctx unit.Context, s unit.Sense) {
 			X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: float64(a.misses),
 		}
 	} else {
-		best := 0.0
-		var live []float64
-		for _, y := range got {
-			if y > best {
-				best = y
-			}
-			if y >= ramNeed {
-				a.held = append(a.held, y)
-				continue
-			}
-			live = append(live, y)
-		}
-		for i, y := range live {
-			a.toss(ctx, s, enemy, y, i, len(live), false)
-		}
-		if len(a.held) > 0 && !a.ram {
-			a.beginRam(ctx, s, best)
-		}
-		ctx.Out <- unit.FX{
-			Name: "reel", Kind: ctx.Kind, UnitID: ctx.ID,
-			X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: best,
-		}
+		a.reel(ctx, s, enemy, got)
 	}
 	a.pondID = 0
 	if !a.ram {
 		a.setWalk(ctx, a.holdVX, a.holdVY)
+	}
+}
+
+func (a *钓鱼佬) rolls(n int, bonus float64) []float64 {
+	var got []float64
+	for i := 0; i < n; i++ {
+		y := catchWeight(a.roll(), bonus)
+		if y > 0 {
+			got = append(got, y)
+		}
+	}
+	return got
+}
+
+func (a *钓鱼佬) reel(ctx unit.Context, s unit.Sense, enemy *unit.Snapshot, got []float64) {
+	best := 0.0
+	var live []float64
+	for _, y := range got {
+		if y > best {
+			best = y
+		}
+		if y >= ramNeed {
+			a.held = append(a.held, y)
+			continue
+		}
+		live = append(live, y)
+	}
+	for i, y := range live {
+		a.toss(ctx, s, enemy, y, i, len(live), false)
+	}
+	if len(a.held) > 0 && !a.ram {
+		a.beginRam(ctx, s, best)
+	}
+	ctx.Out <- unit.FX{
+		Name: "reel", Kind: ctx.Kind, UnitID: ctx.ID,
+		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: best,
 	}
 }
 
