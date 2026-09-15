@@ -11,6 +11,7 @@ import (
 	"xqdj/character/menreiki"
 	"xqdj/character/ranged"
 	"xqdj/character/twin"
+	"xqdj/character/udongein"
 	"xqdj/character/waller"
 	"xqdj/character/warden"
 	"xqdj/character/wolf"
@@ -36,6 +37,13 @@ const (
 	KindTwin        = 无下限术士.KindTwin
 	KindTwinArc     = 无下限术士.KindTwinArc
 	KindTwinBlueArc = 无下限术士.KindTwinBlueArc
+	KindAspect      = 优昙华院.KindAspect
+	KindAspectShot  = 优昙华院.KindAspectShot
+	KindCrown       = 优昙华院.KindCrown
+	KindLaser       = 优昙华院.KindLaser
+	KindMindShard   = 优昙华院.KindMindShard
+	KindMindShot    = 优昙华院.KindMindShot
+	KindUdongein    = 优昙华院.KindUdongein
 	KindWaller      = 筑墙者.KindWaller
 	KindWarden      = 盾士.KindWarden
 	KindMoon        = 狼人.KindMoon
