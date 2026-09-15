@@ -9,6 +9,7 @@ import (
 	"xqdj/character/knight"
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
+	"xqdj/character/radar"
 	"xqdj/character/ranged"
 	"xqdj/character/twin"
 	"xqdj/character/waller"
@@ -32,6 +33,7 @@ const (
 	KindMeleeArc    = 原型机_近战.KindMeleeArc
 	KindMenreiki    = 面灵气.KindMenreiki
 	KindMenreikiArc = 面灵气.KindMenreikiArc
+	KindRadar       = 雷达.KindRadar
 	KindRanged      = 原型机_远程.KindRanged
 	KindTwin        = 无下限术士.KindTwin
 	KindTwinArc     = 无下限术士.KindTwinArc

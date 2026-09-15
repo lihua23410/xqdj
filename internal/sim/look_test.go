@@ -110,4 +110,21 @@ func TestLooksComeFromCharacterSpecs(t *testing.T) {
 			t.Fatalf("内燃机 pack missing %s in %v", f, ep.Files)
 		}
 	}
+	rd, ok := looks[character.KindRadar]
+	if !ok || rd.Color == "" || len(rd.FX) == 0 || rd.FX[0] != "radar" {
+		t.Fatalf("雷达 look=%+v", rd)
+	}
+	rp, ok := unitpkg.Packs()[character.KindRadar]
+	if !ok {
+		t.Fatal("missing radar pack")
+	}
+	have = map[string]bool{}
+	for _, f := range rp.Files {
+		have[f] = true
+	}
+	for _, f := range []string{"fx/radar.css", "fx/radar.js", "fx/shot.js"} {
+		if !have[f] {
+			t.Fatalf("雷达 pack missing %s in %v", f, rp.Files)
+		}
+	}
 }
