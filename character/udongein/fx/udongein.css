@@ -1,4 +1,5 @@
 .ball.look-udongein {
+  overflow: visible;
   background: radial-gradient(circle at 38% 32%, #f4d6ef 0%, #d5a4d2 42%, #b57aad 100%);
   box-shadow: 0 0 16px #d5a4d2, 0 0 36px color-mix(in srgb, #d5a4d2 55%, transparent);
 }
@@ -14,6 +15,42 @@
   -webkit-mask: radial-gradient(circle, transparent 64%, #000 66%, #000 78%, transparent 80%);
   mask: radial-gradient(circle, transparent 64%, #000 66%, #000 78%, transparent 80%);
   pointer-events: none;
+}
+.ball.look-udongein[data-udongein-drained="1"]::after {
+  filter: saturate(0.65) brightness(0.85);
+}
+.udongein-cards {
+  position: absolute;
+  left: 50%;
+  top: -10px;
+  display: flex;
+  gap: 3px;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  z-index: 6;
+}
+.udongein-card {
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 106, 184, 0.55);
+  background: linear-gradient(to top, #ff6ab8 var(--p, 0%), #3a2438 var(--p, 0%));
+  box-shadow: 0 0 6px rgba(213, 164, 210, 0.35);
+  opacity: 0.45;
+}
+.udongein-card.is-on,
+.udongein-card.is-fill {
+  opacity: 1;
+}
+.udongein-card.is-on[data-sk="7"] {
+  border-color: #7dff9a;
+  background: #3dcc6a;
+  box-shadow: 0 0 8px #7dff9a;
+}
+.udongein-card.is-on[data-sk="6"] {
+  border-color: #ffd28a;
+  background: #ff6ab8;
+  box-shadow: 0 0 8px #ff6ab8;
 }
 .ball.look-udongein[data-udongein-dose="1"],
 .ball.look-udongein[data-udongein-dose="2"] {
@@ -59,6 +96,21 @@
     0 0 calc(48px * var(--udongein-shard-fade, 1)) #e23d4a;
 }
 
+.ball.look-udongein-seek {
+  background: radial-gradient(circle at 34% 30%, #fff 0 12%, #ffb0c4 30%, #e23d4a 72%, #7a1828 100%);
+  box-shadow: 0 0 12px #ff6ab8, 0 0 24px #e23d4a;
+}
+.ball.look-udongein-blast {
+  background: radial-gradient(
+    circle,
+    rgba(255, 246, 220, 0.5) 0%,
+    rgba(255, 106, 184, 0.32) 38%,
+    rgba(226, 61, 74, 0.18) 62%,
+    transparent 78%
+  );
+  box-shadow: 0 0 32px rgba(255, 90, 31, 0.45), inset 0 0 28px rgba(255, 210, 138, 0.25);
+  opacity: 0.88;
+}
 .ball.look-udongein-crown {
   background: radial-gradient(circle, #fff 0%, #ff6ab8 45%, #e23d4a 78%, transparent 100%);
   box-shadow: 0 0 22px #ff6ab8, 0 0 40px #e23d4a;
@@ -95,6 +147,22 @@
   background: linear-gradient(90deg, #fff 0%, #ff6ab8 18%, #d5a4d2 70%, transparent 100%);
   box-shadow: 0 0 12px #ff6ab8, 0 0 24px #e23d4a;
   pointer-events: none;
+}
+.fx-udongein-warn {
+  height: 6px;
+  width: var(--len, 560px);
+  transform-origin: 0 50%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 106, 184, 0.85) 0%, rgba(226, 61, 74, 0.35) 55%, transparent 100%);
+  box-shadow: 0 0 10px #ff6ab8;
+  animation: udongein-warn var(--t, 0.4s) ease-in-out forwards;
+  pointer-events: none;
+}
+@keyframes udongein-warn {
+  0% { opacity: 0.25; }
+  35% { opacity: 1; }
+  70% { opacity: 0.45; }
+  100% { opacity: 0; }
 }
 
 .fx-udongein-ring {
@@ -158,4 +226,50 @@
     transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)));
     opacity: 0;
   }
+}
+.fx-udongein-blast-core {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, #ffe08a 28%, #ff6ab8 62%, transparent 100%);
+  box-shadow: 0 0 28px #fff, 0 0 64px #e23d4a;
+  animation: udongein-blast-core 0.55s ease-out forwards;
+}
+@keyframes udongein-blast-core {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+  40% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+}
+.fx-udongein-blast-wave {
+  width: var(--r, 200px);
+  height: var(--r, 200px);
+  border-radius: 50%;
+  border: 4px solid #ffd28a;
+  box-shadow:
+    0 0 28px #ff6ab8,
+    inset 0 0 36px color-mix(in srgb, #e23d4a 80%, transparent);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, #ff6ab8 45%, transparent) 0%,
+    color-mix(in srgb, #e23d4a 18%, transparent) 55%,
+    transparent 72%
+  );
+  animation: udongein-blast-wave 0.85s cubic-bezier(0.12, 0.72, 0.2, 1) var(--delay, 0s) both;
+}
+@keyframes udongein-blast-wave {
+  0% { transform: translate(-50%, -50%) scale(0.12); opacity: 1; }
+  55% { opacity: 0.85; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+.fx-udongein-blast-ring {
+  width: var(--r, 200px);
+  height: var(--r, 200px);
+  border-radius: 50%;
+  border: 2px dashed #ff8aa0;
+  box-shadow: 0 0 22px #ff6ab8;
+  animation: udongein-blast-ring 1s ease-out 0.05s both;
+}
+@keyframes udongein-blast-ring {
+  0% { transform: translate(-50%, -50%) scale(0.2) rotate(0deg); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) scale(1.08) rotate(24deg); opacity: 0; }
 }

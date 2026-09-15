@@ -63,7 +63,8 @@ func (b *心弹) onHit(ctx unit.Context, other unit.Snapshot) {
 	if other.Role != unit.RoleFighter {
 		return
 	}
-	ctx.Out <- unit.Damage{From: ctx.ID, To: other.ID, Amount: scaled(b.owner, mindDamage)}
+	ctx.Out <- unit.Damage{From: ctx.ID, To: other.ID, Amount: scaledSkill(b.owner, SkillMind, mindDamage)}
+	noteDealt(b.owner)
 	b.die(ctx)
 }
 
@@ -150,7 +151,8 @@ func (b *碎弹) Handle(ctx unit.Context, ev unit.Event) {
 		if e.Other.Role != unit.RoleFighter {
 			return
 		}
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: scaled(b.owner, shardDamage)}
+		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: scaledSkill(b.owner, SkillMind, shardDamage)}
+		noteDealt(b.owner)
 		b.dead = true
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	case unit.WallHit:
@@ -164,7 +166,7 @@ type 幻弹 struct{ owner uint64 }
 func (b *幻弹) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.Collision:
-		if hitFighter(ctx, e.Other, b.owner, aspectDamage) {
+		if hitFighter(ctx, e.Other, b.owner, SkillAspect, aspectDamage) {
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		}
 	case unit.WallHit:
@@ -198,13 +200,13 @@ func (b *花冠) Handle(ctx unit.Context, ev unit.Event) {
 			if math.Hypot(o.X-e.Self.X, o.Y-e.Self.Y) > r+o.Radius {
 				continue
 			}
-			ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: scaled(b.owner, crownDamage)}
+			deal(ctx, b.owner, o.ID, SkillCrown, crownDamage)
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			b.dead = true
 			return
 		}
 	case unit.Collision:
-		if hitFighter(ctx, e.Other, b.owner, crownDamage) {
+		if hitFighter(ctx, e.Other, b.owner, SkillCrown, crownDamage) {
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			b.dead = true
 		}
@@ -266,7 +268,7 @@ func (g *瓦斯) tick(ctx unit.Context, s unit.Sense) {
 		seen[o.ID] = true
 		g.slow(ctx, *o)
 		if dmgNow {
-			ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: scaled(g.owner, gasDamage)}
+			deal(ctx, g.owner, o.ID, SkillGas, gasDamage)
 		}
 	}
 	if dmgNow {
@@ -328,6 +330,63 @@ func (l *激光) Handle(ctx unit.Context, ev unit.Event) {
 	}
 }
 
+type 索敌弹 struct{ owner uint64 }
+
+func (b *索敌弹) Handle(ctx unit.Context, ev unit.Event) {
+	switch e := ev.(type) {
+	case unit.Collision:
+		if hitFighter(ctx, e.Other, b.owner, SkillVolley, volleyDamage) {
+			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+		}
+	case unit.WallHit:
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+	}
+}
+
+type 爆药 struct {
+	owner  uint64
+	slot   int
+	born   float64
+	booted bool
+	dead   bool
+	hit    map[uint64]bool
+}
+
+func (b *爆药) Handle(ctx unit.Context, ev unit.Event) {
+	if b.dead {
+		return
+	}
+	s, ok := ev.(unit.Sense)
+	if !ok {
+		return
+	}
+	if !b.booted {
+		b.born = s.Time
+		b.booted = true
+		b.hit = map[uint64]bool{}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+	}
+	if s.Time+1e-9 >= b.born+blastLife {
+		b.dead = true
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+		return
+	}
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Role != unit.RoleFighter || o.Slot == b.slot || o.ID == b.owner {
+			continue
+		}
+		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) > blastRadius+o.Radius {
+			continue
+		}
+		if b.hit[o.ID] {
+			continue
+		}
+		b.hit[o.ID] = true
+		deal(ctx, b.owner, o.ID, SkillDose, blastDamage)
+	}
+}
+
 func clearShots(ctx unit.Context, s unit.Sense, owner uint64) {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
@@ -344,7 +403,7 @@ func clearShots(ctx unit.Context, s unit.Sense, owner uint64) {
 	}
 }
 
-func hitFighter(ctx unit.Context, other unit.Snapshot, owner uint64, base float64) bool {
+func hitFighter(ctx unit.Context, other unit.Snapshot, owner uint64, sk uint8, base float64) bool {
 	if other.ID == owner {
 		return false
 	}
@@ -352,6 +411,6 @@ func hitFighter(ctx unit.Context, other unit.Snapshot, owner uint64, base float6
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		return true
 	}
-	ctx.Out <- unit.Damage{From: ctx.ID, To: other.ID, Amount: scaled(owner, base)}
+	deal(ctx, owner, other.ID, sk, base)
 	return true
 }

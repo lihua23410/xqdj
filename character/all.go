@@ -51,11 +51,13 @@ const (
 	KindTwinBlueArc = 无下限术士.KindTwinBlueArc
 	KindAspect      = 优昙华院.KindAspect
 	KindAspectShot  = 优昙华院.KindAspectShot
+	KindBlast       = 优昙华院.KindBlast
 	KindCrown       = 优昙华院.KindCrown
 	KindGas         = 优昙华院.KindGas
 	KindLaser       = 优昙华院.KindLaser
 	KindMindShard   = 优昙华院.KindMindShard
 	KindMindShot    = 优昙华院.KindMindShot
+	KindSeekShot    = 优昙华院.KindSeekShot
 	KindUdongein    = 优昙华院.KindUdongein
 	KindWaller      = 筑墙者.KindWaller
 	KindWarden      = 盾士.KindWarden

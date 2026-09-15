@@ -6,7 +6,7 @@ import (
 	"xqdj/internal/unit"
 )
 
-func TestPublicAndSkillCooldown(t *testing.T) {
+func TestAnimLockBlocksNextSkill(t *testing.T) {
 	a := fighter(SkillMind)
 	out := make(chan unit.Cmd, 64)
 	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
@@ -21,79 +21,73 @@ func TestPublicAndSkillCooldown(t *testing.T) {
 		t.Fatalf("energy after mind=%v", a.energy)
 	}
 
-	a.locked = true
 	a.force = SkillLaser
-	a.Handle(ctx, unit.Sense{Time: 1.4, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	a.Handle(ctx, unit.Sense{Time: 0.2, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	cmds = drain(out)
-	if hasSpawn(cmds, KindLaser) {
-		t.Fatalf("public cd 1.5s should block laser at 1.4s")
+	if hasSpawn(cmds, KindLaser) || hasFX(cmds, "laser-warn") {
+		t.Fatalf("mind fire window should block laser at 0.2s")
 	}
 
-	a.Handle(ctx, unit.Sense{Time: 1.5, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	a.Handle(ctx, unit.Sense{Time: mindFire, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	cmds = drain(out)
-	if !hasSpawn(cmds, KindLaser) {
-		t.Fatalf("t=1.5 should allow other skill after public cd: %v", cmds)
+	if hasSpawn(cmds, KindLaser) || hasFX(cmds, "laser-warn") {
+		t.Fatalf("mind recovery should still block laser at t=%v", mindFire)
+	}
+
+	done := skillAnim(SkillMind)
+	a.Handle(ctx, unit.Sense{Time: done, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	cmds = drain(out)
+	if !hasFX(cmds, "laser-warn") {
+		t.Fatalf("t=%v should allow laser after mind recovery: %v", done, cmds)
 	}
 }
 
-func TestSkillCooldownTwoSeconds(t *testing.T) {
-	a := fighter(SkillMind)
-	out := make(chan unit.Cmd, 64)
-	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
-	enemy := foe(80, 0)
-
-	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
-	if !hasSpawn(drain(out), KindMindShot) {
-		t.Fatal("t=0 mind")
-	}
-
-	a.Handle(ctx, unit.Sense{Time: 1.5, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
-	if hasSpawn(drain(out), KindMindShot) {
-		t.Fatal("skill cd 2s should block mind at t=1.5 even though public cd is up")
-	}
-
-	a.Handle(ctx, unit.Sense{Time: 2.0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
-	if !hasSpawn(drain(out), KindMindShot) {
-		t.Fatal("t=2 should free mind")
-	}
-}
-
-func TestSpellEnergyCostAndRegen(t *testing.T) {
+func TestEnergyDoesNotRegen(t *testing.T) {
 	a := fighter(SkillCrown)
-	a.energy = 0.9
+	a.energy = 1
 	out := make(chan unit.Cmd, 32)
 	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
 	enemy := foe(120, 0)
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
-	if hasSpawn(drain(out), KindCrown) {
-		t.Fatal("crown needs 1 energy")
-	}
-	a.energy = 1
-	a.Handle(ctx, unit.Sense{Time: 0.05, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	if !hasSpawn(drain(out), KindCrown) {
 		t.Fatal("crown at 1 energy")
 	}
 	if a.energy > 0.05 {
 		t.Fatalf("crown should spend 1, energy=%v", a.energy)
 	}
-
 	a.locked = true
 	a.force = SkillSteer
-	a.Handle(ctx, unit.Sense{Time: 1.05, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	a.Handle(ctx, unit.Sense{Time: 2, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	_ = drain(out)
-	want := energyRegen
-	if a.energy < want-1e-6 || a.energy > want+0.05 {
-		t.Fatalf("regen %v/s, energy=%v", energyRegen, a.energy)
+	if a.energy > 0.05 {
+		t.Fatalf("energy should not regen, energy=%v", a.energy)
 	}
 }
 
+func TestWallRefillsEnergy(t *testing.T) {
+	a := fighter(SkillSteer)
+	a.energy = 1.2
+	out := make(chan unit.Cmd, 16)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	a.Handle(ctx, unit.WallHit{Time: 1, NX: 1, NY: 0})
+	if math.Abs(a.energy-(1.2+energyWall)) > 1e-6 {
+		t.Fatalf("wall should restore %v, energy=%v", energyWall, a.energy)
+	}
+	a.energy = energyMax - 0.1
+	a.Handle(ctx, unit.WallHit{Time: 2, NX: 1, NY: 0})
+	if a.energy != energyMax {
+		t.Fatalf("wall should clamp to cap, energy=%v", a.energy)
+	}
+	_ = drain(out)
+}
+
 func TestNoEnergyNoCast(t *testing.T) {
-	a := &优昙华院{energy: 0.05}
+	a := &优昙华院{energy: 0.05, energyCap: energyMax, deck: []uint8{}}
 	out := make(chan unit.Cmd, 32)
 	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
 	cmds := drain(out)
-	if hasSpawn(cmds, KindMindShot) || hasSpawn(cmds, KindLaser) || hasSpawn(cmds, KindCrown) {
+	if hasSpawn(cmds, KindMindShot) || hasSpawn(cmds, KindLaser) || hasSpawn(cmds, KindCrown) || hasSpawn(cmds, KindSeekShot) {
 		t.Fatalf("no energy must not cast: %v", cmds)
 	}
 	if a.energy > 0.05+1e-6 {
@@ -102,7 +96,7 @@ func TestNoEnergyNoCast(t *testing.T) {
 }
 
 func TestRandomCastSpendsEnergy(t *testing.T) {
-	a := &优昙华院{energy: energyMax}
+	a := &优昙华院{energy: energyMax, energyCap: energyMax}
 	out := make(chan unit.Cmd, 32)
 	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
@@ -114,7 +108,7 @@ func TestRandomCastSpendsEnergy(t *testing.T) {
 func TestRandomOpeningVaries(t *testing.T) {
 	seen := map[string]int{}
 	for i := 0; i < 50; i++ {
-		a := &优昙华院{energy: energyMax}
+		a := &优昙华院{energy: energyMax, energyCap: energyMax}
 		out := make(chan unit.Cmd, 32)
 		ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
 		a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
@@ -123,14 +117,6 @@ func TestRandomOpeningVaries(t *testing.T) {
 			switch x := c.(type) {
 			case unit.Spawn:
 				tag = x.Kind
-			case unit.FX:
-				if x.Name == "dose" {
-					tag = "dose"
-				}
-			case unit.Damage:
-				if tag == "none" {
-					tag = "break"
-				}
 			}
 		}
 		seen[tag]++
@@ -164,7 +150,7 @@ func TestMindSplitsOnWall(t *testing.T) {
 	}
 }
 
-func TestDoseFourKillsSelf(t *testing.T) {
+func TestDoseFourBlastsAndResets(t *testing.T) {
 	a := fighter(SkillDose)
 	out := make(chan unit.Cmd, 32)
 	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
@@ -172,21 +158,57 @@ func TestDoseFourKillsSelf(t *testing.T) {
 	t0 := 0.0
 	for i := 0; i < 4; i++ {
 		a.energy = energyMax
-		a.gcdUntil = 0
-		a.skillCD[SkillDose] = 0
+		a.animUntil = 0
 		a.Handle(ctx, unit.Sense{Time: t0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 		cmds := drain(out)
-		suicided := hasDamageTo(cmds, 1, doseSuicide)
-		if i < 3 && suicided {
-			t.Fatalf("suicide at dose %d", i+1)
+		blasted := hasSpawn(cmds, KindBlast) || hasFX(cmds, "blast")
+		if i < 3 && blasted {
+			t.Fatalf("blast at dose %d", i+1)
 		}
-		if i == 3 && !suicided {
-			t.Fatalf("4th dose should suicide: %v", cmds)
+		if i < 3 && hasDamageTo(cmds, 1, 1) {
+			t.Fatalf("should not hurt self at dose %d: %v", i+1, cmds)
+		}
+		if i == 3 && !blasted {
+			t.Fatalf("4th dose should blast: %v", cmds)
+		}
+		if i == 3 && hasDamageTo(cmds, 1, 1) {
+			t.Fatalf("blast must not hurt self: %v", cmds)
 		}
 		t0 += 3
 	}
-	if a.doses != 4 {
-		t.Fatalf("doses=%d", a.doses)
+	if a.doses != 0 {
+		t.Fatalf("doses should reset after blast, doses=%d", a.doses)
+	}
+}
+
+func TestLaserWindupGivesDodgeWindow(t *testing.T) {
+	a := fighter(SkillLaser)
+	out := make(chan unit.Cmd, 32)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	enemy := foe(90, 0)
+	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	cmds := drain(out)
+	if hasSpawn(cmds, KindLaser) {
+		t.Fatalf("windup should not spawn beam yet: %v", cmds)
+	}
+	if !hasFX(cmds, "laser-warn") {
+		t.Fatalf("windup should telegraph: %v", cmds)
+	}
+	if hasDamageTo(cmds, 2, 0) {
+		t.Fatalf("windup must not damage: %v", cmds)
+	}
+	a.Handle(ctx, unit.Sense{Time: laserWind - 0.05, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	cmds = drain(out)
+	if hasSpawn(cmds, KindLaser) || hasDamageTo(cmds, 2, 0) {
+		t.Fatalf("still in windup: %v", cmds)
+	}
+	a.Handle(ctx, unit.Sense{Time: laserWind, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	cmds = drain(out)
+	if !hasSpawn(cmds, KindLaser) {
+		t.Fatalf("beam should fire after windup: %v", cmds)
+	}
+	if !hasDamageTo(cmds, 2, laserDamage) {
+		t.Fatalf("first tick after windup should damage: %v", cmds)
 	}
 }
 
@@ -225,13 +247,13 @@ func TestLaserRestoresVelocityAfterEnd(t *testing.T) {
 	a.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{enemy}})
 	_ = drain(out)
 	self.VX, self.VY = 0, 0
-	a.Handle(ctx, unit.Sense{Time: 0.5, Self: self, Nearby: []unit.Snapshot{enemy}})
+	a.Handle(ctx, unit.Sense{Time: 0.25, Self: self, Nearby: []unit.Snapshot{enemy}})
 	if hasVelocity(drain(out), 1, 40, 80) {
 		t.Fatal("must stay locked during laser")
 	}
 	a.locked = true
 	a.force = SkillSteer
-	a.Handle(ctx, unit.Sense{Time: 1.0, Self: self, Nearby: []unit.Snapshot{enemy}})
+	a.Handle(ctx, unit.Sense{Time: laserWind + laserLife, Self: self, Nearby: []unit.Snapshot{enemy}})
 	cmds := drain(out)
 	if a.laserUntil != 0 {
 		t.Fatal("laser should end")
@@ -337,18 +359,14 @@ func TestMindClearsProjectileOnPath(t *testing.T) {
 	}
 }
 
-func TestNoZeroFrameCast(t *testing.T) {
-	a := &优昙华院{energy: energyMax, locked: true, force: SkillMind, gcdUntil: publicCD}
+func TestCanCastAtZero(t *testing.T) {
+	a := fighter(SkillMind)
 	out := make(chan unit.Cmd, 32)
 	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
 	enemy := foe(80, 0)
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
-	if hasSpawn(drain(out), KindMindShot) {
-		t.Fatal("opening public cd must block t=0")
-	}
-	a.Handle(ctx, unit.Sense{Time: publicCD, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	if !hasSpawn(drain(out), KindMindShot) {
-		t.Fatal("should fire after opening public cd")
+		t.Fatal("should fire at t=0")
 	}
 }
 
@@ -508,7 +526,13 @@ func TestAspectOnlyCloneShoots(t *testing.T) {
 }
 
 func fighter(skill uint8) *优昙华院 {
-	return &优昙华院{energy: energyMax, locked: true, force: skill}
+	return &优昙华院{
+		energy:    energyMax,
+		energyCap: energyMax,
+		locked:    true,
+		force:     skill,
+		deck:      []uint8{},
+	}
 }
 
 func me(x, y float64) unit.Snapshot {
@@ -613,6 +637,308 @@ func hasCruise(cmds []unit.Cmd, id uint64, speed float64) bool {
 			continue
 		}
 		if math.Abs(v.Speed-speed) < 1e-6 {
+			return true
+		}
+	}
+	return false
+}
+
+func hasFX(cmds []unit.Cmd, name string) bool {
+	for _, c := range cmds {
+		if fx, ok := c.(unit.FX); ok && fx.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func TestVolleyFiresThreeSeekers(t *testing.T) {
+	a := fighter(SkillVolley)
+	out := make(chan unit.Cmd, 32)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	enemy := foe(80, 0)
+	n := 0
+	for i := 0; i < volleyCount; i++ {
+		a.Handle(ctx, unit.Sense{Time: float64(i) * volleyGap, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+		cmds := drain(out)
+		got := 0
+		for _, c := range cmds {
+			if s, ok := c.(unit.Spawn); ok && s.Kind == KindSeekShot {
+				got++
+			}
+		}
+		if got != 1 {
+			t.Fatalf("shot %d count=%d cmds=%v", i+1, got, cmds)
+		}
+		n += got
+	}
+	if n != volleyCount {
+		t.Fatalf("volley shots=%d want %d", n, volleyCount)
+	}
+	if a.energy != energyMax-energyCost {
+		t.Fatalf("volley should spend 1, energy=%v", a.energy)
+	}
+}
+
+func TestVolleyAnimLastsUntilLastShot(t *testing.T) {
+	a := fighter(SkillVolley)
+	out := make(chan unit.Cmd, 32)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	enemy := foe(80, 0)
+	for i := 0; i < volleyCount; i++ {
+		a.Handle(ctx, unit.Sense{Time: float64(i) * volleyGap, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+		_ = drain(out)
+	}
+	a.force = SkillLaser
+	last := float64(volleyCount-1) * volleyGap
+	a.Handle(ctx, unit.Sense{Time: last, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	cmds := drain(out)
+	if hasSpawn(cmds, KindLaser) || hasFX(cmds, "laser-warn") {
+		t.Fatalf("last volley shot still in fire window, should not laser: %v", cmds)
+	}
+	a.Handle(ctx, unit.Sense{Time: last + volleyGap, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	cmds = drain(out)
+	if hasSpawn(cmds, KindLaser) || hasFX(cmds, "laser-warn") {
+		t.Fatalf("volley recovery should still block laser: %v", cmds)
+	}
+	done := skillAnim(SkillVolley)
+	a.Handle(ctx, unit.Sense{Time: done, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	cmds = drain(out)
+	if !hasFX(cmds, "laser-warn") {
+		t.Fatalf("after volley recovery should laser: %v", cmds)
+	}
+}
+
+func TestVolleyLocksAimAtCastNotTrack(t *testing.T) {
+	a := fighter(SkillVolley)
+	out := make(chan unit.Cmd, 32)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
+	cmds := drain(out)
+	var firstVX, firstVY float64
+	got := false
+	for _, c := range cmds {
+		s, ok := c.(unit.Spawn)
+		if !ok || s.Kind != KindSeekShot {
+			continue
+		}
+		got = true
+		firstVX, firstVY = s.VX, s.VY
+	}
+	if !got {
+		t.Fatalf("missing first shot: %v", cmds)
+	}
+	moved := foe(80, 80)
+	a.Handle(ctx, unit.Sense{Time: volleyGap, Self: me(0, 0), Nearby: []unit.Snapshot{moved}})
+	cmds = drain(out)
+	for _, c := range cmds {
+		s, ok := c.(unit.Spawn)
+		if !ok || s.Kind != KindSeekShot {
+			continue
+		}
+		dot := firstVX*s.VX + firstVY*s.VY
+		if dot < 0 {
+			t.Fatalf("later shot tracked the moved enemy, first=(%v,%v) next=(%v,%v)", firstVX, firstVY, s.VX, s.VY)
+		}
+		base := math.Atan2(firstVY, firstVX)
+		gotAng := math.Atan2(s.VY, s.VX)
+		if math.Abs(gotAng-base) > volleySpread+1e-3 {
+			t.Fatalf("aim must stay locked at cast, first=%v next=%v", base, gotAng)
+		}
+	}
+	b := &索敌弹{owner: 1}
+	self := unit.Snapshot{
+		ID: 9, Kind: KindSeekShot, Role: unit.RoleProjectile,
+		X: 0, Y: 0, VX: volleySpeed, Radius: volleyRadius, Slot: 0,
+	}
+	b.Handle(unit.Context{ID: 9, Kind: KindSeekShot, Out: out}, unit.Sense{
+		Time: 0, Self: self, Nearby: []unit.Snapshot{foe(40, 30)},
+	})
+	if hasSelfVelocity(drain(out), 9) {
+		t.Fatal("in-flight shot must not track")
+	}
+}
+
+func TestFrontHitSpendsEnergyAndGuards(t *testing.T) {
+	a := fighter(SkillSteer)
+	out := make(chan unit.Cmd, 16)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	self := me(0, 0)
+	self.VX, self.VY = 152, 0
+	enemy := foe(80, 0)
+	a.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{enemy}})
+	_ = drain(out)
+	a.Handle(ctx, unit.IncomingDamage{Token: 3, From: 2, Amount: 10, Time: 0.1})
+	cmds := drain(out)
+	if math.Abs(a.energy-(energyMax-10/frontCostDiv)) > 1e-6 {
+		t.Fatalf("front hit should spend initial 10/%v energy, energy=%v", frontCostDiv, a.energy)
+	}
+	if !hasConfirm(cmds, 3, 10*frontDR) {
+		t.Fatalf("front hit should keep %v of 10: %v", 10*frontDR, cmds)
+	}
+}
+
+func TestGuardFailDumpsEnergyAndBreaks(t *testing.T) {
+	a := fighter(SkillSteer)
+	a.energy = 1
+	out := make(chan unit.Cmd, 16)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	self := me(0, 0)
+	self.VX, self.VY = 152, 0
+	a.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{foe(80, 0)}})
+	_ = drain(out)
+	a.Handle(ctx, unit.IncomingDamage{Token: 8, From: 2, Amount: 10, Time: 0.1})
+	cmds := drain(out)
+	if a.energy != 0 {
+		t.Fatalf("unpaid guard should dump energy, energy=%v", a.energy)
+	}
+	if !a.drained || a.energyCap != energyMax-1 {
+		t.Fatalf("should enter break, drained=%v cap=%v", a.drained, a.energyCap)
+	}
+	if !hasConfirm(cmds, 8, 10*emptyHurt) {
+		t.Fatalf("unpaid guard should take 150%% of raw 10: %v", cmds)
+	}
+}
+
+func TestRearHitDoesNotGuard(t *testing.T) {
+	a := fighter(SkillSteer)
+	out := make(chan unit.Cmd, 16)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	self := me(0, 0)
+	self.VX, self.VY = 152, 0
+	enemy := foe(-80, 0)
+	a.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{enemy}})
+	_ = drain(out)
+	a.Handle(ctx, unit.IncomingDamage{Token: 4, From: 2, Amount: 10, Time: 0.1})
+	cmds := drain(out)
+	if a.energy != energyMax {
+		t.Fatalf("rear hit should not spend energy, energy=%v", a.energy)
+	}
+	if !hasConfirm(cmds, 4, 10) {
+		t.Fatalf("rear hit should take full 10: %v", cmds)
+	}
+}
+
+func TestEmptyEnergyHurtsMoreAndCutsCap(t *testing.T) {
+	a := fighter(SkillSteer)
+	a.energy = 0
+	out := make(chan unit.Cmd, 16)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	self := me(0, 0)
+	self.VX = 152
+	a.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{foe(80, 0)}})
+	_ = drain(out)
+	a.Handle(ctx, unit.IncomingDamage{Token: 5, From: 2, Amount: 10, Time: 0.1})
+	cmds := drain(out)
+	if !a.drained || a.energyCap != energyMax-1 {
+		t.Fatalf("empty hit should cut cap, drained=%v cap=%v", a.drained, a.energyCap)
+	}
+	if !hasConfirm(cmds, 5, 15) {
+		t.Fatalf("empty energy should take 150%%: %v", cmds)
+	}
+	a.Handle(ctx, unit.WallHit{Time: 1, NX: 1, NY: 0})
+	if math.Abs(a.energy-energyWall) > 1e-6 {
+		t.Fatalf("wall should restore %v, energy=%v", energyWall, a.energy)
+	}
+	if !a.drained || a.energyCap != energyMax-1 {
+		t.Fatalf("drain lasts until energy reaches cap, drained=%v cap=%v", a.drained, a.energyCap)
+	}
+}
+
+func TestCardChargeDrawsAndCosts(t *testing.T) {
+	a := fighter(SkillSteer)
+	out := make(chan unit.Cmd, 32)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
+	_ = drain(out)
+	a.cardMu.Lock()
+	a.deck = []uint8{SkillMind, SkillDose, SkillLaser, SkillAspect}
+	a.hand = nil
+	a.progress = 0
+	a.cardMu.Unlock()
+	for i := 0; i < 10; i++ {
+		a.charge()
+	}
+	if len(a.hand) != 1 {
+		t.Fatalf("10 charges should draw one card, hand=%v", a.hand)
+	}
+	sk := a.hand[0]
+	if sk != SkillMind && sk != SkillDose && sk != SkillLaser && sk != SkillAspect {
+		t.Fatalf("drawn card %v not from deck", sk)
+	}
+	a.locked = false
+	a.animUntil = 0
+	a.energy = 0
+	a.hand = []uint8{SkillDose, SkillMind, SkillLaser}
+	a.Handle(ctx, unit.Sense{Time: 1, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
+	cmds := drain(out)
+	if a.doses != 1 {
+		t.Fatalf("cost3 dose should cast, doses=%d cmds=%v", a.doses, cmds)
+	}
+	if len(a.hand) != 0 {
+		t.Fatalf("cost3 should eat this card and the next two, hand=%v", a.hand)
+	}
+	if a.energy != 0 {
+		t.Fatalf("spell card must not spend energy, energy=%v", a.energy)
+	}
+}
+
+func TestAttackCardCastsAndUpgrades(t *testing.T) {
+	a := fighter(SkillSteer)
+	out := make(chan unit.Cmd, 32)
+	ctx := unit.Context{ID: 1, Kind: KindUdongein, Out: out}
+	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
+	_ = drain(out)
+	a.locked = false
+	a.animUntil = 0
+	a.energy = 0
+	a.hand = []uint8{SkillMind}
+	a.Handle(ctx, unit.Sense{Time: 1, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
+	cmds := drain(out)
+	if !hasSpawn(cmds, KindMindShot) {
+		t.Fatalf("attack card should fire mind: %v", cmds)
+	}
+	if a.upgrades[SkillMind] != 1 {
+		t.Fatalf("attack card should upgrade, upgrades=%v", a.upgrades[SkillMind])
+	}
+	if math.Abs(ownerSkill(1, SkillMind)-1.2) > 1e-6 {
+		t.Fatalf("mind mul=%v want 1.2", ownerSkill(1, SkillMind))
+	}
+	if a.energy != 0 {
+		t.Fatalf("attack card should not spend energy, energy=%v", a.energy)
+	}
+}
+
+func TestBlastHurtsEnemyOnContact(t *testing.T) {
+	b := &爆药{owner: 1, slot: 0}
+	out := make(chan unit.Cmd, 16)
+	ctx := unit.Context{ID: 9, Kind: KindBlast, Out: out}
+	self := unit.Snapshot{
+		ID: 9, Kind: KindBlast, Role: unit.RoleHelper,
+		X: 0, Y: 0, Radius: blastRadius, Slot: 0, OwnerID: 1,
+	}
+	enemy := foe(10, 0)
+	b.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{enemy}})
+	cmds := drain(out)
+	if !hasDamageTo(cmds, 2, blastDamage) {
+		t.Fatalf("blast should hit enemy: %v", cmds)
+	}
+	if hasDamageTo(cmds, 1, 1) {
+		t.Fatalf("blast must not hit owner: %v", cmds)
+	}
+	b.Handle(ctx, unit.Sense{Time: 0.2, Self: self, Nearby: []unit.Snapshot{enemy}})
+	if hasDamageTo(drain(out), 2, blastDamage) {
+		t.Fatal("same enemy should only be hit once")
+	}
+}
+
+func hasConfirm(cmds []unit.Cmd, token uint64, amt float64) bool {
+	for _, c := range cmds {
+		d, ok := c.(unit.ConfirmDamage)
+		if !ok || d.Token != token {
+			continue
+		}
+		if math.Abs(d.Amount-amt) < 1e-6 {
 			return true
 		}
 	}

@@ -3,10 +3,28 @@
 
   arena.registerShot("energy", (fx) => {
     if (!fx || fx.unitId == null) return;
+    const prev = window.udongeinHUD[fx.unitId] || {};
     window.udongeinHUD[fx.unitId] = {
+      ...prev,
       energy: fx.amount || 0,
       dose: fx.vx || 0,
-      fade: (window.udongeinHUD[fx.unitId] || {}).fade,
+      cap: fx.vy || 5,
+    };
+  });
+
+  arena.registerShot("cards", (fx) => {
+    if (!fx || fx.unitId == null) return;
+    const packed = Math.round(fx.vx || 0) >>> 0;
+    const n = Math.max(0, Math.min(5, Math.round(fx.vy || 0)));
+    const cards = [];
+    for (let i = 0; i < n; i++) {
+      cards.push((packed >> (i * 4)) & 0xf);
+    }
+    const prev = window.udongeinHUD[fx.unitId] || {};
+    window.udongeinHUD[fx.unitId] = {
+      ...prev,
+      cards,
+      fill: Math.max(0, Math.min(1, fx.amount || 0)),
     };
   });
 
@@ -14,8 +32,7 @@
     if (!fx || fx.unitId == null) return;
     const prev = window.udongeinHUD[fx.unitId] || {};
     window.udongeinHUD[fx.unitId] = {
-      energy: prev.energy,
-      dose: prev.dose,
+      ...prev,
       fade: Math.max(0, Math.min(1, fx.amount || 0)),
     };
   });
@@ -32,6 +49,16 @@
     arena.spawnFx("fx-udongein-ring", ctx.x, ctx.y, fx.kind, { "--r": `${r}px` });
     arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
     arena.burst(ctx.x, ctx.y, fx.kind, 16);
+  });
+
+  arena.registerShot("laser-warn", (fx, ctx) => {
+    const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1) * (180 / Math.PI);
+    const len = 560 * ((ctx && ctx.scale) || 1);
+    const ray = arena.spawnFx("fx-udongein-warn", ctx.x, ctx.y, fx.kind, {
+      "--len": `${len}px`,
+      "--t": `${fx.amount || 0.4}s`,
+    });
+    if (ray) ray.style.transform = `translate(0, -50%) rotate(${ang}deg)`;
   });
 
   arena.registerShot("laser", (fx, ctx) => {
@@ -70,5 +97,20 @@
       arena.spawnFx("fx-udongein-boom", ctx.x, ctx.y, fx.kind);
       arena.burst(ctx.x, ctx.y, fx.kind, 22);
     }
+  });
+
+  arena.registerShot("blast", (fx, ctx) => {
+    const r = Math.max(48, (fx.amount || 168) * (ctx.scale || 1) * 2);
+    const size = { "--r": `${r}px` };
+    arena.spawnFx("fx-udongein-blast-core", ctx.x, ctx.y, fx.kind);
+    arena.spawnFx("fx-udongein-blast-wave", ctx.x, ctx.y, fx.kind, size);
+    arena.spawnFx("fx-udongein-blast-wave", ctx.x, ctx.y, fx.kind, {
+      "--r": `${r}px`,
+      "--delay": "0.1s",
+    });
+    arena.spawnFx("fx-udongein-blast-ring", ctx.x, ctx.y, fx.kind, size);
+    arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
+    arena.spawnFx("fx-shock", ctx.x, ctx.y, fx.kind);
+    arena.burst(ctx.x, ctx.y, fx.kind, 28);
   });
 })();

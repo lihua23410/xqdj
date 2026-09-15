@@ -6,13 +6,37 @@ window.lookFX.udongein = {
     if (!el) return;
     el.style.removeProperty("--udongein-energy");
     el.removeAttribute("data-udongein-dose");
+    el.removeAttribute("data-udongein-drained");
+    el.querySelector(":scope > .udongein-cards")?.remove();
   },
   tick(el, u) {
     if (!el) return;
-    const st = window.udongeinHUD[u.id] || { energy: 5, dose: 0 };
+    const st = window.udongeinHUD[u.id] || { energy: 5, dose: 0, cap: 5, cards: [], fill: 0 };
     const e = Math.max(0, Math.min(1, (st.energy || 0) / 5));
     el.style.setProperty("--udongein-energy", String(e));
     el.dataset.udongeinDose = String(st.dose || 0);
+    el.dataset.udongeinDrained = (st.cap || 5) < 5 ? "1" : "0";
+    let host = el.querySelector(":scope > .udongein-cards");
+    if (!host) {
+      host = document.createElement("i");
+      host.className = "udongein-cards";
+      el.appendChild(host);
+    }
+    const cards = Array.isArray(st.cards) ? st.cards : [];
+    const fill = Math.max(0, Math.min(1, st.fill || 0));
+    for (let i = 0; i < 5; i++) {
+      let slot = host.children[i];
+      if (!slot) {
+        slot = document.createElement("i");
+        slot.className = "udongein-card";
+        host.appendChild(slot);
+      }
+      const sk = cards[i] || 0;
+      slot.dataset.sk = String(sk);
+      slot.classList.toggle("is-on", sk > 0);
+      slot.classList.toggle("is-fill", sk <= 0 && i === cards.length);
+      slot.style.setProperty("--p", sk > 0 ? "100%" : i === cards.length ? `${Math.round(fill * 100)}%` : "0%");
+    }
   },
 };
 
@@ -65,6 +89,16 @@ window.lookFX["udongein-crown"] = {
 };
 
 window.lookFX["udongein-gas"] = {
+  unmount() {},
+  tick() {},
+};
+
+window.lookFX["udongein-seek"] = {
+  unmount() {},
+  tick() {},
+};
+
+window.lookFX["udongein-blast"] = {
   unmount() {},
   tick() {},
 };
