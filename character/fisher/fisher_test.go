@@ -36,6 +36,40 @@ func TestCatchBonusAtMisses(t *testing.T) {
 	}
 }
 
+func TestFishAndRamDamageFromWeight(t *testing.T) {
+	if math.Abs(fishDamage(20)-10) > 1e-9 {
+		t.Fatalf("20kg fish=%v want 10", fishDamage(20))
+	}
+	if fishDamage(0.5) != 1 {
+		t.Fatal("fish floor 1")
+	}
+	if fishDamage(100) != 26 {
+		t.Fatal("fish cap 26")
+	}
+	if math.Abs(ramDamage(20)-10) > 1e-9 {
+		t.Fatalf("20kg ram=%v want 10", ramDamage(20))
+	}
+	if ramDamage(1) != 4 {
+		t.Fatal("ram floor 4")
+	}
+	if ramDamage(100) != 22 {
+		t.Fatal("ram cap 22")
+	}
+}
+
+func TestSmallMidFishSpeedDoubled(t *testing.T) {
+	base := func(y float64) float64 { return 160 + y*1.6 }
+	if math.Abs(fishSpeed(10)-base(10)*2) > 1e-9 {
+		t.Fatalf("小鱼 speed=%v", fishSpeed(10))
+	}
+	if math.Abs(fishSpeed(30)-base(30)*2) > 1e-9 {
+		t.Fatalf("中鱼 speed=%v", fishSpeed(30))
+	}
+	if math.Abs(fishSpeed(60)-base(60)) > 1e-9 {
+		t.Fatalf("大鱼 should not double, speed=%v", fishSpeed(60))
+	}
+}
+
 func TestBootSpawnsThreeRimPonds(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	a := &钓鱼佬{rng: rand.New(rand.NewPCG(1, 2))}
@@ -100,6 +134,12 @@ func TestFishAfterThreeSeconds(t *testing.T) {
 	sp := lastSpawn(cmds)
 	if sp == nil || (sp.Kind != KindFish && sp.Kind != KindFishMid && sp.Kind != KindFishBig) {
 		t.Fatalf("spawn=%v", cmds)
+	}
+	y := catchWeight(0.5, 0)
+	want := fishSpeed(y)
+	got := math.Hypot(sp.VX, sp.VY)
+	if math.Abs(got-want) > 1e-6 {
+		t.Fatalf("launch speed=%v want %v kind=%s y=%v", got, want, sp.Kind, y)
 	}
 }
 
@@ -203,8 +243,8 @@ func TestTenRollAllMissVoidsOnce(t *testing.T) {
 	if a.misses != 4 {
 		t.Fatalf("session miss should +1, got %d", a.misses)
 	}
-	if !hasDespawn(cmds, pond.ID) {
-		t.Fatalf("should void pond: %v", cmds)
+	if hasDespawn(cmds, pond.ID) || hasDespawnOwned(cmds, KindPond) {
+		t.Fatalf("场鱼塘 must stay: %v", cmds)
 	}
 	if lastSpawnKind(cmds, KindFish) != nil {
 		t.Fatal("all empty should not spawn")
@@ -231,6 +271,70 @@ func TestLeaveAndReenterBeforeNextFish(t *testing.T) {
 	cmds = drain(out)
 	if lastNamed(cmds, "cast") == nil {
 		t.Fatal("re-enter should 再钓")
+	}
+}
+
+func TestSecondMissFloodsArena(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	a := &钓鱼佬{booted: true, misses: 1, draw: seq(0)}
+	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
+	pond := pondAt(0, 0)
+	a.Handle(ctx, unit.Sense{Time: 0, Self: selfAt(0, 0), Nearby: []unit.Snapshot{pond}})
+	_ = drain(out)
+	a.Handle(ctx, unit.Sense{Time: 3, Self: selfAt(0, 0), Nearby: []unit.Snapshot{pond}})
+	cmds := drain(out)
+	if a.misses != 2 {
+		t.Fatalf("misses=%d", a.misses)
+	}
+	if !hasDespawnOwned(cmds, KindPond) {
+		t.Fatalf("should clear rim 鱼塘: %v", cmds)
+	}
+	sp := lastSpawnKind(cmds, KindFlood)
+	if sp == nil || sp.X != 0 || sp.Y != 0 {
+		t.Fatalf("场鱼塘 spawn=%v cmds=%v", sp, cmds)
+	}
+}
+
+func TestFlyFishKeepsMoving(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	a := &钓鱼佬{booted: true, misses: 2}
+	flood := floodAt()
+	a.Handle(unit.Context{ID: 1, Kind: KindFisher, Out: out}, unit.Sense{
+		Time:   1,
+		Self:   selfAt(40, 0),
+		Nearby: []unit.Snapshot{flood},
+	})
+	cmds := drain(out)
+	if !a.fishing || lastNamed(cmds, "cast") == nil {
+		t.Fatalf("should 飞着钓: %v", cmds)
+	}
+	if lastCruise(cmds) == 0 {
+		t.Fatal("飞着钓 must not freeze")
+	}
+	if v := lastVel(cmds); v != nil && v.VX == 0 && v.VY == 0 {
+		t.Fatal("飞着钓 must not zero velocity")
+	}
+}
+
+func TestFlyFishAutoRecast(t *testing.T) {
+	resetFishQ()
+	out := make(chan unit.Cmd, 16)
+	a := &钓鱼佬{booted: true, misses: 2, draw: seq(0.5)}
+	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
+	flood := floodAt()
+	self := selfAt(40, 0)
+	self.VX, self.VY = 80, 0
+	a.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{flood, enemyAt(120, 0)}})
+	_ = drain(out)
+	a.Handle(ctx, unit.Sense{Time: 3, Self: self, Nearby: []unit.Snapshot{flood, enemyAt(120, 0)}})
+	_ = drain(out)
+	if a.fishing {
+		t.Fatal("just reeled")
+	}
+	a.Handle(ctx, unit.Sense{Time: 3.1, Self: self, Nearby: []unit.Snapshot{flood, enemyAt(120, 0)}})
+	cmds := drain(out)
+	if lastNamed(cmds, "cast") == nil || !a.fishing {
+		t.Fatal("should auto 再钓")
 	}
 }
 
@@ -331,7 +435,7 @@ func TestFishLastBounceCoastsToStop(t *testing.T) {
 
 func TestSpentFishDoesNotDamage(t *testing.T) {
 	resetFishQ()
-	pushFish(fishJob{y: 20, dmg: 4.4, speed: 180})
+	pushFish(fishJob{y: 20, dmg: fishDamage(20), speed: 180})
 	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0})
 	f.spent = true
 	out := make(chan unit.Cmd, 8)
@@ -347,7 +451,7 @@ func TestSpentFishDoesNotDamage(t *testing.T) {
 
 func TestFishHitsEnemyGoesInert(t *testing.T) {
 	resetFishQ()
-	pushFish(fishJob{y: 20, dmg: 4.4, speed: 180})
+	pushFish(fishJob{y: 20, dmg: fishDamage(20), speed: 180})
 	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0})
 	out := make(chan unit.Cmd, 8)
 	ctx := unit.Context{ID: 9, Kind: KindFish, Out: out}
@@ -357,7 +461,7 @@ func TestFishHitsEnemyGoesInert(t *testing.T) {
 	})
 	cmds := drain(out)
 	d := lastDamage(cmds)
-	if d == nil || d.To != 2 || math.Abs(d.Amount-4.4) > 1e-9 {
+	if d == nil || d.To != 2 || math.Abs(d.Amount-fishDamage(20)) > 1e-9 {
 		t.Fatalf("damage=%v", cmds)
 	}
 	if hasDespawn(cmds, 9) || !f.spent {
@@ -531,6 +635,13 @@ func pondAt(x, y float64) unit.Snapshot {
 	}
 }
 
+func floodAt() unit.Snapshot {
+	return unit.Snapshot{
+		ID: 41, Kind: KindFlood, Role: unit.RoleHelper,
+		X: 0, Y: 0, Radius: floodRadius, Slot: 0, OwnerID: 1,
+	}
+}
+
 func seq(xs ...float64) func() float64 {
 	i := 0
 	return func() float64 {
@@ -623,6 +734,15 @@ func lastCruise(cmds []unit.Cmd) float64 {
 func hasDespawn(cmds []unit.Cmd, id uint64) bool {
 	for _, c := range cmds {
 		if d, ok := c.(unit.Despawn); ok && d.UnitID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDespawnOwned(cmds []unit.Cmd, kind string) bool {
+	for _, c := range cmds {
+		if d, ok := c.(unit.DespawnOwned); ok && d.Kind == kind {
 			return true
 		}
 	}

@@ -10,6 +10,7 @@ import (
 
 const KindFisher = "钓鱼佬"
 const KindPond = "钓鱼佬鱼塘"
+const KindFlood = "钓鱼佬场鱼塘"
 const KindFish = "钓鱼佬鱼"
 const KindFishMid = "钓鱼佬中鱼"
 const KindFishBig = "钓鱼佬大鱼"
@@ -25,6 +26,7 @@ const (
 	pondN        = 3
 	pondRadius   = 42.0
 	pondColor    = "#3d8fd4"
+	floodRadius  = unit.HexRadius
 
 	missBonus2 = 5.0
 	missBonus3 = 10.0
@@ -62,6 +64,18 @@ func init() {
 		Vision:  pondRadius + 40,
 		Fighter: false,
 		Look:    unit.Look{Color: pondColor, Glow: true, Overlay: true, FX: []string{"fisher-pond"}},
+	}, func(unit.SpawnInfo) unit.Actor {
+		return 鱼塘{}
+	})
+	p.Register(unit.Spec{
+		Kind:    KindFlood,
+		Role:    unit.RoleHelper,
+		Radius:  floodRadius,
+		MaxHP:   1,
+		Speed:   0,
+		Vision:  0,
+		Fighter: false,
+		Look:    unit.Look{Color: pondColor, FX: []string{"fisher-flood"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return 鱼塘{}
 	})
@@ -183,8 +197,14 @@ func (a *钓鱼佬) onSense(ctx unit.Context, s unit.Sense) {
 	a.emitHUD(ctx, s)
 
 	if a.fishing {
-		ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: 0}
-		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+		if a.flyFish() {
+			if !a.ram {
+				ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: a.walkSpeed()}
+			}
+		} else {
+			ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: 0}
+			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+		}
 		if s.Time+1e-9 >= a.until {
 			a.finish(ctx, s)
 		}
@@ -195,6 +215,13 @@ func (a *钓鱼佬) onSense(ctx unit.Context, s unit.Sense) {
 	}
 
 	pond := overlappingPond(s)
+	if a.flyFish() {
+		if pond != nil && !a.ram {
+			a.startFish(ctx, s, *pond)
+		}
+		a.inside = pond != nil
+		return
+	}
 	if pond != nil {
 		if !a.inside && !a.ram {
 			a.startFish(ctx, s, *pond)
@@ -210,8 +237,10 @@ func (a *钓鱼佬) startFish(ctx unit.Context, s unit.Sense, pond unit.Snapshot
 	a.until = s.Time + fishSec
 	a.pondID = pond.ID
 	a.holdVX, a.holdVY = s.Self.VX, s.Self.VY
-	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: 0}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+	if !a.flyFish() {
+		ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: 0}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+	}
 	ctx.Out <- unit.FX{
 		Name: "cast", Kind: ctx.Kind, UnitID: ctx.ID,
 		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot,
@@ -219,6 +248,7 @@ func (a *钓鱼佬) startFish(ctx unit.Context, s unit.Sense, pond unit.Snapshot
 }
 
 func (a *钓鱼佬) finish(ctx unit.Context, s unit.Sense) {
+	stood := !a.flyFish()
 	a.fishing = false
 	n := 1
 	if a.rod || a.misses >= rodUnlock {
@@ -235,7 +265,13 @@ func (a *钓鱼佬) finish(ctx unit.Context, s unit.Sense) {
 		}
 	}
 	if len(got) == 0 {
-		if a.pondID != 0 {
+		if a.misses == 2 {
+			ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindPond}
+			ctx.Out <- unit.Spawn{
+				Kind: KindFlood, X: 0, Y: 0,
+				OwnerID: ctx.ID, Slot: a.slot,
+			}
+		} else if a.misses < 2 && a.pondID != 0 {
 			ctx.Out <- unit.Despawn{UnitID: a.pondID}
 		}
 		ctx.Out <- unit.FX{
@@ -247,7 +283,11 @@ func (a *钓鱼佬) finish(ctx unit.Context, s unit.Sense) {
 	}
 	a.pondID = 0
 	if !a.ram {
-		a.setWalk(ctx, a.holdVX, a.holdVY)
+		if !stood {
+			ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: a.walkSpeed()}
+		} else {
+			a.setWalk(ctx, a.holdVX, a.holdVY)
+		}
 	}
 }
 
@@ -369,6 +409,10 @@ func (a *钓鱼佬) walkSpeed() float64 {
 	return fisherCruise * (1 + 0.5*float64(a.misses))
 }
 
+func (a *钓鱼佬) flyFish() bool {
+	return a.misses >= 2
+}
+
 func (a *钓鱼佬) setWalk(ctx unit.Context, vx, vy float64) {
 	sp := a.walkSpeed()
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: sp}
@@ -455,7 +499,10 @@ func (a *钓鱼佬) emitHUD(ctx unit.Context, s unit.Sense) {
 func overlappingPond(s unit.Sense) *unit.Snapshot {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind != KindPond || o.OwnerID != s.Self.ID {
+		if o.Kind != KindPond && o.Kind != KindFlood {
+			continue
+		}
+		if o.OwnerID != s.Self.ID {
 			continue
 		}
 		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) <= o.Radius+s.Self.Radius {
@@ -496,7 +543,7 @@ func catchBonus(misses int, rod bool) float64 {
 }
 
 func fishDamage(y float64) float64 {
-	d := y * 0.22
+	d := y * 0.5
 	if d < 1 {
 		return 1
 	}
@@ -507,11 +554,16 @@ func fishDamage(y float64) float64 {
 }
 
 func fishSpeed(y float64) float64 {
-	return 160 + y*1.6
+	sp := 160 + y*1.6
+	kind, _ := fishKind(y)
+	if kind != KindFishBig {
+		return sp * 2
+	}
+	return sp
 }
 
 func ramDamage(y float64) float64 {
-	d := y * 0.18
+	d := y * 0.5
 	if d < 4 {
 		return 4
 	}

@@ -29,6 +29,7 @@ const (
 	KindFishBig     = 钓鱼佬.KindFishBig
 	KindFishMid     = 钓鱼佬.KindFishMid
 	KindFisher      = 钓鱼佬.KindFisher
+	KindFlood       = 钓鱼佬.KindFlood
 	KindPond        = 钓鱼佬.KindPond
 	KindGlitch      = 地慧星.KindGlitch
 	KindGlitchArc   = 地慧星.KindGlitchArc

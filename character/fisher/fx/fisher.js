@@ -136,6 +136,20 @@ window.lookFX["fisher-pond"] = {
   },
 };
 
+window.lookFX["fisher-flood"] = {
+  unmount(el) {
+    if (!el) return;
+    el.querySelector(":scope > .pond-ripple")?.remove();
+  },
+  tick(el) {
+    if (!el || !el.classList.contains("look-fisher-flood")) return;
+    if (el.querySelector(":scope > .pond-ripple")) return;
+    const rip = document.createElement("i");
+    rip.className = "pond-ripple";
+    el.appendChild(rip);
+  },
+};
+
 window.lookFX["fisher-fish"] = {
   unmount(el) {
     if (!el) return;
