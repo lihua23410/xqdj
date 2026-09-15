@@ -50,7 +50,7 @@ func main() {
 	type pair struct{ a, b string }
 	var pairs []pair
 	for i := range kinds {
-		for j := i; j < len(kinds); j++ {
+		for j := i + 1; j < len(kinds); j++ {
 			pairs = append(pairs, pair{kinds[i], kinds[j]})
 		}
 	}
@@ -79,7 +79,7 @@ func main() {
 					gate <- struct{}{}
 					defer func() { <-gate }()
 					left, right := p.a, p.b
-					if p.a != p.b && n%2 == 1 {
+					if n%2 == 1 {
 						left, right = p.b, p.a
 					}
 					seed := mixSeed(left, right, uint64(n)+1)
@@ -95,8 +95,6 @@ func main() {
 					switch {
 					case winner == "平局" || winner == "":
 						wD[n] = 1
-					case winner == p.a && winner == p.b:
-						wA[n] = 1
 					case winner == p.a:
 						wA[n] = 1
 					case winner == p.b:
@@ -149,9 +147,6 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 	}
 	for _, r := range results {
 		byPair[[2]string{r.a, r.b}] = r
-		if r.a == r.b {
-			continue
-		}
 		solo[r.a].win += r.winsA
 		solo[r.a].lose += r.winsB
 		solo[r.a].draw += r.draws
@@ -163,14 +158,14 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 	var b strings.Builder
 	fmt.Fprintf(&b, "# 小球胜率\n\n")
 	fmt.Fprintf(&b, "- 时间：%s\n", time.Now().Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(&b, "- 每组对战：%d 场（异名组合左右槽各一半）\n", nGames)
+	fmt.Fprintf(&b, "- 每组对战：%d 场（左右槽各一半）\n", nGames)
 	fmt.Fprintf(&b, "- 超时：%.0f 秒模拟时间，超时计平\n", maxSec)
 	fmt.Fprintf(&b, "- 组合数：%d，用时：%s\n\n", len(results), elapsed.Round(time.Millisecond))
 
 	fmt.Fprintf(&b, "## 单球胜率\n\n")
-	fmt.Fprintf(&b, "不含同名对打。胜率 = 胜 /（胜+负+平）。\n\n")
-	fmt.Fprintf(&b, "| 角色 | 场次 | 胜 | 负 | 平 | 胜率 |\n")
-	fmt.Fprintf(&b, "| --- | ---: | ---: | ---: | ---: | ---: |\n")
+	fmt.Fprintf(&b, "胜率 = 胜 /（胜+负+平）。胜平率 =（胜+平）/（胜+负+平）。不含自己打自己。\n\n")
+	fmt.Fprintf(&b, "| 战斗机 | 场次 | 胜 | 负 | 平 | 胜率 | 胜平率 |\n")
+	fmt.Fprintf(&b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	type row struct {
 		kind string
 		t    tally
@@ -192,31 +187,20 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 	})
 	for _, r := range rows {
 		g := games(r.t)
-		fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %s |\n", r.kind, g, r.t.win, r.t.lose, r.t.draw, pct(rate(r.t)))
+		fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %s | %s |\n", r.kind, g, r.t.win, r.t.lose, r.t.draw, pct(rate(r.t)), pct(winDraw(r.t)))
 	}
 
 	fmt.Fprintf(&b, "\n## 一对一胜率\n\n")
-	fmt.Fprintf(&b, "单元格为行对列的胜率（行赢的场次 / %d）。对角线为同名对打中有胜负的比例（不是某侧胜率）。\n\n", nGames)
-	fmt.Fprintf(&b, "|")
-	for _, k := range kinds {
-		fmt.Fprintf(&b, " | %s", k)
-	}
-	fmt.Fprintf(&b, " |\n| ---")
-	for range kinds {
-		fmt.Fprintf(&b, " | ---:")
-	}
-	fmt.Fprintf(&b, " |\n")
-	for _, rowK := range kinds {
-		fmt.Fprintf(&b, "| %s", rowK)
-		for _, colK := range kinds {
-			fmt.Fprintf(&b, " | %s", cell(byPair, rowK, colK, nGames))
-		}
-		fmt.Fprintf(&b, " |\n")
-	}
+	fmt.Fprintf(&b, "单元格为行对列的胜率（行赢的场次 / %d）。对角线是自己打自己，不测。\n\n", nGames)
+	writeMatrix(&b, kinds, byPair, nGames, false)
+
+	fmt.Fprintf(&b, "\n## 一对一胜平率\n\n")
+	fmt.Fprintf(&b, "单元格为行对列的胜平率（行赢+平 / %d）。对角线是自己打自己，不测。\n\n", nGames)
+	writeMatrix(&b, kinds, byPair, nGames, true)
 
 	fmt.Fprintf(&b, "\n## 一对一明细\n\n")
-	fmt.Fprintf(&b, "| 对阵 | 场次 | 前者胜 | 后者胜 | 平 | 超时平 |\n")
-	fmt.Fprintf(&b, "| --- | ---: | ---: | ---: | ---: | ---: |\n")
+	fmt.Fprintf(&b, "| 对阵 | 场次 | 前者胜 | 后者胜 | 平 | 超时平 | 前者胜平率 | 后者胜平率 |\n")
+	fmt.Fprintf(&b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	sorted := append([]pairResult(nil), results...)
 	sort.Slice(sorted, func(i, j int) bool {
 		if sorted[i].a != sorted[j].a {
@@ -226,7 +210,10 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 	})
 	for _, r := range sorted {
 		label := r.a + " vs " + r.b
-		fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %d |\n", label, nGames, r.winsA, r.winsB, r.draws, r.timeout)
+		fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %d | %s | %s |\n",
+			label, nGames, r.winsA, r.winsB, r.draws, r.timeout,
+			pct(float64(r.winsA+r.draws)/float64(nGames)),
+			pct(float64(r.winsB+r.draws)/float64(nGames)))
 	}
 	fmt.Fprintf(&b, "\n")
 	return b.String()
@@ -242,9 +229,36 @@ func rate(t tally) float64 {
 	return float64(t.win) / float64(g)
 }
 
+func winDraw(t tally) float64 {
+	g := games(t)
+	if g == 0 {
+		return 0
+	}
+	return float64(t.win+t.draw) / float64(g)
+}
+
 func pct(r float64) string { return fmt.Sprintf("%.1f%%", r*100) }
 
-func cell(byPair map[[2]string]pairResult, row, col string, n int) string {
+func writeMatrix(b *strings.Builder, kinds []string, byPair map[[2]string]pairResult, nGames int, withDraw bool) {
+	fmt.Fprintf(b, "|")
+	for _, k := range kinds {
+		fmt.Fprintf(b, " | %s", k)
+	}
+	fmt.Fprintf(b, " |\n| ---")
+	for range kinds {
+		fmt.Fprintf(b, " | ---:")
+	}
+	fmt.Fprintf(b, " |\n")
+	for _, rowK := range kinds {
+		fmt.Fprintf(b, "| %s", rowK)
+		for _, colK := range kinds {
+			fmt.Fprintf(b, " | %s", cell(byPair, rowK, colK, nGames, withDraw))
+		}
+		fmt.Fprintf(b, " |\n")
+	}
+}
+
+func cell(byPair map[[2]string]pairResult, row, col string, n int, withDraw bool) string {
 	if n == 0 {
 		return "—"
 	}
@@ -255,14 +269,14 @@ func cell(byPair map[[2]string]pairResult, row, col string, n int) string {
 	if !ok {
 		return "—"
 	}
-	if row == col {
-		return pct(float64(r.winsA) / float64(n))
-	}
 	w := r.winsA
 	if row == r.b {
 		w = r.winsB
 	} else if row != r.a {
 		return "—"
+	}
+	if withDraw {
+		w += r.draws
 	}
 	return pct(float64(w) / float64(n))
 }

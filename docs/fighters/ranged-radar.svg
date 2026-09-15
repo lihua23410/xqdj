@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="240" viewBox="0 0 260 240">
+<rect width="260" height="240" fill="#fff"/>
+<polygon points="130.0,104.4 144.8,115.2 139.2,132.6 120.8,132.6 115.2,115.2" fill="none" stroke="#c8c8c8" stroke-width="1"/>
+<polygon points="130.0,88.8 159.7,110.4 148.3,145.2 111.7,145.2 100.3,110.4" fill="none" stroke="#c8c8c8" stroke-width="1"/>
+<polygon points="130.0,73.2 174.5,105.5 157.5,157.9 102.5,157.9 85.5,105.5" fill="none" stroke="#c8c8c8" stroke-width="1"/>
+<polygon points="130.0,57.6 189.3,100.7 166.7,170.5 93.3,170.5 70.7,100.7" fill="none" stroke="#c8c8c8" stroke-width="1"/>
+<polygon points="130.0,42.0 204.2,95.9 175.8,183.1 84.2,183.1 55.8,95.9" fill="none" stroke="#c8c8c8" stroke-width="1"/>
+<line x1="130" y1="120" x2="130.0" y2="42.0" stroke="#d0d0d0" stroke-width="1"/>
+<line x1="130" y1="120" x2="204.2" y2="95.9" stroke="#d0d0d0" stroke-width="1"/>
+<line x1="130" y1="120" x2="175.8" y2="183.1" stroke="#d0d0d0" stroke-width="1"/>
+<line x1="130" y1="120" x2="84.2" y2="183.1" stroke="#d0d0d0" stroke-width="1"/>
+<line x1="130" y1="120" x2="55.8" y2="95.9" stroke="#d0d0d0" stroke-width="1"/>
+<polygon points="130.0,88.8 159.7,110.4 166.7,170.5 102.5,157.9 85.5,105.5" fill="#f0a050" fill-opacity="0.35" stroke="#f0a050" stroke-width="2"/>
+<circle cx="130.0" cy="88.8" r="3" fill="#f0a050"/>
+<circle cx="159.7" cy="110.4" r="3" fill="#f0a050"/>
+<circle cx="166.7" cy="170.5" r="3" fill="#f0a050"/>
+<circle cx="102.5" cy="157.9" r="3" fill="#f0a050"/>
+<circle cx="85.5" cy="105.5" r="3" fill="#f0a050"/>
+<text x="130.0" y="20.0" text-anchor="middle" font-size="13" fill="#333" font-family="sans-serif">生存</text>
+<text x="225.1" y="93.1" text-anchor="start" font-size="13" fill="#333" font-family="sans-serif">爆发</text>
+<text x="188.8" y="212.9" text-anchor="start" font-size="13" fill="#333" font-family="sans-serif">稳定</text>
+<text x="71.2" y="212.9" text-anchor="end" font-size="13" fill="#333" font-family="sans-serif">机动</text>
+<text x="34.9" y="93.1" text-anchor="end" font-size="13" fill="#333" font-family="sans-serif">输出</text>
+</svg>
