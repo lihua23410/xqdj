@@ -255,6 +255,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 | `SetCruise` | 改自己的巡航。不改当前速度。快于巡航拉回；慢于巡航但仍在动则沿当前方向以回拉一半往上推；速率为 0 不推 |
 | `SetVision` | 改自己的感知半径。0 = 看不见场上其它单位（随从仍进感知） |
 | `SetArcSpan` | 改自己这发 `Attach` 扇环弹的张角（弧度）。近战用这个跟速度走 |
+| `SetRadius` | 改自己的碰撞半径。≤0 被丢掉。花冠长大用这个；快照 `radius` 会跟着变，前端按这个画 |
 | `Damage` | 向战斗机报价伤害。引擎发 `IncomingDamage`，必须 `ConfirmDamage` 才会扣血。带 `MarkKind` 时，真正掉血那一拍才叠状态；格挡 / 吸收不叠。`MarkIcon` 用绝对路径，如 `/ball/地慧星/status/jianhen.png` |
 | `ConfirmDamage` | 确认一笔报价；`Amount` 只能比原值更小 |
 | `BlockDamage` | 取消一笔报价 |

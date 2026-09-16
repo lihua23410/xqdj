@@ -43,6 +43,8 @@ const (
 	maskHong          = "面具红"
 	maskZi            = "面具紫"
 	maskCang          = "面具苍"
+	menreikiBlastR    = menreikiRadius * 3
+	menreikiBlast     = 16.0
 )
 
 var menreikiBarrage = []string{maskQing, maskHong, maskZi, maskCang}
@@ -169,13 +171,15 @@ func (m *面灵气) sense(ctx unit.Context, s unit.Sense) {
 func (m *面灵气) grant(ctx unit.Context, s unit.Sense) {
 	if !m.selfMarked {
 		ctx.Out <- unit.MarkFaction{
-			UnitID:  ctx.ID,
-			Faction: unit.PickFaction(rand.IntN(4)),
-			Cycle:   true,
-			AmpOut:  menreikiAmpOut,
-			AmpIn:   menreikiAmpIn,
-			Collect: true,
-			Barrage: menreikiBarrage,
+			UnitID:      ctx.ID,
+			Faction:     unit.PickFaction(rand.IntN(4)),
+			Cycle:       true,
+			AmpOut:      menreikiAmpOut,
+			AmpIn:       menreikiAmpIn,
+			Collect:     true,
+			Barrage:     menreikiBarrage,
+			BlastRadius: menreikiBlastR,
+			BlastDamage: menreikiBlast,
 		}
 		m.selfMarked = true
 	}

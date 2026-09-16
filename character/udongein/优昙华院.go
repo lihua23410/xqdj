@@ -31,7 +31,7 @@ const (
 
 	energyMax  = 5.0
 	energyCost = 1.0
-	energyWall = 1.2
+	energyWall = 1.8
 
 	cardSlots   = 5
 	cardFill    = 0.1
@@ -45,7 +45,7 @@ const (
 	recoverAtk  = 1.00 // 非想天则特技后摇（出完弹到能再出招）
 	recoverCard = 1.10
 
-	frontCostDiv = 5.0 // 按初始伤害扣灵力：每 5 点初始伤害 1 灵力
+	frontCostDiv = 10.0 // 按初始伤害扣灵力：每 5 点初始伤害 1 灵力
 	frontDR      = 0.75 // 前方减伤后剩 75%
 	emptyHurt    = 1.5
 
@@ -94,11 +94,12 @@ const (
 	gasDamage = 1.0
 	gasSlow   = 0.4
 
-	crownDamage = 18.0
-	crownSpeed  = 155.0
-	crownBaseR  = 10.0
-	crownGrow   = 0.22
-	crownMaxR   = 60.0
+	crownDamage    = 18.0
+	crownSpeed     = 155.0
+	crownBaseR     = 10.0
+	crownGrow      = 0.22
+	crownMaxR      = 60.0
+	crownOffscreen = 640.0
 
 	doseAtk     = 0.06
 	doseDef     = 0.08
@@ -177,16 +178,17 @@ func init() {
 		return &索敌弹{owner: info.OwnerID}
 	})
 	p.Register(unit.Spec{
-		Kind:    KindCrown,
-		Role:    unit.RoleProjectile,
-		Radius:  crownBaseR,
-		MaxHP:   1,
-		Speed:   crownSpeed,
-		Vision:  udongeinVision,
-		Fighter: false,
-		Look:    unit.Look{Color: "#ff6ab8", Trail: true, Glow: true, FX: []string{"udongein-crown"}},
+		Kind:      KindCrown,
+		Role:      unit.RoleProjectile,
+		Radius:    crownBaseR,
+		MaxHP:     1,
+		Speed:     crownSpeed,
+		Vision:    udongeinVision,
+		Fighter:   false,
+		PassWalls: true,
+		Look:      unit.Look{Color: "#ff6ab8", Trail: true, Glow: true, Overlay: true, FX: []string{"udongein-crown"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &花冠{owner: info.OwnerID}
+		return &花冠{owner: info.OwnerID, slot: info.Slot}
 	})
 	p.Register(unit.Spec{
 		Kind:    KindAspect,

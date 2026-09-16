@@ -343,6 +343,50 @@ func TestShardRadiusIsSphere(t *testing.T) {
 	}
 }
 
+func TestCrownPiercesOrdinaryShot(t *testing.T) {
+	spec, ok := unit.Lookup(KindCrown)
+	if !ok {
+		t.Fatal("missing crown spec")
+	}
+	if !spec.PassWalls {
+		t.Fatal("crown should pass walls like 紫弹")
+	}
+	out := make(chan unit.Cmd, 32)
+	ctx := unit.Context{ID: 9, Kind: KindCrown, Out: out}
+	b := &花冠{owner: 1, slot: 0}
+	b.Handle(ctx, unit.Collision{
+		Other: unit.Snapshot{ID: 40, Role: unit.RoleProjectile, Slot: 1, OwnerID: 2, Radius: 6},
+	})
+	cmds := drain(out)
+	if hasDespawnID(cmds, 9) {
+		t.Fatalf("crown must keep flying: %v", cmds)
+	}
+	if hasDespawnID(cmds, 40) {
+		t.Fatalf("crown should not delete the other shot: %v", cmds)
+	}
+}
+
+func TestCrownGrowsRadius(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	ctx := unit.Context{ID: 9, Kind: KindCrown, Out: out}
+	b := &花冠{owner: 1, slot: 0}
+	self := unit.Snapshot{ID: 9, X: 0, Y: 0, Radius: crownBaseR, Slot: 0}
+	b.Handle(ctx, unit.Sense{Self: self})
+	_ = drain(out)
+	self.X = 100
+	b.Handle(ctx, unit.Sense{Self: self})
+	cmds := drain(out)
+	want := crownRadius(100)
+	if !hasSetRadius(cmds, 9, want) {
+		t.Fatalf("want radius %v after 100 travel, cmds=%v", want, cmds)
+	}
+	self.X = 230
+	b.Handle(ctx, unit.Sense{Self: self})
+	if !hasSetRadius(drain(out), 9, crownMaxR) {
+		t.Fatal("should clamp to crownMaxR")
+	}
+}
+
 func TestMindClearsProjectileOnPath(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	ctx := unit.Context{ID: 9, Kind: KindMindShot, Out: out}
@@ -582,6 +626,19 @@ func hasDamageTo(cmds []unit.Cmd, id uint64, amt float64) bool {
 func hasDespawnID(cmds []unit.Cmd, id uint64) bool {
 	for _, c := range cmds {
 		if d, ok := c.(unit.Despawn); ok && d.UnitID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSetRadius(cmds []unit.Cmd, id uint64, r float64) bool {
+	for _, c := range cmds {
+		s, ok := c.(unit.SetRadius)
+		if !ok || s.UnitID != id {
+			continue
+		}
+		if math.Abs(s.Radius-r) < 1e-6 {
 			return true
 		}
 	}

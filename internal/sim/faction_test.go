@@ -133,6 +133,9 @@ func TestMenreikiMarksBothFighters(t *testing.T) {
 	if len(src.factionBarrage) != 4 {
 		t.Fatalf("barrage kinds=%v", src.factionBarrage)
 	}
+	if src.factionBlastR != 54 || src.factionBlastD != 16 {
+		t.Fatalf("blast r=%v d=%v", src.factionBlastR, src.factionBlastD)
+	}
 }
 
 func TestFactionBarrageWhenFourSeen(t *testing.T) {
@@ -182,6 +185,88 @@ func TestFactionBarrageWhenFourSeen(t *testing.T) {
 	m.pending = nil
 	if dst.hp != before {
 		t.Fatalf("aoe hp %v -> %v", before, dst.hp)
+	}
+	m.mu.Unlock()
+}
+
+func collectFour(m *Match, src *unit, blastR, blastD float64) {
+	m.markFactionLocked(unitpkg.MarkFaction{
+		UnitID: src.id, Faction: unitpkg.FactionCyan,
+		Cycle: true, Collect: true,
+		Barrage:     []string{"面具青", "面具红", "面具紫", "面具苍"},
+		BlastRadius: blastR,
+		BlastDamage: blastD,
+	})
+	for _, f := range unitpkg.AllFactions() {
+		src.noteFaction(f)
+	}
+	m.maybeFactionCollectLocked(src)
+}
+
+func flushPendingHits(t *testing.T, m *Match) {
+	t.Helper()
+	for _, d := range m.pending {
+		m.applyCmdLocked(d)
+	}
+	m.pending = nil
+	m.mu.Unlock()
+	time.Sleep(8 * time.Millisecond)
+	m.mu.Lock()
+	m.drainCmdsLocked()
+}
+
+func TestFactionBlastWhenFourSeen(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindMenreiki)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	m.mu.Lock()
+	src := fighterByKind(m, character.KindMenreiki)
+	dst := fighterByKind(m, character.KindRanged)
+	if src == nil || dst == nil {
+		m.mu.Unlock()
+		t.Fatal("missing fighters")
+	}
+	dst.p = src.p.add(vec{40, 0})
+	before := dst.hp
+	collectFour(m, src, 54, 16)
+	var gotFX bool
+	for _, fx := range m.fx {
+		if fx.Name == "blast" && fx.Kind == src.kind && math.Abs(fx.Amount-54) < 1e-9 {
+			gotFX = true
+		}
+	}
+	if !gotFX {
+		m.mu.Unlock()
+		t.Fatalf("missing blast fx in %+v", m.fx)
+	}
+	flushPendingHits(t, m)
+	if dst.hp >= before {
+		t.Fatalf("blast hp %v -> %v", before, dst.hp)
+	}
+	m.mu.Unlock()
+}
+
+func TestFactionBlastMissesOutOfRange(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindMenreiki)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	m.mu.Lock()
+	src := fighterByKind(m, character.KindMenreiki)
+	dst := fighterByKind(m, character.KindRanged)
+	if src == nil || dst == nil {
+		m.mu.Unlock()
+		t.Fatal("missing fighters")
+	}
+	dst.p = src.p.add(vec{200, 0})
+	before := dst.hp
+	collectFour(m, src, 54, 16)
+	flushPendingHits(t, m)
+	if dst.hp != before {
+		t.Fatalf("out of range hp %v -> %v", before, dst.hp)
 	}
 	m.mu.Unlock()
 }

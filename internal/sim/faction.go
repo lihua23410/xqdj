@@ -24,6 +24,12 @@ func (m *Match) markFactionLocked(c unitpkg.MarkFaction) {
 	if len(c.Barrage) > 0 {
 		u.factionBarrage = append([]string(nil), c.Barrage...)
 	}
+	if c.BlastRadius > 0 {
+		u.factionBlastR = c.BlastRadius
+	}
+	if c.BlastDamage > 0 {
+		u.factionBlastD = c.BlastDamage
+	}
 	u.noteFaction(f)
 	m.maybeFactionCollectLocked(u)
 	if prev != f {
@@ -60,23 +66,47 @@ func (m *Match) maybeFactionCollectLocked(u *unit) {
 		return
 	}
 	n := len(u.factionBarrage)
-	if n == 0 {
+	hasBlast := u.factionBlastR > 0 && u.factionBlastD > 0
+	if n == 0 && !hasBlast {
 		return
 	}
-	base := math.Atan2(u.v.Y, u.v.X)
-	if u.v.len2() < 1e-12 {
-		base = 0
-	}
-	step := 2 * math.Pi / float64(n)
-	for i, kind := range u.factionBarrage {
-		spec, ok := unitpkg.Lookup(kind)
-		if !ok || spec.Fighter {
-			continue
+	if n > 0 {
+		base := math.Atan2(u.v.Y, u.v.X)
+		if u.v.len2() < 1e-12 {
+			base = 0
 		}
-		ang := base + step*float64(i)
-		ux, uy := math.Cos(ang), math.Sin(ang)
-		gap := u.radius + spec.Radius + 1.5
-		m.addUnitLocked(kind, vec{u.p.X + ux*gap, u.p.Y + uy*gap}, vec{ux * spec.Speed, uy * spec.Speed}, u.id, u.slot)
+		step := 2 * math.Pi / float64(n)
+		for i, kind := range u.factionBarrage {
+			spec, ok := unitpkg.Lookup(kind)
+			if !ok || spec.Fighter {
+				continue
+			}
+			ang := base + step*float64(i)
+			ux, uy := math.Cos(ang), math.Sin(ang)
+			gap := u.radius + spec.Radius + 1.5
+			m.addUnitLocked(kind, vec{u.p.X + ux*gap, u.p.Y + uy*gap}, vec{ux * spec.Speed, uy * spec.Speed}, u.id, u.slot)
+		}
+	}
+	if hasBlast {
+		reach := u.factionBlastR
+		for _, id := range m.order {
+			o := m.units[id]
+			if o == nil || o.stopped || o.role != unitpkg.RoleFighter || o.slot == u.slot {
+				continue
+			}
+			dx := o.p.X - u.p.X
+			dy := o.p.Y - u.p.Y
+			lim := reach + o.radius
+			if dx*dx+dy*dy > lim*lim {
+				continue
+			}
+			m.pending = append(m.pending, unitpkg.Damage{From: u.id, To: o.id, Amount: u.factionBlastD})
+		}
+		m.fx = append(m.fx, unitpkg.FX{
+			Name: "blast", UnitID: u.id, Kind: u.kind,
+			X: u.p.X, Y: u.p.Y, Slot: u.slot,
+			Amount: reach,
+		})
 	}
 	u.factionSeen = map[string]bool{}
 	u.noteFaction(u.faction)

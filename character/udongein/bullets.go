@@ -176,6 +176,7 @@ func (b *幻弹) Handle(ctx unit.Context, ev unit.Event) {
 
 type 花冠 struct {
 	owner     uint64
+	slot      int
 	ox, oy    float64
 	originSet bool
 	dead      bool
@@ -187,11 +188,20 @@ func (b *花冠) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	switch e := ev.(type) {
 	case unit.Sense:
+		if math.Abs(e.Self.X) > crownOffscreen || math.Abs(e.Self.Y) > crownOffscreen {
+			b.dead = true
+			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+			return
+		}
 		if !b.originSet {
 			b.ox, b.oy = e.Self.X, e.Self.Y
 			b.originSet = true
+			b.slot = e.Self.Slot
 		}
 		r := crownRadius(math.Hypot(e.Self.X-b.ox, e.Self.Y-b.oy))
+		if math.Abs(r-e.Self.Radius) > 1e-6 {
+			ctx.Out <- unit.SetRadius{UnitID: ctx.ID, Radius: r}
+		}
 		for i := range e.Nearby {
 			o := &e.Nearby[i]
 			if o.Role != unit.RoleFighter || o.ID == b.owner {
@@ -206,11 +216,13 @@ func (b *花冠) Handle(ctx unit.Context, ev unit.Event) {
 			return
 		}
 	case unit.Collision:
-		if hitFighter(ctx, e.Other, b.owner, SkillCrown, crownDamage) {
-			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
-			b.dead = true
+		if e.Other.Slot == b.slot || e.Other.ID == b.owner {
+			return
 		}
-	case unit.WallHit:
+		if e.Other.Role != unit.RoleFighter {
+			return
+		}
+		deal(ctx, b.owner, e.Other.ID, SkillCrown, crownDamage)
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		b.dead = true
 	}

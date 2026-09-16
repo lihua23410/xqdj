@@ -56,6 +56,8 @@ type unit struct {
 	factionSeen    map[string]bool
 	factionNext    float64
 	factionBarrage []string
+	factionBlastR  float64
+	factionBlastD  float64
 	marks          map[string]*stackMark
 }
 
@@ -610,6 +612,12 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			span = 0
 		}
 		u.arcSpan = span
+	case unitpkg.SetRadius:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || c.Radius <= 0 {
+			return
+		}
+		u.radius = c.Radius
 	case unitpkg.Damage:
 		m.offerDamageLocked(c)
 	case unitpkg.ConfirmDamage:

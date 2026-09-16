@@ -71,21 +71,8 @@ window.lookFX["udongein-shard"] = {
 };
 
 window.lookFX["udongein-crown"] = {
-  unmount(el) {
-    if (!el) return;
-    el._ux = el._uy = undefined;
-  },
-  tick(el, u) {
-    if (!el) return;
-    if (el._ux == null) {
-      el._ux = u.x;
-      el._uy = u.y;
-    }
-    const dist = Math.hypot((u.x || 0) - el._ux, (u.y || 0) - el._uy);
-    const r = Math.min(60, 10 + dist * 0.22);
-    const s = r / Math.max(1, u.radius || 10);
-    el.style.transform = `translate(-50%, -50%) scale(${s})`;
-  },
+  unmount() {},
+  tick() {},
 };
 
 window.lookFX["udongein-gas"] = {

@@ -91,3 +91,40 @@ func TestCruiseZeroSpeedDoesNotPush(t *testing.T) {
 		t.Fatalf("zero speed was pushed to %v", u.v.len())
 	}
 }
+
+func TestSetRadiusGrowsUnit(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindUdongein)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	owner := fighterByKind(m, character.KindUdongein)
+	if owner == nil {
+		t.Fatal("missing 优昙华院")
+	}
+	m.applyCmdLocked(unitpkg.Spawn{
+		Kind: character.KindCrown, X: 0, Y: 0, VX: 100,
+		OwnerID: owner.id, Slot: owner.slot,
+	})
+	var crown *unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u != nil && u.kind == character.KindCrown {
+			crown = u
+			break
+		}
+	}
+	if crown == nil {
+		t.Fatal("missing 花冠")
+	}
+	m.applyCmdLocked(unitpkg.SetRadius{UnitID: crown.id, Radius: 48})
+	if math.Abs(crown.radius-48) > 1e-9 {
+		t.Fatalf("radius=%v", crown.radius)
+	}
+	m.applyCmdLocked(unitpkg.SetRadius{UnitID: crown.id, Radius: 0})
+	if math.Abs(crown.radius-48) > 1e-9 {
+		t.Fatalf("zero radius should be ignored, radius=%v", crown.radius)
+	}
+}

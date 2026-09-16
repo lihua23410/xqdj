@@ -70,6 +70,12 @@ type SetArcSpan struct {
 	Span   float64
 }
 
+// SetRadius 改自己的碰撞半径。花冠长大用这个。
+type SetRadius struct {
+	UnitID uint64
+	Radius float64
+}
+
 type Damage struct {
 	From      uint64
 	To        uint64

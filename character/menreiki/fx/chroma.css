@@ -13,3 +13,102 @@
 @keyframes chroma-hue {
   to { filter: hue-rotate(360deg); }
 }
+.fx-menreiki-blast-fill {
+  width: var(--r, 160px);
+  height: var(--r, 160px);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #fff 0%,
+    color-mix(in srgb, #3ec8e0 70%, #fff) 18%,
+    color-mix(in srgb, #ff3b3b 55%, transparent) 42%,
+    color-mix(in srgb, #b44cff 40%, transparent) 62%,
+    color-mix(in srgb, #8dffb0 22%, transparent) 78%,
+    transparent 100%
+  );
+  mix-blend-mode: plus-lighter;
+  animation: menreiki-blast-fill 0.7s ease-out forwards;
+}
+@keyframes menreiki-blast-fill {
+  0% { transform: translate(-50%, -50%) scale(0.08); opacity: 1; }
+  40% { transform: translate(-50%, -50%) scale(0.72); opacity: 0.95; }
+  100% { transform: translate(-50%, -50%) scale(1.05); opacity: 0; }
+}
+.fx-menreiki-blast-core {
+  width: var(--r, 160px);
+  height: var(--r, 160px);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #fff 0%,
+    #fff 12%,
+    #3ec8e0 28%,
+    #ff3b3b 48%,
+    #b44cff 68%,
+    #8dffb0 84%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 28px #fff,
+    0 0 64px #3ec8e0,
+    0 0 96px #b44cff;
+  mix-blend-mode: plus-lighter;
+  animation: menreiki-blast-core 0.55s ease-out forwards;
+}
+@keyframes menreiki-blast-core {
+  0% { transform: translate(-50%, -50%) scale(0.12); opacity: 1; }
+  35% { transform: translate(-50%, -50%) scale(0.55); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+}
+.fx-menreiki-blast-wave {
+  width: var(--r, 160px);
+  height: var(--r, 160px);
+  border-radius: 50%;
+  border: 5px solid var(--c, #3ec8e0);
+  box-shadow:
+    0 0 22px var(--c, #3ec8e0),
+    inset 0 0 28px color-mix(in srgb, var(--c, #3ec8e0) 80%, transparent);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--c, #3ec8e0) 48%, transparent) 0%,
+    color-mix(in srgb, var(--c, #3ec8e0) 16%, transparent) 55%,
+    transparent 74%
+  );
+  mix-blend-mode: plus-lighter;
+  animation: menreiki-blast-wave 0.9s cubic-bezier(0.12, 0.72, 0.2, 1) var(--delay, 0s) both;
+}
+@keyframes menreiki-blast-wave {
+  0% { transform: translate(-50%, -50%) scale(0.1); opacity: 1; }
+  55% { opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) scale(1.04); opacity: 0; }
+}
+.fx-menreiki-blast-ring {
+  width: var(--r, 160px);
+  height: var(--r, 160px);
+  border-radius: 50%;
+  border: 3px dashed #fff;
+  box-shadow: 0 0 24px #fff, 0 0 40px #b44cff;
+  animation: menreiki-blast-ring 1.05s ease-out 0.04s both;
+}
+@keyframes menreiki-blast-ring {
+  0% { transform: translate(-50%, -50%) scale(0.18) rotate(0deg); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.12) rotate(32deg); opacity: 0; }
+}
+.fx-menreiki-blast-shard {
+  width: 14px;
+  height: 28px;
+  border-radius: 40% 40% 60% 60%;
+  background: var(--c, #fff);
+  box-shadow: 0 0 16px var(--c, #fff);
+  animation: menreiki-blast-shard 0.62s ease-out forwards;
+}
+@keyframes menreiki-blast-shard {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scale(0.6);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) rotate(var(--ang, 0rad)) scale(0.2);
+    opacity: 0;
+  }
+}
