@@ -32,12 +32,26 @@ func main() {
 	maxSec := flag.Float64("timeout", 90, "单场模拟超时秒数，超时计平")
 	outPath := flag.String("o", "winrate.md", "输出文件")
 	jobs := flag.Int("j", runtime.NumCPU()*8, "同时进行的场次数")
+	only := flag.String("only", "", "只测该战斗机对其余所有球（不含自己打自己）")
 	flag.Parse()
 
 	kinds := unit.FighterKinds()
 	if len(kinds) < 1 {
 		fmt.Fprintln(os.Stderr, "没有已注册的战斗机")
 		os.Exit(1)
+	}
+	if *only != "" {
+		found := false
+		for _, k := range kinds {
+			if k == *only {
+				found = true
+				break
+			}
+		}
+		if !found {
+			fmt.Fprintf(os.Stderr, "没有战斗机 %q，已注册：%s\n", *only, strings.Join(kinds, " "))
+			os.Exit(1)
+		}
 	}
 	maxTicks := int(*maxSec * sim.TickHz)
 	if maxTicks < 1 {
@@ -49,9 +63,18 @@ func main() {
 
 	type pair struct{ a, b string }
 	var pairs []pair
-	for i := range kinds {
-		for j := i + 1; j < len(kinds); j++ {
-			pairs = append(pairs, pair{kinds[i], kinds[j]})
+	if *only != "" {
+		for _, k := range kinds {
+			if k == *only {
+				continue
+			}
+			pairs = append(pairs, pair{*only, k})
+		}
+	} else {
+		for i := range kinds {
+			for j := i + 1; j < len(kinds); j++ {
+				pairs = append(pairs, pair{kinds[i], kinds[j]})
+			}
 		}
 	}
 
@@ -120,7 +143,7 @@ func main() {
 	elapsed := time.Since(t0)
 	fmt.Fprintf(os.Stderr, "打完 %d 场，用时 %s\n", done.Load(), elapsed.Round(time.Millisecond))
 
-	text := render(kinds, results, *nGames, *maxSec, elapsed)
+	text := render(kinds, results, *nGames, *maxSec, elapsed, *only)
 	if err := os.WriteFile(*outPath, []byte(text), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -139,7 +162,7 @@ func mixSeed(a, b string, n uint64) uint64 {
 	return h
 }
 
-func render(kinds []string, results []pairResult, nGames int, maxSec float64, elapsed time.Duration) string {
+func render(kinds []string, results []pairResult, nGames int, maxSec float64, elapsed time.Duration, only string) string {
 	byPair := map[[2]string]pairResult{}
 	solo := map[string]*tally{}
 	for _, k := range kinds {
@@ -160,7 +183,11 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 	fmt.Fprintf(&b, "- 时间：%s\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(&b, "- 每组对战：%d 场（左右槽各一半）\n", nGames)
 	fmt.Fprintf(&b, "- 超时：%.0f 秒模拟时间，超时计平\n", maxSec)
-	fmt.Fprintf(&b, "- 组合数：%d，用时：%s\n\n", len(results), elapsed.Round(time.Millisecond))
+	fmt.Fprintf(&b, "- 组合数：%d，用时：%s\n", len(results), elapsed.Round(time.Millisecond))
+	if only != "" {
+		fmt.Fprintf(&b, "- 范围：仅 %s vs 其余战斗机；其他球的单球胜率是对阵 %s 的成绩\n", only, only)
+	}
+	fmt.Fprintf(&b, "\n")
 
 	fmt.Fprintf(&b, "## 单球胜率\n\n")
 	fmt.Fprintf(&b, "胜率 = 胜 /（胜+负+平）。胜平率 =（胜+平）/（胜+负+平）。不含自己打自己。\n\n")

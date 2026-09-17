@@ -8,10 +8,90 @@
   to { --hue: 360; }
 }
 .ball.look-chroma {
-  animation: chroma-spin 2.2s linear infinite, chroma-hue 2.2s linear infinite;
+  animation: chroma-spin 2.2s linear infinite;
+  background: transparent;
+  box-shadow: none;
+}
+.ball.look-chroma::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--kind);
+  color: var(--kind);
+  box-shadow: 0 0 12px currentColor;
+  animation: chroma-hue 2.2s linear infinite;
+  pointer-events: none;
+  z-index: 0;
 }
 @keyframes chroma-hue {
   to { filter: hue-rotate(360deg); }
+}
+.ball.look-chroma > .menreiki-hook {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 2px);
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, 0);
+  pointer-events: none;
+  z-index: 6;
+  filter: drop-shadow(0 0 2px #000c);
+  object-fit: contain;
+}
+.status-mark:has(img[src*="面灵气/status/break.png"]) {
+  width: 16px;
+  height: 16px;
+}
+.status-mark:has(img[src*="面灵气/status/break.png"]) img {
+  width: 16px;
+  height: 16px;
+}
+.status-mark:has(img[src*="面灵气/status/break.png"]) b {
+  right: -3px;
+  bottom: -2px;
+  font-size: 10px;
+}
+.ball.look-chroma.dashing::before {
+  box-shadow: 0 0 28px currentColor, 0 0 56px currentColor;
+}
+.ball.look-chroma.menreiki-share {
+  box-shadow: 0 0 18px #b44cff, 0 0 36px #b44cff;
+}
+.ball > .menreiki-stun {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 130%;
+  height: 130%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 8;
+  object-fit: contain;
+  filter: drop-shadow(0 0 4px #fff);
+  animation: menreiki-stun-spin 0.7s linear infinite;
+}
+@keyframes menreiki-stun-spin {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+.ball.look-mask1,
+.ball.look-mask2,
+.ball.look-mask3 {
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  box-shadow: none;
+  opacity: 1;
+}
+.ball.look-mask1 {
+  background-image: url("/ball/面灵气/status/mask1.png");
+}
+.ball.look-mask2 {
+  background-image: url("/ball/面灵气/status/mask2.png");
+}
+.ball.look-mask3 {
+  background-image: url("/ball/面灵气/status/mask3.png");
 }
 .fx-menreiki-blast-fill {
   width: var(--r, 160px);

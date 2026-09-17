@@ -687,7 +687,10 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		u.setVel(u.v.add(vec{c.AX, c.AY}.mul(DT)))
 	case unitpkg.Teleport:
 		u := m.units[c.UnitID]
-		if u == nil || u.stopped || !u.solid {
+		if u == nil || u.stopped {
+			return
+		}
+		if !u.solid && u.role != unitpkg.RoleHelper {
 			return
 		}
 		u.p = vec{c.X, c.Y}

@@ -124,17 +124,28 @@ func TestMenreikiMarksBothFighters(t *testing.T) {
 	if src == nil || dst == nil {
 		t.Fatal("missing fighters")
 	}
-	if !unitpkg.ValidFaction(src.faction) || !src.factionCollect || src.factionAmpOut != 1.15 {
-		t.Fatalf("self mark %+v collect=%v amp=%v", src.faction, src.factionCollect, src.factionAmpOut)
+	if !unitpkg.ValidFaction(src.faction) || src.factionCycle || src.factionCollect {
+		t.Fatalf("self mark %+v cycle=%v collect=%v", src.faction, src.factionCycle, src.factionCollect)
 	}
-	if !unitpkg.ValidFaction(dst.faction) || !dst.factionCycle || dst.factionAmpOut != 0 {
+	if math.Abs(src.factionAmpOut-1.10) > 1e-9 || math.Abs(src.factionAmpIn-0.90) > 1e-9 {
+		t.Fatalf("self amp out=%v in=%v", src.factionAmpOut, src.factionAmpIn)
+	}
+	if !unitpkg.ValidFaction(dst.faction) || dst.factionCycle || dst.factionAmpOut != 0 {
 		t.Fatalf("enemy mark %+v cycle=%v ampOut=%v", dst.faction, dst.factionCycle, dst.factionAmpOut)
 	}
-	if len(src.factionBarrage) != 4 {
-		t.Fatalf("barrage kinds=%v", src.factionBarrage)
+	got := 0
+	for _, id := range m.order {
+		o := m.units[id]
+		if o == nil || o.stopped || o.owner != src.id {
+			continue
+		}
+		switch o.kind {
+		case character.KindMenreikiMask1, character.KindMenreikiMask2, character.KindMenreikiMask3:
+			got++
+		}
 	}
-	if src.factionBlastR != 54 || src.factionBlastD != 16 {
-		t.Fatalf("blast r=%v d=%v", src.factionBlastR, src.factionBlastD)
+	if got != 3 {
+		t.Fatalf("masks=%d", got)
 	}
 }
 
@@ -156,7 +167,7 @@ func TestFactionBarrageWhenFourSeen(t *testing.T) {
 	m.markFactionLocked(unitpkg.MarkFaction{
 		UnitID: src.id, Faction: unitpkg.FactionCyan,
 		Cycle: true, Collect: true, AmpOut: 1.25,
-		Barrage: []string{"面具青", "面具红", "面具紫", "面具苍"},
+		Barrage: []string{"子弹", "子弹", "子弹", "子弹"},
 	})
 	for _, f := range unitpkg.AllFactions() {
 		src.noteFaction(f)
@@ -170,11 +181,9 @@ func TestFactionBarrageWhenFourSeen(t *testing.T) {
 		}
 		got[o.kind]++
 	}
-	for _, kind := range []string{"面具青", "面具红", "面具紫", "面具苍"} {
-		if got[kind] != 1 {
-			m.mu.Unlock()
-			t.Fatalf("shot %s count=%d all=%v", kind, got[kind], got)
-		}
+	if got["子弹"] < 4 {
+		m.mu.Unlock()
+		t.Fatalf("shot 子弹 count=%d all=%v", got["子弹"], got)
 	}
 	if len(src.seenList()) != 1 {
 		t.Fatalf("seen after barrage=%v", src.seenList())
@@ -193,7 +202,7 @@ func collectFour(m *Match, src *unit, blastR, blastD float64) {
 	m.markFactionLocked(unitpkg.MarkFaction{
 		UnitID: src.id, Faction: unitpkg.FactionCyan,
 		Cycle: true, Collect: true,
-		Barrage:     []string{"面具青", "面具红", "面具紫", "面具苍"},
+		Barrage:     []string{"子弹", "子弹", "子弹", "子弹"},
 		BlastRadius: blastR,
 		BlastDamage: blastD,
 	})

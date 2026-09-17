@@ -7,57 +7,59 @@ import (
 	"xqdj/internal/unit"
 )
 
-//go:embed fx faction
+//go:embed fx faction status
 var assets embed.FS
 
 const KindMenreiki = "面灵气"
-const KindMenreikiArc = "面灵气弧"
+const KindMenreikiMask1 = "面灵气面具1"
+const KindMenreikiMask2 = "面灵气面具2"
+const KindMenreikiMask3 = "面灵气面具3"
+const KindMenreikiShot = "面灵气弹"
 
 const (
-	menreikiRadius    = 18.0
-	menreikiSpeed     = 150.0
-	menreikiHP        = 75.0
-	menreikiVision    = 9999.0
-	menreikiRedDamage = 8.0
-	menreikiHitCD     = 0.1
-	menreikiRegen     = 1.0
-	menreikiRegenGap  = 1.0
-	menreikiCyanCD    = 1.4
-	menreikiPaleSpeed = 250.0
-	menreikiAmpOut    = 1.15
-	menreikiAmpIn     = 0.85
-	menreikiArcInner  = menreikiRadius
-	menreikiArcOuter  = menreikiRadius + 2
-	menreikiArcSpan   = 150.0
-	menreikiArcColor  = "#ff3b3b"
-	cyanKind          = "青弹"
-	cyanRadius        = 6.0
-	cyanSpeed         = 170.0
-	cyanDamage        = 5.0
-	cyanBounces       = 2
-	maskRadius        = 7.0
-	maskSpeed         = 300.0
-	maskDamage        = 7.0
-	maskBounces       = 4
-	maskQing          = "面具青"
-	maskHong          = "面具红"
-	maskZi            = "面具紫"
-	maskCang          = "面具苍"
-	menreikiBlastR    = menreikiRadius * 3
-	menreikiBlast     = 16.0
+	menreikiRadius = 18.0
+	menreikiSpeed  = 150.0
+	menreikiHP     = 100.0
+	menreikiVision = 9999.0
+	menreikiRegen  = 1.0
+	menreikiRegenGap = 1.0
+
+	maskDamage    = 3.5
+	maskRadius    = 10.0
+	maskRadiusRed = 15.0
+	maskOrbitPad  = 6.0
+	maskSpinT     = 2.0
+	maskSpinPaleT = 1.2
+	maskHitArc    = 2 * math.Pi / 3
+	paleCruise    = 250.0
+	paleTurn      = 90 * math.Pi / 180
+	paleSteerGap  = 0.15
+	redDamageMul  = 1.35
+
+	shotRadius     = 6.0
+	shotSpeed      = 300.0
+	shotRetarget   = 1.0
+	shotRetargetN  = 1
+	shotArc        = 2 * math.Pi
+	shotFirst      = math.Pi / 3
+
+	hook2At = 10.0
+	hook3At = 30.0
+
+	ampOut12 = 1.10
+	ampIn12  = 0.90
+	ampOut3  = 1.5
+	ampIn3   = 0.75
+
+	breakStacks = 4
+	stunSecs    = 2.0
+	shareSecs   = 5.0
+	shareMul    = 0.5
+	breakKind   = "破甲"
+	breakIcon   = "/ball/面灵气/status/break.png"
 )
 
-var menreikiBarrage = []string{maskQing, maskHong, maskZi, maskCang}
-
-var maskLooks = []struct {
-	kind  string
-	color string
-}{
-	{maskQing, "#3ec8e0"},
-	{maskHong, "#ff3b3b"},
-	{maskZi, "#b44cff"},
-	{maskCang, "#8dffb0"},
-}
+var maskKinds = []string{KindMenreikiMask1, KindMenreikiMask2, KindMenreikiMask3}
 
 func init() {
 	p := unit.NewPack(KindMenreiki, assets)
@@ -77,244 +79,585 @@ func init() {
 		Fighter: true,
 		Look:    unit.Look{Color: "hsl(200 92% 60%)", Ghost: 220, FX: []string{"chroma"}},
 	}, func(unit.SpawnInfo) unit.Actor {
-		return &面灵气{}
+		return &面灵气{hook: 1}
 	})
-	p.Register(unit.Spec{
-		Kind:     KindMenreikiArc,
-		Role:     unit.RoleProjectile,
-		Radius:   menreikiArcOuter,
-		MaxHP:    1,
-		Speed:    menreikiSpeed,
-		Vision:   0,
-		Fighter:  false,
-		Attach:   true,
-		ArcSpan:  unit.Deg(menreikiArcSpan),
-		ArcInner: menreikiArcInner,
-		Look:     unit.Look{Color: menreikiArcColor, Overlay: true},
-	}, func(info unit.SpawnInfo) unit.Actor {
-		return &面灵气弧{slot: info.Slot}
-	})
-	p.Register(unit.Spec{
-		Kind:    cyanKind,
-		Role:    unit.RoleProjectile,
-		Radius:  cyanRadius,
-		MaxHP:   1,
-		Speed:   cyanSpeed,
-		Vision:  0,
-		Fighter: false,
-		Look:    unit.Look{Color: "#3ec8e0"},
-	}, func(info unit.SpawnInfo) unit.Actor {
-		return &青弹{owner: info.OwnerID}
-	})
-	for _, shot := range maskLooks {
-		shot := shot
+	for i, kind := range maskKinds {
+		i, kind := i, kind
 		p.Register(unit.Spec{
-			Kind:    shot.kind,
-			Role:    unit.RoleProjectile,
-			Radius:  maskRadius,
-			MaxHP:   1,
-			Speed:   maskSpeed,
-			Vision:  0,
-			Fighter: false,
-			Look:    unit.Look{Color: shot.color, Trail: true},
+			Kind:      kind,
+			Role:      unit.RoleHelper,
+			Radius:    maskRadius,
+			MaxHP:     1,
+			Speed:     menreikiSpeed,
+			Vision:    0,
+			Fighter:   false,
+			PassWalls: true,
+			Look:      unit.Look{Color: "#f4f0e8", Overlay: true, FX: []string{maskFX(i)}},
 		}, func(info unit.SpawnInfo) unit.Actor {
-			return &面具弹{owner: info.OwnerID}
+			return &面具{owner: info.OwnerID, slot: info.Slot, index: i}
 		})
+	}
+	p.Register(unit.Spec{
+		Kind:    KindMenreikiShot,
+		Role:    unit.RoleProjectile,
+		Radius:  shotRadius,
+		MaxHP:   1,
+		Speed:   shotSpeed,
+		Vision:  9999,
+		Fighter: false,
+		Look:    unit.Look{Color: "#3ec8e0", Trail: true},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &面灵气弹{owner: info.OwnerID, slot: info.Slot}
+	})
+}
+
+func maskFX(i int) string {
+	switch i {
+	case 1:
+		return "mask2"
+	case 2:
+		return "mask3"
+	default:
+		return "mask1"
 	}
 }
 
 type 面灵气 struct {
-	selfMarked  bool
-	enemyMarked bool
-	faction     string
-	arc         unit.AttachState
-	fireReady   float64
+	hook        int
+	marked      bool
+	enemyID     uint64
+	angle       float64
+	lastT       float64
+	spun        [3]float64
+	shotOnce    [3]bool
+	hitSpun     [3]float64
+	paid        bool
 	regenReady  float64
+	paleOn      bool
+	stunID      uint64
+	stunUntil   float64
+	stunVX      float64
+	stunVY      float64
+	stunCruise  float64
+	frozen      bool
+	shareUntil  float64
+	breakN      int
+	prevEHP     float64
+	x, y        float64
+	vx, vy      float64
+	slot        int
+	ex, ey      float64
+	hasEnemy    bool
+	lastFac     string
+	steerReady  float64
+	steerWait   bool
 }
 
 func (m *面灵气) Handle(ctx unit.Context, ev unit.Event) {
-	if unit.AcceptHit(ctx, ev) {
-		return
-	}
-	s, ok := ev.(unit.Sense)
-	if !ok {
-		return
-	}
-	m.sense(ctx, s)
-	if m.faction == unit.FactionRed {
-		if unit.RearmAttach(s, ctx.ID, KindMenreikiArc, menreikiHitCD, &m.arc) {
-			unit.SpawnAttach(ctx, s, KindMenreikiArc)
+	switch e := ev.(type) {
+	case unit.IncomingDamage:
+		unit.ConfirmHit(ctx, e)
+		m.shareHit(ctx, e)
+	case unit.WallHit:
+		if m.lastFac == unit.FactionPale {
+			m.steerWait = true
 		}
-	} else if m.arc.Armed || unit.HasOwned(s, ctx.ID, KindMenreikiArc) {
-		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindMenreikiArc}
-		m.arc.Armed = false
-		m.arc.ReadyAt = 0
+	case unit.Collision:
+		if m.lastFac == unit.FactionPale && hitTarget(e.Other, m.slot) {
+			m.steerWait = true
+		}
+	case unit.Sense:
+		m.tickSense(ctx, e)
 	}
 }
 
-func (m *面灵气) sense(ctx unit.Context, s unit.Sense) {
+func (m *面灵气) tickSense(ctx unit.Context, s unit.Sense) {
+	m.x, m.y = s.Self.X, s.Self.Y
+	m.vx, m.vy = s.Self.VX, s.Self.VY
+	m.slot = s.Self.Slot
+	if e := enemyOf(s); e != nil {
+		m.ex, m.ey = e.X, e.Y
+		m.hasEnemy = true
+		m.enemyID = e.ID
+	}
+	if !m.marked {
+		ctx.Out <- unit.NoFrameFreeze{UnitID: ctx.ID, Hold: true}
+	}
+	setLive(ctx.ID, s.Self.Faction)
+	m.tickHook(ctx, s)
 	m.grant(ctx, s)
-	m.faction = s.Self.Faction
-	switch m.faction {
-	case unit.FactionPurple:
-		if s.Time >= m.regenReady {
-			ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: menreikiRegen}
-			m.regenReady = s.Time + menreikiRegenGap
+	m.watchBreak(ctx, s)
+	m.orbit(ctx, s)
+	m.factionTick(ctx, s)
+	m.collect(ctx, s)
+	m.holdStun(ctx, s)
+	switched := s.Self.Faction == unit.FactionPale && m.lastFac != unit.FactionPale
+	pending := m.steerWait && (m.lastFac == unit.FactionPale || s.Self.Faction == unit.FactionPale)
+	if switched || pending {
+		m.steerPale(ctx, s.Time, switched)
+	}
+	m.steerWait = false
+	m.lastFac = s.Self.Faction
+	if s.Time+1e-9 < m.shareUntil {
+		ctx.Out <- unit.FX{
+			Name: "share", Kind: ctx.Kind, UnitID: ctx.ID,
+			X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot,
 		}
-	case unit.FactionCyan:
-		m.shoot(ctx, s)
-	case unit.FactionPale:
-		m.speedUp(ctx, s)
+	}
+}
+
+func (m *面灵气) tickHook(ctx unit.Context, s unit.Sense) {
+	want := 1
+	if s.Time+1e-9 >= hook3At {
+		want = 3
+	} else if s.Time+1e-9 >= hook2At {
+		want = 2
+	}
+	if want != m.hook {
+		if want == 3 {
+			m.paid = false
+			if e := enemyOf(s); e != nil {
+				ctx.Out <- unit.ClearFactionSeen{UnitID: e.ID}
+			}
+		}
+		m.hook = want
+		m.restamp(ctx, s, true)
+	}
+	ctx.Out <- unit.FX{
+		Name: "hook", Kind: ctx.Kind, UnitID: ctx.ID,
+		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot,
+		Amount: float64(m.hook),
 	}
 }
 
 func (m *面灵气) grant(ctx unit.Context, s unit.Sense) {
-	if !m.selfMarked {
-		ctx.Out <- unit.MarkFaction{
-			UnitID:      ctx.ID,
-			Faction:     unit.PickFaction(rand.IntN(4)),
-			Cycle:       true,
-			AmpOut:      menreikiAmpOut,
-			AmpIn:       menreikiAmpIn,
-			Collect:     true,
-			Barrage:     menreikiBarrage,
-			BlastRadius: menreikiBlastR,
-			BlastDamage: menreikiBlast,
+	if m.marked {
+		if e := enemyOf(s); e != nil {
+			m.enemyID = e.ID
 		}
-		m.selfMarked = true
-	}
-	if m.enemyMarked {
 		return
 	}
+	selfF := unit.PickFaction(rand.IntN(4))
+	ctx.Out <- unit.MarkFaction{
+		UnitID:  ctx.ID,
+		Faction: selfF,
+		AmpOut:  ampOut12,
+		AmpIn:   ampIn12,
+	}
+	m.marked = true
+	e := enemyOf(s)
+	if e == nil {
+		return
+	}
+	m.enemyID = e.ID
+	ctx.Out <- unit.MarkFaction{
+		UnitID:  e.ID,
+		Faction: unit.PickFaction(rand.IntN(4)),
+	}
+}
+
+func (m *面灵气) restamp(ctx unit.Context, s unit.Sense, cycle bool) {
+	out, in := amps(m.hook)
+	selfF := s.Self.Faction
+	if selfF == "" {
+		selfF = unit.PickFaction(rand.IntN(4))
+	}
+	ctx.Out <- unit.MarkFaction{
+		UnitID:  ctx.ID,
+		Faction: selfF,
+		Cycle:   cycle,
+		AmpOut:  out,
+		AmpIn:   in,
+	}
+	e := enemyOf(s)
+	if e == nil {
+		return
+	}
+	ef := e.Faction
+	if ef == "" {
+		ef = unit.PickFaction(rand.IntN(4))
+	}
+	ctx.Out <- unit.MarkFaction{
+		UnitID:  e.ID,
+		Faction: ef,
+		Cycle:   cycle,
+		Collect: cycle,
+	}
+}
+
+func amps(hook int) (out, in float64) {
+	if hook >= 3 {
+		return ampOut3, ampIn3
+	}
+	return ampOut12, ampIn12
+}
+
+func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
+	dt := 0.0
+	if m.lastT > 0 {
+		dt = s.Time - m.lastT
+	} else {
+		armAllMasks(ctx.ID)
+	}
+	m.lastT = s.Time
+	omega := 2 * math.Pi / maskSpinT
+	if s.Self.Faction == unit.FactionPale {
+		omega = 2 * math.Pi / maskSpinPaleT
+	}
+	m.angle -= omega * dt
+	r := maskRadius
+	if s.Self.Faction == unit.FactionRed {
+		r = maskRadiusRed
+	}
+	orbit := s.Self.Radius + r + maskOrbitPad
+	have := map[string]*unit.Snapshot{}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+		if o.OwnerID != ctx.ID {
 			continue
 		}
-		ctx.Out <- unit.MarkFaction{
-			UnitID:  o.ID,
-			Faction: unit.PickFaction(rand.IntN(4)),
-			Cycle:   true,
+		have[o.Kind] = o
+	}
+	e := enemyOf(s)
+	var mx, my [3]float64
+	for i, kind := range maskKinds {
+		ang := m.angle - float64(i)*2*math.Pi/3
+		cs, sn := math.Cos(ang), math.Sin(ang)
+		x := s.Self.X + cs*orbit
+		y := s.Self.Y + sn*orbit
+		mx[i], my[i] = x, y
+		vx := s.Self.VX + omega*sn*orbit
+		vy := s.Self.VY - omega*cs*orbit
+		cur := have[kind]
+		if dt > 0 {
+			m.hitSpun[i] += omega * dt
+			for m.hitSpun[i] >= maskHitArc {
+				m.hitSpun[i] -= maskHitArc
+				armMask(ctx.ID, i)
+			}
 		}
-		m.enemyMarked = true
-		return
+		if e != nil && math.Hypot(x-e.X, y-e.Y) <= r+e.Radius {
+			if spendMask(ctx.ID, i) {
+				strike(ctx, *e, maskDmg(s.Self.Faction))
+			}
+		}
+		if cur == nil {
+			ctx.Out <- unit.Spawn{
+				Kind:    kind,
+				X:       x,
+				Y:       y,
+				VX:      vx,
+				VY:      vy,
+				OwnerID: ctx.ID,
+				Slot:    s.Self.Slot,
+			}
+			continue
+		}
+		ctx.Out <- unit.Teleport{UnitID: cur.ID, X: x, Y: y}
+		ctx.Out <- unit.SetVelocity{UnitID: cur.ID, VX: vx, VY: vy}
+		if math.Abs(cur.Radius-r) > 1e-6 {
+			ctx.Out <- unit.SetRadius{UnitID: cur.ID, Radius: r}
+		}
+		if s.Self.Faction == unit.FactionCyan && dt > 0 {
+			m.spun[i] += omega * dt
+			if !m.shotOnce[i] {
+				if m.spun[i] >= shotFirst {
+					m.spun[i] = 0
+					m.shotOnce[i] = true
+					m.fireShot(ctx, s, x, y, cs, sn)
+				}
+			} else {
+				for m.spun[i] >= shotArc {
+					m.spun[i] -= shotArc
+					m.fireShot(ctx, s, x, y, cs, sn)
+				}
+			}
+		} else if s.Self.Faction != unit.FactionCyan {
+			m.spun[i] = 0
+			m.shotOnce[i] = false
+		}
+	}
+	if s.Self.Faction == unit.FactionPurple {
+		m.eatShots(ctx, s, mx, my, r)
 	}
 }
 
-type 面灵气弧 struct {
-	slot int
-}
-
-func (a *面灵气弧) Handle(ctx unit.Context, ev unit.Event) {
-	e, ok := ev.(unit.Collision)
-	if !ok || !unit.EnemyFighter(e, a.slot) {
-		return
-	}
-	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: menreikiRedDamage}
-	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
-}
-
-func (m *面灵气) shoot(ctx unit.Context, s unit.Sense) {
-	if s.Time < m.fireReady {
-		return
-	}
-	var target *unit.Snapshot
+func (m *面灵气) eatShots(ctx unit.Context, s unit.Sense, mx, my [3]float64, r float64) {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+		if !shotClearable(*o, ctx.ID) {
 			continue
 		}
-		target = o
-		break
+		for k := 0; k < 3; k++ {
+			if math.Hypot(o.X-mx[k], o.Y-my[k]) <= o.Radius+r {
+				ctx.Out <- unit.Despawn{UnitID: o.ID}
+				break
+			}
+		}
 	}
-	if target == nil {
-		return
+}
+
+func (m *面灵气) fireShot(ctx unit.Context, s unit.Sense, x, y, nx, ny float64) {
+	ux, uy := -ny, nx
+	if e := enemyOf(s); e != nil {
+		dx, dy := e.X-x, e.Y-y
+		if n := math.Hypot(dx, dy); n > 1e-6 {
+			ux, uy = dx/n, dy/n
+		}
 	}
-	dx := target.X - s.Self.X
-	dy := target.Y - s.Self.Y
-	n := math.Hypot(dx, dy)
-	if n < 1e-6 {
-		return
+	gap := maskRadius + shotRadius + 1.5
+	if s.Self.Faction == unit.FactionRed {
+		gap = maskRadiusRed + shotRadius + 1.5
 	}
-	ux, uy := dx/n, dy/n
-	gap := s.Self.Radius + cyanRadius + 1.5
 	ctx.Out <- unit.Spawn{
-		Kind:    cyanKind,
-		X:       s.Self.X + ux*gap,
-		Y:       s.Self.Y + uy*gap,
-		VX:      ux * cyanSpeed,
-		VY:      uy * cyanSpeed,
+		Kind:    KindMenreikiShot,
+		X:       x + ux*gap,
+		Y:       y + uy*gap,
+		VX:      ux * shotSpeed,
+		VY:      uy * shotSpeed,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
 	}
-	m.fireReady = s.Time + menreikiCyanCD
 	ctx.Out <- unit.FX{
 		Name: "shot", Kind: ctx.Kind,
-		X: s.Self.X, Y: s.Self.Y,
-		VX: ux * cyanSpeed, VY: uy * cyanSpeed,
+		X: x, Y: y, VX: ux * shotSpeed, VY: uy * shotSpeed,
 		Slot: s.Self.Slot,
 	}
 }
 
-func (m *面灵气) speedUp(ctx unit.Context, s unit.Sense) {
-	dx, dy := s.Self.VX, s.Self.VY
-	n := math.Hypot(dx, dy)
-	if n < 1e-6 {
-		dx, dy, n = 1, 0, 1
+func (m *面灵气) factionTick(ctx unit.Context, s unit.Sense) {
+	if s.Self.Faction == unit.FactionPurple && s.Time >= m.regenReady {
+		ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: menreikiRegen}
+		m.regenReady = s.Time + menreikiRegenGap
 	}
-	ctx.Out <- unit.SetVelocity{
-		UnitID: ctx.ID,
-		VX:     dx / n * menreikiPaleSpeed,
-		VY:     dy / n * menreikiPaleSpeed,
+	if s.Self.Faction == unit.FactionPale {
+		if !m.paleOn {
+			ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: paleCruise}
+			m.paleOn = true
+			m.writeSpeed(ctx, paleCruise)
+		}
+		return
 	}
-}
-
-type 青弹 struct {
-	owner   uint64
-	bounces int
-}
-
-func (b *青弹) Handle(ctx unit.Context, ev unit.Event) {
-	switch e := ev.(type) {
-	case unit.Collision:
-		if e.Other.ID == b.owner {
-			return
-		}
-		if e.Other.Role != unit.RoleFighter {
-			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
-			return
-		}
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: cyanDamage}
-		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
-	case unit.WallHit:
-		b.bounces++
-		if b.bounces >= cyanBounces {
-			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
-		}
+	if m.paleOn {
+		ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: menreikiSpeed}
+		m.paleOn = false
+		m.writeSpeed(ctx, menreikiSpeed)
 	}
 }
 
-type 面具弹 struct {
-	owner   uint64
-	bounces int
+func (m *面灵气) writeSpeed(ctx unit.Context, speed float64) {
+	n := math.Hypot(m.vx, m.vy)
+	ux, uy := 1.0, 0.0
+	if n > 1e-6 {
+		ux, uy = m.vx/n, m.vy/n
+	}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * speed, VY: uy * speed}
+	m.vx, m.vy = ux * speed, uy * speed
 }
 
-func (b *面具弹) Handle(ctx unit.Context, ev unit.Event) {
-	switch e := ev.(type) {
-	case unit.Collision:
-		if e.Other.ID == b.owner {
-			return
+func (m *面灵气) steerPale(ctx unit.Context, t float64, force bool) {
+	if !m.hasEnemy {
+		return
+	}
+	if !force && t+1e-9 < m.steerReady {
+		return
+	}
+	sp := math.Hypot(m.vx, m.vy)
+	if m.paleOn {
+		sp = paleCruise
+	}
+	if sp < 1e-6 {
+		return
+	}
+	dx, dy := m.ex-m.x, m.ey-m.y
+	tn := math.Hypot(dx, dy)
+	ux, uy := m.vx/sp, m.vy/sp
+	if tn > 1e-6 {
+		ux, uy = turnToward(ux, uy, dx/tn, dy/tn, paleTurn)
+	}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * sp, VY: uy * sp}
+	m.vx, m.vy = ux*sp, uy*sp
+	m.steerReady = t + paleSteerGap
+}
+
+func turnToward(ux, uy, tx, ty, maxRad float64) (float64, float64) {
+	ang := math.Atan2(ux*ty-uy*tx, ux*tx+uy*ty)
+	if ang > maxRad {
+		ang = maxRad
+	} else if ang < -maxRad {
+		ang = -maxRad
+	}
+	c, s := math.Cos(ang), math.Sin(ang)
+	return ux*c - uy*s, ux*s + uy*c
+}
+
+func (m *面灵气) collect(ctx unit.Context, s unit.Sense) {
+	if m.hook < 2 {
+		return
+	}
+	e := enemyOf(s)
+	if e == nil {
+		return
+	}
+	if len(e.Seen) < len(unit.AllFactions()) {
+		return
+	}
+	if m.hook < 3 && m.paid {
+		return
+	}
+	m.paid = m.hook < 3
+	m.pay(ctx, s, e)
+	if m.hook >= 3 {
+		ctx.Out <- unit.ClearFactionSeen{UnitID: e.ID}
+	}
+}
+
+func (m *面灵气) pay(ctx unit.Context, s unit.Sense, e *unit.Snapshot) {
+	switch e.Faction {
+	case unit.FactionRed:
+		strike(ctx, *e, maskDmg(s.Self.Faction))
+	case unit.FactionCyan:
+		m.stun(ctx, s, e)
+	case unit.FactionPale:
+		ctx.Out <- unit.StackMark{
+			UnitID: e.ID,
+			Kind:   breakKind,
+			Delta:  breakStacks,
+			Icon:   breakIcon,
 		}
-		if e.Other.Role != unit.RoleFighter {
-			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
-			return
-		}
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: maskDamage}
-		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
-	case unit.WallHit:
-		b.bounces++
-		if b.bounces >= maskBounces {
-			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+	case unit.FactionPurple:
+		m.shareUntil = s.Time + shareSecs
+		m.enemyID = e.ID
+		ctx.Out <- unit.FX{
+			Name: "share", Kind: ctx.Kind, UnitID: ctx.ID,
+			X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot,
 		}
 	}
+}
+
+func (m *面灵气) stun(ctx unit.Context, s unit.Sense, e *unit.Snapshot) {
+	m.stunID = e.ID
+	m.stunUntil = s.Time + stunSecs
+	m.stunVX, m.stunVY = e.VX, e.VY
+	m.stunCruise = math.Hypot(e.VX, e.VY)
+	if spec, ok := unit.Lookup(e.Kind); ok && spec.Speed > 0 {
+		m.stunCruise = spec.Speed
+	}
+	m.frozen = true
+	ctx.Out <- unit.Stun{UnitID: e.ID, Hold: true}
+	ctx.Out <- unit.SetVelocity{UnitID: e.ID, VX: 0, VY: 0}
+	ctx.Out <- unit.SetCruise{UnitID: e.ID, Speed: 0}
+	ctx.Out <- unit.FX{
+		Name: "stun", Kind: ctx.Kind, UnitID: e.ID,
+		X: e.X, Y: e.Y, Slot: s.Self.Slot,
+	}
+}
+
+func (m *面灵气) holdStun(ctx unit.Context, s unit.Sense) {
+	if !m.frozen || m.stunID == 0 {
+		return
+	}
+	alive := false
+	for i := range s.Nearby {
+		if s.Nearby[i].ID == m.stunID {
+			alive = true
+			break
+		}
+	}
+	if !alive || s.Time+1e-9 >= m.stunUntil {
+		if alive {
+			ctx.Out <- unit.Stun{UnitID: m.stunID, Hold: false}
+			ctx.Out <- unit.SetCruise{UnitID: m.stunID, Speed: m.stunCruise}
+			vx, vy := m.stunVX, m.stunVY
+			if math.Hypot(vx, vy) < 1e-6 {
+				vx, vy = m.stunCruise, 0
+			}
+			ctx.Out <- unit.SetVelocity{UnitID: m.stunID, VX: vx, VY: vy}
+		}
+		m.frozen = false
+		m.stunID = 0
+		return
+	}
+	ctx.Out <- unit.Stun{UnitID: m.stunID, Hold: true}
+	ctx.Out <- unit.SetVelocity{UnitID: m.stunID, VX: 0, VY: 0}
+	ctx.Out <- unit.SetCruise{UnitID: m.stunID, Speed: 0}
+	var tx, ty float64
+	for i := range s.Nearby {
+		if s.Nearby[i].ID == m.stunID {
+			tx, ty = s.Nearby[i].X, s.Nearby[i].Y
+			break
+		}
+	}
+	ctx.Out <- unit.FX{
+		Name: "stun", Kind: ctx.Kind, UnitID: m.stunID,
+		X: tx, Y: ty, Slot: s.Self.Slot,
+	}
+}
+
+func maskDmg(faction string) float64 {
+	if faction == unit.FactionRed {
+		return maskDamage * redDamageMul
+	}
+	return maskDamage
+}
+
+func enemyOf(s unit.Sense) *unit.Snapshot {
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Role == unit.RoleFighter && o.Slot != s.Self.Slot {
+			return o
+		}
+	}
+	return nil
+}
+
+func hitTarget(other unit.Snapshot, slot int) bool {
+	return other.Role == unit.RoleFighter && other.Slot != slot
+}
+
+func strike(ctx unit.Context, to unit.Snapshot, amount float64) {
+	extra := markStacks(to, breakKind)
+	ctx.Out <- unit.Damage{From: ctx.ID, To: to.ID, Amount: amount + float64(extra)}
+	if extra > 0 {
+		ctx.Out <- unit.ClearMarks{UnitID: to.ID, Kind: breakKind}
+	}
+}
+
+func markStacks(u unit.Snapshot, kind string) int {
+	for _, mk := range u.Marks {
+		if mk.Kind == kind {
+			return mk.Stacks
+		}
+	}
+	return 0
+}
+
+func (m *面灵气) shareHit(ctx unit.Context, d unit.IncomingDamage) {
+	if m.shareUntil <= 0 || d.Time+1e-9 >= m.shareUntil {
+		return
+	}
+	if m.enemyID == 0 || d.Amount <= 0 || d.From == ctx.ID {
+		return
+	}
+	extra := m.breakN
+	ctx.Out <- unit.Damage{From: ctx.ID, To: m.enemyID, Amount: d.Amount*shareMul + float64(extra)}
+	if extra > 0 {
+		ctx.Out <- unit.ClearMarks{UnitID: m.enemyID, Kind: breakKind}
+		m.breakN = 0
+	}
+}
+
+func (m *面灵气) watchBreak(ctx unit.Context, s unit.Sense) {
+	e := enemyOf(s)
+	if e == nil {
+		return
+	}
+	n := markStacks(*e, breakKind)
+	if n > 0 && m.prevEHP > 0 && e.HP < m.prevEHP-0.5 {
+		ctx.Out <- unit.Damage{From: ctx.ID, To: e.ID, Amount: float64(n)}
+		ctx.Out <- unit.ClearMarks{UnitID: e.ID, Kind: breakKind}
+		n = 0
+	}
+	m.prevEHP = e.HP
+	m.breakN = n
 }

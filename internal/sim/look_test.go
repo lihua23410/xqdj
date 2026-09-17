@@ -26,17 +26,19 @@ func TestLooksComeFromCharacterSpecs(t *testing.T) {
 	if !ok || eng.Color == "" || eng.VisionRing || len(eng.FX) == 0 || eng.FX[0] != "engine" {
 		t.Fatalf("内燃机 look=%+v", eng)
 	}
-	if looks["面具青"].Color != "#3ec8e0" || looks["面具红"].Color != "#ff3b3b" {
-		t.Fatalf("mask looks 青=%+v 红=%+v", looks["面具青"], looks["面具红"])
+	m1, m2 := looks[character.KindMenreikiMask1], looks[character.KindMenreikiMask2]
+	if len(m1.FX) == 0 || m1.FX[0] != "mask1" || len(m2.FX) == 0 || m2.FX[0] != "mask2" {
+		t.Fatalf("mask looks 1=%+v 2=%+v", m1, m2)
 	}
-	if looks["面具紫"].Color != "#b44cff" || looks["面具苍"].Color != "#8dffb0" {
-		t.Fatalf("mask looks 紫=%+v 苍=%+v", looks["面具紫"], looks["面具苍"])
+	m3, mshot := looks[character.KindMenreikiMask3], looks[character.KindMenreikiShot]
+	if len(m3.FX) == 0 || m3.FX[0] != "mask3" || mshot.Color == "" {
+		t.Fatalf("mask3=%+v shot=%+v", m3, mshot)
 	}
 	pack, ok := unitpkg.Packs()[character.KindMenreiki]
 	if !ok || pack.Base != "/ball/面灵气" {
 		t.Fatalf("面灵气 pack=%+v", pack)
 	}
-	wantFiles := []string{"faction/qing.png", "faction/hong.png", "faction/zi.png", "faction/cang.png", "fx/faction.js"}
+	wantFiles := []string{"faction/qing.png", "faction/hong.png", "faction/zi.png", "faction/cang.png", "fx/chroma.js", "status/hook1.png", "status/mask1.png", "status/break.png", "status/stg_0.png"}
 	have := map[string]bool{}
 	for _, f := range pack.Files {
 		have[f] = true
