@@ -1,331 +1,454 @@
-package 优昙华院
+package 人偶使
 
 import (
 	"math"
 	"xqdj/internal/unit"
 )
 
-func (a *优昙华院) castVolley(ctx unit.Context, s unit.Sense, enemy unit.Snapshot, act Action) bool {
-	a.volleyAng = angleOf(s.Self, enemy, act.ABin)
-	a.volleyLeft = volleyCount
-	a.volleyNext = s.Time
-	a.volleyHold = s.Time + float64(volleyCount)*volleyGap
-	a.tickVolley(ctx, s)
-	return true
+func (a *人偶使) invoke(ctx unit.Context, s unit.Sense, enemy unit.Snapshot, sk uint8) bool {
+	switch sk {
+	case SkillAtkFan:
+		return a.castFan(ctx, s, enemy, unit.Deg(atkFanDeg), atkFanHits, atkFanDmg, atkFanWind, atkFanLife, 1, poseAd)
+	case SkillFan:
+		return a.castFan(ctx, s, enemy, unit.Deg(skFanDeg), skFanHits, skFanDmg, atkFanWind, atkFanLife, 1, poseAc)
+	case SkillAtkRect:
+		return a.castRect(ctx, s, enemy)
+	case SkillPlace:
+		return a.castPlace(ctx, s)
+	case SkillN22:
+		if a.playingCard || a.levelOf(SkillN22) >= 1 {
+			return a.castChain(ctx, s, enemy)
+		}
+		return a.castChase(ctx, s, enemy)
+	case SkillN26:
+		if a.playingCard || a.levelOf(SkillN26) >= 1 {
+			return a.castSpell26(ctx, s)
+		}
+		return a.castSpecial26(ctx, s)
+	case SkillN24:
+		return a.castSpell24(ctx, s, enemy)
+	case SkillN62:
+		return a.castSpell62(ctx, s, enemy)
+	case CardDemon:
+		return a.castDemon(ctx, s, enemy)
+	case CardHourai:
+		return a.castHourai(ctx, s, enemy)
+	case CardBattle:
+		return a.castBattle(ctx, s)
+	case CardSpirit:
+		return a.castSpirit(ctx, s, enemy)
+	}
+	return false
 }
 
-func (a *优昙华院) tickVolley(ctx unit.Context, s unit.Sense) {
-	if a.volleyLeft <= 0 {
-		if s.Time+1e-9 >= a.volleyHold {
-			a.volleyHold = 0
-		}
-		return
-	}
-	if s.Time+1e-9 < a.volleyNext {
-		return
-	}
-	i := volleyCount - a.volleyLeft
-	off := float64(i-(volleyCount-1)/2) * volleySpread
-	ang := a.volleyAng + off
-	ux, uy := math.Cos(ang), math.Sin(ang)
-	gap := s.Self.Radius + volleyRadius + 1.5
-	spawnShot(ctx, KindSeekShot, s.Self.X, s.Self.Y, ux, uy, volleySpeed, gap, s.Self.Slot)
-	shotFX(ctx, s, ux, uy)
-	a.volleyLeft--
-	a.volleyNext = s.Time + volleyGap
-	if a.volleyLeft <= 0 {
-		a.volleyHold = s.Time + volleyGap
-	}
-}
-
-func (a *优昙华院) castMind(ctx unit.Context, s unit.Sense, enemy unit.Snapshot, act Action) bool {
-	ang := angleOf(s.Self, enemy, act.ABin)
-	ux, uy := math.Cos(ang), math.Sin(ang)
-	gap := s.Self.Radius + mindRadius + 1.5
-	spawnShot(ctx, KindMindShot, s.Self.X, s.Self.Y, ux, uy, mindSpeed(0), gap, s.Self.Slot)
-	shotFX(ctx, s, ux, uy)
-	return true
-}
-
-func (a *优昙华院) castBreak(ctx unit.Context, s unit.Sense, enemy unit.Snapshot) bool {
-	hit := false
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
-			continue
-		}
-		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) > breakRange+o.Radius {
-			continue
-		}
-		hit = true
-		deal(ctx, ctx.ID, o.ID, SkillBreak, breakDamage)
-		dx, dy := o.X-s.Self.X, o.Y-s.Self.Y
-		n := math.Hypot(dx, dy)
-		if n < 1e-6 {
-			dx, dy = enemy.X-s.Self.X, enemy.Y-s.Self.Y
-			n = math.Hypot(dx, dy)
-		}
-		if n < 1e-6 {
-			dx, dy, n = 1, 0, 1
-		}
-		ctx.Out <- unit.SetVelocity{UnitID: o.ID, VX: dx / n * breakKnock, VY: dy / n * breakKnock}
-	}
-	if !hit {
+func (a *人偶使) castFan(ctx unit.Context, s unit.Sense, enemy unit.Snapshot, span float64, hits int, dmg, wind, life float64, nDolls int, pose uint8) bool {
+	if enemy.ID == 0 {
 		return false
 	}
-	ctx.Out <- unit.FX{
-		Name: "break", Kind: ctx.Kind, UnitID: ctx.ID,
-		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: breakRange,
+	ux, uy := toward(s.Self, enemy)
+	ox, oy := offset(s.Self.X, s.Self.Y, ux, uy, dollReach)
+	ox, oy = clampHex(ox, oy, dollRadius)
+	for i := 0; i < nDolls; i++ {
+		px, py := ox, oy
+		if nDolls > 1 {
+			perpX, perpY := -uy, ux
+			off := (float64(i) - float64(nDolls-1)/2) * 16
+			px, py = clampHex(ox+perpX*off, oy+perpY*off, dollRadius)
+		}
+		spawnDollAt(ctx, s, px, py, dollSpec{mode: dollStrike, pose: pose, recallAt: s.Time + wind + life})
 	}
+	a.setJob(ctx, s, job{
+		kind: SkillAtkFan, until: s.Time + wind + life, next: s.Time + wind,
+		left: hits, ox: ox, oy: oy, ux: ux, uy: uy, dmg: dmg, span: span, reach: fanR,
+		wind: s.Time + wind, gap: life / float64(hits),
+	})
 	return true
 }
 
-func (a *优昙华院) castLaser(ctx unit.Context, s unit.Sense, enemy unit.Snapshot, act Action) bool {
-	ang := angleOf(s.Self, enemy, act.ABin)
-	ux, uy := math.Cos(ang), math.Sin(ang)
-	a.lockX, a.lockY = s.Self.X, s.Self.Y
-	a.holdVX, a.holdVY = s.Self.VX, s.Self.VY
-	a.laserUX, a.laserUY = ux, uy
-	a.laserFrom = s.Time + laserWind
-	a.laserUntil = a.laserFrom + laserLife
-	a.laserHitAt = a.laserFrom
-	a.laserOn = false
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
-	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: a.lockX, Y: a.lockY}
-	ctx.Out <- unit.FX{
-		Name: "laser-warn", Kind: ctx.Kind, UnitID: ctx.ID,
-		X: a.lockX, Y: a.lockY, VX: ux, VY: uy, Slot: s.Self.Slot, Amount: laserWind,
-	}
-	return true
-}
-
-func (a *优昙华院) armLaser(ctx unit.Context, s unit.Sense) {
-	if a.laserOn || s.Time+1e-9 < a.laserFrom {
-		return
-	}
-	a.laserOn = true
-	ctx.Out <- unit.Spawn{
-		Kind: KindLaser, X: a.lockX, Y: a.lockY,
-		VX: a.laserUX, VY: a.laserUY, OwnerID: ctx.ID, Slot: s.Self.Slot,
-	}
-	ctx.Out <- unit.FX{
-		Name: "laser", Kind: ctx.Kind, UnitID: ctx.ID,
-		X: a.lockX, Y: a.lockY, VX: a.laserUX, VY: a.laserUY, Slot: s.Self.Slot,
-	}
-}
-
-func (a *优昙华院) lockPose(ctx unit.Context, s unit.Sense) {
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
-	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: a.lockX, Y: a.lockY}
-}
-
-func (a *优昙华院) tickLaser(ctx unit.Context, s unit.Sense) {
-	if s.Time+1e-9 < a.laserHitAt {
-		return
-	}
-	a.laserHitAt = s.Time + laserTick
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
-			continue
-		}
-		if !laserHits(a.lockX, a.lockY, a.laserUX, a.laserUY, *o) {
-			continue
-		}
-		deal(ctx, ctx.ID, o.ID, SkillLaser, laserDamage)
-	}
-}
-
-func (a *优昙华院) stopLaser(ctx unit.Context) {
-	a.laserUntil = 0
-	a.laserFrom = 0
-	a.laserOn = false
-	ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindLaser}
-	vx, vy := a.holdVX, a.holdVY
-	if math.Hypot(vx, vy) < 1e-6 {
-		vx, vy = a.laserUX*udongeinSpeed, a.laserUY*udongeinSpeed
-	}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
-}
-
-func laserHits(x, y, ux, uy float64, e unit.Snapshot) bool {
-	vx, vy := e.X-x, e.Y-y
-	along := vx*ux + vy*uy
-	if along < -e.Radius || along > laserLen {
+func (a *人偶使) castRect(ctx unit.Context, s unit.Sense, enemy unit.Snapshot) bool {
+	if enemy.ID == 0 {
 		return false
 	}
-	side := math.Abs(vx*uy - vy*ux)
-	return side <= laserHalf+e.Radius
-}
-
-func (a *优昙华院) castAspect(ctx unit.Context, s unit.Sense, enemy unit.Snapshot, act Action) bool {
-	ang := angleOf(s.Self, enemy, act.ABin)
-	cx, cy := aspectPos(s.Self, enemy, ang)
-	a.aspectUX, a.aspectUY = math.Cos(ang), math.Sin(ang)
-	a.cloneX, a.cloneY = cx, cy
-	a.aspectLeft = aspectShots
-	a.aspectNext = s.Time
-	a.aspectHold = s.Time + float64(aspectShots)*aspectGap
-	ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindAspect}
-	ctx.Out <- unit.Spawn{
-		Kind: KindAspect, X: cx, Y: cy,
-		OwnerID: ctx.ID, Slot: s.Self.Slot,
+	ux, uy := toward(s.Self, enemy)
+	ox, oy := offset(s.Self.X, s.Self.Y, ux, uy, dollReach)
+	ox, oy = clampHex(ox, oy, dollRadius)
+	for i := 0; i < 4; i++ {
+		perpX, perpY := -uy, ux
+		col, row := float64(i%2)*18-9, float64(i/2)*18-9
+		px, py := clampHex(ox+ux*row+perpX*col, oy+uy*row+perpY*col, dollRadius)
+		spawnDollAt(ctx, s, px, py, dollSpec{mode: dollStrike, pose: poseAh, recallAt: s.Time + atkRectWind + atkRectLife})
 	}
-	ctx.Out <- unit.FX{
-		Name: "clone", Kind: ctx.Kind, UnitID: ctx.ID,
-		X: cx, Y: cy, Slot: s.Self.Slot,
-	}
-	a.tickAspect(ctx, s)
+	a.setJob(ctx, s, job{
+		kind: SkillAtkRect, until: s.Time + atkRectWind + atkRectLife, next: s.Time + atkRectWind,
+		left: 1, ox: ox, oy: oy, ux: ux, uy: uy, dmg: atkRectDmg, knock: true,
+		wind: s.Time + atkRectWind, gap: atkRectLife,
+	})
 	return true
 }
 
-func (a *优昙华院) tickAspect(ctx unit.Context, s unit.Sense) {
-	if a.aspectLeft <= 0 {
-		if s.Time+1e-9 >= a.aspectHold {
-			ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindAspect}
-			a.aspectHold = 0
-		}
-		return
-	}
-	if s.Time+1e-9 < a.aspectNext {
-		return
-	}
-	a.fireAt(ctx, s, a.cloneX, a.cloneY, a.aspectUX, a.aspectUY)
-	a.aspectLeft--
-	a.aspectNext = s.Time + aspectGap
-	if a.aspectLeft <= 0 {
-		a.aspectHold = s.Time + aspectGap
-	}
+func (a *人偶使) castPlace(ctx unit.Context, s unit.Sense) bool {
+	ux, uy := randDir(a)
+	x, y := offset(s.Self.X, s.Self.Y, ux, uy, dollFar)
+	x, y = clampHex(x, y, dollRadius)
+	spawnDollAt(ctx, s, x, y, dollSpec{mode: dollShoot, shootAt: s.Time + placeWind, shots: placeShots})
+	return true
 }
 
-func (a *优昙华院) fireAt(ctx unit.Context, s unit.Sense, x, y, ux, uy float64) {
-	n := math.Hypot(ux, uy)
-	if n < 1e-6 {
-		ux, uy, n = 1, 0, 1
+func (a *人偶使) castChase(ctx unit.Context, s unit.Sense, enemy unit.Snapshot) bool {
+	if enemy.ID == 0 {
+		return false
+	}
+	n := 0
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Kind == KindNingyushiDoll && o.OwnerID == ctx.ID && stateOf(o.ID) == dollIdle {
+			orderChase(o.ID, s.Time+placeWind, s.Time+placeWind+chaseLife, enemy.X, enemy.Y)
+			n++
+		}
+	}
+	return n > 0
+}
+
+func (a *人偶使) castSpecial26(ctx unit.Context, s unit.Sense) bool {
+	ux, uy := randDir(a)
+	x, y := offset(s.Self.X, s.Self.Y, ux, uy, dollReach)
+	x, y = clampHex(x, y, dollRadius)
+	spawnDollAt(ctx, s, x, y, dollSpec{mode: dollEllipse, ux: ux, uy: uy, armAt: s.Time + placeWind, until: s.Time + placeWind + chaseLife, rangeOn: true})
+	return true
+}
+
+func (a *人偶使) castChain(ctx unit.Context, s unit.Sense, enemy unit.Snapshot) bool {
+	pts := [][2]float64{{s.Self.X, s.Self.Y}}
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Kind == KindNingyushiDoll && o.OwnerID == ctx.ID && stateOf(o.ID) == dollIdle {
+			pts = append(pts, [2]float64{o.X, o.Y})
+		}
+	}
+	if enemy.ID != 0 {
+		pts = append(pts, [2]float64{enemy.X, enemy.Y})
 	} else {
-		ux, uy = ux/n, uy/n
-	}
-	gap := shotRadius + 2
-	ctx.Out <- unit.Spawn{
-		Kind:    KindAspectShot,
-		X:       x + ux*gap,
-		Y:       y + uy*gap,
-		VX:      ux * aspectSpeed,
-		VY:      uy * aspectSpeed,
-		OwnerID: ctx.ID,
-		Slot:    s.Self.Slot,
-	}
-	ctx.Out <- unit.FX{
-		Name: "shot", Kind: ctx.Kind, UnitID: ctx.ID,
-		X: x, Y: y, VX: ux, VY: uy, Slot: s.Self.Slot,
-	}
-}
-
-func aspectPos(self, enemy unit.Snapshot, ang float64) (float64, float64) {
-	ux, uy := math.Cos(ang), math.Sin(ang)
-	dist := aspectReach
-	ex, ey := enemy.X-self.X, enemy.Y-self.Y
-	along := ex*ux + ey*uy
-	clear := enemy.Radius + udongeinRadius + 10
-	if along > 0 && along < dist+clear {
-		cand := along - clear
-		if cand < aspectMin {
-			dist = aspectMin
-		} else {
-			dist = cand
+		hx, hy := a.hx, a.hy
+		if math.Hypot(hx, hy) < 1e-6 {
+			hx, hy = 1, 0
 		}
+		pts = append(pts, [2]float64{s.Self.X + hx*80, s.Self.Y + hy*80})
 	}
-	if dist > aspectMax {
-		dist = aspectMax
+	hops := len(pts) - 1
+	until := s.Time + placeWind + laserHold
+	a.setJob(ctx, s, job{
+		kind: SkillN22, until: until, next: s.Time + placeWind,
+		left: hops, paths: pts, idx: 1,
+		dmg: float64(a.spellLevel(SkillN22)+5) * 1.4, wind: s.Time + placeWind,
+	})
+	if until > a.lockUntil {
+		a.lockUntil = until
 	}
-	x, y := self.X+ux*dist, self.Y+uy*dist
-	x, y = clampHex(x, y, udongeinRadius)
-	x, y = leashTo(self.X, self.Y, x, y, aspectMax)
-	if math.Hypot(x-enemy.X, y-enemy.Y) < clear {
-		x, y = self.X-uy*aspectMin, self.Y+ux*aspectMin
-		x, y = clampHex(x, y, udongeinRadius)
-		x, y = leashTo(self.X, self.Y, x, y, aspectMax)
-	}
-	return x, y
+	return true
 }
 
-func leashTo(ox, oy, x, y, maxDist float64) (float64, float64) {
-	dx, dy := x-ox, y-oy
+func (a *人偶使) castSpell26(ctx unit.Context, s unit.Sense) bool {
+	ux, uy := randDir(a)
+	x, y := offset(s.Self.X, s.Self.Y, ux, uy, dollReach)
+	x, y = clampHex(x, y, dollRadius)
+	spawnDollAt(ctx, s, x, y, dollSpec{
+		mode: dollEllipseRecall, ux: ux, uy: uy,
+		armAt: s.Time + placeWind,
+		dmg:   float64(a.spellLevel(SkillN26)+5) * 1.4, once: true, rangeOn: true, slow: true,
+	})
+	return true
+}
+
+func (a *人偶使) castSpell24(ctx unit.Context, s unit.Sense, enemy unit.Snapshot) bool {
+	ux, uy := faceOf(a, s, enemy)
+	for i := 0; i < spell24N; i++ {
+		ang := float64(i) * 2 * math.Pi / float64(spell24N)
+		px := s.Self.X + math.Cos(ang)*spell24Ring
+		py := s.Self.Y + math.Sin(ang)*spell24Ring
+		spawnDollAt(ctx, s, px, py, dollSpec{
+			mode: dollStrike, pose: poseAh, ang: ang, follow: true,
+			until: s.Time + spell24Wind + spell24Life, bornGen: a.abortGen,
+		})
+	}
+	a.rush(ctx, ux, uy, spell24Rush)
+	a.setJob(ctx, s, job{
+		kind: SkillN24, until: s.Time + spell24Wind + spell24Life,
+		next: s.Time + spell24Wind, left: spell24Hits,
+		ox: s.Self.X, oy: s.Self.Y, ux: ux, uy: uy,
+		dmg:  float64(a.spellLevel(SkillN24)+2) * 1.4,
+		wind: s.Time + spell24Wind, selfUX: ux, selfUY: uy,
+		gap: spell24Life / float64(spell24Hits),
+	})
+	return true
+}
+
+func (a *人偶使) castSpell62(ctx unit.Context, s unit.Sense, enemy unit.Snapshot) bool {
+	ux, uy := faceOf(a, s, enemy)
+	pushBomb(bombSpec{kind: bombBounce, dmg: float64(a.spellLevel(SkillN62)+5) * 1.4, tx: enemy.X, ty: enemy.Y})
+	gap := s.Self.Radius + bombR + 2
+	ctx.Out <- unit.Spawn{
+		Kind: KindNingyushiBomb, X: s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
+		VX: ux * bounceSp, VY: uy * bounceSp, OwnerID: ctx.ID, Slot: s.Self.Slot,
+	}
+	return true
+}
+
+func (a *人偶使) castDemon(ctx unit.Context, s unit.Sense, enemy unit.Snapshot) bool {
+	if enemy.ID == 0 {
+		return false
+	}
+	dx, dy := enemy.X-s.Self.X, enemy.Y-s.Self.Y
 	n := math.Hypot(dx, dy)
-	if n <= maxDist || n < 1e-6 {
-		return x, y
-	}
-	s := maxDist / n
-	return ox + dx*s, oy + dy*s
-}
-
-func clampHex(x, y, radius float64) (float64, float64) {
-	if unit.HexContains(x, y, radius) {
-		return x, y
-	}
-	n := math.Hypot(x, y)
 	if n < 1e-6 {
-		return 0, 0
+		dx, dy, n = 1, 0, 1
 	}
-	limit := unit.HexRadius - radius - 4
-	if limit < 8 {
-		limit = 8
-	}
-	s := limit / n
-	return x * s, y * s
-}
-
-func (a *优昙华院) castGas(ctx unit.Context, s unit.Sense, enemy unit.Snapshot, act Action) bool {
-	x, y := gasPos(s.Self, enemy, act.DBin)
+	ux, uy := dx/n, dy/n
+	pushBomb(bombSpec{kind: bombSeek, dmg: demonDmg, tx: enemy.X, ty: enemy.Y, explode: demonR})
+	gap := s.Self.Radius + bombR + 2
 	ctx.Out <- unit.Spawn{
-		Kind: KindGas, X: x, Y: y,
-		OwnerID: ctx.ID, Slot: s.Self.Slot,
-	}
-	ctx.Out <- unit.FX{
-		Name: "gas", Kind: ctx.Kind, UnitID: ctx.ID,
-		X: x, Y: y, Slot: s.Self.Slot, Amount: gasRadius,
+		Kind: KindNingyushiBomb, X: s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
+		VX: ux * demonSp, VY: uy * demonSp, OwnerID: ctx.ID, Slot: s.Self.Slot,
 	}
 	return true
 }
 
-func (a *优昙华院) castCrown(ctx unit.Context, s unit.Sense, enemy unit.Snapshot, act Action) bool {
-	ang := angleOf(s.Self, enemy, act.ABin)
-	ux, uy := math.Cos(ang), math.Sin(ang)
-	gap := s.Self.Radius + crownBaseR + 1.5
-	spawnShot(ctx, KindCrown, s.Self.X, s.Self.Y, ux, uy, crownSpeed, gap, s.Self.Slot)
-	ctx.Out <- unit.FX{
-		Name: "crown", Kind: ctx.Kind, UnitID: ctx.ID,
-		X: s.Self.X, Y: s.Self.Y, VX: ux, VY: uy, Slot: s.Self.Slot,
+func (a *人偶使) castHourai(ctx unit.Context, s unit.Sense, enemy unit.Snapshot) bool {
+	if enemy.ID == 0 {
+		return false
 	}
-	return true
-}
-
-func (a *优昙华院) castDose(ctx unit.Context, s unit.Sense) bool {
-	a.doses++
-	if a.doses >= doseMax {
-		a.doses = 0
-		a.blast(ctx, s)
-	} else {
-		ctx.Out <- unit.FX{
-			Name: "dose", Kind: ctx.Kind, UnitID: ctx.ID,
-			X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: float64(a.doses),
+	ux, uy := toward(s.Self, enemy)
+	a.setJob(ctx, s, job{
+		kind: CardHourai, until: s.Time + houraiLife, next: s.Time,
+		left: houraiHits, ux: ux, uy: uy, dmg: houraiDmg, ox: s.Self.X, oy: s.Self.Y,
+		gap: houraiLife / float64(houraiHits),
+	})
+	perpX, perpY := -uy, ux
+	for i := 0; i < houraiBeams; i++ {
+		off := (float64(i) - 1.5) * 14
+		ctx.Out <- unit.Spawn{
+			Kind: KindNingyushiBeam, X: s.Self.X + perpX*off, Y: s.Self.Y + perpY*off,
+			VX: ux, VY: uy, OwnerID: ctx.ID, Slot: s.Self.Slot,
 		}
 	}
-	a.publish(ctx.ID)
 	return true
 }
 
-func (a *优昙华院) blast(ctx unit.Context, s unit.Sense) {
-	ctx.Out <- unit.Spawn{
-		Kind: KindBlast, X: s.Self.X, Y: s.Self.Y,
-		OwnerID: ctx.ID, Slot: s.Self.Slot,
+func (a *人偶使) castBattle(ctx unit.Context, s unit.Sense) bool {
+	for i := 0; i < orbitN; i++ {
+		ang := float64(i) * 2 * math.Pi / orbitN
+		x, y := math.Cos(ang)*orbitR, math.Sin(ang)*orbitR
+		spawnDollAt(ctx, s, x, y, dollSpec{
+			mode: dollOrbit, ang: ang, rangeOn: true,
+			arriveIn: orbitExpand,
+			until:    s.Time + orbitExpand + orbitLife,
+		})
+	}
+	return true
+}
+
+func (a *人偶使) castSpirit(ctx unit.Context, s unit.Sense, enemy unit.Snapshot) bool {
+	if enemy.ID == 0 {
+		return false
+	}
+	pushEnemy(ctx, s.Self.X, s.Self.Y, enemy, knockDist)
+	ctx.Out <- unit.FX{Name: "break", Kind: ctx.Kind, UnitID: ctx.ID, X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: knockDist}
+	return true
+}
+
+func (a *人偶使) spellLevel(sk uint8) int {
+	lv := a.levelOf(sk)
+	if lv < 1 {
+		return 1
+	}
+	return lv
+}
+
+func (a *人偶使) setJob(ctx unit.Context, s unit.Sense, j job) {
+	a.abortJobFx(ctx, s)
+	a.job = j
+	if a.job.kind == SkillAtkFan {
+		a.emitFan(ctx, s, true)
+	}
+}
+
+func (a *人偶使) emitFan(ctx unit.Context, s unit.Sense, on bool) {
+	amt := 0.0
+	if on {
+		amt = a.job.span
 	}
 	ctx.Out <- unit.FX{
-		Name: "blast", Kind: ctx.Kind, UnitID: ctx.ID,
-		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: blastRadius,
+		Name: "fan", Kind: ctx.Kind, UnitID: ctx.ID,
+		X: a.job.ox, Y: a.job.oy, VX: a.job.ux, VY: a.job.uy,
+		Amount: amt, Slot: s.Self.Slot,
 	}
-	ctx.Out <- unit.FX{
-		Name: "dose", Kind: ctx.Kind, UnitID: ctx.ID,
-		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: 0,
+}
+
+func (a *人偶使) abortJobFx(ctx unit.Context, s unit.Sense) {
+	if a.job.kind == SkillAtkFan {
+		a.emitFan(ctx, s, false)
+	}
+	if a.job.kind == SkillN24 {
+		a.restoreCruise(ctx)
+	}
+	if a.job.kind == SkillN22 || a.job.kind == CardHourai {
+		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindNingyushiBeam}
+	}
+}
+
+func (a *人偶使) tickJob(ctx unit.Context, s unit.Sense) {
+	if a.job.kind == 0 {
+		return
+	}
+	if s.Time+1e-9 >= a.job.until && a.job.left <= 0 {
+		if a.job.kind == SkillAtkFan {
+			a.emitFan(ctx, s, false)
+		}
+		if a.job.kind == SkillN22 {
+			recallAll(ctx, s)
+		}
+		if a.job.kind == SkillN24 {
+			a.restoreCruise(ctx)
+		}
+		if a.job.kind == SkillN22 || a.job.kind == CardHourai {
+			ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindNingyushiBeam}
+		}
+		a.job = job{}
+		return
+	}
+	switch a.job.kind {
+	case SkillAtkFan:
+		a.emitFan(ctx, s, true)
+		a.tickFan(ctx, s)
+	case SkillAtkRect:
+		a.tickRect(ctx, s)
+	case SkillN24:
+		a.tickRush(ctx, s)
+		a.tickRect(ctx, s)
+	case SkillN22:
+		a.tickChain(ctx, s)
+	case CardHourai:
+		a.tickHourai(ctx, s)
+	}
+}
+
+func (a *人偶使) tickFan(ctx unit.Context, s unit.Sense) {
+	if a.job.left <= 0 || s.Time+1e-9 < a.job.next {
+		return
+	}
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+			continue
+		}
+		if fanHit(a.job.ox, a.job.oy, a.job.ux, a.job.uy, a.job.span, a.job.reach, *o) {
+			deal(ctx, ctx.ID, o.ID, a.job.dmg)
+		}
+	}
+	a.job.left--
+	a.job.next = s.Time + a.job.gap
+}
+
+func (a *人偶使) tickRect(ctx unit.Context, s unit.Sense) {
+	if a.job.left <= 0 || s.Time+1e-9 < a.job.next {
+		return
+	}
+	ox, oy := a.job.ox, a.job.oy
+	w, h := rectW, rectH
+	if a.job.kind == SkillN24 {
+		w = spell24Len
+		ox = s.Self.X + a.job.ux*(w*0.5)
+		oy = s.Self.Y + a.job.uy*(w*0.5)
+	}
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+			continue
+		}
+		if !rectHit(ox, oy, a.job.ux, a.job.uy, w, h, *o) {
+			continue
+		}
+		deal(ctx, ctx.ID, o.ID, a.job.dmg)
+		if a.job.knock {
+			pushEnemy(ctx, s.Self.X, s.Self.Y, *o, knockDist)
+			a.stun(ctx, s, o)
+		}
+	}
+	a.job.left--
+	a.job.next = s.Time + a.job.gap
+}
+
+func (a *人偶使) rush(ctx unit.Context, ux, uy, sp float64) {
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: sp}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * sp, VY: uy * sp}
+}
+
+func (a *人偶使) tickRush(ctx unit.Context, s unit.Sense) {
+	a.rush(ctx, a.job.ux, a.job.uy, spell24Rush)
+}
+
+func (a *人偶使) restoreCruise(ctx unit.Context) {
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: ningyushiSpeed}
+}
+
+func (a *人偶使) tickChain(ctx unit.Context, s unit.Sense) {
+	if s.Time+1e-9 < a.job.next || a.job.left <= 0 {
+		return
+	}
+	hit := false
+	for i := 1; i < len(a.job.paths); i++ {
+		x1, y1 := a.job.paths[i-1][0], a.job.paths[i-1][1]
+		x2, y2 := a.job.paths[i][0], a.job.paths[i][1]
+		ctx.Out <- unit.Spawn{
+			Kind: KindNingyushiBeam, X: x1, Y: y1, VX: x2 - x1, VY: y2 - y1,
+			OwnerID: ctx.ID, Slot: s.Self.Slot,
+		}
+		if hit {
+			continue
+		}
+		for j := range s.Nearby {
+			o := &s.Nearby[j]
+			if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+				continue
+			}
+			if segHits(x1, y1, x2, y2, laserHalf, *o) {
+				deal(ctx, ctx.ID, o.ID, a.job.dmg)
+				hit = true
+				break
+			}
+		}
+	}
+	a.job.left = 0
+	a.job.idx = len(a.job.paths)
+	a.job.until = s.Time + laserHold
+}
+
+func (a *人偶使) tickHourai(ctx unit.Context, s unit.Sense) {
+	if a.job.left <= 0 || s.Time+1e-9 < a.job.next {
+		return
+	}
+	perpX, perpY := -a.job.uy, a.job.ux
+	for b := 0; b < houraiBeams; b++ {
+		off := (float64(b) - 1.5) * 14
+		ox, oy := s.Self.X+perpX*off, s.Self.Y+perpY*off
+		for i := range s.Nearby {
+			o := &s.Nearby[i]
+			if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+				continue
+			}
+			if laserHits(ox, oy, a.job.ux, a.job.uy, laserHalf, laserLen, *o) {
+				deal(ctx, ctx.ID, o.ID, a.job.dmg)
+			}
+		}
+	}
+	a.job.left--
+	a.job.next = s.Time + a.job.gap
+}
+
+func recallAll(ctx unit.Context, s unit.Sense) {
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Kind == KindNingyushiDoll && o.OwnerID == ctx.ID && stateOf(o.ID) == dollIdle {
+			orderRecall(o.ID)
+		}
 	}
 }

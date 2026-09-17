@@ -1,0 +1,223 @@
+.ball.look-ningyushi {
+  overflow: visible;
+  background: radial-gradient(circle at 38% 32%, #fff 0%, #fafab2 48%, #d8d888 100%);
+  box-shadow: 0 0 16px #fafab2, 0 0 36px color-mix(in srgb, #fafab2 55%, transparent);
+}
+.ball.look-ningyushi::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  background: conic-gradient(
+    #fafab2 calc(var(--ningyushi-energy, 1) * 360deg),
+    #3a2a10 0
+  );
+  -webkit-mask: radial-gradient(circle, transparent 64%, #000 66%, #000 78%, transparent 80%);
+  mask: radial-gradient(circle, transparent 64%, #000 66%, #000 78%, transparent 80%);
+  pointer-events: none;
+}
+.ball.look-ningyushi[data-ningyushi-drained="1"]::after {
+  filter: saturate(0.65) brightness(0.85);
+}
+.ball.look-ningyushi > .ningyushi-fan {
+  position: absolute;
+  left: calc(50% + var(--ox, 0px));
+  top: calc(50% + var(--oy, 0px));
+  width: calc(var(--reach, 36px) * 2);
+  height: calc(var(--reach, 36px) * 2);
+  margin: 0;
+  transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
+  border-radius: 50%;
+  background: color-mix(in srgb, #ffe08a 42%, transparent);
+  border: 2px solid rgba(255, 224, 138, 0.92);
+  box-shadow: 0 0 14px rgba(255, 210, 74, 0.4);
+  -webkit-mask-image: conic-gradient(
+    from var(--from, 30deg),
+    #000 0 var(--span, 120deg),
+    transparent 0
+  );
+  mask-image: conic-gradient(
+    from var(--from, 30deg),
+    #000 0 var(--span, 120deg),
+    transparent 0
+  );
+  pointer-events: none;
+  opacity: 0.9;
+  z-index: 2;
+}
+.ningyushi-cards {
+  position: absolute;
+  left: 50%;
+  top: -10px;
+  display: flex;
+  gap: 3px;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  z-index: 6;
+}
+.ningyushi-card {
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 210, 74, 0.55);
+  background: linear-gradient(to top, #e4b43c var(--p, 0%), #3a2a10 var(--p, 0%));
+  box-shadow: 0 0 6px rgba(228, 180, 60, 0.35);
+  opacity: 0.45;
+}
+.ningyushi-card.is-on,
+.ningyushi-card.is-fill {
+  opacity: 1;
+}
+.ningyushi-card.is-on[data-sk="10"] {
+  border-color: #fff4c8;
+  background: #ffe08a;
+  box-shadow: 0 0 8px #fff4c8;
+}
+.ningyushi-card.is-on[data-sk="11"] {
+  border-color: #ff9a3c;
+  background: #e48a28;
+  box-shadow: 0 0 8px #ff9a3c;
+}
+.ningyushi-card.is-on[data-sk="12"] {
+  border-color: #fff;
+  background: #f4e8c0;
+  box-shadow: 0 0 8px #fff;
+}
+
+.ball.look-ningyushi-doll,
+.ball.look-ningyushi-bomb {
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.ningyushi-spr {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--spr-h, 20px) * 2);
+  height: var(--spr-h, 20px);
+  margin: 0;
+  transform: translate(-50%, -50%) scaleX(var(--face, 1));
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: auto 100%;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 3;
+}
+.ball.look-ningyushi-doll > .ningyushi-ellipse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(72px * var(--scale, 1));
+  height: calc(36px * var(--scale, 1));
+  margin: 0;
+  transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
+  border: 1.5px solid rgba(255, 244, 200, 0.55);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 210, 74, 0.35);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.ball.look-ningyushi-shot {
+  background: radial-gradient(circle at 34% 30%, #fff 0 14%, #ffe08a 40%, #e4b43c 100%);
+  box-shadow: 0 0 10px #ffe08a;
+}
+
+.ball.look-ningyushi-beam {
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  pointer-events: none;
+  z-index: 18;
+}
+.ball.look-ningyushi-beam > .ningyushi-ray {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 8px;
+  width: var(--beam-len, 560px);
+  transform: translate(0, -50%) rotate(var(--beam-ang, 0rad));
+  transform-origin: 0 50%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #fff 0%, #ffe08a 18%, #e4b43c 70%, transparent 100%);
+  box-shadow: 0 0 12px #ffe08a, 0 0 24px #e4b43c;
+  pointer-events: none;
+}
+
+.guide.ningyushi-line {
+  height: 0;
+  border: none;
+  border-top: 1.5px solid #fff;
+  opacity: 0.85;
+  box-shadow: 0 0 6px #fff;
+}
+.guide.ningyushi-laser {
+  height: 0;
+  border: none;
+  border-top: 5px solid #ffe08a;
+  opacity: 1;
+  box-shadow: 0 0 10px #ffe08a, 0 0 22px #e4b43c;
+  z-index: 18;
+}
+
+.fx-ningyushi-ring {
+  width: var(--r, 140px);
+  height: var(--r, 140px);
+  border-radius: 50%;
+  border: 3px solid #ffd24a;
+  box-shadow: 0 0 18px #e4b43c, inset 0 0 24px #ffe08a;
+  animation: ningyushi-ring 0.55s ease-out forwards;
+}
+@keyframes ningyushi-ring {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+.fx-ningyushi-blast-core {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, #ffe08a 28%, #e4b43c 62%, transparent 100%);
+  box-shadow: 0 0 28px #fff, 0 0 64px #e4b43c;
+  animation: ningyushi-blast-core 0.55s ease-out forwards;
+}
+@keyframes ningyushi-blast-core {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+  40% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+}
+.fx-ningyushi-blast-wave {
+  width: var(--r, 200px);
+  height: var(--r, 200px);
+  border-radius: 50%;
+  border: 4px solid #ffe08a;
+  box-shadow: 0 0 28px #e4b43c, inset 0 0 36px color-mix(in srgb, #e4b43c 80%, transparent);
+  animation: ningyushi-blast-wave 0.85s cubic-bezier(0.12, 0.72, 0.2, 1) both;
+}
+@keyframes ningyushi-blast-wave {
+  0% { transform: translate(-50%, -50%) scale(0.12); opacity: 1; }
+  55% { opacity: 0.85; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+.fx-ningyushi-call {
+  position: absolute;
+  font: 700 16px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  color: #fafab2;
+  text-shadow: 0 0 8px #fafab2, 0 1px 0 #000;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 20;
+  animation: ningyushi-call 0.8s ease-out forwards;
+}
+.fx-ningyushi-call.is-spell {
+  font-size: 18px;
+  color: #fafab2;
+  text-shadow: 0 0 10px #fafab2, 0 0 18px #fafab2, 0 1px 0 #000;
+}
+@keyframes ningyushi-call {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.85); }
+  100% { opacity: 0; transform: translate(-50%, -78%) scale(1.2); }
+}

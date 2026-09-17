@@ -94,37 +94,37 @@ func TestCruiseZeroSpeedDoesNotPush(t *testing.T) {
 
 func TestSetRadiusGrowsUnit(t *testing.T) {
 	m := NewMatchSeeded(1)
-	m.SetSlot(0, character.KindUdongein)
+	m.SetSlot(0, character.KindNingyushi)
 	m.SetSlot(1, character.KindRanged)
 	m.Start()
 	defer m.End()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	owner := fighterByKind(m, character.KindUdongein)
+	owner := fighterByKind(m, character.KindNingyushi)
 	if owner == nil {
-		t.Fatal("missing 优昙华院")
+		t.Fatal("missing 人偶使")
 	}
 	m.applyCmdLocked(unitpkg.Spawn{
-		Kind: character.KindCrown, X: 0, Y: 0, VX: 100,
+		Kind: character.KindNingyushiDoll, X: 0, Y: 0, VX: 100,
 		OwnerID: owner.id, Slot: owner.slot,
 	})
-	var crown *unit
+	var doll *unit
 	for _, id := range m.order {
 		u := m.units[id]
-		if u != nil && u.kind == character.KindCrown {
-			crown = u
+		if u != nil && u.kind == character.KindNingyushiDoll {
+			doll = u
 			break
 		}
 	}
-	if crown == nil {
-		t.Fatal("missing 花冠")
+	if doll == nil {
+		t.Fatal("missing 人偶")
 	}
-	m.applyCmdLocked(unitpkg.SetRadius{UnitID: crown.id, Radius: 48})
-	if math.Abs(crown.radius-48) > 1e-9 {
-		t.Fatalf("radius=%v", crown.radius)
+	m.applyCmdLocked(unitpkg.SetRadius{UnitID: doll.id, Radius: 48})
+	if math.Abs(doll.radius-48) > 1e-9 {
+		t.Fatalf("radius=%v", doll.radius)
 	}
-	m.applyCmdLocked(unitpkg.SetRadius{UnitID: crown.id, Radius: 0})
-	if math.Abs(crown.radius-48) > 1e-9 {
-		t.Fatalf("zero radius should be ignored, radius=%v", crown.radius)
+	m.applyCmdLocked(unitpkg.SetRadius{UnitID: doll.id, Radius: 0})
+	if math.Abs(doll.radius-48) > 1e-9 {
+		t.Fatalf("zero radius should be ignored, radius=%v", doll.radius)
 	}
 }

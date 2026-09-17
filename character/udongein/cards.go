@@ -1,28 +1,26 @@
-package 优昙华院
+package 人偶使
 
 import "xqdj/internal/unit"
 
-func (a *优昙华院) initDeckLocked() {
+func (a *人偶使) initDeckLocked() {
 	a.deck = make([]uint8, 0, deckSize)
-	for i := 0; i < 3; i++ {
-		a.deck = append(a.deck, SkillVolley, SkillMind, SkillAspect, SkillLaser)
-	}
 	for i := 0; i < 4; i++ {
-		a.deck = append(a.deck, SkillDose, SkillCrown)
+		a.deck = append(a.deck, SkillN26, SkillN24, CardSpirit)
 	}
+	a.deck = append(a.deck, SkillN62, SkillN62, SkillN22, SkillN22, CardDemon, CardBattle, CardBattle, CardHourai)
 	a.rng.Shuffle(len(a.deck), func(i, j int) { a.deck[i], a.deck[j] = a.deck[j], a.deck[i] })
 	a.hand = a.hand[:0]
 	a.progress = 0
 }
 
-func (a *优昙华院) charge() {
+func (a *人偶使) charge() {
 	a.cardMu.Lock()
 	defer a.cardMu.Unlock()
 	a.progress += cardFill
 	a.drawReadyLocked()
 }
 
-func (a *优昙华院) drawReadyLocked() {
+func (a *人偶使) drawReadyLocked() {
 	if a.rng == nil {
 		return
 	}
@@ -37,7 +35,7 @@ func (a *优昙华院) drawReadyLocked() {
 	}
 }
 
-func (a *优昙华院) hudCards() (packed, prog float64, n int) {
+func (a *人偶使) hudCards() (packed, prog float64, n int) {
 	a.cardMu.Lock()
 	defer a.cardMu.Unlock()
 	code := 0
@@ -50,46 +48,52 @@ func (a *优昙华院) hudCards() (packed, prog float64, n int) {
 	return float64(code), a.progress, len(a.hand)
 }
 
-func (a *优昙华院) tryCard(ctx unit.Context, s unit.Sense, enemy *unit.Snapshot) bool {
+func (a *人偶使) tryCard(ctx unit.Context, s unit.Sense, enemy *unit.Snapshot) bool {
 	if a.locked {
 		return false
 	}
-	sk, ok := a.takeCard(enemy != nil)
+	if a.energy+1e-9 < 1 {
+		return false
+	}
+	sk, ok := a.takeCard(s, enemy)
 	if !ok {
 		return false
 	}
-	a.publish(ctx.ID)
-	act := Action{Skill: sk}
-	var target unit.Snapshot
-	if enemy != nil {
-		target = *enemy
-	}
-	if !a.invoke(ctx, s, target, act, sk) {
+	if !a.invokePaid(ctx, s, enemy, sk, true) {
 		return false
 	}
-	a.lockAnim(s.Time, sk)
-	a.charge()
-	a.publish(ctx.ID)
+	if isNumberCard(sk) {
+		if a.level[sk] < 1 {
+			a.level[sk] = 1
+		} else {
+			a.level[sk]++
+		}
+	}
 	return true
 }
 
-func (a *优昙华院) takeCard(hasEnemy bool) (uint8, bool) {
+func (a *人偶使) takeCard(s unit.Sense, enemy *unit.Snapshot) (uint8, bool) {
 	a.cardMu.Lock()
 	defer a.cardMu.Unlock()
+	idx := make([]int, 0, len(a.hand))
 	for i, sk := range a.hand {
-		cost := cardCostOf(sk)
-		if i+cost > len(a.hand) {
+		if energyCostOf(sk) > a.energy+1e-9 {
 			continue
 		}
-		if sk != SkillDose && !hasEnemy {
+		if !a.shouldCast(s, enemy, sk, true) {
 			continue
 		}
-		if isAttackCard(sk) {
-			a.upgrades[sk]++
+		if a.energy+1e-9 < energyCostOf(sk)+1 && a.energy+1e-9 < a.energyCap-1e-6 && sk != CardSpirit {
+			continue
 		}
-		a.hand = append(a.hand[:i], a.hand[i+cost:]...)
-		a.drawReadyLocked()
-		return sk, true
+		idx = append(idx, i)
 	}
-	return 0, false
+	if len(idx) == 0 {
+		return 0, false
+	}
+	pick := idx[a.rng.IntN(len(idx))]
+	sk := a.hand[pick]
+	a.hand = append(a.hand[:pick], a.hand[pick+1:]...)
+	a.drawReadyLocked()
+	return sk, true
 }
