@@ -71,7 +71,7 @@ func (r *雷达) sweep(ctx unit.Context, s unit.Sense, dx, dy float64) {
 	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+		if !unit.Hittable(*o, s.Self.Slot) {
 			continue
 		}
 		if !rayHits(s.Self.X, s.Self.Y, dx, dy, reach, o.X, o.Y, o.Radius, half) {

@@ -252,7 +252,7 @@ func (d *人偶) onSense(ctx unit.Context, s unit.Sense) {
 		d.showRange(ctx, s)
 		d.emitPose(ctx, s)
 		if d.spec.mode == dollOrbit {
-			d.pulseEllipse(ctx, s, enemyOf(s))
+			d.pulseEllipse(ctx, s)
 		}
 		return
 	}
@@ -439,8 +439,7 @@ func (d *人偶) tickEllipse(ctx unit.Context, s unit.Sense, dt float64) {
 	if s.Time+1e-9 < d.spec.armAt {
 		return
 	}
-	e := enemyOf(s)
-	d.pulseEllipse(ctx, s, e)
+	d.pulseEllipse(ctx, s)
 	if d.spec.mode == dollEllipseRecall {
 		d.spec.slow = true
 		d.nudgeRecall(ctx, s, dt)
@@ -476,7 +475,7 @@ func (d *人偶) tickChase(ctx unit.Context, s unit.Sense, dt float64) {
 			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: mx * chaseSp, VY: my * chaseSp}
 		}
 	}
-	d.pulseEllipse(ctx, s, enemyOf(s))
+	d.pulseEllipse(ctx, s)
 }
 
 func (d *人偶) tickOrbit(ctx unit.Context, s unit.Sense, dt float64) {
@@ -489,34 +488,42 @@ func (d *人偶) tickOrbit(ctx unit.Context, s unit.Sense, dt float64) {
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: x, Y: y}
 	tx, ty := -math.Sin(d.ang), math.Cos(d.ang)
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: tx * (orbitR * 2 * math.Pi / orbitLife), VY: ty * (orbitR * 2 * math.Pi / orbitLife)}
-	e := enemyOf(s)
-	d.pulseEllipse(ctx, s, e)
+	d.pulseEllipse(ctx, s)
 }
 
-func (d *人偶) pulseEllipse(ctx unit.Context, s unit.Sense, e *unit.Snapshot) {
-	if e == nil {
-		return
+func (d *人偶) pulseEllipse(ctx unit.Context, s unit.Sense) {
+	var hit []unit.Snapshot
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if !unit.Hittable(*o, d.slot) {
+			continue
+		}
+		if ellipseHit(s.Self.X, s.Self.Y, ellipseRX, ellipseRY, *o) {
+			hit = append(hit, *o)
+		}
 	}
-	inside := ellipseHit(s.Self.X, s.Self.Y, ellipseRX, ellipseRY, *e)
 	if d.spec.once {
-		if inside && !d.hitOnce {
-			d.hitOnce = true
-			dmg := d.spec.dmg
-			if dmg <= 0 {
-				dmg = burstDmg
-			}
-			deal(ctx, d.owner, e.ID, dmg)
+		if len(hit) == 0 || d.hitOnce {
+			return
+		}
+		d.hitOnce = true
+		dmg := d.spec.dmg
+		if dmg <= 0 {
+			dmg = burstDmg
+		}
+		for i := range hit {
+			deal(ctx, d.owner, hit[i].ID, dmg)
 		}
 		return
 	}
-	if !inside {
+	if len(hit) == 0 {
 		return
 	}
-	d.pulseHits(ctx, s, e, burstDmg)
+	d.pulseHits(ctx, s, hit, burstDmg)
 }
 
-func (d *人偶) pulseHits(ctx unit.Context, s unit.Sense, e *unit.Snapshot, dmg float64) {
-	if e == nil {
+func (d *人偶) pulseHits(ctx unit.Context, s unit.Sense, hit []unit.Snapshot, dmg float64) {
+	if len(hit) == 0 {
 		return
 	}
 	if !d.bursting {
@@ -531,7 +538,9 @@ func (d *人偶) pulseHits(ctx unit.Context, s unit.Sense, e *unit.Snapshot, dmg
 		d.bursting = false
 		return
 	}
-	deal(ctx, d.owner, e.ID, dmg)
+	for i := range hit {
+		deal(ctx, d.owner, hit[i].ID, dmg)
+	}
 	d.burstN--
 	d.burstAt = s.Time + burstLife/float64(burstHits)
 	if d.burstN <= 0 {
@@ -559,7 +568,7 @@ func (d *人偶) armRecall(now float64) {
 
 func (d *人偶) tickRecall(ctx unit.Context, s unit.Sense, dt float64) {
 	if d.spec.slow && d.spec.rangeOn {
-		d.pulseEllipse(ctx, s, enemyOf(s))
+		d.pulseEllipse(ctx, s)
 	}
 	d.nudgeRecall(ctx, s, dt)
 }
@@ -645,7 +654,7 @@ func (b *人偶弹) Handle(ctx unit.Context, ev unit.Event) {
 		if e.Other.ID == b.owner {
 			return
 		}
-		if e.Other.Role == unit.RoleFighter && e.Other.Slot != b.slot {
+		if unit.Hittable(e.Other, b.slot) {
 			deal(ctx, b.owner, e.Other.ID, placeDmg)
 			b.dead = true
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
@@ -687,7 +696,7 @@ func (b *人偶炸弹) Handle(ctx unit.Context, ev unit.Event) {
 		if e.Other.ID == b.owner {
 			return
 		}
-		if e.Other.Role == unit.RoleFighter && e.Other.Slot != b.slot {
+		if unit.Hittable(e.Other, b.slot) {
 			if b.spec.kind == bombSeek {
 				b.explode(ctx, b.x, b.y, unit.Sense{Self: unit.Snapshot{X: b.x, Y: b.y}, Nearby: []unit.Snapshot{e.Other}})
 				return
@@ -705,7 +714,7 @@ func (b *人偶炸弹) explode(ctx unit.Context, x, y float64, s unit.Sense) {
 	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == b.slot {
+		if !unit.Hittable(*o, b.slot) {
 			continue
 		}
 		if math.Hypot(o.X-x, o.Y-y) <= r+o.Radius {

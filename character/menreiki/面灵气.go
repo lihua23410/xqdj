@@ -17,11 +17,11 @@ const KindMenreikiMask3 = "面灵气面具3"
 const KindMenreikiShot = "面灵气弹"
 
 const (
-	menreikiRadius = 18.0
-	menreikiSpeed  = 150.0
-	menreikiHP     = 100.0
-	menreikiVision = 9999.0
-	menreikiRegen  = 1.0
+	menreikiRadius   = 18.0
+	menreikiSpeed    = 150.0
+	menreikiHP       = 100.0
+	menreikiVision   = 9999.0
+	menreikiRegen    = 1.0
 	menreikiRegenGap = 1.0
 
 	maskDamage    = 3.5
@@ -36,12 +36,12 @@ const (
 	paleSteerGap  = 0.15
 	redDamageMul  = 1.35
 
-	shotRadius     = 6.0
-	shotSpeed      = 300.0
-	shotRetarget   = 1.0
-	shotRetargetN  = 1
-	shotArc        = 2 * math.Pi
-	shotFirst      = math.Pi / 3
+	shotRadius    = 6.0
+	shotSpeed     = 300.0
+	shotRetarget  = 1.0
+	shotRetargetN = 1
+	shotArc       = 2 * math.Pi
+	shotFirst     = math.Pi / 3
 
 	hook2At = 10.0
 	hook3At = 30.0
@@ -123,34 +123,34 @@ func maskFX(i int) string {
 }
 
 type 面灵气 struct {
-	hook        int
-	marked      bool
-	enemyID     uint64
-	angle       float64
-	lastT       float64
-	spun        [3]float64
-	shotOnce    [3]bool
-	hitSpun     [3]float64
-	paid        bool
-	regenReady  float64
-	paleOn      bool
-	stunID      uint64
-	stunUntil   float64
-	stunVX      float64
-	stunVY      float64
-	stunCruise  float64
-	frozen      bool
-	shareUntil  float64
-	breakN      int
-	prevEHP     float64
-	x, y        float64
-	vx, vy      float64
-	slot        int
-	ex, ey      float64
-	hasEnemy    bool
-	lastFac     string
-	steerReady  float64
-	steerWait   bool
+	hook       int
+	marked     bool
+	enemyID    uint64
+	angle      float64
+	lastT      float64
+	spun       [3]float64
+	shotOnce   [3]bool
+	hitSpun    [3]float64
+	paid       bool
+	regenReady float64
+	paleOn     bool
+	stunID     uint64
+	stunUntil  float64
+	stunVX     float64
+	stunVY     float64
+	stunCruise float64
+	frozen     bool
+	shareUntil float64
+	breakN     int
+	prevEHP    float64
+	x, y       float64
+	vx, vy     float64
+	slot       int
+	ex, ey     float64
+	hasEnemy   bool
+	lastFac    string
+	steerReady float64
+	steerWait  bool
 }
 
 func (m *面灵气) Handle(ctx unit.Context, ev unit.Event) {
@@ -318,7 +318,6 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 		}
 		have[o.Kind] = o
 	}
-	e := enemyOf(s)
 	var mx, my [3]float64
 	for i, kind := range maskKinds {
 		ang := m.angle - float64(i)*2*math.Pi/3
@@ -336,9 +335,20 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 				armMask(ctx.ID, i)
 			}
 		}
-		if e != nil && math.Hypot(x-e.X, y-e.Y) <= r+e.Radius {
-			if spendMask(ctx.ID, i) {
-				strike(ctx, *e, maskDmg(s.Self.Faction))
+		var hit []unit.Snapshot
+		for j := range s.Nearby {
+			o := &s.Nearby[j]
+			if !hitTarget(*o, s.Self.Slot) {
+				continue
+			}
+			if math.Hypot(x-o.X, y-o.Y) <= r+o.Radius {
+				hit = append(hit, *o)
+			}
+		}
+		if len(hit) > 0 && spendMask(ctx.ID, i) {
+			dmg := maskDmg(s.Self.Faction)
+			for k := range hit {
+				strike(ctx, hit[k], dmg)
 			}
 		}
 		if cur == nil {
@@ -452,7 +462,7 @@ func (m *面灵气) writeSpeed(ctx unit.Context, speed float64) {
 		ux, uy = m.vx/n, m.vy/n
 	}
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * speed, VY: uy * speed}
-	m.vx, m.vy = ux * speed, uy * speed
+	m.vx, m.vy = ux*speed, uy*speed
 }
 
 func (m *面灵气) steerPale(ctx unit.Context, t float64, force bool) {
@@ -612,7 +622,7 @@ func enemyOf(s unit.Sense) *unit.Snapshot {
 }
 
 func hitTarget(other unit.Snapshot, slot int) bool {
-	return other.Role == unit.RoleFighter && other.Slot != slot
+	return unit.Hittable(other, slot)
 }
 
 func strike(ctx unit.Context, to unit.Snapshot, amount float64) {

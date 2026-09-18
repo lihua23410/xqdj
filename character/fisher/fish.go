@@ -129,7 +129,7 @@ func (f *鱼) onHit(ctx unit.Context, c unit.Collision) {
 	if o.ID == f.owner {
 		return
 	}
-	if o.Role != unit.RoleFighter || o.Slot == f.slot {
+	if !unit.Hittable(o, f.slot) {
 		return
 	}
 	ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: f.job.dmg}

@@ -7,6 +7,7 @@ import (
 	"xqdj/character/engine"
 	"xqdj/character/fisher"
 	"xqdj/character/glitch"
+	"xqdj/character/godfather"
 	"xqdj/character/knight"
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
@@ -37,6 +38,12 @@ const (
 	KindGlitchGhost   = 地慧星.KindGlitchGhost
 	KindGlitchShot    = 地慧星.KindGlitchShot
 	KindGlitchSlash   = 地慧星.KindGlitchSlash
+	KindAssassin      = 教父.KindAssassin
+	KindDealer        = 教父.KindDealer
+	KindDrug          = 教父.KindDrug
+	KindGodfather     = 教父.KindGodfather
+	KindGodfatherShot = 教父.KindGodfatherShot
+	KindSniper        = 教父.KindSniper
 	KindKnight        = 小骑士.KindKnight
 	KindKnightArc     = 小骑士.KindKnightArc
 	KindMelee         = 原型机_近战.KindMelee

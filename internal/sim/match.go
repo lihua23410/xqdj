@@ -41,6 +41,8 @@ type unit struct {
 	semi           bool
 	face           vec
 	passWalls      bool
+	breakWalls     bool
+	mortal         bool
 	pass           bool
 	stun           bool
 	noFrameFreeze  bool
@@ -202,28 +204,30 @@ func (m *Match) SnapshotJSON() []byte {
 
 func (u *unit) snap() unitpkg.Snapshot {
 	return unitpkg.Snapshot{
-		ID:        u.id,
-		Kind:      u.kind,
-		Role:      u.role,
-		X:         u.p.X,
-		Y:         u.p.Y,
-		VX:        u.v.X,
-		VY:        u.v.Y,
-		Radius:    u.radius,
-		HP:        u.hp,
-		MaxHP:     u.maxHP,
-		Vision:    u.vision,
-		OwnerID:   u.owner,
-		Slot:      u.slot,
-		Semi:      u.semi,
-		FaceX:     u.face.X,
-		FaceY:     u.face.Y,
-		PassWalls: u.passWalls,
-		ArcSpan:   u.arcSpan,
-		ArcInner:  u.arcInner,
-		Faction:   u.faction,
-		Seen:      u.seenList(),
-		Marks:     u.markList(),
+		ID:         u.id,
+		Kind:       u.kind,
+		Role:       u.role,
+		X:          u.p.X,
+		Y:          u.p.Y,
+		VX:         u.v.X,
+		VY:         u.v.Y,
+		Radius:     u.radius,
+		HP:         u.hp,
+		MaxHP:      u.maxHP,
+		Vision:     u.vision,
+		OwnerID:    u.owner,
+		Slot:       u.slot,
+		Semi:       u.semi,
+		FaceX:      u.face.X,
+		FaceY:      u.face.Y,
+		PassWalls:  u.passWalls,
+		Mortal:     u.mortal,
+		BreakWalls: u.breakWalls,
+		ArcSpan:    u.arcSpan,
+		ArcInner:   u.arcInner,
+		Faction:    u.faction,
+		Seen:       u.seenList(),
+		Marks:      u.markList(),
 	}
 }
 
@@ -497,29 +501,31 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 	m.nextID++
 	id := m.nextID
 	u := &unit{
-		id:        id,
-		kind:      kind,
-		role:      spec.Role,
-		slot:      slot,
-		owner:     owner,
-		p:         p,
-		v:         v,
-		radius:    spec.Radius,
-		hp:        spec.MaxHP,
-		maxHP:     spec.MaxHP,
-		vision:    spec.Vision,
-		cruise:    spec.Speed,
-		actor:     actor,
-		inbox:     make(chan unitpkg.Event, 64),
-		stop:      make(chan struct{}),
-		solid:     spec.Role != unitpkg.RoleHelper,
-		semi:      spec.Semi,
-		face:      vec{1, 0},
-		passWalls: spec.PassWalls,
-		shell:     spec.Shell,
-		attach:    spec.Attach,
-		arcSpan:   spec.ArcSpan,
-		arcInner:  spec.ArcInner,
+		id:         id,
+		kind:       kind,
+		role:       spec.Role,
+		slot:       slot,
+		owner:      owner,
+		p:          p,
+		v:          v,
+		radius:     spec.Radius,
+		hp:         spec.MaxHP,
+		maxHP:      spec.MaxHP,
+		vision:     spec.Vision,
+		cruise:     spec.Speed,
+		actor:      actor,
+		inbox:      make(chan unitpkg.Event, 64),
+		stop:       make(chan struct{}),
+		solid:      spec.Role != unitpkg.RoleHelper,
+		semi:       spec.Semi,
+		face:       vec{1, 0},
+		passWalls:  spec.PassWalls,
+		breakWalls: spec.BreakWalls,
+		mortal:     spec.Mortal,
+		shell:      spec.Shell,
+		attach:     spec.Attach,
+		arcSpan:    spec.ArcSpan,
+		arcInner:   spec.ArcInner,
 	}
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
@@ -635,7 +641,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		m.clearMarksLocked(c)
 	case unitpkg.Heal:
 		u := m.units[c.UnitID]
-		if u == nil || u.stopped || u.role != unitpkg.RoleFighter || c.Amount <= 0 {
+		if u == nil || u.stopped || !u.takesHit() || c.Amount <= 0 {
 			return
 		}
 		before := u.hp
@@ -721,12 +727,22 @@ func (m *Match) settleHitsLocked() {
 	m.drainCmdsLocked()
 }
 
+func (u *unit) takesHit() bool {
+	return u != nil && !u.stopped && (u.role == unitpkg.RoleFighter || u.mortal)
+}
+
 func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 	if c.Amount <= 0 {
 		return
 	}
 	u := m.units[c.To]
-	if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
+	if !u.takesHit() {
+		return
+	}
+	if u.role != unitpkg.RoleFighter {
+		from := m.units[c.From]
+		amt := m.scaleDamage(m.factionBearer(from), u, c.Amount)
+		m.applyHurtLocked(from, u, amt, false, false)
 		return
 	}
 	m.dmgSeq++
@@ -774,16 +790,6 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	}
 	from := m.units[off.from]
 	amt = m.scaleDamage(m.factionBearer(from), u, amt)
-	m.fx = append(m.fx, unitpkg.FX{
-		Name:   "hurt",
-		UnitID: u.id,
-		Kind:   u.kind,
-		X:      u.p.X,
-		Y:      u.p.Y,
-		Slot:   u.slot,
-		Amount: amt,
-	})
-	u.hp -= amt
 	if off.markKind != "" && amt > 0 {
 		delta := off.markDelta
 		if delta == 0 {
@@ -796,11 +802,30 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 			Icon:   off.markIcon,
 		})
 	}
-	m.hitStopIfNeeded(from)
+	m.applyHurtLocked(from, u, amt, true, true)
+}
+
+func (m *Match) applyHurtLocked(from, u *unit, amt float64, freeze, swap bool) {
+	if u == nil || amt <= 0 {
+		return
+	}
+	m.fx = append(m.fx, unitpkg.FX{
+		Name:   "hurt",
+		UnitID: u.id,
+		Kind:   u.kind,
+		X:      u.p.X,
+		Y:      u.p.Y,
+		Slot:   u.slot,
+		Amount: amt,
+	})
+	u.hp -= amt
+	if freeze {
+		m.hitStopIfNeeded(from)
+	}
 	if u.hp <= 0 {
 		u.hp = 0
 		m.removeLocked(u)
-	} else {
+	} else if swap {
 		m.swapOwnedLocked(u.id)
 	}
 }
@@ -950,6 +975,22 @@ func (m *Match) expireWallsLocked() {
 			Name: "wall-fade", Kind: w.kind, Slot: w.slot,
 			X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
 		})
+	}
+	m.walls = m.walls[:n]
+}
+
+func (m *Match) breakWallLocked(id uint64) {
+	n := 0
+	for _, w := range m.walls {
+		if w.id == id {
+			m.fx = append(m.fx, unitpkg.FX{
+				Name: "wall-fade", Kind: w.kind, Slot: w.slot,
+				X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
+			})
+			continue
+		}
+		m.walls[n] = w
+		n++
 	}
 	m.walls = m.walls[:n]
 }
@@ -1141,10 +1182,10 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 				if a.attach && b.attach {
 					continue
 				}
-				if a.attach && (b.role != unitpkg.RoleFighter || b.slot == a.slot || b.id == a.owner) {
+				if a.attach && !attachHits(a, b) {
 					continue
 				}
-				if b.attach && (a.role != unitpkg.RoleFighter || a.slot == b.slot || a.id == b.owner) {
+				if b.attach && !attachHits(b, a) {
 					continue
 				}
 			}
@@ -1197,6 +1238,10 @@ func (m *Match) resolveLocked(h ccdHit) {
 		if u == nil || w == nil {
 			return
 		}
+		if u.breakWalls {
+			m.breakWallLocked(w.id)
+			return
+		}
 		cc, cr := colOf(u.p, u.face, u.radius, u.semi)
 		R := cr + w.radius + skin
 		q := closestOnSeg(cc, w.a, w.b)
@@ -1213,7 +1258,7 @@ func (m *Match) resolveLocked(h ccdHit) {
 		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
 		u.setVel(reflectVelocity(u.v, h.n))
 		m.cycleFactionLocked(u)
-		if u.role == unitpkg.RoleFighter && u.slot != w.slot && u.id != w.owner {
+		if u.takesHit() && u.slot != w.slot && u.id != w.owner {
 			if at, ok := w.hitAt[u.id]; !ok || m.time >= at {
 				w.hitAt[u.id] = m.time + 0.1
 				m.pending = append(m.pending, unitpkg.Damage{From: w.owner, To: u.id, Amount: w.amount})
@@ -1237,7 +1282,7 @@ func (m *Match) resolveLocked(h ccdHit) {
 		dist := delta.len()
 		target := ra + rb + skin
 		pass := a.pass || b.pass
-		pierce := a.passWalls || b.passWalls || pass
+		pierce := a.passWalls || b.passWalls || a.breakWalls || b.breakWalls || pass
 		if !pierce && dist > 1e-9 && dist < target {
 			pn := delta.norm()
 			push := (target - dist) / 2
@@ -1266,17 +1311,17 @@ func (m *Match) resolveLocked(h ccdHit) {
 		projA := a.role == unitpkg.RoleProjectile
 		projB := b.role == unitpkg.RoleProjectile
 		if projA || projB {
-			if projA && !a.passWalls {
+			if projA && !a.passWalls && !a.breakWalls {
 				a.v = vec{0, 0}
 				a.solid = false
 			}
-			if projB && !b.passWalls {
+			if projB && !b.passWalls && !b.breakWalls {
 				b.v = vec{0, 0}
 				b.solid = false
 			}
-			if a.passWalls && !projB {
+			if a.passWalls && !a.breakWalls && !projB {
 				b.setVel(n.mul(-b.v.len()))
-			} else if b.passWalls && !projA {
+			} else if b.passWalls && !b.breakWalls && !projA {
 				a.setVel(n.mul(a.v.len()))
 			}
 		} else {
@@ -1285,6 +1330,16 @@ func (m *Match) resolveLocked(h ccdHit) {
 			b.setVel(n.mul(-sb))
 		}
 	}
+}
+
+func attachHits(atk, target *unit) bool {
+	if atk == nil || target == nil {
+		return false
+	}
+	if target.slot == atk.slot || target.id == atk.owner {
+		return false
+	}
+	return target.role == unitpkg.RoleFighter || target.mortal
 }
 
 func (m *Match) constrainAllLocked() {

@@ -103,7 +103,7 @@ func (a *近战弧) Handle(ctx unit.Context, ev unit.Event) {
 	case unit.Sense:
 		ctx.Out <- unit.SetArcSpan{UnitID: ctx.ID, Span: meleeArcSpan(math.Hypot(e.Self.VX, e.Self.VY))}
 	case unit.Collision:
-		if !unit.EnemyFighter(e, a.slot) {
+		if !unit.EnemyTarget(e, a.slot) {
 			return
 		}
 		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: meleeDamage}

@@ -136,7 +136,7 @@ func overlapEnemy(s unit.Sense) *unit.Snapshot {
 	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+		if !unit.Hittable(*o, s.Self.Slot) {
 			continue
 		}
 		r := o.Radius
@@ -217,7 +217,7 @@ func (a *电椅) strike(ctx unit.Context, s unit.Sense, bolts [][]vec) {
 			}
 			for j := range s.Nearby {
 				o := &s.Nearby[j]
-				if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot || o.ID == a.owner {
+				if !unit.Hittable(*o, s.Self.Slot) || o.ID == a.owner {
 					continue
 				}
 				if !segHits(p.x, p.y, q.x, q.y, o.X, o.Y, o.Radius, half) {

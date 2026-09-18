@@ -1,0 +1,85 @@
+.ball.look-godfather {
+  background: radial-gradient(circle at 35% 30%, #3a322c 0%, #1a1410 55%, #0b0908 100%);
+  box-shadow: inset 0 0 0 2px #c9a227, 0 0 10px rgba(201, 162, 39, 0.35);
+}
+
+.minion-hp {
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 120%;
+  height: 4px;
+  transform: translate(-50%, -100%);
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.minion-hp i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: #7dff9a;
+}
+
+.ball.assassin-dash {
+  box-shadow: 0 0 16px #ff4a3a, 0 0 28px #8b1e18;
+}
+
+.ball.look-sniper {
+  overflow: visible;
+}
+
+.sniper-laser {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--len, 560px);
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 92, 82, 0.55) 0%,
+    rgba(255, 80, 70, 0.28) 42%,
+    rgba(255, 80, 70, 0.08) 78%,
+    transparent
+  );
+  box-shadow: 0 0 6px rgba(255, 70, 60, 0.35);
+  transform-origin: 0 50%;
+  transform: rotate(var(--ang, 0rad));
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fx-dealer-scream {
+  position: absolute;
+  font: 700 13px/1.2 sans-serif;
+  color: #e8d9a0;
+  text-shadow: 0 0 8px #4a6b3a, 0 1px 0 #000;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: dealer-scream 1.1s ease-out forwards;
+}
+@keyframes dealer-scream {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.85); }
+  100% { opacity: 0; transform: translate(-50%, -80%) scale(1.05); }
+}
+
+.ball.drug-pack {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, #fff 0 16%, transparent 17%),
+    radial-gradient(circle at 68% 42%, #f7f7f7 0 20%, transparent 21%),
+    radial-gradient(circle at 46% 72%, #ececec 0 14%, transparent 15%),
+    radial-gradient(circle at 58% 22%, #fff 0 10%, transparent 11%),
+    radial-gradient(circle at 50% 50%, #e8e8e8 0 38%, #cfcfcf 62%, #b8b8b8 78%, transparent 80%);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.55), inset 0 0 6px rgba(255, 255, 255, 0.7);
+  filter: contrast(1.08);
+}
+
+.ball.minion-leave {
+  opacity: 0;
+  transition: opacity 0.2s linear;
+}

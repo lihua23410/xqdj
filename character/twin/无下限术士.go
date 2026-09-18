@@ -246,7 +246,7 @@ type 术士弧 struct {
 
 func (a *术士弧) Handle(ctx unit.Context, ev unit.Event) {
 	e, ok := ev.(unit.Collision)
-	if !ok || !unit.EnemyFighter(e, a.slot) {
+	if !ok || !unit.EnemyTarget(e, a.slot) {
 		return
 	}
 	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: a.dmg}
@@ -268,7 +268,7 @@ func (b *紫弹) Handle(ctx unit.Context, ev unit.Event) {
 		if e.Other.Slot == b.slot {
 			return
 		}
-		if e.Other.Role != unit.RoleFighter {
+		if e.Other.Role != unit.RoleFighter && !e.Other.Mortal {
 			return
 		}
 		if e.Time < b.hitReadyAt {

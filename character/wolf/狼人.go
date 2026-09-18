@@ -131,7 +131,7 @@ type 狼弧 struct {
 
 func (a *狼弧) Handle(ctx unit.Context, ev unit.Event) {
 	e, ok := ev.(unit.Collision)
-	if !ok || !unit.EnemyFighter(e, a.slot) {
+	if !ok || !unit.EnemyTarget(e, a.slot) {
 		return
 	}
 	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: a.dmg}

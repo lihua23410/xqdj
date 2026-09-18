@@ -91,7 +91,7 @@ func (m *Match) maybeFactionCollectLocked(u *unit) {
 		reach := u.factionBlastR
 		for _, id := range m.order {
 			o := m.units[id]
-			if o == nil || o.stopped || o.role != unitpkg.RoleFighter || o.slot == u.slot {
+			if o == nil || o.stopped || !o.takesHit() || o.slot == u.slot {
 				continue
 			}
 			dx := o.p.X - u.p.X
@@ -146,21 +146,10 @@ func (m *Match) scaleDamage(atk, def *unit, amount float64) float64 {
 
 func (m *Match) harmLocked(fromID, toID uint64, amount float64) {
 	to := m.units[toID]
-	if to == nil || to.stopped || to.role != unitpkg.RoleFighter || amount <= 0 {
+	if !to.takesHit() || amount <= 0 {
 		return
 	}
 	from := m.units[fromID]
 	amount = m.scaleDamage(m.factionBearer(from), to, amount)
-	m.fx = append(m.fx, unitpkg.FX{
-		Name: "hurt", UnitID: to.id, Kind: to.kind,
-		X: to.p.X, Y: to.p.Y, Slot: to.slot, Amount: amount,
-	})
-	to.hp -= amount
-	m.hitStopIfNeeded(from)
-	if to.hp <= 0 {
-		to.hp = 0
-		m.removeLocked(to)
-	} else {
-		m.swapOwnedLocked(to.id)
-	}
+	m.applyHurtLocked(from, to, amount, to.role == unitpkg.RoleFighter, to.role == unitpkg.RoleFighter)
 }

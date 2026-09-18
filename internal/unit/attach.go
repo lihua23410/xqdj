@@ -25,6 +25,18 @@ func EnemyFighter(e Collision, slot int) bool {
 	return e.Other.Role == RoleFighter && e.Other.Slot != slot
 }
 
+// Hittable：敌方战斗机或敌方活随从。索敌仍用 RoleFighter；出伤用这个。
+func Hittable(o Snapshot, slot int) bool {
+	if o.Slot == slot {
+		return false
+	}
+	return o.Role == RoleFighter || o.Mortal
+}
+
+func EnemyTarget(e Collision, slot int) bool {
+	return Hittable(e.Other, slot)
+}
+
 // RearmAttach 主人每帧 Sense 调用。true 时 Spawn 一发 kind。
 // 打中后弹会 Despawn；这里等 cd 再挂。
 func RearmAttach(s Sense, owner uint64, kind string, cd float64, st *AttachState) bool {

@@ -337,7 +337,7 @@ func (a *人偶使) tickFan(ctx unit.Context, s unit.Sense) {
 	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+		if !unit.Hittable(*o, s.Self.Slot) {
 			continue
 		}
 		if fanHit(a.job.ox, a.job.oy, a.job.ux, a.job.uy, a.job.span, a.job.reach, *o) {
@@ -361,7 +361,7 @@ func (a *人偶使) tickRect(ctx unit.Context, s unit.Sense) {
 	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+		if !unit.Hittable(*o, s.Self.Slot) {
 			continue
 		}
 		if !rectHit(ox, oy, a.job.ux, a.job.uy, w, h, *o) {
@@ -407,7 +407,7 @@ func (a *人偶使) tickChain(ctx unit.Context, s unit.Sense) {
 		}
 		for j := range s.Nearby {
 			o := &s.Nearby[j]
-			if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+			if !unit.Hittable(*o, s.Self.Slot) {
 				continue
 			}
 			if segHits(x1, y1, x2, y2, laserHalf, *o) {
@@ -432,7 +432,7 @@ func (a *人偶使) tickHourai(ctx unit.Context, s unit.Sense) {
 		ox, oy := s.Self.X+perpX*off, s.Self.Y+perpY*off
 		for i := range s.Nearby {
 			o := &s.Nearby[i]
-			if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+			if !unit.Hittable(*o, s.Self.Slot) {
 				continue
 			}
 			if laserHits(ox, oy, a.job.ux, a.job.uy, laserHalf, laserLen, *o) {

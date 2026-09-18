@@ -50,7 +50,7 @@ func init() {
 		Fighter: false,
 		Look:    unit.Look{Color: "#f0a050"},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &远程子弹{owner: info.OwnerID}
+		return &远程子弹{owner: info.OwnerID, slot: info.Slot}
 	})
 }
 
@@ -125,6 +125,7 @@ func (r *原型机_远程) shoot(ctx unit.Context, s unit.Sense) {
 
 type 远程子弹 struct {
 	owner   uint64
+	slot    int
 	bounces int
 }
 
@@ -144,7 +145,7 @@ func (b *远程子弹) onHit(ctx unit.Context, other unit.Snapshot) {
 	if other.ID == b.owner {
 		return
 	}
-	if other.Role != unit.RoleFighter {
+	if !unit.Hittable(other, b.slot) {
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		return
 	}

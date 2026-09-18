@@ -521,6 +521,21 @@ func TestEllipseAxesStayHorizontal(t *testing.T) {
 	dropState(9)
 }
 
+func TestEllipseHitsMortalMinion(t *testing.T) {
+	resetQueues()
+	pushDoll(dollSpec{mode: dollOrbit, ang: 0, until: 3, rangeOn: true})
+	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	out := make(chan unit.Cmd, 32)
+	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	self := dollSnap(9, 200, 0)
+	d.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{me(0, 0), mortalMinion(230, 0)}})
+	cmds := drain(out)
+	if !hasDamage(cmds, 8, burstDmg) {
+		t.Fatalf("ellipse should hit mortal minion: %v", cmds)
+	}
+	dropState(9)
+}
+
 func TestBattleAxeUsesEllipse(t *testing.T) {
 	resetQueues()
 	pushDoll(dollSpec{mode: dollOrbit, ang: 0, until: 3, rangeOn: true})
@@ -691,6 +706,13 @@ func foe(x, y float64) unit.Snapshot {
 	return unit.Snapshot{
 		ID: 2, Kind: "原型机_远程", Role: unit.RoleFighter,
 		X: x, Y: y, Radius: 18, HP: 100, MaxHP: 100, Slot: 1,
+	}
+}
+
+func mortalMinion(x, y float64) unit.Snapshot {
+	return unit.Snapshot{
+		ID: 8, Kind: "教父暗杀者", Role: unit.RoleMinion, Mortal: true,
+		X: x, Y: y, Radius: 14, HP: 30, MaxHP: 30, Slot: 1,
 	}
 }
 

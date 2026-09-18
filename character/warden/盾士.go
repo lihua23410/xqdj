@@ -71,7 +71,7 @@ func init() {
 		Fighter: false,
 		Look:    unit.Look{Color: "#8b9cb3"},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &盾碎片{owner: info.OwnerID, dmg: fullShardDmg}
+		return &盾碎片{owner: info.OwnerID, slot: info.Slot, dmg: fullShardDmg}
 	})
 	p.Register(unit.Spec{
 		Kind:    kindWeakShard,
@@ -83,7 +83,7 @@ func init() {
 		Fighter: false,
 		Look:    unit.Look{Color: "#c47a4a"},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &盾碎片{owner: info.OwnerID, dmg: weakShardDmg}
+		return &盾碎片{owner: info.OwnerID, slot: info.Slot, dmg: weakShardDmg}
 	})
 }
 
@@ -188,6 +188,7 @@ func (*盾) Handle(unit.Context, unit.Event) {}
 
 type 盾碎片 struct {
 	owner   uint64
+	slot    int
 	dmg     float64
 	bounces int
 }
@@ -208,7 +209,7 @@ func (b *盾碎片) onHit(ctx unit.Context, other unit.Snapshot) {
 	if other.ID == b.owner {
 		return
 	}
-	if other.Role != unit.RoleFighter {
+	if !unit.Hittable(other, b.slot) {
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		return
 	}

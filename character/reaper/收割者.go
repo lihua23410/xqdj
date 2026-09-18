@@ -229,7 +229,7 @@ func (k *镰刀) cut(ctx unit.Context, s unit.Sense) {
 	r := s.Self.Radius
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == k.slot {
+		if !unit.Hittable(*o, k.slot) {
 			continue
 		}
 		if !overlap(s.Self.X, s.Self.Y, r, o.X, o.Y, o.Radius) {

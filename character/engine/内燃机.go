@@ -148,7 +148,7 @@ func (e *内燃机) tickAtk(ctx unit.Context, s unit.Sense) {
 	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+		if !unit.Hittable(*o, s.Self.Slot) {
 			continue
 		}
 		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: amt}
@@ -159,7 +159,7 @@ func (e *内燃机) blast(ctx unit.Context, s unit.Sense) {
 	if engineBlast > 0 {
 		for i := range s.Nearby {
 			o := &s.Nearby[i]
-			if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
+			if !unit.Hittable(*o, s.Self.Slot) {
 				continue
 			}
 			ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: engineBlast}

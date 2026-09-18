@@ -161,7 +161,7 @@ func (a *钓鱼佬) onBump(ctx unit.Context, c unit.Collision) {
 	if !a.ram {
 		return
 	}
-	if !unit.EnemyFighter(c, a.slot) {
+	if !unit.EnemyTarget(c, a.slot) {
 		return
 	}
 	if c.Time+1e-9 < a.ramHitAt {

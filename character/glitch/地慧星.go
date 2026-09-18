@@ -110,7 +110,7 @@ func init() {
 		Fighter: false,
 		Look:    unit.Look{Color: glitchColor, Trail: true, FX: []string{"crescent"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &地慧星弹{owner: info.OwnerID}
+		return &地慧星弹{owner: info.OwnerID, slot: info.Slot}
 	})
 }
 
@@ -163,7 +163,7 @@ func ghostOverlap(s unit.Sense, slot int) *unit.Snapshot {
 	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == slot {
+		if !unit.Hittable(*o, slot) {
 			continue
 		}
 		r := o.Radius
@@ -198,6 +198,7 @@ func (s *地慧星斩击) Handle(ctx unit.Context, ev unit.Event) {
 
 type 地慧星弹 struct {
 	owner uint64
+	slot  int
 }
 
 func (b *地慧星弹) Handle(ctx unit.Context, ev unit.Event) {
@@ -206,7 +207,7 @@ func (b *地慧星弹) Handle(ctx unit.Context, ev unit.Event) {
 		if e.Other.ID == b.owner {
 			return
 		}
-		if e.Other.Role != unit.RoleFighter {
+		if !unit.Hittable(e.Other, b.slot) {
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return
 		}
@@ -275,7 +276,7 @@ func (a *地慧星弧) Handle(ctx unit.Context, ev unit.Event) {
 		a.x, a.y = e.Self.X, e.Self.Y
 		a.booted = true
 	case unit.Collision:
-		if !unit.EnemyFighter(e, a.slot) {
+		if !unit.EnemyTarget(e, a.slot) {
 			return
 		}
 		ctx.Out <- unit.Damage{

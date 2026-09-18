@@ -93,11 +93,11 @@ const (
 	houraiHits  = 16
 	houraiBeams = 4
 
-	bombR     = 12.0
-	demonR    = 54.0
-	demonDmg  = 28.0
-	demonSp   = 108.0 / 1.2
-	bounceSp  = 75.0
+	bombR       = 12.0
+	demonR      = 54.0
+	demonDmg    = 28.0
+	demonSp     = 108.0 / 1.2
+	bounceSp    = 75.0
 	orbitR      = 200.0
 	orbitN      = 8
 	orbitLife   = 3.0
@@ -256,7 +256,7 @@ func (a *人偶使) onCollide(ctx unit.Context, e unit.Collision) {
 	if a.job.kind != SkillN24 || a.job.left <= 0 {
 		return
 	}
-	if !unit.EnemyFighter(e, a.slot) {
+	if !unit.EnemyTarget(e, a.slot) {
 		return
 	}
 	deal(ctx, ctx.ID, e.Other.ID, float64(a.job.left)*a.job.dmg)
