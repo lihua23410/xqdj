@@ -747,7 +747,7 @@ func TestChainLaserPolylineThenClears(t *testing.T) {
 		t.Fatalf("lasers should wait for windup: %v", cmds)
 	}
 
-	a.Handle(ctx, unit.Sense{Time: 0.8, Self: me(0, 0), Nearby: near})
+	a.Handle(ctx, unit.Sense{Time: chainWind, Self: me(0, 0), Nearby: near})
 	cmds = drain(out)
 	segs := beamSegs(cmds)
 	if len(segs) != 3 {
@@ -766,7 +766,7 @@ func TestChainLaserPolylineThenClears(t *testing.T) {
 		t.Fatalf("path should hit enemy for (level+5)*1.4: %v", cmds)
 	}
 
-	a.Handle(ctx, unit.Sense{Time: 0.8 + laserHold, Self: me(0, 0), Nearby: near})
+	a.Handle(ctx, unit.Sense{Time: chainWind + laserHold, Self: me(0, 0), Nearby: near})
 	cmds = drain(out)
 	if !hasDespawnOwned(cmds, KindNingyushiBeam) {
 		t.Fatalf("finished lasers should despawn: %v", cmds)

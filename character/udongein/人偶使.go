@@ -68,6 +68,7 @@ const (
 	burstDmg  = 1.4
 
 	placeWind  = 0.8
+	chainWind  = 0.1
 	placeShots = 6
 	placeLife  = 1.0
 	placeDmg   = 1.4
@@ -416,7 +417,11 @@ func (a *人偶使) spend(amt float64) {
 }
 
 func (a *人偶使) lockUntilAt(now float64, sk uint8) {
-	until := now + lockSpan(sk)
+	span := lockSpan(sk)
+	if sk == SkillN22 && a.job.kind == SkillN22 {
+		span = chainWind + laserHold
+	}
+	until := now + span
 	if until > a.lockUntil {
 		a.lockUntil = until
 	}

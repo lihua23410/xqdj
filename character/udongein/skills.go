@@ -135,11 +135,11 @@ func (a *人偶使) castChain(ctx unit.Context, s unit.Sense, enemy unit.Snapsho
 		pts = append(pts, [2]float64{s.Self.X + hx*80, s.Self.Y + hy*80})
 	}
 	hops := len(pts) - 1
-	until := s.Time + placeWind + laserHold
+	until := s.Time + chainWind + laserHold
 	a.setJob(ctx, s, job{
-		kind: SkillN22, until: until, next: s.Time + placeWind,
+		kind: SkillN22, until: until, next: s.Time + chainWind,
 		left: hops, paths: pts, idx: 1,
-		dmg: float64(a.spellLevel(SkillN22)+5) * 1.4, wind: s.Time + placeWind,
+		dmg: float64(a.spellLevel(SkillN22)+5) * 1.4, wind: s.Time + chainWind,
 	})
 	if until > a.lockUntil {
 		a.lockUntil = until
