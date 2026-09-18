@@ -251,7 +251,7 @@ func (d *人偶) onSense(ctx unit.Context, s unit.Sense) {
 		d.tickDeploy(ctx, s, dt)
 		d.showRange(ctx, s)
 		d.emitPose(ctx, s)
-		if d.spec.mode == dollOrbit {
+		if d.spec.mode == dollOrbit || d.spec.mode == dollEllipseRecall {
 			d.pulseEllipse(ctx, s)
 		}
 		return
@@ -309,9 +309,10 @@ func canForceRecall(mode uint8) bool {
 func (d *人偶) showRange(ctx unit.Context, s unit.Sense) {
 	armed := d.spec.armAt <= 0 || s.Time+1e-9 >= d.spec.armAt
 	boomerang := d.spec.mode == dollRecall && d.spec.slow && d.spec.rangeOn
+	flying := d.spec.mode == dollEllipseRecall || d.spec.mode == dollOrbit
 	on := 0.0
 	if d.spec.rangeOn && armed && (d.spec.mode != dollRecall || boomerang) {
-		if d.spec.arriveAt <= 0 || d.spec.mode == dollOrbit {
+		if d.spec.arriveAt <= 0 || flying {
 			on = 1
 		}
 	}
@@ -324,7 +325,7 @@ func (d *人偶) emitPose(ctx unit.Context, s unit.Sense) {
 
 func (d *人偶) currentPose(now float64) uint8 {
 	if d.spec.arriveAt > now+1e-9 {
-		if d.spec.mode == dollOrbit {
+		if d.spec.mode == dollOrbit || d.spec.mode == dollEllipseRecall {
 			return poseAe
 		}
 		return poseAb

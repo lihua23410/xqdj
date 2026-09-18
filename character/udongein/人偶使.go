@@ -83,7 +83,7 @@ const (
 	spell24N    = 6
 	spell24Ring = 24.0
 	spell24Len  = 108.0
-	spell24Rush = ningyushiSpeed * 1.8
+	spell24Rush = ningyushiSpeed * 2.5
 
 	laserHalf = 10.0
 	laserLen  = 560.0

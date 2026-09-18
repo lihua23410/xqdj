@@ -612,23 +612,34 @@ func TestChaseGoesToLockedPoint(t *testing.T) {
 	}
 }
 
-func TestSpell26ReturnsAfterWindup(t *testing.T) {
+func TestSpell26EllipseOnThrowAndReturn(t *testing.T) {
 	resetQueues()
-	pushDoll(dollSpec{mode: dollEllipseRecall, ux: 1, uy: 0, armAt: 0.8, rangeOn: true, slow: true, once: true})
+	pushDoll(dollSpec{
+		mode: dollEllipseRecall, x: dollReach, y: 0, arriveAt: deployLife,
+		rangeOn: true, slow: true, once: true, dmg: 8.4,
+	})
 	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
 	out := make(chan unit.Cmd, 32)
 	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
-	self := dollSnap(9, 54, 0)
-	d.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{me(0, 0), foe(80, 0)}})
-	if hasTeleport(drain(out), 9) {
-		t.Fatal("should not return during windup")
+	self := dollSnap(9, 0, 0)
+	d.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{me(0, 0), foe(20, 0)}})
+	cmds := drain(out)
+	if !rangeOn(cmds) {
+		t.Fatal("boomerang should show ellipse while thrown")
 	}
-	d.Handle(ctx, unit.Sense{Time: 0.8, Self: self, Nearby: []unit.Snapshot{me(0, 0), foe(80, 0)}})
-	tp := lastTeleport(drain(out), 9)
-	if tp == nil || tp.X >= 54 {
-		t.Fatalf("boomerang should start returning after windup: %v", tp)
+	if !hasDamage(cmds, 2, 8.4) {
+		t.Fatalf("throw should hit with ellipse: %v", cmds)
 	}
-	d.Handle(ctx, unit.Sense{Time: 0.8 + recallLife, Self: self, Nearby: []unit.Snapshot{me(0, 0), foe(80, 0)}})
+	d.Handle(ctx, unit.Sense{Time: deployLife, Self: dollSnap(9, dollReach, 0), Nearby: []unit.Snapshot{me(0, 0), foe(20, 0)}})
+	cmds = drain(out)
+	tp := lastTeleport(cmds, 9)
+	if tp == nil || tp.X >= dollReach {
+		t.Fatalf("boomerang should start returning after arriving: %v", cmds)
+	}
+	if !rangeOn(cmds) {
+		t.Fatal("boomerang should keep ellipse while returning")
+	}
+	d.Handle(ctx, unit.Sense{Time: deployLife + recallLife, Self: dollSnap(9, 20, 0), Nearby: []unit.Snapshot{me(0, 0), foe(20, 0)}})
 	if !hasDespawn(drain(out), 9) {
 		t.Fatal("spell 26 recall should finish in about 0.4s")
 	}

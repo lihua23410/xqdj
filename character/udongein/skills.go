@@ -153,8 +153,7 @@ func (a *人偶使) castSpell26(ctx unit.Context, s unit.Sense) bool {
 	x, y = clampHex(x, y, dollRadius)
 	spawnDollAt(ctx, s, x, y, dollSpec{
 		mode: dollEllipseRecall, ux: ux, uy: uy,
-		armAt: s.Time + placeWind,
-		dmg:   float64(a.spellLevel(SkillN26)+5) * 1.4, once: true, rangeOn: true, slow: true,
+		dmg: float64(a.spellLevel(SkillN26)+5) * 1.4, once: true, rangeOn: true, slow: true,
 	})
 	return true
 }
