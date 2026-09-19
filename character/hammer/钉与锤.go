@@ -851,3 +851,4 @@ func reflectDir(ux, uy, nx, ny float64) (float64, float64) {
 	}
 	return rx / n, ry / n
 }
+
