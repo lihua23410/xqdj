@@ -2,8 +2,11 @@ package 盾士
 
 import (
 	"embed"
+	"encoding/json"
 	"math"
 	"math/rand/v2"
+	"os"
+	"time"
 	"xqdj/internal/unit"
 )
 
@@ -101,14 +104,23 @@ func (s *盾士) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
 		if s.armed || s.cover {
+			// #region agent log
+			wardenLog("盾士.go:IncomingDamage", "block", "B", map[string]any{"id": ctx.ID, "armed": s.armed, "cover": s.cover, "amt": e.Amount, "token": e.Token, "time": e.Time, "lost": s.lost})
+			// #endregion
 			unit.BlockHit(ctx, e)
 			s.cover = false
 			s.breakFull(ctx)
 			return
 		}
+		// #region agent log
+		wardenLog("盾士.go:IncomingDamage", "confirm", "B", map[string]any{"id": ctx.ID, "armed": s.armed, "cover": s.cover, "amt": e.Amount, "token": e.Token, "time": e.Time, "lost": s.lost})
+		// #endregion
 		unit.ConfirmHit(ctx, e)
 		s.lost += e.Amount
 	case unit.GuardBreak:
+		// #region agent log
+		wardenLog("盾士.go:GuardBreak", "guard break", "B", map[string]any{"id": ctx.ID, "armedBefore": s.armed, "coverBefore": s.cover, "time": e.Time})
+		// #endregion
 		s.cover = true
 		s.breakFull(ctx)
 	case unit.Sense:
@@ -122,6 +134,26 @@ func (s *盾士) Handle(ctx unit.Context, ev unit.Event) {
 		s.maybeRefresh(ctx, e)
 	}
 }
+
+// #region agent log
+func wardenLog(location, message, hid string, data map[string]any) {
+	f, err := os.OpenFile(`e:\xqdj\debug-a87218.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	b, _ := json.Marshal(map[string]any{
+		"sessionId":    "a87218",
+		"timestamp":    time.Now().UnixMilli(),
+		"location":     location,
+		"message":      message,
+		"hypothesisId": hid,
+		"data":         data,
+	})
+	_, _ = f.Write(append(b, '\n'))
+	_ = f.Close()
+}
+
+// #endregion
 
 func (s *盾士) maybeRefresh(ctx unit.Context, sense unit.Sense) {
 	if sense.Time+1e-9 < s.refreshAt && s.lost < shieldLostTrig {

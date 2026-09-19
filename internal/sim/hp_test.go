@@ -362,6 +362,71 @@ func TestWardenBreakingHitDoesNotDamage(t *testing.T) {
 	m.mu.Unlock()
 }
 
+func TestWardenBodyHitAfterShellGone(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindWarden)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 8; i++ {
+		m.Tick()
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.mu.Lock()
+	var warden, shell *unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil {
+			continue
+		}
+		if u.kind == character.KindWarden {
+			warden = u
+		}
+		if u.shell {
+			shell = u
+		}
+	}
+	if warden == nil || shell == nil {
+		m.mu.Unlock()
+		t.Fatal("need warden and shield")
+	}
+	id := warden.id
+	m.popShellLocked(shell, 0)
+	m.mu.Unlock()
+	for i := 0; i < 12; i++ {
+		m.Tick()
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.mu.Lock()
+	if m.shellOfLocked(id) != nil {
+		m.mu.Unlock()
+		t.Fatal("shield still present")
+	}
+	u := m.units[id]
+	if u == nil {
+		m.mu.Unlock()
+		t.Fatal("warden gone")
+	}
+	hp0 := u.hp
+	m.applyCmdLocked(unitpkg.Damage{From: 0, To: id, Amount: 14})
+	m.settleHitsLocked()
+	m.mu.Unlock()
+	time.Sleep(3 * time.Millisecond)
+	m.mu.Lock()
+	m.drainCmdsLocked()
+	m.settleHitsLocked()
+	u = m.units[id]
+	if u == nil {
+		m.mu.Unlock()
+		t.Fatal("warden gone after hit")
+	}
+	hp1 := u.hp
+	m.mu.Unlock()
+	if hp1 >= hp0-0.05 {
+		t.Fatalf("no shield but hp stayed %.1f after 14 dmg (wardAbsorb leftover?)", hp0)
+	}
+}
+
 func TestWardenCombatNoBleedWithShield(t *testing.T) {
 	foes := []string{character.KindMelee, character.KindRanged, character.KindKnight, character.KindDoppel}
 	for seed := uint64(1); seed <= 12; seed++ {
