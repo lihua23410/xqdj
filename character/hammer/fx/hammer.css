@@ -1,3 +1,44 @@
+.ball.look-hammer-arc {
+  overflow: visible !important;
+}
+.ball.look-hammer-arc.arc {
+  border-color: transparent;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.ball.look-hammer-arc > .blade-glow,
+.ball.look-hammer-arc > .blade-core,
+.ball.look-hammer-arc > .blade-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  box-sizing: border-box;
+  -webkit-mask-image: conic-gradient(
+    from var(--arc-from, 45deg),
+    #000 0 var(--arc-span, 90deg),
+    transparent 0
+  );
+  mask-image: conic-gradient(
+    from var(--arc-from, 45deg),
+    #000 0 var(--arc-span, 90deg),
+    transparent 0
+  );
+}
+.ball.look-hammer-arc > .blade-glow {
+  border: calc(var(--arc-thick, 2px) + 6px) solid color-mix(in srgb, var(--kind) 75%, transparent);
+  filter: blur(5px);
+  opacity: 0.34;
+}
+.ball.look-hammer-arc > .blade-edge {
+  border: calc(var(--arc-thick, 2px) + 1px) solid var(--kind);
+  opacity: 0.9;
+}
+.ball.look-hammer-arc > .blade-core {
+  border: 1.2px solid #fff;
+  box-shadow: 0 0 3px var(--kind), 0 0 8px color-mix(in srgb, var(--kind) 70%, transparent);
+}
+
 /* 钉与锤：紫色球体 + 木槌 / 五寸钉 / 藁人形 */
 .ball.look-hammer {
   overflow: visible !important;

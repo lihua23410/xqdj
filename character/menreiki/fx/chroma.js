@@ -46,6 +46,30 @@ function paintStun() {
   }
 }
 
+window.lookFX["chroma-bolt"] = {
+  unmount(el) {
+    el?.querySelector(":scope > .chroma-bolt")?.remove();
+  },
+  tick(el, u) {
+    if (!el || !el.classList.contains("look-chroma-bolt")) return;
+    let art = el.querySelector(":scope > .chroma-bolt");
+    if (!art) {
+      art = document.createElement("span");
+      art.className = "chroma-bolt";
+      for (const name of ["bolt-glow", "bolt-body", "bolt-core", "bolt-fringe"]) {
+        const layer = document.createElement("i");
+        layer.className = name;
+        art.appendChild(layer);
+      }
+      el.appendChild(art);
+    }
+    const ang = Math.atan2(-(u.vy || 0), u.vx || 1);
+    const r = el.clientWidth || 12;
+    art.style.setProperty("--bolt-ang", `${ang}rad`);
+    art.style.setProperty("--bolt-len", `${Math.max(32, r * 3.6)}px`);
+  },
+};
+
 window.lookFX.chroma = {
   unmount(el) {
     el?.querySelector(":scope > .menreiki-hook")?.remove();

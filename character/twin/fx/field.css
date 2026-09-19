@@ -1,3 +1,72 @@
+.ball.look-twin-arc {
+  overflow: visible !important;
+}
+.ball.look-twin-arc.arc {
+  border-color: transparent;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.ball.look-twin-arc > .blade-glow,
+.ball.look-twin-arc > .blade-core,
+.ball.look-twin-arc > .blade-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  box-sizing: border-box;
+  -webkit-mask-image: conic-gradient(
+    from var(--arc-from, 45deg),
+    #000 0 var(--arc-span, 90deg),
+    transparent 0
+  );
+  mask-image: conic-gradient(
+    from var(--arc-from, 45deg),
+    #000 0 var(--arc-span, 90deg),
+    transparent 0
+  );
+}
+.ball.look-twin-arc > .blade-glow {
+  border: calc(var(--arc-thick, 2px) + 6px) solid color-mix(in srgb, var(--kind) 75%, transparent);
+  filter: blur(5px);
+  opacity: 0.34;
+}
+.ball.look-twin-arc > .blade-edge {
+  border: calc(var(--arc-thick, 2px) + 1px) solid var(--kind);
+  opacity: 0.9;
+}
+.ball.look-twin-arc > .blade-core {
+  border: 1.2px solid #fff;
+  box-shadow: 0 0 3px var(--kind), 0 0 8px color-mix(in srgb, var(--kind) 70%, transparent);
+}
+
+.ball.look-void-orb {
+  overflow: visible !important;
+}
+.ball.look-void-orb > .void-rim,
+.ball.look-void-orb > .void-cross {
+  position: absolute;
+  pointer-events: none;
+}
+.ball.look-void-orb > .void-rim {
+  inset: 8%;
+  border-radius: 50%;
+  border: 1.2px solid #fff;
+  box-shadow: 0 0 6px #b44cff, 0 0 14px #b44cff;
+  opacity: 0.85;
+}
+.ball.look-void-orb > .void-cross {
+  left: 50%;
+  top: 50%;
+  width: 54%;
+  height: 54%;
+  transform: translate(-50%, -50%);
+  background:
+    linear-gradient(#fff, #fff) center / 100% 1px no-repeat,
+    linear-gradient(#fff, #fff) center / 1px 100% no-repeat;
+  box-shadow: 0 0 4px #fff, 0 0 10px #b44cff;
+  pointer-events: none;
+}
+
 .guide.bond {
   opacity: 0.42;
   border-top-width: 2px;

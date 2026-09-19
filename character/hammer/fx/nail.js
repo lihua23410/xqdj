@@ -125,6 +125,24 @@ function ensureChild(el, cls, html) {
   return node;
 }
 
+window.lookFX["hammer-arc"] = {
+  unmount(el) {
+    el?.querySelector(":scope > .blade-glow")?.remove();
+    el?.querySelector(":scope > .blade-edge")?.remove();
+    el?.querySelector(":scope > .blade-core")?.remove();
+  },
+  tick(el) {
+    if (!el || !el.classList.contains("look-hammer-arc")) return;
+    for (const name of ["blade-glow", "blade-edge", "blade-core"]) {
+      if (!el.querySelector(`:scope > .${name}`)) {
+        const layer = document.createElement("i");
+        layer.className = name;
+        el.appendChild(layer);
+      }
+    }
+  },
+};
+
 window.lookFX.hammer = {
   unmount(el) {
     el?.querySelector(":scope > .hammer-art")?.remove();

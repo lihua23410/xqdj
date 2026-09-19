@@ -40,35 +40,30 @@
   width: var(--r, 192px);
   height: var(--r, 192px);
   border-radius: 50%;
-  border: 2px solid #ff5a1f;
+  border: 1.5px solid #fff;
   box-shadow:
-    0 0 16px #ff5a1f,
-    inset 0 0 18px color-mix(in srgb, #ff8a3a 70%, transparent);
-  background: radial-gradient(
-    circle,
-    transparent 42%,
-    color-mix(in srgb, #ff5a1f 28%, transparent) 70%,
-    transparent 100%
-  );
+    0 0 10px #ff5a1f,
+    0 0 18px #ff8a3a;
+  background: none;
   animation: engine-ripple 1.15s cubic-bezier(0.12, 0.7, 0.3, 1) forwards;
 }
 .engine-ember {
   position: absolute;
   left: 0;
   top: 0;
-  width: calc(5px * var(--s, 1));
-  height: calc(5px * var(--s, 1));
+  width: 2px;
+  height: calc(11px * var(--s, 1));
   margin: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff6c8 0%, #ffd28a 35%, #ff5a1f 70%, transparent 78%);
-  box-shadow: 0 0 7px #ff5a1f, 0 0 14px #ff8a3a;
+  border-radius: 1px;
+  background: linear-gradient(#fff8d0, #ff5a1f 70%, transparent);
+  box-shadow: 0 0 6px #ff5a1f, 0 0 12px #ff8a3a;
   animation: engine-ember 0.72s cubic-bezier(0.12, 0.62, 0.28, 1) var(--delay, 0s) forwards;
 }
 .engine-ember.is-spark {
   width: 2px;
-  height: calc(10px * var(--s, 1));
-  border-radius: 2px;
-  background: linear-gradient(#fff8d0, #ff5a1f 70%, transparent);
+  height: calc(14px * var(--s, 1));
+  border-radius: 1px;
+  background: linear-gradient(#fff, #ffd28a 40%, #ff5a1f 80%, transparent);
   box-shadow: 0 0 8px #ff5a1f;
 }
 .ball.look-engine[data-engine-frail="1"] .engine-ripple,
@@ -108,12 +103,25 @@
   display: none;
 }
 .fx-engine-blast-core {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff 0%, #ffe08a 35%, #ff5a1f 70%, transparent 100%);
-  box-shadow: 0 0 28px #fff, 0 0 64px #ff5a1f;
+  width: 22px;
+  height: 22px;
+  border-radius: 0;
+  background: radial-gradient(ellipse 55% 80% at 50% 50%, #fff 0%, #ffe08a 28%, transparent 72%);
+  box-shadow: none;
+  mix-blend-mode: screen;
   animation: engine-blast-core 0.55s ease-out forwards;
+}
+.fx-engine-blast-core::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: #fff;
+  box-shadow: 0 0 8px #ff5a1f, 0 0 18px #ff5a1f;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 @keyframes engine-blast-core {
   0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
@@ -124,16 +132,12 @@
   width: var(--r, 200px);
   height: var(--r, 200px);
   border-radius: 50%;
-  border: 4px solid #ffd28a;
+  border: 1.6px solid #fff;
   box-shadow:
-    0 0 28px #ff5a1f,
-    inset 0 0 36px color-mix(in srgb, #ff5a1f 80%, transparent);
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, #ff5a1f 45%, transparent) 0%,
-    color-mix(in srgb, #ff5a1f 18%, transparent) 55%,
-    transparent 72%
-  );
+    0 0 10px #ff5a1f,
+    0 0 22px #ff5a1f,
+    inset 0 0 12px color-mix(in srgb, #ff5a1f 55%, transparent);
+  background: none;
   animation: engine-blast-wave 0.85s cubic-bezier(0.12, 0.72, 0.2, 1) var(--delay, 0s) both;
 }
 @keyframes engine-blast-wave {
@@ -145,8 +149,8 @@
   width: var(--r, 200px);
   height: var(--r, 200px);
   border-radius: 50%;
-  border: 2px dashed #ff8a3a;
-  box-shadow: 0 0 22px #ff5a1f;
+  border: 1.4px solid #ffd28a;
+  box-shadow: 0 0 14px #ff5a1f;
   animation: engine-blast-ring 1s ease-out 0.05s both;
 }
 @keyframes engine-blast-ring {

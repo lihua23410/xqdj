@@ -28,10 +28,9 @@
   });
 
   arena.registerShot("shot", (fx, ctx) => {
-    arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
-    const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1) * (180 / Math.PI);
-    const beam = arena.spawnFx("fx-beam", ctx.x, ctx.y, fx.kind);
-    if (beam) beam.style.transform = `translate(0, -50%) rotate(${ang}deg)`;
+    const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1);
+    const beam = arena.spawnFx("fx-ningyushi-muzzle", ctx.x, ctx.y, fx.kind);
+    if (beam) beam.style.transform = `translate(-50%, -50%) rotate(${ang}rad)`;
   });
 
   arena.registerShot("break", (fx, ctx) => {

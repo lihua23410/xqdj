@@ -1,0 +1,92 @@
+/* 教父狙击弹：细长穿甲曳光。短动能弹体 + 长发亮芯线，和远程飞镖不是同一套皮。 */
+.ball.look-slug,
+.ball.look-slug.projectile,
+.ball.look-slug.glow,
+.ball.look-slug.dashing {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none;
+  overflow: visible !important;
+  border: none !important;
+}
+.ball.look-slug > .slug-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--slug-len, 152px);
+  height: 12px;
+  transform: translate(-50%, -50%) rotate(var(--slug-ang, 0rad));
+  pointer-events: none;
+  overflow: visible;
+  z-index: 5;
+}
+.ball.look-slug .slug-wake,
+.ball.look-slug .slug-glow,
+.ball.look-slug .slug-core {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.ball.look-slug .slug-wake {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, #ff6a5a 62%, transparent 100%);
+  opacity: 0.42;
+  filter: blur(0.4px);
+}
+.ball.look-slug .slug-glow {
+  height: 10px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    #5a0c12 38%,
+    #ff6a5a 78%,
+    transparent 100%
+  );
+  filter: blur(5px);
+  opacity: 0.26;
+}
+.ball.look-slug .slug-core {
+  height: 1px;
+  left: 6%;
+  right: 2%;
+  background: #ffe8e0;
+  box-shadow: 0 0 1px #ffe8e0, 0 0 6px #ff6a5a;
+}
+.ball.look-slug .slug-body {
+  position: absolute;
+  right: 7%;
+  top: 50%;
+  width: 16px;
+  height: 4px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  background: linear-gradient(180deg, #ffd4cc 0%, #ff6a5a 46%, #7a1810 100%);
+  clip-path: polygon(0% 30%, 14% 0%, 76% 0%, 100% 50%, 76% 100%, 14% 100%, 0% 70%);
+}
+.ball.look-slug .slug-flare {
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  width: 9px;
+  height: 8px;
+  transform: translate(0, -50%);
+  pointer-events: none;
+  background: radial-gradient(ellipse 55% 80% at 50% 50%, #fff 0%, #ff8a7a 30%, transparent 72%);
+  mix-blend-mode: screen;
+}
+.ball.look-slug .slug-flare::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: #fff;
+  box-shadow: 0 0 5px #ff6a5a, 0 0 11px #ff6a5a;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}

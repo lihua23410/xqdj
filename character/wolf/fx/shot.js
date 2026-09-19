@@ -78,7 +78,7 @@
 
   arena.registerShot("phase", (fx, ctx) => {
     window.wolfMoonPhase[fx.slot] = fx.amount | 0;
-    arena.spawnFx("fx-ring", ctx.x, ctx.y, fx.kind);
+    arena.spawnFx("fx-wolf-phase", ctx.x, ctx.y, fx.kind);
   });
 
   window.wolfRaging = window.wolfRaging || {};
