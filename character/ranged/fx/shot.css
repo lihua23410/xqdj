@@ -17,21 +17,21 @@
 .fx-tracer-muzzle::before {
   width: 100%;
   height: 10px;
-  background: linear-gradient(90deg, #7a3010, #f0a050 40%, transparent);
+  background: linear-gradient(90deg, #0a4a58, #3ec8e0 40%, transparent);
   filter: blur(4px);
-  opacity: 0.45;
+  opacity: 0.5;
 }
 .fx-tracer-muzzle::after {
   width: 100%;
   height: 1px;
-  background: linear-gradient(90deg, #fff8e8, #ffd08a 55%, transparent);
-  box-shadow: 0 0 4px #f0a050;
+  background: linear-gradient(90deg, #9cffff, #6af0ff 55%, transparent);
+  box-shadow: 0 0 4px #3ec8e0, 0 0 8px #ff6a18;
 }
 .fx-tracer-flare {
   width: 16px;
   height: 16px;
   pointer-events: none;
-  background: radial-gradient(ellipse 55% 80% at 50% 50%, #fff 0%, #ffd08a 30%, transparent 72%);
+  background: radial-gradient(ellipse 55% 80% at 50% 50%, #fff 0%, #6af0ff 28%, transparent 72%);
   mix-blend-mode: screen;
   animation: tracer-flare 0.2s ease-out forwards;
 }
@@ -44,7 +44,7 @@
   height: 6px;
   transform: translate(-50%, -50%) rotate(45deg);
   background: #fff;
-  box-shadow: 0 0 6px #f0a050, 0 0 12px #f0a050;
+  box-shadow: 0 0 6px #3ec8e0, 0 0 12px #ff6a18;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 @keyframes tracer-muzzle {

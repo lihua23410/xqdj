@@ -10,7 +10,7 @@ window.lookFX.slug = {
     if (!art) {
       art = document.createElement("span");
       art.className = "slug-art";
-      for (const name of ["slug-wake", "slug-glow", "slug-core", "slug-body", "slug-flare"]) {
+      for (const name of ["slug-glow", "slug-core", "slug-hot", "slug-ticks", "slug-tip"]) {
         const layer = document.createElement("i");
         layer.className = name;
         art.appendChild(layer);
@@ -20,6 +20,6 @@ window.lookFX.slug = {
     const ang = Math.atan2(-(u.vy || 0), u.vx || 1);
     const r = el.clientWidth || 10;
     art.style.setProperty("--slug-ang", `${ang}rad`);
-    art.style.setProperty("--slug-len", `${Math.max(110, r * 14)}px`);
+    art.style.setProperty("--slug-len", `${Math.max(132, r * 16)}px`);
   },
 };

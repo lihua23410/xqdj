@@ -58,24 +58,24 @@
   height: 10px;
   background: linear-gradient(
     90deg,
-    #7a1810 0%,
-    #ff5046 18%,
-    rgba(255, 80, 70, 0.35) 70%,
+    #0a3a58 0%,
+    #2ec8e0 18%,
+    rgba(46, 200, 224, 0.32) 70%,
     transparent 100%
   );
   filter: blur(5px);
-  opacity: 0.28;
+  opacity: 0.3;
 }
 .sniper-laser > .sniper-core {
   height: 1px;
   background: linear-gradient(
     90deg,
-    #ffe8e0 0%,
-    #ff6a5a 22%,
-    rgba(255, 106, 90, 0.35) 78%,
+    #9cffff 0%,
+    #6af0ff 22%,
+    rgba(106, 240, 255, 0.32) 78%,
     transparent 100%
   );
-  box-shadow: 0 0 1px #ff6a5a, 0 0 5px #ff5046;
+  box-shadow: 0 0 1px #6af0ff, 0 0 5px #2ec8e0;
 }
 
 .fx-dealer-scream {
