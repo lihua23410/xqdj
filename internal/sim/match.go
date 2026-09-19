@@ -2,10 +2,8 @@ package sim
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"math/rand/v2"
-	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -679,9 +677,6 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		delete(m.pendingDmg, c.Token)
 		delete(m.wardAbsorb, off.to)
-		// #region agent log
-		agentLog("match.go:BlockDamage", "block consumed", "B", map[string]any{"token": c.Token, "to": off.to, "time": m.time, "hasShell": m.shellOfLocked(off.to) != nil, "wardAbsorbAfter": m.wardAbsorb[off.to]})
-		// #endregion
 	case unitpkg.StackMark:
 		m.stackMarkLocked(c)
 	case unitpkg.ClearMarks:
@@ -805,13 +800,7 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 	}
 	m.dmgSeq++
 	token := m.dmgSeq
-	hasShell := m.shellOfLocked(u.id) != nil
-	absorb := hasShell || m.wardAbsorb[u.id]
-	// #region agent log
-	if u.kind == "盾士" || absorb {
-		agentLog("match.go:offerDamageLocked", "offer", "A", map[string]any{"token": token, "to": u.id, "kind": u.kind, "amt": c.Amount, "time": m.time, "hasShell": hasShell, "wardAbsorb": m.wardAbsorb[u.id], "absorbFlag": absorb, "hp": u.hp})
-	}
-	// #endregion
+	absorb := m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id]
 	m.pendingDmg[token] = dmgOffer{
 		from:      c.From,
 		to:        c.To,
@@ -840,11 +829,7 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
 		return
 	}
-	liveShell := m.shellOfLocked(u.id) != nil
-	if off.absorb || liveShell || m.wardAbsorb[u.id] {
-		// #region agent log
-		agentLog("match.go:confirmDamageLocked", "confirm absorbed no hp", "A", map[string]any{"token": c.Token, "to": u.id, "kind": u.kind, "hp": u.hp, "time": m.time, "offAbsorb": off.absorb, "liveShell": liveShell, "wardAbsorb": m.wardAbsorb[u.id], "staleAbsorb": off.absorb && !liveShell && !m.wardAbsorb[u.id]})
-		// #endregion
+	if off.absorb || m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id] {
 		delete(m.wardAbsorb, u.id)
 		if sh := m.shellOfLocked(u.id); sh != nil {
 			m.popShellLocked(sh, off.from)
@@ -852,11 +837,6 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 		}
 		return
 	}
-	// #region agent log
-	if u.kind == "盾士" {
-		agentLog("match.go:confirmDamageLocked", "confirm applied", "A", map[string]any{"token": c.Token, "to": u.id, "kind": u.kind, "hp": u.hp, "amt": off.amount, "time": m.time})
-	}
-	// #endregion
 	amt := off.amount
 	if c.Amount > 0 && c.Amount < amt {
 		amt = c.Amount
@@ -1005,9 +985,6 @@ func (m *Match) popShellLocked(shell *unit, from uint64) {
 	m.removeLocked(shell)
 	if owner != nil && !owner.stopped {
 		m.send(owner, unitpkg.GuardBreak{Time: t, From: from})
-		// #region agent log
-		agentLog("match.go:popShellLocked", "shell popped no leftover absorb", "A", map[string]any{"owner": owner.id, "kind": owner.kind, "from": from, "time": t, "hp": owner.hp, "wardAbsorb": m.wardAbsorb[owner.id]})
-		// #endregion
 	}
 }
 
@@ -1503,33 +1480,8 @@ func (m *Match) send(u *unit, ev unitpkg.Event) {
 	case u.inbox <- ev:
 	case <-u.stop:
 	default:
-		// #region agent log
-		if _, ok := ev.(unitpkg.Sense); !ok {
-			agentLog("match.go:send", "inbox drop", "D", map[string]any{"id": u.id, "kind": u.kind, "ev": fmt.Sprintf("%T", ev), "time": m.time})
-		}
-		// #endregion
 	}
 }
-
-// #region agent log
-func agentLog(location, message, hid string, data map[string]any) {
-	f, err := os.OpenFile(`e:\xqdj\debug-a87218.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return
-	}
-	b, _ := json.Marshal(map[string]any{
-		"sessionId":    "a87218",
-		"timestamp":    time.Now().UnixMilli(),
-		"location":     location,
-		"message":      message,
-		"hypothesisId": hid,
-		"data":         data,
-	})
-	_, _ = f.Write(append(b, '\n'))
-	_ = f.Close()
-}
-
-// #endregion
 
 func (m *Match) checkWinLocked() {
 	var fighters []*unit
