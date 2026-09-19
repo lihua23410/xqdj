@@ -78,6 +78,13 @@ type SetRadius struct {
 	Radius float64
 }
 
+// SetHP 直接设置单位的当前血量和最大血量，不触发伤害特效。用于活随从动态初始化血量。
+type SetHP struct {
+	UnitID uint64
+	HP     float64
+	MaxHP  float64
+}
+
 type Damage struct {
 	From      uint64
 	To        uint64

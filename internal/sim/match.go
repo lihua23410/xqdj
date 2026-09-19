@@ -624,6 +624,20 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		u.radius = c.Radius
+	case unitpkg.SetHP:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		if c.MaxHP > 0 {
+			u.maxHP = c.MaxHP
+		}
+		if c.HP >= 0 {
+			u.hp = c.HP
+			if u.hp > u.maxHP {
+				u.hp = u.maxHP
+			}
+		}
 	case unitpkg.Damage:
 		m.offerDamageLocked(c)
 	case unitpkg.ConfirmDamage:

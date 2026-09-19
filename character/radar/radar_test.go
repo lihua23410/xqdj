@@ -26,7 +26,7 @@ func TestLaserQuarterTurnIsEast(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	e := &雷达{}
 	e.Handle(unit.Context{ID: 1, Kind: KindRadar, Out: out}, unit.Sense{
-		Time: 0.75,
+		Time: 5.5 / 4, // 1/4 圈 = radarSpin/4
 		Self: selfAt(0, 0),
 	})
 	beam := lastNamed(drain(out), "beam")
@@ -44,7 +44,7 @@ func TestLaserHitsEnemyOnRay(t *testing.T) {
 		Nearby: []unit.Snapshot{enemyAt(0, 80)},
 	})
 	d := lastDamage(drain(out))
-	if d == nil || d.Amount != 8 || d.To != 2 {
+	if d == nil || d.Amount != radarDamage || d.To != 2 {
 		t.Fatalf("damage=%v", d)
 	}
 }
@@ -99,7 +99,7 @@ func TestLaserHitCooldown(t *testing.T) {
 		Nearby: []unit.Snapshot{enemyAt(dx*60, dy*60)},
 	})
 	d := lastDamage(drain(out))
-	if d == nil || d.Amount != 8 {
+	if d == nil || d.Amount != radarDamage {
 		t.Fatalf("after CD damage=%v", d)
 	}
 }

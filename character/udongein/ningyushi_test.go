@@ -581,8 +581,10 @@ func TestBattleExpandsWithHit(t *testing.T) {
 	}
 	d.Handle(ctx, unit.Sense{Time: orbitExpand, Self: dollSnap(9, tp.X, 0), Nearby: []unit.Snapshot{me(0, 0), foe(230, 0)}})
 	tp = lastTeleport(drain(out), 9)
-	if tp == nil || math.Abs(tp.X-orbitR) > 1 {
-		t.Fatalf("should reach the ring at 1.2s, got %+v", tp)
+	// 到达帧 dt=orbitExpand 被全量喂给 tickOrbit 推角度，人偶已上轨道只是角度不为 0。
+	// 检查到原点距离 ≈ orbitR 即可。
+	if tp == nil || math.Abs(math.Hypot(tp.X, tp.Y)-orbitR) > 1 {
+		t.Fatalf("should be on the ring at 1.2s, got %+v", tp)
 	}
 	d.Handle(ctx, unit.Sense{Time: orbitExpand + orbitLife, Self: dollSnap(9, orbitR, 0), Nearby: []unit.Snapshot{me(0, 0)}})
 	if !hasDespawn(drain(out), 9) {

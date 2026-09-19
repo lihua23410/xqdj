@@ -8,6 +8,7 @@ import (
 	"xqdj/character/fisher"
 	"xqdj/character/glitch"
 	"xqdj/character/godfather"
+	"xqdj/character/hammer"
 	"xqdj/character/knight"
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
@@ -44,6 +45,10 @@ const (
 	KindGodfather     = 教父.KindGodfather
 	KindGodfatherShot = 教父.KindGodfatherShot
 	KindSniper        = 教父.KindSniper
+	KindDoll          = 钉与锤.KindDoll
+	KindHammer        = 钉与锤.KindHammer
+	KindHammerArc     = 钉与锤.KindHammerArc
+	KindNail          = 钉与锤.KindNail
 	KindKnight        = 小骑士.KindKnight
 	KindKnightArc     = 小骑士.KindKnightArc
 	KindMelee         = 原型机_近战.KindMelee

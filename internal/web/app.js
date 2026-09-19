@@ -711,6 +711,7 @@ function renderArena() {
       scale,
       cx,
       cy,
+      units: state.units || [],
       fxRoot: overEl || fxRoot,
       spawnGhost: spawnGhostFrom,
     });

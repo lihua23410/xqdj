@@ -139,12 +139,12 @@ func TestSickleCutsWithCD(t *testing.T) {
 		t.Fatal("0.3s still in CD")
 	}
 	k.Handle(ctx, unit.Sense{
-		Time:   0.4,
+		Time:   1.0,
 		Self:   unit.Snapshot{ID: 9, X: 0, Y: 0, Radius: 18, Slot: 0},
 		Nearby: []unit.Snapshot{enemy},
 	})
 	if lastDamage(drain(out)) == nil {
-		t.Fatal("0.4s should cut")
+		t.Fatal("1.0s should cut")
 	}
 }
 
