@@ -1,0 +1,81 @@
+.ball.look-axe {
+  overflow: visible;
+  background: radial-gradient(circle at 42% 38%, #d8d8d8 0%, #9a9a9a 42%, #6e6e6e 100%);
+  box-shadow: 0 0 10px #8888;
+}
+.axe-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.axe-weapon {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  margin-left: -20px;
+  margin-top: -31px;
+  object-fit: contain;
+  pointer-events: none;
+  transform-origin: 50% 78%;
+  filter: drop-shadow(0 0 4px #0008);
+}
+.axe-weapon.is-axe {
+  width: 88px;
+  height: 88px;
+  margin-left: -44px;
+  margin-top: -68px;
+}
+.axe-phials {
+  position: absolute;
+  left: 50%;
+  top: -16px;
+  display: flex;
+  gap: 2px;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  z-index: 4;
+}
+.axe-phials img {
+  width: 11px;
+  height: 14px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 3px #000c);
+}
+.fx-axe-wave {
+  width: var(--r, 56px);
+  height: var(--r, 56px);
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  box-shadow:
+    0 0 12px #fff,
+    0 0 22px #fff,
+    inset 0 0 10px rgba(255, 255, 255, 0.55);
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0.12) 42%,
+    transparent 70%
+  );
+  animation: axe-wave 0.7s cubic-bezier(0.12, 0.7, 0.3, 1) var(--delay, 0s) forwards;
+}
+@keyframes axe-wave {
+  0% {
+    transform: translate(-50%, -50%) scale(0.18);
+    opacity: 1;
+    border-width: 4px;
+  }
+  55% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+    border-width: 0;
+  }
+}

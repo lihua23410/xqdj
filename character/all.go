@@ -3,7 +3,9 @@
 package character
 
 import (
+	"xqdj/character/axe"
 	"xqdj/character/doppel"
+	"xqdj/character/dummy"
 	"xqdj/character/engine"
 	"xqdj/character/fisher"
 	"xqdj/character/glitch"
@@ -24,9 +26,11 @@ import (
 )
 
 const (
+	KindAxe           = 盾斧.KindAxe
 	KindClone         = 分身者.KindClone
 	KindCloneArc      = 分身者.KindCloneArc
 	KindDoppel        = 分身者.KindDoppel
+	KindDummy         = 靶子.KindDummy
 	KindEngine        = 内燃机.KindEngine
 	KindFish          = 钓鱼佬.KindFish
 	KindFishBig       = 钓鱼佬.KindFishBig
