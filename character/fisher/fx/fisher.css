@@ -206,9 +206,9 @@
   width: var(--r, 90px);
   height: var(--r, 90px);
   border-radius: 50%;
-  border: 3px solid #8ec8e8;
-  box-shadow: 0 0 16px #3d8fd4, inset 0 0 18px rgba(142, 200, 232, 0.7);
-  background: radial-gradient(circle, rgba(180, 230, 255, 0.45) 0%, transparent 70%);
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 10px #3d8fd4, 0 0 18px #8ec8e8;
+  background: none;
   animation: fisher-splash 0.55s ease-out forwards;
 }
 @keyframes fisher-splash {
@@ -227,16 +227,17 @@
   width: var(--r, 120px);
   height: var(--r, 120px);
   border-radius: 50%;
-  border: 3px solid #ffd28a;
-  box-shadow: 0 0 22px #ff8a3a, inset 0 0 24px rgba(255, 138, 58, 0.55);
+  border: 1.6px solid #fff;
+  box-shadow: 0 0 12px #ff8a3a, 0 0 22px #ffd28a;
   animation: fisher-splash 0.65s ease-out forwards;
 }
 .fx-fisher-drop {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #c8eefe;
-  box-shadow: 0 0 8px #3d8fd4;
+  width: 6px;
+  height: 6px;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: 0 0 6px #3d8fd4;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   animation: fisher-drop 0.5s ease-out forwards;
 }
 @keyframes fisher-drop {

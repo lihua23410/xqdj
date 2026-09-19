@@ -1,3 +1,57 @@
+.ball.look-wolf-arc {
+  overflow: visible !important;
+}
+.ball.look-wolf-arc.arc {
+  border-color: transparent;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.ball.look-wolf-arc > .blade-glow,
+.ball.look-wolf-arc > .blade-core,
+.ball.look-wolf-arc > .blade-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  box-sizing: border-box;
+  -webkit-mask-image: conic-gradient(
+    from var(--arc-from, 45deg),
+    #000 0 var(--arc-span, 90deg),
+    transparent 0
+  );
+  mask-image: conic-gradient(
+    from var(--arc-from, 45deg),
+    #000 0 var(--arc-span, 90deg),
+    transparent 0
+  );
+}
+.ball.look-wolf-arc > .blade-glow {
+  border: calc(var(--arc-thick, 2px) + 6px) solid color-mix(in srgb, var(--kind) 75%, transparent);
+  filter: blur(5px);
+  opacity: 0.34;
+}
+.ball.look-wolf-arc > .blade-edge {
+  border: calc(var(--arc-thick, 2px) + 1px) solid var(--kind);
+  opacity: 0.9;
+}
+.ball.look-wolf-arc > .blade-core {
+  border: 1.2px solid #fff;
+  box-shadow: 0 0 3px var(--kind), 0 0 8px color-mix(in srgb, var(--kind) 70%, transparent);
+}
+
+.fx-wolf-phase {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1.4px solid #fff;
+  box-shadow: 0 0 8px #e8d9a0, 0 0 16px #ff6a4a;
+  animation: wolf-phase 0.45s cubic-bezier(0.12, 0.7, 0.3, 1) forwards;
+}
+@keyframes wolf-phase {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+}
+
 .ball.look-wolf.wolf-rage {
   box-shadow: 0 0 18px #fff, 0 0 42px #ff6a4a, 0 0 70px #ff2a2a;
   filter: contrast(1.12) saturate(1.15);

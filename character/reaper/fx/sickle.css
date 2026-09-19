@@ -20,11 +20,28 @@
   height: 100%;
   overflow: visible;
 }
+.ball.look-sickle > .sickle-art .sickle-glow {
+  opacity: 0.32;
+  filter: blur(1.4px);
+}
+.ball.look-sickle > .sickle-art .sickle-edge {
+  filter: drop-shadow(0 0 1px #c43d6e);
+}
+.ball.look-sickle > .sickle-art .sickle-core {
+  opacity: 0.9;
+}
 .ball.look-sickle.is-blood svg path:first-of-type {
   fill: #e01018;
 }
-.ball.look-sickle.is-blood svg path:last-of-type {
-  stroke: #ff3b3b;
+.ball.look-sickle.is-blood .sickle-glow {
+  stroke: #ff2a2a;
+  opacity: 0.45;
+}
+.ball.look-sickle.is-blood .sickle-edge {
+  stroke: #ff6a6a;
+}
+.ball.look-sickle.is-blood .sickle-core {
+  stroke: #fff0f0;
 }
 @keyframes sickle-spin {
   from {

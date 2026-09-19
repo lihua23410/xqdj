@@ -1,33 +1,94 @@
 .fx-beam.void {
-  height: 7px;
-  width: 56px;
-  background: linear-gradient(90deg, transparent, currentColor, #fff 70%, currentColor);
-  box-shadow: 0 0 16px currentColor, 0 0 28px #fff6;
+  height: 10px;
+  width: 64px;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
   animation: beam-void 0.28s ease-out forwards;
+  overflow: visible;
+}
+.fx-beam.void::before,
+.fx-beam.void::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.fx-beam.void::before {
+  height: 10px;
+  background: linear-gradient(90deg, transparent, #b44cff 40%, transparent);
+  filter: blur(5px);
+  opacity: 0.4;
+}
+.fx-beam.void::after {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #fff 30%, #d8b0ff 80%, transparent);
+  box-shadow: 0 0 4px #b44cff;
 }
 @keyframes beam-void {
-  to { width: 96px; opacity: 0; }
+  to { width: 110px; opacity: 0; }
 }
 .fx-split-slash {
-  height: 6px;
-  width: 52px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, transparent, #fff, currentColor, #fff, transparent);
-  box-shadow: 0 0 14px currentColor, 0 0 22px #fff8;
+  height: 12px;
+  width: 64px;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
   animation: split-slash 0.36s ease-out forwards;
+  overflow: visible;
+}
+.fx-split-slash::before,
+.fx-split-slash::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  clip-path: polygon(0% 50%, 12% 0%, 88% 0%, 100% 50%, 88% 100%, 12% 100%);
+}
+.fx-split-slash::before {
+  height: 10px;
+  background: currentColor;
+  filter: blur(5px);
+  opacity: 0.35;
+  clip-path: none;
+}
+.fx-split-slash::after {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #fff, currentColor, #fff, transparent);
+  box-shadow: 0 0 4px currentColor;
+  clip-path: none;
 }
 @keyframes split-slash {
   0% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.12); opacity: 1; }
-  100% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1.6); opacity: 0; }
+  100% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1.7); opacity: 0; }
 }
 .fx-void-core {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 18px currentColor, 0 0 32px #fff;
+  width: 22px;
+  height: 22px;
+  border-radius: 0;
+  background: radial-gradient(ellipse 55% 80% at 50% 50%, #fff 0%, #d8b0ff 28%, transparent 72%);
+  box-shadow: none;
+  mix-blend-mode: screen;
   animation: void-core 0.4s ease-out forwards;
 }
+.fx-void-core::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: #fff;
+  box-shadow: 0 0 6px #b44cff, 0 0 14px #b44cff;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
 @keyframes void-core {
-  to { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+  to { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
 }

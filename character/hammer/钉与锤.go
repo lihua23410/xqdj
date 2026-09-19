@@ -105,7 +105,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  unit.Deg(arcSpanDeg),
 		ArcInner: arcInner,
-		Look:     unit.Look{Color: arcColor, Overlay: true},
+		Look:     unit.Look{Color: arcColor, Overlay: true, FX: []string{"hammer-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &弧{owner: info.OwnerID, slot: info.Slot}
 	})

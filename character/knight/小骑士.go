@@ -56,7 +56,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  unit.Deg(knightArcSpan),
 		ArcInner: knightArcInner,
-		Look:     unit.Look{Color: knightColor, Overlay: true},
+		Look:     unit.Look{Color: knightColor, Overlay: true, FX: []string{"knight-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &骑士弧{slot: info.Slot}
 	})
