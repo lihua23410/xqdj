@@ -24,11 +24,25 @@ function ningyushiFrame(pose, now) {
 
 function ningyushiFace(u, ctx) {
   if (u && Math.hypot(u.vx || 0, u.vy || 0) > 8) {
-    return (u.vx || 0) >= 0 ? -1 : 1;
+    const f = (u.vx || 0) >= 0 ? -1 : 1;
+    if (u.role !== "fighter") console.log("[face] by velocity", u.kind, "vx=", u.vx, "face=", f);
+    return f;
   }
   const units = (ctx && ctx.units) || [];
   const foe = units.find((o) => o && o.role === "fighter" && o.slot !== u.slot);
-  if (foe) return foe.x >= u.x ? -1 : 1;
+  if (foe) {
+    const f = foe.x >= u.x ? -1 : 1;
+    if (u.role !== "fighter") console.log("[face] by foe", u.kind, "foe.x=", foe.x, "u.x=", u.x, "face=", f);
+    return f;
+  }
+  // 找不到敌方 fighter 时，尝试朝向主人方向（人偶/炸弹）
+  const owner = units.find((o) => o && o.role === "fighter" && o.slot === u.slot);
+  if (owner) {
+    const f = owner.x >= u.x ? -1 : 1;
+    if (u.role !== "fighter") console.log("[face] by owner", u.kind, "owner.x=", owner.x, "u.x=", u.x, "face=", f);
+    return f;
+  }
+  if (u.role !== "fighter") console.log("[face] fallback", u.kind, "face=1");
   return 1;
 }
 

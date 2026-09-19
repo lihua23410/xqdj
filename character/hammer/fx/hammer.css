@@ -8,8 +8,8 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 58%;
-  height: 58%;
+  width: 87%;
+  height: 87%;
   transform: translate(-50%, -50%) rotate(var(--hammer-ang, 0rad));
   pointer-events: none;
   z-index: 4;
@@ -29,13 +29,7 @@
   transform-origin: 18% 50%;
   transform: translate(32%, -4%) rotate(-40deg);
 }
-.ball.look-hammer > .hammer-art > .hammer-spin.is-striking {
-  animation: hammer-whirl 0.42s cubic-bezier(0.15, 0.7, 0.2, 1) forwards;
-}
-@keyframes hammer-whirl {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
-}
+/* 锤击挥砸动画已改 GSAP（shot.js）：旧版 is-striking + hammer-whirl keyframes 已删 */
 
 /* 藁人形 */
 .ball.look-hammer-doll {
@@ -132,7 +126,6 @@
 .fx-nail-spawn {
   width: 88px;
   height: 16px;
-  animation: nail-spawn 0.34s ease-out forwards;
 }
 .fx-nail-spawn svg {
   width: 100%;
@@ -141,16 +134,10 @@
   transform: rotate(var(--ang, 0rad));
   filter: drop-shadow(0 0 4px #c0c0c0);
 }
-@keyframes nail-spawn {
-  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
-  55%  { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-  100% { transform: translate(-50%, -50%) scale(0.95); opacity: 0; }
-}
 
 .fx-nail-hit {
   width: 96px;
   height: 18px;
-  animation: nail-hit-impact 0.5s ease-out forwards;
 }
 .fx-nail-hit svg {
   width: 100%;
@@ -159,16 +146,10 @@
   transform: rotate(var(--ang, 0rad));
   filter: drop-shadow(0 0 5px #e8e8e8);
 }
-@keyframes nail-hit-impact {
-  0%   { transform: translate(-50%, -50%) translateX(-10%); opacity: 1; }
-  40%  { transform: translate(-50%, -50%) translateX(8%); opacity: 1; }
-  100% { transform: translate(-50%, -50%) translateX(16%); opacity: 0; }
-}
 
 .fx-doll-spawn {
   width: 72px;
   height: 88px;
-  animation: doll-spawn 0.7s ease-out forwards;
 }
 .fx-doll-spawn svg {
   width: 100%;
@@ -176,8 +157,5 @@
   overflow: visible;
   filter: drop-shadow(0 0 8px #6a4018aa);
 }
-@keyframes doll-spawn {
-  0%   { transform: translate(-50%, -50%) scale(0.2) rotate(-8deg); opacity: 0; }
-  40%  { transform: translate(-50%, -50%) scale(1.15) rotate(3deg); opacity: 0.95; }
-  100% { transform: translate(-50%, -50%) scale(1.45) rotate(0deg); opacity: 0; }
-}
+
+/* 一次性特效动画（nail-spawn / nail-hit-impact / doll-spawn）已全部改 GSAP（shot.js），旧 keyframes 已删 */

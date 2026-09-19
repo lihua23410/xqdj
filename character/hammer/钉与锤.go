@@ -549,7 +549,20 @@ func (n *钉) onCollision(ctx unit.Context, e unit.Collision) {
 	n.enemyID = e.Other.ID
 	n.enemyKind = e.Other.Kind
 	n.hitTime = e.Time
-	n.pushX, n.pushY = nearestWallDir(e.Other.X, e.Other.Y)
+	// 推送方向 = 钉子飞行方向：沿命中朝向把敌人钉出去。
+	// 旧版用 nearestWallDir（敌人到最近场边），导致位移和钉子朝向不一致。
+	px, py := n.flyX, n.flyY
+	if d := math.Hypot(px, py); d > 1e-6 {
+		px, py = px/d, py/d
+	} else {
+		px, py = -e.NX, -e.NY
+		if d := math.Hypot(px, py); d > 1e-6 {
+			px, py = px/d, py/d
+		} else {
+			px, py = 1, 0
+		}
+	}
+	n.pushX, n.pushY = px, py
 	ctx.Out <- unit.SetVelocity{UnitID: n.enemyID, VX: n.pushX * nailPushSpeed, VY: n.pushY * nailPushSpeed}
 	ctx.Out <- unit.Stun{UnitID: n.enemyID, Hold: true}
 	n.stickTo(ctx, &e.Other, n.pushX*nailPushSpeed, n.pushY*nailPushSpeed)
@@ -837,20 +850,4 @@ func reflectDir(ux, uy, nx, ny float64) (float64, float64) {
 		return ux, uy
 	}
 	return rx / n, ry / n
-}
-
-// nearestWallDir 返回六边形场地中离 (x,y) 最近场边的方向（单位向量）
-func nearestWallDir(x, y float64) (float64, float64) {
-	bestDot := math.Inf(-1)
-	bx, by := 1.0, 0.0
-	for i := range 6 {
-		a := (float64(i) + 0.5) * math.Pi / 3
-		nx, ny := math.Cos(a), math.Sin(a)
-		dot := x*nx + y*ny
-		if dot > bestDot {
-			bestDot = dot
-			bx, by = nx, ny
-		}
-	}
-	return bx, by
 }

@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"xqdj/internal/sim"
 	"xqdj/internal/unit"
@@ -110,7 +111,10 @@ func main() {
 		}
 	})
 
-	addr := ":8080"
+	addr := os.Getenv("XQDJ_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
 	log.Printf("open http://127.0.0.1%s", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }

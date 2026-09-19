@@ -69,7 +69,7 @@ func TestEnergyRegensAfterLock(t *testing.T) {
 	}
 }
 
-func TestRegenRestartsAfterSkillLock(t *testing.T) {
+func TestRegenPausesDuringSkillLock(t *testing.T) {
 	a := fighter(SkillNone)
 	a.energy = 3
 	out := make(chan unit.Cmd, 32)
@@ -82,20 +82,22 @@ func TestRegenRestartsAfterSkillLock(t *testing.T) {
 	a.force = SkillPlace
 	a.Handle(ctx, unit.Sense{Time: 0.5, Self: me(0, 0), Nearby: []unit.Snapshot{far}})
 	_ = drain(out)
-	if math.Abs(a.energy-2) > 1e-6 {
-		t.Fatalf("place should spend 1, energy=%v", a.energy)
+	// 帧恢复：施法花 1，但之前 0.5s 的恢复进度保留，不再重置：3+0.625-1=2.625
+	if math.Abs(a.energy-(2+0.5/energyTick)) > 1e-6 {
+		t.Fatalf("cast should keep partial regen progress, energy=%v", a.energy)
 	}
 	a.force = SkillNone
 	unlock := 0.5 + lockSpan(SkillPlace)
 	a.Handle(ctx, unit.Sense{Time: unlock + 0.79, Self: me(0, 0), Nearby: []unit.Snapshot{far}})
 	_ = drain(out)
-	if math.Abs(a.energy-2) > 1e-6 {
-		t.Fatalf("need a fresh 0.8s after lock, energy=%v", a.energy)
+	// 施法 lock 内暂停，解锁后继续按帧恢复
+	if math.Abs(a.energy-(2+0.5/energyTick+0.79/energyTick)) > 1e-6 {
+		t.Fatalf("regen should pause during lock then resume, energy=%v", a.energy)
 	}
 	a.Handle(ctx, unit.Sense{Time: unlock + 0.8, Self: me(0, 0), Nearby: []unit.Snapshot{far}})
 	_ = drain(out)
-	if math.Abs(a.energy-3) > 1e-6 {
-		t.Fatalf("regen +1 after idle 0.8s, energy=%v", a.energy)
+	if math.Abs(a.energy-(2+1.3/energyTick)) > 1e-6 {
+		t.Fatalf("regen should accumulate continuously, energy=%v", a.energy)
 	}
 }
 
@@ -165,21 +167,55 @@ func TestRectKnockback(t *testing.T) {
 	if !hasDamage(cmds, 2, atkRectDmg) {
 		t.Fatalf("rect should deal 9.8: %v", cmds)
 	}
-	if !hasTeleportAway(cmds, 2, 70, knockDist) {
-		t.Fatalf("rect should push ~108: %v", cmds)
+	if !hasPushVelocity(cmds, 2) {
+		t.Fatalf("rect should push with velocity: %v", cmds)
 	}
 	st := lastStun(cmds)
 	if st == nil || st.UnitID != 2 || !st.Hold {
-		t.Fatalf("rect should stun 1s: %+v", st)
+		t.Fatalf("rect should stun: %+v", st)
 	}
 	if lastFX(cmds, "stun") != nil {
 		t.Fatalf("rect stun should have no vfx: %v", cmds)
 	}
-	a.Handle(ctx, unit.Sense{Time: 0.2 + rectStun, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+
+	// 撞墙反弹：敌人速度与推动方向相反 → 锁定定身（速度清零）
+	bounced := foe(200, 0)
+	bounced.VX = -600
+	a.Handle(ctx, unit.Sense{Time: 0.25, Self: me(0, 0), Nearby: []unit.Snapshot{bounced}})
+	lock := drain(out)
+	if v := lastVel(lock, 2); v == nil || math.Hypot(v.VX, v.VY) > 1e-6 {
+		t.Fatalf("wall bounce should lock enemy vel: %v", lock)
+	}
+
+	// 锁定后 1.5s 解除眩晕
+	a.Handle(ctx, unit.Sense{Time: 0.25 + rectStun, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	end := drain(out)
 	rel := lastStun(end)
 	if rel == nil || rel.Hold {
-		t.Fatalf("stun should end at 1s: %+v", rel)
+		t.Fatalf("stun should release after lock+rectStun: %+v", rel)
+	}
+}
+
+func TestRectKnockTimeoutLock(t *testing.T) {
+	a := fighter(SkillAtkRect)
+	out := make(chan unit.Cmd, 64)
+	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	enemy := foe(70, 0)
+	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	_ = drain(out)
+	a.Handle(ctx, unit.Sense{Time: 0.2, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	_ = drain(out)
+
+	// 敌人一直被推着滑（速度保持推动方向），滑行窗口 1s 到点后锁定
+	glide := foe(400, 0)
+	glide.VX = knockPush
+	a.Handle(ctx, unit.Sense{Time: 0.2 + knockFreeze, Self: me(0, 0), Nearby: []unit.Snapshot{glide}})
+	lock := drain(out)
+	if v := lastVel(lock, 2); v == nil || math.Hypot(v.VX, v.VY) > 1e-6 {
+		t.Fatalf("glide timeout should lock enemy vel: %v", lock)
+	}
+	if !a.stunLocked {
+		t.Fatalf("glide timeout should mark locked")
 	}
 }
 
@@ -880,13 +916,13 @@ func hasDamageTo(cmds []unit.Cmd, to uint64) bool {
 	return false
 }
 
-func hasTeleportAway(cmds []unit.Cmd, id uint64, fromX, dist float64) bool {
+func hasPushVelocity(cmds []unit.Cmd, id uint64) bool {
 	for _, c := range cmds {
-		tp, ok := c.(unit.Teleport)
-		if !ok || tp.UnitID != id {
+		v, ok := c.(unit.SetVelocity)
+		if !ok || v.UnitID != id {
 			continue
 		}
-		if math.Abs(tp.X-fromX) > dist*0.5 {
+		if math.Hypot(v.VX, v.VY) > 100 {
 			return true
 		}
 	}

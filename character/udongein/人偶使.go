@@ -54,10 +54,12 @@ const (
 	rectW       = 72.0
 	rectH       = 36.0
 	atkRectWind = 0.2
-	atkRectLife = 1.5
+	atkRectLife = 0.5 // 推完就走：0.2 前摇 + 0.5 表现 = 0.7s
 	atkRectDmg  = 9.8
-	knockDist   = 108.0
-	rectStun    = 1.0
+	knockDist   = 108.0 // castSpirit 波纹显示半径
+	rectStun    = 1.5   // 锁定后定身时长（对齐钉与锤 nailLockDur）
+	knockPush   = 600.0 // 推动初速度（对齐钉与锤钉子弹）
+	knockFreeze = 1.0   // 滑行超时窗口（对齐钉与锤 nailPushWait）
 
 	ellipseRX = 36.0
 	ellipseRY = 18.0
@@ -75,7 +77,7 @@ const (
 	shotSpeed  = 240.0
 	shotRadius = 6.0
 
-	recallLife = 0.4
+	recallLife = 1.2 // 归巢人偶在场上飞回的持续时间，越长脉冲伤害窗口越大
 	deployLife = 0.2
 
 	spell24Wind = 0.2
@@ -179,7 +181,6 @@ type 人偶使 struct {
 
 	energy    float64
 	energyCap float64
-	regenAcc  float64
 	spentAcc  float64
 	drained   bool
 	lastT     float64
@@ -202,12 +203,17 @@ type 人偶使 struct {
 	job      job
 	abortGen int
 
-	stunID     uint64
-	stunUntil  float64
-	stunVX     float64
-	stunVY     float64
-	stunCruise float64
-	stunning   bool
+	stunID       uint64
+	stunUntil    float64 // 锁定后解除时刻
+	stunFreezeAt float64 // 滑行超时点
+	stunLockAt   float64
+	stunLocked   bool
+	stunUX       float64 // 推动方向，检测撞墙反弹
+	stunUY       float64
+	stunVX       float64
+	stunVY       float64
+	stunCruise   float64
+	stunning     bool
 
 	deck     []uint8
 	hand     []uint8
@@ -381,19 +387,14 @@ func (a *人偶使) regen(dt float64) {
 	if dt <= 0 || a.energy+1e-9 >= a.energyCap {
 		return
 	}
-	a.regenAcc += dt
-	for a.regenAcc+1e-9 >= energyTick {
-		a.regenAcc -= energyTick
-		a.energy += 1
-		if a.energy > a.energyCap {
-			a.energy = a.energyCap
-		}
-		if a.energy+1e-9 >= a.energyCap {
-			a.drained = false
-			a.energyCap = energyMax
-			a.regenAcc = 0
-			return
-		}
+	// 帧恢复：连续按比例涨，0.8s 恰好 +1；被打断（lockedOut 不调 regen）时暂停，进度保留
+	a.energy += dt / energyTick
+	if a.energy > a.energyCap {
+		a.energy = a.energyCap
+	}
+	if a.energy+1e-9 >= a.energyCap {
+		a.drained = false
+		a.energyCap = energyMax
 	}
 }
 
@@ -487,7 +488,6 @@ func (a *人偶使) invokePaid(ctx unit.Context, s unit.Sense, enemy *unit.Snaps
 	if cost > 0 {
 		a.spend(cost)
 	}
-	a.regenAcc = 0
 	a.lockUntilAt(s.Time, sk)
 	return true
 }
@@ -543,32 +543,35 @@ func deal(ctx unit.Context, owner, to uint64, amt float64) {
 	noteDealt(owner)
 }
 
-func pushEnemy(ctx unit.Context, fromX, fromY float64, e unit.Snapshot, dist float64) {
+func pushEnemy(ctx unit.Context, fromX, fromY float64, e unit.Snapshot) (float64, float64) {
 	dx, dy := e.X-fromX, e.Y-fromY
 	n := math.Hypot(dx, dy)
 	if n < 1e-6 {
 		dx, dy, n = 1, 0, 1
 	}
 	ux, uy := dx/n, dy/n
-	nx, ny := clampHex(e.X+ux*dist, e.Y+uy*dist, e.Radius)
-	ctx.Out <- unit.Teleport{UnitID: e.ID, X: nx, Y: ny}
-	ctx.Out <- unit.SetVelocity{UnitID: e.ID, VX: ux * 220, VY: uy * 220}
+	// 只给初速度推动，不瞬移（和钉与锤钉子弹一致）
+	ctx.Out <- unit.SetVelocity{UnitID: e.ID, VX: ux * knockPush, VY: uy * knockPush}
+	return ux, uy
 }
 
-func (a *人偶使) stun(ctx unit.Context, s unit.Sense, e *unit.Snapshot) {
+func (a *人偶使) stun(ctx unit.Context, s unit.Sense, e *unit.Snapshot, ux, uy float64) {
 	if e == nil || e.ID == 0 {
 		return
 	}
 	a.stunID = e.ID
-	a.stunUntil = s.Time + rectStun
+	a.stunUX, a.stunUY = ux, uy
+	a.stunFreezeAt = s.Time + knockFreeze
+	a.stunLocked = false
+	a.stunLockAt = 0
 	a.stunVX, a.stunVY = e.VX, e.VY
 	a.stunCruise = math.Hypot(e.VX, e.VY)
 	if spec, ok := unit.Lookup(e.Kind); ok && spec.Speed > 0 {
 		a.stunCruise = spec.Speed
 	}
 	a.stunning = true
+	// 对齐钉与锤钉子弹：推动期只停感知不清速度，敌人靠初速度滑行，撞墙/超时后锁定定身
 	ctx.Out <- unit.Stun{UnitID: e.ID, Hold: true}
-	ctx.Out <- unit.SetVelocity{UnitID: e.ID, VX: 0, VY: 0}
 	ctx.Out <- unit.SetCruise{UnitID: e.ID, Speed: 0}
 }
 
@@ -576,15 +579,21 @@ func (a *人偶使) holdStun(ctx unit.Context, s unit.Sense) {
 	if !a.stunning || a.stunID == 0 {
 		return
 	}
-	alive := false
+	var foe *unit.Snapshot
 	for i := range s.Nearby {
 		if s.Nearby[i].ID == a.stunID {
-			alive = true
+			foe = &s.Nearby[i]
 			break
 		}
 	}
-	if !alive || s.Time+1e-9 >= a.stunUntil {
-		if alive {
+	if foe == nil {
+		a.stunning = false
+		a.stunID = 0
+		return
+	}
+	if a.stunLocked {
+		// 定身期：钉在原地，到点解除恢复
+		if s.Time+1e-9 >= a.stunUntil {
 			ctx.Out <- unit.Stun{UnitID: a.stunID, Hold: false}
 			ctx.Out <- unit.SetCruise{UnitID: a.stunID, Speed: a.stunCruise}
 			vx, vy := a.stunVX, a.stunVY
@@ -592,14 +601,25 @@ func (a *人偶使) holdStun(ctx unit.Context, s unit.Sense) {
 				vx, vy = a.stunCruise, 0
 			}
 			ctx.Out <- unit.SetVelocity{UnitID: a.stunID, VX: vx, VY: vy}
+			a.stunning = false
+			a.stunID = 0
+			return
 		}
-		a.stunning = false
-		a.stunID = 0
+		ctx.Out <- unit.Stun{UnitID: a.stunID, Hold: true}
+		if math.Hypot(foe.VX, foe.VY) > 1 {
+			ctx.Out <- unit.SetVelocity{UnitID: a.stunID, VX: 0, VY: 0}
+		}
 		return
 	}
+	// 滑行期：只停感知不清速度；推不动（撞墙反弹）或超时窗口到点 → 锁定定身
+	if foe.VX*a.stunUX+foe.VY*a.stunUY < 0 || s.Time+1e-9 >= a.stunFreezeAt {
+		a.stunLocked = true
+		a.stunLockAt = s.Time
+		a.stunUntil = s.Time + rectStun
+		ctx.Out <- unit.SetVelocity{UnitID: a.stunID, VX: 0, VY: 0}
+		ctx.Out <- unit.SetCruise{UnitID: a.stunID, Speed: 0}
+	}
 	ctx.Out <- unit.Stun{UnitID: a.stunID, Hold: true}
-	ctx.Out <- unit.SetVelocity{UnitID: a.stunID, VX: 0, VY: 0}
-	ctx.Out <- unit.SetCruise{UnitID: a.stunID, Speed: 0}
 }
 
 func faceOf(a *人偶使, s unit.Sense, enemy unit.Snapshot) (float64, float64) {

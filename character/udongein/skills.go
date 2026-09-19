@@ -79,8 +79,8 @@ func (a *人偶使) castRect(ctx unit.Context, s unit.Sense, enemy unit.Snapshot
 		spawnDollAt(ctx, s, px, py, dollSpec{mode: dollStrike, pose: poseAh, recallAt: s.Time + atkRectWind + atkRectLife})
 	}
 	a.setJob(ctx, s, job{
-		kind: SkillAtkRect, until: s.Time + atkRectWind + atkRectLife, next: s.Time + atkRectWind,
-		left: 1, ox: ox, oy: oy, ux: ux, uy: uy, dmg: atkRectDmg, knock: true,
+		kind: SkillAtkRect, until: s.Time + atkRectWind + atkRectLife,
+		next: s.Time + atkRectWind, left: 1, ox: ox, oy: oy, ux: ux, uy: uy, dmg: atkRectDmg, knock: true,
 		wind: s.Time + atkRectWind, gap: atkRectLife,
 	})
 	return true
@@ -249,7 +249,7 @@ func (a *人偶使) castSpirit(ctx unit.Context, s unit.Sense, enemy unit.Snapsh
 	if enemy.ID == 0 {
 		return false
 	}
-	pushEnemy(ctx, s.Self.X, s.Self.Y, enemy, knockDist)
+	pushEnemy(ctx, s.Self.X, s.Self.Y, enemy)
 	ctx.Out <- unit.FX{Name: "break", Kind: ctx.Kind, UnitID: ctx.ID, X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: knockDist}
 	return true
 }
@@ -368,8 +368,8 @@ func (a *人偶使) tickRect(ctx unit.Context, s unit.Sense) {
 		}
 		deal(ctx, ctx.ID, o.ID, a.job.dmg)
 		if a.job.knock {
-			pushEnemy(ctx, s.Self.X, s.Self.Y, *o, knockDist)
-			a.stun(ctx, s, o)
+			ux, uy := pushEnemy(ctx, s.Self.X, s.Self.Y, *o)
+			a.stun(ctx, s, o, ux, uy)
 		}
 	}
 	a.job.left--
