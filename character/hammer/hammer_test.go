@@ -16,11 +16,11 @@ func TestHammerSmashStunsInMelee(t *testing.T) {
 	h.Handle(ctx, unit.Sense{Time: 1, Self: self, Nearby: []unit.Snapshot{enemy}})
 	cmds := drain(out)
 	st := lastStun(cmds)
-	if st == nil || st.UnitID != 2 || !st.Hold {
+	if st == nil || st.UnitID != 2 || !st.Hold || math.Abs(st.Until-(1+hammerStunDur)) > 1e-9 {
 		t.Fatalf("stun=%v", cmds)
 	}
-	v := lastVel(cmds, 2)
-	if v == nil || v.VX <= 0 {
+	fs := lastAddFS(cmds, 2)
+	if fs == nil || fs.BaseSpeed != hammerKnockback || fs.DX <= 0 || !fs.OnWall {
 		t.Fatalf("knockback=%v", cmds)
 	}
 	if lastNamed(cmds, "hammer") == nil {
@@ -31,24 +31,29 @@ func TestHammerSmashStunsInMelee(t *testing.T) {
 	}
 }
 
-func TestHammerStunRestoresCruise(t *testing.T) {
+func TestHammerStunUsesUntil(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	h := &钉与锤{hammerArmed: true, nailReadyAt: 999, ritualReadyAt: 999, dollsSpawned: true}
 	ctx := unit.Context{ID: 1, Kind: KindHammer, Out: out}
 	self := me(0, 0)
 	enemy := foe(30, 0)
 	h.Handle(ctx, unit.Sense{Time: 1, Self: self, Nearby: []unit.Snapshot{enemy}})
-	_ = drain(out)
+	hit := drain(out)
+	st := lastStun(hit)
+	if st == nil || !st.Hold || math.Abs(st.Until-(1+hammerStunDur)) > 1e-9 {
+		t.Fatalf("stun=%v cmds=%v", st, hit)
+	}
+	if lastCruise(hit, 2) != nil {
+		t.Fatalf("must not write target cruise: %v", hit)
+	}
 
 	h.Handle(ctx, unit.Sense{Time: 1 + hammerStunDur, Self: self, Nearby: []unit.Snapshot{enemy}})
 	end := drain(out)
-	st := lastStun(end)
-	if st == nil || st.Hold || st.UnitID != 2 {
-		t.Fatalf("release stun=%v cmds=%v", st, end)
+	if lastStun(end) != nil {
+		t.Fatalf("must not babysit stun: %v", end)
 	}
-	v := lastVel(end, 2)
-	if v == nil || math.Hypot(v.VX, v.VY) < 1 {
-		t.Fatalf("release should restore motion, vel=%v cmds=%v", v, end)
+	if lastCruise(end, 2) != nil || lastVel(end, 2) != nil {
+		t.Fatalf("must not restoreMotion: %v", end)
 	}
 }
 
@@ -66,6 +71,9 @@ func TestHammerSmashHitsMinion(t *testing.T) {
 	if st == nil || st.UnitID != 3 || !st.Hold {
 		t.Fatalf("minion stun=%v cmds=%v", st, cmds)
 	}
+	if lastAddFS(cmds, 3) == nil {
+		t.Fatalf("minion should be knocked: %v", cmds)
+	}
 }
 
 func TestHammerSmashDoesNotMoveDoll(t *testing.T) {
@@ -81,7 +89,7 @@ func TestHammerSmashDoesNotMoveDoll(t *testing.T) {
 	if lastStun(cmds) != nil {
 		t.Fatalf("doll should not be displaced: %v", cmds)
 	}
-	if lastVel(cmds, 10) != nil {
+	if lastVel(cmds, 10) != nil || lastAddFS(cmds, 10) != nil {
 		t.Fatalf("doll should not be knocked: %v", cmds)
 	}
 	if d := damageTo(cmds, 10); d == nil || d.Amount != swingDamage {
@@ -136,14 +144,25 @@ func TestNailHitPinsThenReleases(t *testing.T) {
 	n.Handle(ctx, unit.Collision{Time: 1, Other: enemy})
 	hit := drain(out)
 	st := lastStun(hit)
-	if st == nil || st.UnitID != 2 || !st.Hold {
+	if st == nil || st.UnitID != 2 || !st.Hold || math.Abs(st.Until-(1+nailLockDur)) > 1e-9 {
 		t.Fatalf("hit stun=%v", hit)
+	}
+	fs := lastAddFS(hit, 2)
+	if fs == nil || fs.BaseSpeed != nailPushSpeed || !fs.OnWall || math.Abs(fs.ExpiresAt-(1+nailPushWait)) > 1e-9 {
+		t.Fatalf("push fs=%v cmds=%v", fs, hit)
+	}
+	pin := lastAddFSComponent(hit, 2)
+	if pin == nil || pin.Zone != unit.FSZoneM || pin.Value != 0 || math.Abs(pin.ExpiresAt-(1+nailLockDur)) > 1e-9 {
+		t.Fatalf("pin=%v cmds=%v", pin, hit)
 	}
 	if lastNamed(hit, "nail-hit") == nil {
 		t.Fatalf("missing nail-hit fx: %v", hit)
 	}
 	if lastTeleport(hit) == nil {
 		t.Fatalf("nail should stick to target: %v", hit)
+	}
+	if lastCruise(hit, 2) != nil {
+		t.Fatalf("must not write target cruise: %v", hit)
 	}
 
 	n.Handle(ctx, unit.Sense{
@@ -153,29 +172,47 @@ func TestNailHitPinsThenReleases(t *testing.T) {
 			{ID: 2, Kind: KindHammer, Role: unit.RoleFighter, Slot: 1, X: 240, Y: 0, Radius: 18, VX: 80, VY: 0},
 		},
 	})
-	lock := drain(out)
-	if !n.locked {
-		t.Fatalf("should lock after push wait, cmds=%v", lock)
+	mid := drain(out)
+	if lastVel(mid, 2) != nil {
+		t.Fatalf("must not babysit target vel: %v", mid)
 	}
-	if v := lastVel(lock, 2); v == nil || math.Hypot(v.VX, v.VY) > 1e-6 {
-		t.Fatalf("lock should zero target vel, vel=%v", v)
+	if lastTeleport(mid) == nil {
+		t.Fatalf("nail should keep sticking: %v", mid)
 	}
 
 	n.Handle(ctx, unit.Sense{
-		Time: n.lockTime + nailLockDur,
+		Time: 1 + nailLockDur,
 		Self: unit.Snapshot{ID: 9, Kind: KindNail, Role: unit.RoleProjectile, Slot: 0, X: 240, Y: 0},
 		Nearby: []unit.Snapshot{
 			{ID: 2, Kind: KindHammer, Role: unit.RoleFighter, Slot: 1, X: 240, Y: 0, Radius: 18, VX: 0, VY: 0},
 		},
 	})
 	end := drain(out)
-	rel := lastStun(end)
-	if rel == nil || rel.Hold {
-		t.Fatalf("release stun=%v cmds=%v", rel, end)
+	if lastStun(end) != nil || lastCruise(end, 2) != nil || lastVel(end, 2) != nil {
+		t.Fatalf("engine owns release, cmds=%v", end)
 	}
-	v := lastVel(end, 2)
-	if v == nil || math.Hypot(v.VX, v.VY) < 1 {
-		t.Fatalf("nailed target must move again, vel=%v cmds=%v", v, end)
+	if !hasDespawn(end, 9) {
+		t.Fatalf("nail should despawn: %v", end)
+	}
+}
+
+func TestNailLostTargetClearsPin(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	n := &钉{owner: 1, slot: 0, spawnTime: 0}
+	ctx := unit.Context{ID: 9, Kind: KindNail, Out: out}
+	n.Handle(ctx, unit.Collision{Time: 1, Other: foe(200, 0)})
+	_ = drain(out)
+	n.Handle(ctx, unit.Sense{
+		Time: 1.2,
+		Self: unit.Snapshot{ID: 9, Kind: KindNail, Role: unit.RoleProjectile, Slot: 0, X: 200, Y: 0},
+	})
+	end := drain(out)
+	if lastRemoveFS(end, 2) == nil || lastRemoveFSComponent(end, 2) == nil {
+		t.Fatalf("lost target should lift pin: %v", end)
+	}
+	st := lastStun(end)
+	if st == nil || st.Hold {
+		t.Fatalf("lost target should drop stun: %v", end)
 	}
 	if !hasDespawn(end, 9) {
 		t.Fatalf("nail should despawn: %v", end)
@@ -234,6 +271,9 @@ func TestNailHitsLivingMinion(t *testing.T) {
 	if st == nil || st.UnitID != 4 || !st.Hold {
 		t.Fatalf("minion should be pinned, stun=%v cmds=%v", st, cmds)
 	}
+	if lastAddFS(cmds, 4) == nil || lastAddFSComponent(cmds, 4) == nil {
+		t.Fatalf("minion should get pin FS: %v", cmds)
+	}
 }
 
 func TestNailHitsDollWithoutDisplace(t *testing.T) {
@@ -260,7 +300,7 @@ func TestNailHitsDollWithoutDisplace(t *testing.T) {
 	if lastStun(cmds) != nil {
 		t.Fatalf("doll should not be displaced: %v", cmds)
 	}
-	if lastVel(cmds, 10) != nil {
+	if lastVel(cmds, 10) != nil || lastAddFS(cmds, 10) != nil {
 		t.Fatalf("doll should keep velocity: %v", cmds)
 	}
 	if n.hit {
@@ -476,6 +516,61 @@ func lastVel(cmds []unit.Cmd, id uint64) *unit.SetVelocity {
 	var v *unit.SetVelocity
 	for _, c := range cmds {
 		if x, ok := c.(unit.SetVelocity); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastAddFS(cmds []unit.Cmd, id uint64) *unit.AddFS {
+	var v *unit.AddFS
+	for _, c := range cmds {
+		if x, ok := c.(unit.AddFS); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastAddFSComponent(cmds []unit.Cmd, id uint64) *unit.AddFSComponent {
+	var v *unit.AddFSComponent
+	for _, c := range cmds {
+		if x, ok := c.(unit.AddFSComponent); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastCruise(cmds []unit.Cmd, id uint64) *unit.SetCruise {
+	var v *unit.SetCruise
+	for _, c := range cmds {
+		if x, ok := c.(unit.SetCruise); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastRemoveFS(cmds []unit.Cmd, id uint64) *unit.RemoveFS {
+	var v *unit.RemoveFS
+	for _, c := range cmds {
+		if x, ok := c.(unit.RemoveFS); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastRemoveFSComponent(cmds []unit.Cmd, id uint64) *unit.RemoveFSComponent {
+	var v *unit.RemoveFSComponent
+	for _, c := range cmds {
+		if x, ok := c.(unit.RemoveFSComponent); ok && x.UnitID == id {
 			cp := x
 			v = &cp
 		}

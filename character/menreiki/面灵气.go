@@ -136,9 +136,8 @@ type 面灵气 struct {
 	paleOn     bool
 	stunID     uint64
 	stunUntil  float64
-	stunVX     float64
-	stunVY     float64
-	stunCruise float64
+	pinTok     uint64
+	fsSeq      uint32
 	frozen     bool
 	shareUntil float64
 	breakN     int
@@ -546,17 +545,19 @@ func (m *面灵气) pay(ctx unit.Context, s unit.Sense, e *unit.Snapshot) {
 }
 
 func (m *面灵气) stun(ctx unit.Context, s unit.Sense, e *unit.Snapshot) {
-	m.stunID = e.ID
-	m.stunUntil = s.Time + stunSecs
-	m.stunVX, m.stunVY = e.VX, e.VY
-	m.stunCruise = math.Hypot(e.VX, e.VY)
-	if spec, ok := unit.Lookup(e.Kind); ok && spec.Speed > 0 {
-		m.stunCruise = spec.Speed
+	if m.frozen {
+		m.clearPin(ctx)
 	}
+	until := s.Time + stunSecs
+	m.stunID = e.ID
+	m.stunUntil = until
+	m.pinTok = m.nextFSToken(ctx.ID)
 	m.frozen = true
-	ctx.Out <- unit.Stun{UnitID: e.ID, Hold: true}
-	ctx.Out <- unit.SetVelocity{UnitID: e.ID, VX: 0, VY: 0}
-	ctx.Out <- unit.SetCruise{UnitID: e.ID, Speed: 0}
+	ctx.Out <- unit.AddFSComponent{
+		UnitID: e.ID, Zone: unit.FSZoneM, Token: m.pinTok,
+		Value: 0, ExpiresAt: until,
+	}
+	ctx.Out <- unit.Stun{UnitID: e.ID, Hold: true, Until: until}
 	ctx.Out <- unit.FX{
 		Name: "stun", Kind: ctx.Kind, UnitID: e.ID,
 		X: e.X, Y: e.Y, Slot: s.Self.Slot,
@@ -568,40 +569,47 @@ func (m *面灵气) holdStun(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	alive := false
-	for i := range s.Nearby {
-		if s.Nearby[i].ID == m.stunID {
-			alive = true
-			break
-		}
-	}
-	if !alive || s.Time+1e-9 >= m.stunUntil {
-		if alive {
-			ctx.Out <- unit.Stun{UnitID: m.stunID, Hold: false}
-			ctx.Out <- unit.SetCruise{UnitID: m.stunID, Speed: m.stunCruise}
-			vx, vy := m.stunVX, m.stunVY
-			if math.Hypot(vx, vy) < 1e-6 {
-				vx, vy = m.stunCruise, 0
-			}
-			ctx.Out <- unit.SetVelocity{UnitID: m.stunID, VX: vx, VY: vy}
-		}
-		m.frozen = false
-		m.stunID = 0
-		return
-	}
-	ctx.Out <- unit.Stun{UnitID: m.stunID, Hold: true}
-	ctx.Out <- unit.SetVelocity{UnitID: m.stunID, VX: 0, VY: 0}
-	ctx.Out <- unit.SetCruise{UnitID: m.stunID, Speed: 0}
 	var tx, ty float64
 	for i := range s.Nearby {
 		if s.Nearby[i].ID == m.stunID {
+			alive = true
 			tx, ty = s.Nearby[i].X, s.Nearby[i].Y
 			break
 		}
+	}
+	if !alive {
+		m.clearPin(ctx)
+		return
+	}
+	if s.Time+1e-9 >= m.stunUntil {
+		m.frozen = false
+		m.stunID = 0
+		m.pinTok = 0
+		return
 	}
 	ctx.Out <- unit.FX{
 		Name: "stun", Kind: ctx.Kind, UnitID: m.stunID,
 		X: tx, Y: ty, Slot: s.Self.Slot,
 	}
+}
+
+func (m *面灵气) clearPin(ctx unit.Context) {
+	if m.stunID == 0 {
+		m.frozen = false
+		return
+	}
+	if m.pinTok != 0 {
+		ctx.Out <- unit.RemoveFSComponent{UnitID: m.stunID, Token: m.pinTok}
+		m.pinTok = 0
+	}
+	ctx.Out <- unit.Stun{UnitID: m.stunID, Hold: false}
+	m.frozen = false
+	m.stunID = 0
+}
+
+func (m *面灵气) nextFSToken(owner uint64) uint64 {
+	m.fsSeq++
+	return owner<<32 | uint64(m.fsSeq)
 }
 
 func maskDmg(faction string) float64 {

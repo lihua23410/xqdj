@@ -1,6 +1,7 @@
 package 面灵气
 
 import (
+	"math"
 	"testing"
 	"xqdj/internal/unit"
 )
@@ -66,4 +67,143 @@ func TestMaskHitGateIndependent(t *testing.T) {
 			t.Fatalf("arm all: mask %d", i)
 		}
 	}
+}
+
+func TestCyanCollectPinsWithoutWritingCruise(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	m := &面灵气{hook: 2}
+	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius,
+	}
+	enemy := unit.Snapshot{
+		ID: 2, Kind: "筑墙者", Role: unit.RoleFighter, Slot: 1,
+		X: 80, Y: 0, Radius: 18, Faction: unit.FactionCyan,
+		Seen: unit.AllFactions(),
+	}
+	m.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{enemy}})
+	hit := drain(out)
+	until := 10 + stunSecs
+	st := lastStun(hit)
+	if st == nil || st.UnitID != 2 || !st.Hold || math.Abs(st.Until-until) > 1e-9 {
+		t.Fatalf("stun=%v cmds=%v", st, hit)
+	}
+	pin := lastAddFSComponent(hit, 2)
+	if pin == nil || pin.Zone != unit.FSZoneM || pin.Value != 0 || math.Abs(pin.ExpiresAt-until) > 1e-9 {
+		t.Fatalf("pin=%v cmds=%v", pin, hit)
+	}
+	if lastCruise(hit, 2) != nil || lastVel(hit, 2) != nil {
+		t.Fatalf("must not write target cruise/vel: %v", hit)
+	}
+	if lastNamed(hit, "stun") == nil {
+		t.Fatalf("missing stun fx: %v", hit)
+	}
+
+	m.Handle(ctx, unit.Sense{Time: 10.2, Self: self, Nearby: []unit.Snapshot{enemy}})
+	mid := drain(out)
+	if lastStun(mid) != nil || lastCruise(mid, 2) != nil || lastVel(mid, 2) != nil {
+		t.Fatalf("must not babysit pin: %v", mid)
+	}
+	if lastNamed(mid, "stun") == nil {
+		t.Fatalf("stun overlay should keep ticking: %v", mid)
+	}
+
+	m.Handle(ctx, unit.Sense{Time: until, Self: self, Nearby: []unit.Snapshot{enemy}})
+	end := drain(out)
+	if lastStun(end) != nil || lastCruise(end, 2) != nil || lastVel(end, 2) != nil {
+		t.Fatalf("engine owns release, cmds=%v", end)
+	}
+}
+
+func TestCyanLostTargetClearsPin(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	m := &面灵气{hook: 2}
+	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius,
+	}
+	enemy := unit.Snapshot{
+		ID: 2, Kind: "筑墙者", Role: unit.RoleFighter, Slot: 1,
+		X: 80, Y: 0, Radius: 18, Faction: unit.FactionCyan,
+		Seen: unit.AllFactions(),
+	}
+	m.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{enemy}})
+	_ = drain(out)
+	m.Handle(ctx, unit.Sense{Time: 10.2, Self: self})
+	end := drain(out)
+	if lastRemoveFSComponent(end, 2) == nil {
+		t.Fatalf("lost target should lift pin: %v", end)
+	}
+	st := lastStun(end)
+	if st == nil || st.Hold {
+		t.Fatalf("lost target should drop stun: %v", end)
+	}
+}
+
+func lastStun(cmds []unit.Cmd) *unit.Stun {
+	var st *unit.Stun
+	for _, c := range cmds {
+		if v, ok := c.(unit.Stun); ok {
+			cp := v
+			st = &cp
+		}
+	}
+	return st
+}
+
+func lastVel(cmds []unit.Cmd, id uint64) *unit.SetVelocity {
+	var v *unit.SetVelocity
+	for _, c := range cmds {
+		if x, ok := c.(unit.SetVelocity); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastCruise(cmds []unit.Cmd, id uint64) *unit.SetCruise {
+	var v *unit.SetCruise
+	for _, c := range cmds {
+		if x, ok := c.(unit.SetCruise); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastAddFSComponent(cmds []unit.Cmd, id uint64) *unit.AddFSComponent {
+	var v *unit.AddFSComponent
+	for _, c := range cmds {
+		if x, ok := c.(unit.AddFSComponent); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastRemoveFSComponent(cmds []unit.Cmd, id uint64) *unit.RemoveFSComponent {
+	var v *unit.RemoveFSComponent
+	for _, c := range cmds {
+		if x, ok := c.(unit.RemoveFSComponent); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastNamed(cmds []unit.Cmd, name string) *unit.FX {
+	var fx *unit.FX
+	for _, c := range cmds {
+		if v, ok := c.(unit.FX); ok && v.Name == name {
+			cp := v
+			fx = &cp
+		}
+	}
+	return fx
 }

@@ -368,8 +368,7 @@ func (a *人偶使) tickRect(ctx unit.Context, s unit.Sense) {
 		}
 		deal(ctx, ctx.ID, o.ID, a.job.dmg)
 		if a.job.knock {
-			ux, uy := pushEnemy(ctx, s.Self.X, s.Self.Y, *o)
-			a.stun(ctx, s, o, ux, uy)
+			a.stun(ctx, s, o)
 		}
 	}
 	a.job.left--

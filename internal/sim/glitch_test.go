@@ -235,6 +235,7 @@ func TestGlitchWallSpeedUntilRealDamage(t *testing.T) {
 		t.Fatal("missing fighters")
 	}
 	id := g.id
+	base := glitchCruise(g)
 	m.send(g, unitpkg.WallHit{Time: m.time, NX: 1, NY: 0})
 	m.send(g, unitpkg.WallHit{Time: m.time, NX: 1, NY: 0})
 	m.mu.Unlock()
@@ -247,9 +248,10 @@ func TestGlitchWallSpeedUntilRealDamage(t *testing.T) {
 	m.mu.Lock()
 	m.drainCmdsLocked()
 	u := m.units[id]
-	if u.v.len() <= glitchCruise(u)+1e-3 {
+	want := base + 100
+	if math.Abs(u.cruise-want) > 1e-3 || math.Abs(u.v.len()-want) > 1e-3 {
 		m.mu.Unlock()
-		t.Fatalf("speed after walls %v want > cruise %v", u.v.len(), glitchCruise(u))
+		t.Fatalf("after walls cruise=%v vel=%v want %v", u.cruise, u.v.len(), want)
 	}
 	boosted := u.v.len()
 	hp0 := u.hp
@@ -281,9 +283,9 @@ func TestGlitchWallSpeedUntilRealDamage(t *testing.T) {
 		m.mu.Unlock()
 		t.Fatalf("second hit should land hp=%v", u)
 	}
-	if math.Abs(u.v.len()-glitchCruise(u)) > 1e-3 {
+	if math.Abs(u.cruise-base) > 1e-3 || math.Abs(u.v.len()-base) > 1e-3 {
 		m.mu.Unlock()
-		t.Fatalf("real damage should drop speed to cruise, got %v", u.v.len())
+		t.Fatalf("real damage should snap cruise and speed to %v, cruise=%v vel=%v", base, u.cruise, u.v.len())
 	}
 	m.mu.Unlock()
 }

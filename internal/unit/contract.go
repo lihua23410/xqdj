@@ -46,6 +46,11 @@ type WallHit struct {
 	NY   float64
 }
 
+// FactionChanged 阵营刚变时发给该战斗机。撞墙轮换和 MarkFaction 改派系都会发；Stun 拦不住。
+type FactionChanged struct {
+	Faction string
+}
+
 type Cmd any
 
 type SetVelocity struct {
@@ -54,10 +59,59 @@ type SetVelocity struct {
 	VY     float64
 }
 
-// SetCruise 改自己的巡航。不改当前速度。快于巡航会被拉回；慢于巡航但仍在动会沿当前方向被推上去。
+// SetCruise 改自己巡航 FS 的 BaseSpeed。不改当前速度。快于巡航会被拉回；慢于巡航但仍在动会沿当前方向被推上去。
 type SetCruise struct {
 	UnitID uint64
 	Speed  float64
+}
+
+// FSZone 是巡航 FS 分量袋子的区。空袋 Σ=0、Π=1。
+type FSZone int
+
+const (
+	FSZoneDp FSZone = iota + 1
+	FSZoneDt
+	FSZoneFp
+	FSZoneFt
+	FSZoneM
+)
+
+// AddFS 给目标加一条瞬时 FS。Token 由塞入者自 mint；同 token 覆盖。ExpiresAt=0 表示直到 Remove 或单位销毁。
+type AddFS struct {
+	UnitID    uint64
+	DX, DY    float64
+	BaseSpeed float64
+	OnWall    bool
+	ExpiresAt float64
+	Token     uint64
+}
+
+// RemoveFS 撤一条瞬时 FS。token 不存在则 no-op。
+type RemoveFS struct {
+	UnitID uint64
+	Token  uint64
+}
+
+// AddFSComponent 往目标巡航 FS 的袋子里塞一分量。同 token 覆盖。ExpiresAt=0 表示直到 Remove。
+type AddFSComponent struct {
+	UnitID    uint64
+	Zone      FSZone
+	Token     uint64
+	Value     float64
+	ExpiresAt float64
+}
+
+// RemoveFSComponent 撤巡航 FS 上的一分量。token 不存在则 no-op。
+type RemoveFSComponent struct {
+	UnitID uint64
+	Token  uint64
+}
+
+// SetFSDirection 改巡航 FS 的朝向，不改当前速度。
+type SetFSDirection struct {
+	UnitID uint64
+	VX     float64
+	VY     float64
 }
 
 // SetVision 改自己的感知半径。视野为 0 则看不见场上其它单位（自己的随从仍能进感知）。
@@ -208,10 +262,18 @@ type NoFrameFreeze struct {
 	Hold   bool
 }
 
+// Stand 站定令牌。Hold 时速率为 0 也不往巡航推。虚弱、居合、锁敌用这个；没带令牌则从静止恢复巡航。
+type Stand struct {
+	UnitID uint64
+	Hold   bool
+}
+
 // Stun 令牌。Hold 时引擎不发 Sense（自身攻击停在冷却），IncomingDamage / 撞墙仍到。
+// Until>0 时到点自动放下；Until=0 维持旧语义，需 Hold=false 才解除。
 type Stun struct {
 	UnitID uint64
 	Hold   bool
+	Until  float64
 }
 
 type Context struct {

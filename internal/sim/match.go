@@ -37,13 +37,17 @@ type unit struct {
 	solid          bool
 	vision         float64
 	cruise         float64
+	cruiseFS       *cruiseFS
+	fsList         []impulseFS
 	decelT         float64
+	stunUntil      float64
 	semi           bool
 	face           vec
 	passWalls      bool
 	breakWalls     bool
 	mortal         bool
 	pass           bool
+	stand          bool
 	stun           bool
 	noFrameFreeze  bool
 	shell          bool
@@ -61,6 +65,7 @@ type unit struct {
 	factionBlastR  float64
 	factionBlastD  float64
 	marks          map[string]*stackMark
+	tap            func(unitpkg.Event)
 }
 
 type spawnSpot struct {
@@ -364,8 +369,11 @@ func (m *Match) Tick() {
 	if m.hitStop > 0 {
 		m.drainCmdsLocked()
 	} else {
+		m.expireFSLocked()
+		m.syncCruiseLocked()
 		m.decelerateLocked(DT)
 		m.drainCmdsLocked()
+		m.applyImpulseLocked()
 	}
 	m.settleHitsLocked()
 	if m.hitStop > 0 {
@@ -386,6 +394,7 @@ func (m *Match) Tick() {
 	m.stickFollowersLocked()
 	m.time += DT
 	m.expireWallsLocked()
+	m.expireStunLocked()
 	m.seq++
 	m.emitLocked()
 	m.checkWinLocked()
@@ -418,8 +427,21 @@ func (m *Match) decelerateLocked(dt float64) {
 		if u == nil || !u.solid || u.role != unitpkg.RoleFighter {
 			continue
 		}
+		if u.skipDecel() {
+			u.decelT = 0
+			continue
+		}
 		sp := u.v.len()
-		if sp < 1e-6 || math.Abs(sp-u.cruise) <= 1e-6 {
+		if sp < 1e-6 {
+			if u.stand || u.cruise < 1e-6 {
+				u.decelT = 0
+				continue
+			}
+			u.setVel(u.cruiseDir().mul(u.cruise))
+			u.decelT = 0
+			continue
+		}
+		if math.Abs(sp-u.cruise) <= 1e-6 {
 			u.decelT = 0
 			continue
 		}
@@ -530,6 +552,10 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
 	}
+	if spec.Role == unitpkg.RoleFighter {
+		u.cruiseFS = newCruiseFS(v, spec.Speed)
+		u.syncCruise()
+	}
 	u.aimFace()
 	m.units[id] = u
 	m.order = append(m.order, id)
@@ -589,15 +615,17 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		u.setVel(vec{c.VX, c.VY})
 	case unitpkg.SetCruise:
-		u := m.units[c.UnitID]
-		if u == nil || u.stopped {
-			return
-		}
-		if c.Speed < 0 {
-			u.cruise = 0
-		} else {
-			u.cruise = c.Speed
-		}
+		m.applySetCruiseLocked(c)
+	case unitpkg.AddFS:
+		m.applyAddFSLocked(c)
+	case unitpkg.RemoveFS:
+		m.applyRemoveFSLocked(c)
+	case unitpkg.AddFSComponent:
+		m.applyAddFSComponentLocked(c)
+	case unitpkg.RemoveFSComponent:
+		m.applyRemoveFSComponentLocked(c)
+	case unitpkg.SetFSDirection:
+		m.applySetFSDirectionLocked(c)
 	case unitpkg.SetVision:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -721,6 +749,12 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		u.pass = c.Hold
+	case unitpkg.Stand:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		u.stand = c.Hold
 	case unitpkg.NoFrameFreeze:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -733,6 +767,11 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		u.stun = c.Hold
+		if !c.Hold {
+			u.stunUntil = 0
+		} else {
+			u.stunUntil = c.Until
+		}
 	}
 }
 
@@ -1246,6 +1285,7 @@ func (m *Match) resolveLocked(h ccdHit) {
 		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
 		u.setVel(reflectVelocity(u.v, h.n))
 		m.cycleFactionLocked(u)
+		u.expireOnWallFS()
 	case hitBarrier:
 		u := m.units[h.a]
 		w := m.wallByID(h.w)
@@ -1272,6 +1312,7 @@ func (m *Match) resolveLocked(h ccdHit) {
 		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
 		u.setVel(reflectVelocity(u.v, h.n))
 		m.cycleFactionLocked(u)
+		u.expireOnWallFS()
 		if u.takesHit() && u.slot != w.slot && u.id != w.owner {
 			if at, ok := w.hitAt[u.id]; !ok || m.time >= at {
 				w.hitAt[u.id] = m.time + 0.1
@@ -1432,6 +1473,9 @@ func (m *Match) emitLocked() {
 func (m *Match) send(u *unit, ev unitpkg.Event) {
 	if u == nil || u.stopped {
 		return
+	}
+	if u.tap != nil {
+		u.tap(ev)
 	}
 	select {
 	case u.inbox <- ev:

@@ -148,13 +148,9 @@ type 钉与锤 struct {
 	enemySlot int
 
 	// 锤击
-	hammerReadyAt    float64
-	hammerArmed      bool
-	hammerStunUntil  float64
-	hammerStunTarget uint64
-	hammerStunKind   string
-	hammerStunDX     float64
-	hammerStunDY     float64
+	hammerReadyAt float64
+	hammerArmed   bool
+	fsSeq         uint32
 
 	// 钉子弹
 	nailReadyAt   float64
@@ -196,8 +192,6 @@ func (h *钉与锤) Handle(ctx unit.Context, ev unit.Event) {
 		h.hammerArmed = s.Time >= h.hammerReadyAt
 		unit.SpawnAttach(ctx, s, KindHammerArc)
 	}
-
-	h.holdHammerStun(ctx, s)
 
 	if !h.tryRitual(ctx, s) {
 		h.tryFireNail(ctx, s)
@@ -258,33 +252,15 @@ func (h *钉与锤) checkHammer(ctx unit.Context, s unit.Sense) {
 	ux, uy := (aim.X-s.Self.X)/dist, (aim.Y-s.Self.Y)/dist
 	h.hammerReadyAt = s.Time + hammerCD
 	if best != nil {
-		h.hammerStunUntil = s.Time + hammerStunDur
-		h.hammerStunTarget = best.ID
-		h.hammerStunKind = best.Kind
-		h.hammerStunDX, h.hammerStunDY = ux, uy
-		ctx.Out <- unit.SetVelocity{UnitID: best.ID, VX: ux * hammerKnockback, VY: uy * hammerKnockback}
-		ctx.Out <- unit.Stun{UnitID: best.ID, Hold: true}
+		until := s.Time + hammerStunDur
+		ctx.Out <- unit.AddFS{
+			UnitID: best.ID, DX: ux, DY: uy,
+			BaseSpeed: hammerKnockback, OnWall: true,
+			ExpiresAt: s.Time + nailPushWait, Token: h.nextFSToken(ctx.ID),
+		}
+		ctx.Out <- unit.Stun{UnitID: best.ID, Hold: true, Until: until}
 	}
 	h.swingAround(ctx, s, ux, uy)
-}
-
-func (h *钉与锤) holdHammerStun(ctx unit.Context, s unit.Sense) {
-	if h.hammerStunTarget == 0 {
-		return
-	}
-	alive := false
-	for i := range s.Nearby {
-		if s.Nearby[i].ID == h.hammerStunTarget {
-			alive = true
-			break
-		}
-	}
-	if !alive || s.Time+1e-9 >= h.hammerStunUntil {
-		restoreMotion(ctx, h.hammerStunTarget, h.hammerStunKind, h.hammerStunDX, h.hammerStunDY)
-		h.hammerStunTarget = 0
-		return
-	}
-	ctx.Out <- unit.Stun{UnitID: h.hammerStunTarget, Hold: true}
 }
 
 func (h *钉与锤) swingAround(ctx unit.Context, s unit.Sense, vx, vy float64) {
@@ -475,17 +451,17 @@ type 钉 struct {
 	lastY       float64
 	hasLockPos  bool
 
-	hit       bool
-	enemyID   uint64
-	enemyKind string
-	pushX     float64
-	pushY     float64
-	hitTime   float64
-	locked    bool
-	lockTime  float64
-	struck    map[uint64]bool
-	flyX      float64
-	flyY      float64
+	hit     bool
+	enemyID uint64
+	pushX   float64
+	pushY   float64
+	hitTime float64
+	pushTok uint64
+	pinTok  uint64
+	struck  map[uint64]bool
+	flyX    float64
+	flyY    float64
+	fsSeq   uint32
 }
 
 func (n *钉) Handle(ctx unit.Context, ev unit.Event) {
@@ -547,7 +523,6 @@ func (n *钉) onCollision(ctx unit.Context, e unit.Collision) {
 	}
 	n.hit = true
 	n.enemyID = e.Other.ID
-	n.enemyKind = e.Other.Kind
 	n.hitTime = e.Time
 	// 推送方向 = 钉子飞行方向：沿命中朝向把敌人钉出去。
 	// 旧版用 nearestWallDir（敌人到最近场边），导致位移和钉子朝向不一致。
@@ -563,8 +538,19 @@ func (n *钉) onCollision(ctx unit.Context, e unit.Collision) {
 		}
 	}
 	n.pushX, n.pushY = px, py
-	ctx.Out <- unit.SetVelocity{UnitID: n.enemyID, VX: n.pushX * nailPushSpeed, VY: n.pushY * nailPushSpeed}
-	ctx.Out <- unit.Stun{UnitID: n.enemyID, Hold: true}
+	until := e.Time + nailLockDur
+	n.pushTok = n.nextFSToken(ctx.ID)
+	n.pinTok = n.nextFSToken(ctx.ID)
+	ctx.Out <- unit.AddFS{
+		UnitID: n.enemyID, DX: n.pushX, DY: n.pushY,
+		BaseSpeed: nailPushSpeed, OnWall: true,
+		ExpiresAt: e.Time + nailPushWait, Token: n.pushTok,
+	}
+	ctx.Out <- unit.AddFSComponent{
+		UnitID: n.enemyID, Zone: unit.FSZoneM, Token: n.pinTok,
+		Value: 0, ExpiresAt: until,
+	}
+	ctx.Out <- unit.Stun{UnitID: n.enemyID, Hold: true, Until: until}
 	n.stickTo(ctx, &e.Other, n.pushX*nailPushSpeed, n.pushY*nailPushSpeed)
 	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
 }
@@ -592,28 +578,12 @@ func (n *钉) onSense(ctx unit.Context, s unit.Sense) {
 		}
 	}
 	if enemy == nil {
-		restoreMotion(ctx, n.enemyID, n.enemyKind, -n.pushX, -n.pushY)
+		n.clearPin(ctx)
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		return
 	}
-	ctx.Out <- unit.Stun{UnitID: n.enemyID, Hold: true}
-	if !n.locked {
-		n.stickTo(ctx, enemy, enemy.VX, enemy.VY)
-		dot := enemy.VX*n.pushX + enemy.VY*n.pushY
-		if dot < 0 || s.Time > n.hitTime+nailPushWait {
-			ctx.Out <- unit.SetVelocity{UnitID: n.enemyID, VX: 0, VY: 0}
-			n.stickTo(ctx, enemy, 0, 0)
-			n.locked = true
-			n.lockTime = s.Time
-		}
-		return
-	}
-	if math.Hypot(enemy.VX, enemy.VY) > 1 {
-		ctx.Out <- unit.SetVelocity{UnitID: n.enemyID, VX: 0, VY: 0}
-	}
-	n.stickTo(ctx, enemy, 0, 0)
-	if s.Time+1e-9 >= n.lockTime+nailLockDur {
-		restoreMotion(ctx, n.enemyID, n.enemyKind, -n.pushX, -n.pushY)
+	n.stickTo(ctx, enemy, enemy.VX, enemy.VY)
+	if s.Time+1e-9 >= n.hitTime+nailLockDur {
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
 }
@@ -768,27 +738,32 @@ func clampInHex(x, y, r float64) (float64, float64) {
 	return x * lo, y * lo
 }
 
-func restoreMotion(ctx unit.Context, id uint64, kind string, dx, dy float64) {
-	ctx.Out <- unit.Stun{UnitID: id, Hold: false}
-	speed := fighterSpeed
-	if spec, ok := unit.Lookup(kind); ok {
-		speed = spec.Speed
-		if speed < 0 {
-			speed = 0
-		}
-	}
-	if speed < 1e-6 {
-		ctx.Out <- unit.SetCruise{UnitID: id, Speed: 0}
-		ctx.Out <- unit.SetVelocity{UnitID: id, VX: 0, VY: 0}
+func (h *钉与锤) nextFSToken(owner uint64) uint64 {
+	return nextFSToken(owner, &h.fsSeq)
+}
+
+func (n *钉) nextFSToken(owner uint64) uint64 {
+	return nextFSToken(owner, &n.fsSeq)
+}
+
+func nextFSToken(owner uint64, seq *uint32) uint64 {
+	*seq++
+	return owner<<32 | uint64(*seq)
+}
+
+func (n *钉) clearPin(ctx unit.Context) {
+	if n.enemyID == 0 {
 		return
 	}
-	n := math.Hypot(dx, dy)
-	vx, vy := speed, 0.0
-	if n > 1e-6 {
-		vx, vy = dx/n*speed, dy/n*speed
+	if n.pushTok != 0 {
+		ctx.Out <- unit.RemoveFS{UnitID: n.enemyID, Token: n.pushTok}
+		n.pushTok = 0
 	}
-	ctx.Out <- unit.SetCruise{UnitID: id, Speed: speed}
-	ctx.Out <- unit.SetVelocity{UnitID: id, VX: vx, VY: vy}
+	if n.pinTok != 0 {
+		ctx.Out <- unit.RemoveFSComponent{UnitID: n.enemyID, Token: n.pinTok}
+		n.pinTok = 0
+	}
+	ctx.Out <- unit.Stun{UnitID: n.enemyID, Hold: false}
 }
 
 type nailJob struct {
@@ -851,4 +826,3 @@ func reflectDir(ux, uy, nx, ny float64) (float64, float64) {
 	}
 	return rx / n, ry / n
 }
-

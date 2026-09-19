@@ -86,9 +86,29 @@ func TestCruiseZeroSpeedDoesNotPush(t *testing.T) {
 	u.cruise = 120
 	u.decelT = 0
 	u.setVel(vec{})
+	m.applyCmdLocked(unitpkg.Stand{UnitID: u.id, Hold: true})
 	m.decelerateLocked(1)
 	if u.v.len() > 1e-9 {
-		t.Fatalf("zero speed was pushed to %v", u.v.len())
+		t.Fatalf("stand still was pushed to %v", u.v.len())
+	}
+}
+
+func TestCruiseZeroSpeedSnapsWithoutStand(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindWaller)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u := fighterByKind(m, character.KindWaller)
+	u.cruise = 120
+	u.cruiseFS.dir = vec{0, 1}
+	u.decelT = 0
+	u.setVel(vec{})
+	m.decelerateLocked(1)
+	if math.Abs(u.v.X) > 1e-9 || math.Abs(u.v.Y-120) > 1e-9 {
+		t.Fatalf("want snap along cruise dir, vel=%+v", u.v)
 	}
 }
 

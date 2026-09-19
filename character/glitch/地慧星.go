@@ -309,6 +309,7 @@ func (g *地慧星) maybeSlash(ctx unit.Context, s unit.Sense) {
 		g.slashHolding = false
 		g.x, g.y = g.slashLockX, g.slashLockY
 		g.vx, g.vy = g.slashHoldVX, g.slashHoldVY
+		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
 		ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: g.slashLockX, Y: g.slashLockY}
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: g.vx, VY: g.vy}
 		g.releaseSlash(ctx, s)
@@ -360,6 +361,7 @@ func (g *地慧星) lockSlashPose(ctx unit.Context) {
 	g.x, g.y = g.slashLockX, g.slashLockY
 	g.vx, g.vy = 0, 0
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: g.slashLockX, Y: g.slashLockY}
 }
 
@@ -417,10 +419,12 @@ func (g *地慧星) applyBoost(ctx unit.Context, s unit.Sense) {
 	ns := sp + float64(g.boostPending)*glitchWallBoost
 	g.boostPending = 0
 	g.vx, g.vy = s.Self.VX/sp*ns, s.Self.VY/sp*ns
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: ns}
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: g.vx, VY: g.vy}
 }
 
 func (g *地慧星) clampCruise(ctx unit.Context) {
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: glitchSpeed}
 	sp := math.Hypot(g.vx, g.vy)
 	if sp < 1e-6 {
 		return

@@ -167,55 +167,36 @@ func TestRectKnockback(t *testing.T) {
 	if !hasDamage(cmds, 2, atkRectDmg) {
 		t.Fatalf("rect should deal 9.8: %v", cmds)
 	}
-	if !hasPushVelocity(cmds, 2) {
-		t.Fatalf("rect should push with velocity: %v", cmds)
+	fs := lastAddFS(cmds, 2)
+	if fs == nil || fs.BaseSpeed != knockPush || fs.DX <= 0 || !fs.OnWall || math.Abs(fs.ExpiresAt-(0.2+knockFreeze)) > 1e-9 {
+		t.Fatalf("push fs=%v cmds=%v", fs, cmds)
+	}
+	pin := lastAddFSComponent(cmds, 2)
+	until := 0.2 + knockFreeze + rectStun
+	if pin == nil || pin.Zone != unit.FSZoneM || pin.Value != 0 || math.Abs(pin.ExpiresAt-until) > 1e-9 {
+		t.Fatalf("pin=%v cmds=%v", pin, cmds)
 	}
 	st := lastStun(cmds)
-	if st == nil || st.UnitID != 2 || !st.Hold {
+	if st == nil || st.UnitID != 2 || !st.Hold || math.Abs(st.Until-until) > 1e-9 {
 		t.Fatalf("rect should stun: %+v", st)
+	}
+	if lastCruise(cmds, 2) != nil {
+		t.Fatalf("must not write target cruise: %v", cmds)
 	}
 	if lastFX(cmds, "stun") != nil {
 		t.Fatalf("rect stun should have no vfx: %v", cmds)
 	}
 
-	// 撞墙反弹：敌人速度与推动方向相反 → 锁定定身（速度清零）
-	bounced := foe(200, 0)
-	bounced.VX = -600
-	a.Handle(ctx, unit.Sense{Time: 0.25, Self: me(0, 0), Nearby: []unit.Snapshot{bounced}})
-	lock := drain(out)
-	if v := lastVel(lock, 2); v == nil || math.Hypot(v.VX, v.VY) > 1e-6 {
-		t.Fatalf("wall bounce should lock enemy vel: %v", lock)
+	a.Handle(ctx, unit.Sense{Time: 0.25, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	mid := drain(out)
+	if lastVel(mid, 2) != nil || lastStun(mid) != nil || lastCruise(mid, 2) != nil {
+		t.Fatalf("must not babysit target: %v", mid)
 	}
 
-	// 锁定后 1.5s 解除眩晕
-	a.Handle(ctx, unit.Sense{Time: 0.25 + rectStun, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	a.Handle(ctx, unit.Sense{Time: 0.5, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	end := drain(out)
-	rel := lastStun(end)
-	if rel == nil || rel.Hold {
-		t.Fatalf("stun should release after lock+rectStun: %+v", rel)
-	}
-}
-
-func TestRectKnockTimeoutLock(t *testing.T) {
-	a := fighter(SkillAtkRect)
-	out := make(chan unit.Cmd, 64)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
-	enemy := foe(70, 0)
-	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
-	_ = drain(out)
-	a.Handle(ctx, unit.Sense{Time: 0.2, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
-	_ = drain(out)
-
-	// 敌人一直被推着滑（速度保持推动方向），滑行窗口 1s 到点后锁定
-	glide := foe(400, 0)
-	glide.VX = knockPush
-	a.Handle(ctx, unit.Sense{Time: 0.2 + knockFreeze, Self: me(0, 0), Nearby: []unit.Snapshot{glide}})
-	lock := drain(out)
-	if v := lastVel(lock, 2); v == nil || math.Hypot(v.VX, v.VY) > 1e-6 {
-		t.Fatalf("glide timeout should lock enemy vel: %v", lock)
-	}
-	if !a.stunLocked {
-		t.Fatalf("glide timeout should mark locked")
+	if lastStun(end) != nil || lastCruise(end, 2) != nil || lastVel(end, 2) != nil {
+		t.Fatalf("engine owns release, cmds=%v", end)
 	}
 }
 
@@ -971,6 +952,28 @@ func lastStun(cmds []unit.Cmd) *unit.Stun {
 		}
 	}
 	return st
+}
+
+func lastAddFS(cmds []unit.Cmd, id uint64) *unit.AddFS {
+	var v *unit.AddFS
+	for _, c := range cmds {
+		if x, ok := c.(unit.AddFS); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastAddFSComponent(cmds []unit.Cmd, id uint64) *unit.AddFSComponent {
+	var v *unit.AddFSComponent
+	for _, c := range cmds {
+		if x, ok := c.(unit.AddFSComponent); ok && x.UnitID == id {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
 }
 
 func hasConfirm(cmds []unit.Cmd, token uint64, amt float64) bool {

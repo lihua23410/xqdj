@@ -37,6 +37,7 @@ func (m *Match) markFactionLocked(c unitpkg.MarkFaction) {
 			Name: "faction", UnitID: u.id, Kind: f,
 			X: u.p.X, Y: u.p.Y, Slot: u.slot,
 		})
+		m.send(u, unitpkg.FactionChanged{Faction: f})
 	}
 }
 
@@ -56,6 +57,7 @@ func (m *Match) cycleFactionLocked(u *unit) {
 		Name: "faction", UnitID: u.id, Kind: next,
 		X: u.p.X, Y: u.p.Y, Slot: u.slot,
 	})
+	m.send(u, unitpkg.FactionChanged{Faction: next})
 }
 
 func (m *Match) maybeFactionCollectLocked(u *unit) {

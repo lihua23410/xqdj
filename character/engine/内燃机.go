@@ -183,6 +183,7 @@ func (e *内燃机) breakNow(ctx unit.Context, t float64) {
 	e.blastAt = t + engineBlastT
 	e.frailUntil = t + engineFrail
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
 }
 
 func (e *内燃机) endFrail(ctx unit.Context) {
@@ -191,6 +192,7 @@ func (e *内燃机) endFrail(ctx unit.Context) {
 	e.gear = 1
 	e.heat = 0
 	e.applyStats(ctx)
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
 	ux, uy := e.heading()
 	sp := engineCruise[1]
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * sp, VY: uy * sp}

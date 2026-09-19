@@ -108,6 +108,7 @@ func (a *绞刑架) Handle(ctx unit.Context, ev unit.Event) {
 
 func (a *绞刑架) hold(ctx unit.Context, now float64) {
 	ctx.Out <- unit.Stun{UnitID: a.locked, Hold: true}
+	ctx.Out <- unit.Stand{UnitID: a.locked, Hold: true}
 	ctx.Out <- unit.SetVelocity{UnitID: a.locked, VX: 0, VY: 0}
 	if now+1e-9 < a.nextTick {
 		return
@@ -118,6 +119,7 @@ func (a *绞刑架) hold(ctx unit.Context, now float64) {
 
 func (a *绞刑架) release(ctx unit.Context) {
 	ctx.Out <- unit.Stun{UnitID: a.locked, Hold: false}
+	ctx.Out <- unit.Stand{UnitID: a.locked, Hold: false}
 	vx, vy := a.lockVX, a.lockVY
 	if math.Hypot(vx, vy) < 1e-6 {
 		speed := prisonerCruise

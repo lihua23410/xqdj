@@ -208,6 +208,8 @@ func (w *狼人) startBite(ctx unit.Context, s unit.Sense) {
 	w.dashesLeft = wolfDashCount
 	w.lockUntil = s.Time + wolfDashLock
 	w.updateAim(s)
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 	ctx.Out <- unit.FX{
 		Name:   "rage",
 		Kind:   ctx.Kind,
@@ -232,6 +234,7 @@ func (w *狼人) onWall(ctx unit.Context, e unit.WallHit) {
 	if w.dashesLeft > 0 {
 		w.beginLock(e.Time)
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
+		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 		return
 	}
@@ -244,6 +247,7 @@ func (w *狼人) finishBite(ctx unit.Context, e unit.WallHit) {
 	w.phase = 0
 	w.emitPhase(ctx)
 	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
 	vx, vy := cruiseOffWall(w.aimX, w.aimY, e.NX, e.NY)
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
 	ctx.Out <- unit.FX{
@@ -278,6 +282,7 @@ func (w *狼人) tickBite(ctx unit.Context, s unit.Sense) {
 		if s.Time+1e-9 >= w.lockUntil {
 			w.bite = biteDash
 			ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+			ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
 			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: w.aimX * wolfDashSpeed, VY: w.aimY * wolfDashSpeed}
 		}
 		return
