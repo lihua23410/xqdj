@@ -68,8 +68,9 @@
   pointer-events: none;
   z-index: 8;
   object-fit: contain;
-  filter: drop-shadow(0 0 4px #fff);
-  animation: menreiki-stun-spin 0.7s linear infinite;
+  filter: drop-shadow(0 0 2px #0008);
+  opacity: 0.85;
+  animation: menreiki-stun-spin 0.9s linear infinite;
 }
 @keyframes menreiki-stun-spin {
   to { transform: translate(-50%, -50%) rotate(360deg); }
@@ -93,20 +94,40 @@
 .ball.look-mask3 {
   background-image: url("/ball/面灵气/status/mask3.png");
 }
+.fx-menreiki-muzzle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, currentColor 45%, transparent 74%);
+  box-shadow: 0 0 7px color-mix(in srgb, currentColor 40%, transparent);
+  animation: menreiki-muzzle 0.28s ease-out forwards;
+}
+@keyframes menreiki-muzzle {
+  0% { transform: translate(-50%, -50%) scale(0.55); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+.fx-menreiki-beam {
+  height: 2px;
+  width: 34px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, currentColor 42%, #fff8 78%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, currentColor 35%, transparent);
+  transform-origin: 0 50%;
+  animation: menreiki-beam 0.24s ease-out forwards;
+}
+@keyframes menreiki-beam {
+  to { width: 54px; opacity: 0; }
+}
 .fx-menreiki-blast-fill {
   width: var(--r, 160px);
   height: var(--r, 160px);
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    #fff 0%,
-    color-mix(in srgb, #3ec8e0 70%, #fff) 18%,
-    color-mix(in srgb, #ff3b3b 55%, transparent) 42%,
-    color-mix(in srgb, #b44cff 40%, transparent) 62%,
-    color-mix(in srgb, #8dffb0 22%, transparent) 78%,
-    transparent 100%
+    color-mix(in srgb, currentColor 35%, #fff) 0%,
+    color-mix(in srgb, currentColor 16%, transparent) 48%,
+    transparent 76%
   );
-  mix-blend-mode: plus-lighter;
   animation: menreiki-blast-fill 0.7s ease-out forwards;
 }
 @keyframes menreiki-blast-fill {
@@ -121,18 +142,10 @@
   background: radial-gradient(
     circle,
     #fff 0%,
-    #fff 12%,
-    #3ec8e0 28%,
-    #ff3b3b 48%,
-    #b44cff 68%,
-    #8dffb0 84%,
-    transparent 100%
+    currentColor 28%,
+    transparent 72%
   );
-  box-shadow:
-    0 0 28px #fff,
-    0 0 64px #3ec8e0,
-    0 0 96px #b44cff;
-  mix-blend-mode: plus-lighter;
+  box-shadow: 0 0 16px color-mix(in srgb, currentColor 40%, transparent);
   animation: menreiki-blast-core 0.55s ease-out forwards;
 }
 @keyframes menreiki-blast-core {
@@ -154,7 +167,6 @@
     color-mix(in srgb, var(--c, #3ec8e0) 16%, transparent) 55%,
     transparent 74%
   );
-  mix-blend-mode: plus-lighter;
   animation: menreiki-blast-wave 0.9s cubic-bezier(0.12, 0.72, 0.2, 1) var(--delay, 0s) both;
 }
 @keyframes menreiki-blast-wave {

@@ -11,7 +11,7 @@
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  animation: wolf-cutin-fade 1.6s ease-out forwards;
+  animation: wolf-cutin-fade 1.5s ease-out forwards;
 }
 .wolf-cutin img {
   display: block;
@@ -20,6 +20,7 @@
   object-fit: contain;
 }
 @keyframes wolf-cutin-fade {
-  0%, 62.5% { opacity: 1; }
+  0% { opacity: 0.92; }
+  55% { opacity: 0.92; }
   100% { opacity: 0; }
 }

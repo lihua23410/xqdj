@@ -54,13 +54,13 @@
 .guide.prisoner-drop {
   width: 28px;
   height: 28px;
-  border: 2px dashed var(--kind, #888);
+  border: 1px dashed var(--kind, #888);
   border-radius: 50%;
-  background: color-mix(in srgb, var(--kind, #888) 22%, transparent);
-  box-shadow: 0 0 16px var(--kind, #888);
+  background: color-mix(in srgb, var(--kind, #888) 12%, transparent);
+  box-shadow: none;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  opacity: 0.85;
+  opacity: 0.7;
 }
 .ball.look-cage {
   background: transparent !important;
@@ -100,18 +100,18 @@
 .fx-bolt {
   position: absolute;
   width: var(--len, 40px);
-  height: 4px;
+  height: 2px;
   margin: 0;
-  border-radius: 2px;
-  background: linear-gradient(90deg, #fcf05a, #32b1cc 55%, #e8ff7a);
-  box-shadow: 0 0 8px #fcf05a, 0 0 16px #32b1cc;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, #d8e8c8 18%, #7ec8c4 58%, #d8e8c8 88%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, #7ec8c4 45%, transparent);
   transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
   pointer-events: none;
-  animation: prisoner-bolt 0.45s ease-out forwards;
+  animation: prisoner-bolt 0.4s ease-out forwards;
 }
 @keyframes prisoner-bolt {
-  0% { opacity: 1; filter: brightness(1.8); }
-  100% { opacity: 0; filter: brightness(0.6); }
+  0% { opacity: 0.9; filter: brightness(1.15); }
+  100% { opacity: 0; filter: brightness(0.85); }
 }
 .fx-scream {
   position: absolute;

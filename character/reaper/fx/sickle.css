@@ -19,12 +19,13 @@
   width: 100%;
   height: 100%;
   overflow: visible;
+  filter: drop-shadow(0 0 2px rgba(20, 8, 14, 0.55));
 }
 .ball.look-sickle.is-blood svg path:first-of-type {
-  fill: #e01018;
+  fill: #8a1016;
 }
 .ball.look-sickle.is-blood svg path:last-of-type {
-  stroke: #ff3b3b;
+  stroke: #c43a42;
 }
 @keyframes sickle-spin {
   from {

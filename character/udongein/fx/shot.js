@@ -28,17 +28,16 @@
   });
 
   arena.registerShot("shot", (fx, ctx) => {
-    arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
+    arena.spawnFx("fx-ningyushi-muzzle", ctx.x, ctx.y, fx.kind);
     const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1) * (180 / Math.PI);
-    const beam = arena.spawnFx("fx-beam", ctx.x, ctx.y, fx.kind);
+    const beam = arena.spawnFx("fx-ningyushi-beam", ctx.x, ctx.y, fx.kind);
     if (beam) beam.style.transform = `translate(0, -50%) rotate(${ang}deg)`;
   });
 
   arena.registerShot("break", (fx, ctx) => {
     const r = Math.max(48, (fx.amount || 108) * (ctx.scale || 1) * 2);
     arena.spawnFx("fx-ningyushi-ring", ctx.x, ctx.y, fx.kind, { "--r": `${r}px` });
-    arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
-    arena.burst(ctx.x, ctx.y, fx.kind, 16);
+    arena.burst(ctx.x, ctx.y, fx.kind, 6);
   });
 
   arena.registerShot("range", (fx) => {
@@ -96,8 +95,7 @@
     const size = { "--r": `${r}px` };
     arena.spawnFx("fx-ningyushi-blast-core", ctx.x, ctx.y, fx.kind);
     arena.spawnFx("fx-ningyushi-blast-wave", ctx.x, ctx.y, fx.kind, size);
-    arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
-    arena.burst(ctx.x, ctx.y, fx.kind, 18);
+    arena.burst(ctx.x, ctx.y, fx.kind, 6);
   });
 
   const CALLS = {

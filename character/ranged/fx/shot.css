@@ -1,0 +1,24 @@
+.fx-ranged-muzzle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff4e4 0%, currentColor 42%, transparent 74%);
+  box-shadow: 0 0 8px color-mix(in srgb, currentColor 45%, transparent);
+  animation: ranged-muzzle 0.3s ease-out forwards;
+}
+@keyframes ranged-muzzle {
+  0% { transform: translate(-50%, -50%) scale(0.6); opacity: 0.85; }
+  100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+}
+.fx-ranged-beam {
+  height: 2px;
+  width: 36px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, currentColor 40%, #ffe0b8 80%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, currentColor 40%, transparent);
+  transform-origin: 0 50%;
+  animation: ranged-beam 0.24s ease-out forwards;
+}
+@keyframes ranged-beam {
+  to { width: 58px; opacity: 0; }
+}

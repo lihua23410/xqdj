@@ -46,7 +46,7 @@ function drawLens(ctx, x1, y1, x2, y2, halfW, color, additive, lengthScale) {
 function spawnBurst(p1, p2, ox, oy) {
   const particles = [];
   const streaks = [];
-  for (let i = 0; i < 35; i++) {
+  for (let i = 0; i < 10; i++) {
     const cyan = Math.random() >= 0.7;
     particles.push({
       x: ox,
@@ -67,7 +67,7 @@ function spawnBurst(p1, p2, ox, oy) {
   const uy = dy / lineLen;
   const nx = -uy;
   const ny = ux;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 8; i++) {
     const t = Math.random();
     const side = Math.random() < 0.5 ? 1 : -1;
     const init = 10 + Math.random() * 35;

@@ -19,9 +19,9 @@
 
   arena.registerShot("cast", (fx, ctx) => {
     arena.spawnFx("fx-fisher-splash", ctx.x, ctx.y, fx.kind, { "--r": "70px" });
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 3; i++) {
       const a = Math.random() * Math.PI * 2;
-      const d = 10 + Math.random() * 18;
+      const d = 10 + Math.random() * 14;
       arena.spawnFx("fx-fisher-drop", ctx.x, ctx.y, fx.kind, {
         "--dx": `${Math.cos(a) * d}px`,
         "--dy": `${Math.sin(a) * d}px`,
@@ -32,8 +32,7 @@
   arena.registerShot("reel", (fx, ctx) => {
     const r = Math.max(80, 48 + (fx.amount || 10) * 1.2);
     arena.spawnFx("fx-fisher-splash", ctx.x, ctx.y, fx.kind, { "--r": `${r}px` });
-    arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
-    arena.burst(ctx.x, ctx.y, fx.kind, 12);
+    arena.burst(ctx.x, ctx.y, fx.kind, 5);
   });
 
   arena.registerShot("miss", (fx, ctx) => {
@@ -44,8 +43,7 @@
   arena.registerShot("ram", (fx, ctx) => {
     const r = Math.max(96, (fx.amount || 50) * 1.6);
     arena.spawnFx("fx-fisher-ram", ctx.x, ctx.y, fx.kind, { "--r": `${r}px` });
-    arena.spawnFx("fx-shock", ctx.x, ctx.y, fx.kind);
-    arena.burst(ctx.x, ctx.y, fx.kind, 18);
+    arena.burst(ctx.x, ctx.y, fx.kind, 6);
   });
 
   arena.registerShot("carry", (fx) => {

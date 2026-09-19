@@ -1,0 +1,12 @@
+.fx-warden-shatter {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, currentColor 70%, transparent);
+  box-shadow: inset 0 0 8px color-mix(in srgb, currentColor 18%, transparent);
+  animation: warden-shatter 0.42s ease-out forwards;
+}
+@keyframes warden-shatter {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+}

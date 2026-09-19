@@ -35,17 +35,17 @@
   left: 50%;
   top: 50%;
   width: var(--len, 560px);
-  height: 2px;
-  margin-top: -1px;
+  height: 1px;
+  margin-top: -0.5px;
   border-radius: 1px;
   background: linear-gradient(
     90deg,
-    rgba(255, 92, 82, 0.55) 0%,
-    rgba(255, 80, 70, 0.28) 42%,
-    rgba(255, 80, 70, 0.08) 78%,
+    rgba(200, 70, 64, 0.42) 0%,
+    rgba(180, 60, 54, 0.2) 46%,
+    rgba(180, 60, 54, 0.06) 78%,
     transparent
   );
-  box-shadow: 0 0 6px rgba(255, 70, 60, 0.35);
+  box-shadow: 0 0 4px rgba(180, 60, 54, 0.22);
   transform-origin: 0 50%;
   transform: rotate(var(--ang, 0rad));
   pointer-events: none;

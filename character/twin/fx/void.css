@@ -1,33 +1,33 @@
 .fx-beam.void {
-  height: 7px;
-  width: 56px;
-  background: linear-gradient(90deg, transparent, currentColor, #fff 70%, currentColor);
-  box-shadow: 0 0 16px currentColor, 0 0 28px #fff6;
-  animation: beam-void 0.28s ease-out forwards;
+  height: 3px;
+  width: 48px;
+  background: linear-gradient(90deg, transparent, currentColor 40%, #d8b8ff 78%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, currentColor 45%, transparent);
+  animation: beam-void 0.3s ease-out forwards;
 }
 @keyframes beam-void {
-  to { width: 96px; opacity: 0; }
+  to { width: 78px; opacity: 0; }
 }
 .fx-split-slash {
-  height: 6px;
-  width: 52px;
+  height: 3px;
+  width: 48px;
   border-radius: 99px;
-  background: linear-gradient(90deg, transparent, #fff, currentColor, #fff, transparent);
-  box-shadow: 0 0 14px currentColor, 0 0 22px #fff8;
-  animation: split-slash 0.36s ease-out forwards;
+  background: linear-gradient(90deg, transparent, currentColor, #e8d8ff 70%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, currentColor 40%, transparent);
+  animation: split-slash 0.38s ease-out forwards;
 }
 @keyframes split-slash {
-  0% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.12); opacity: 1; }
-  100% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1.6); opacity: 0; }
+  0% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(0.14); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(1.35); opacity: 0; }
 }
 .fx-void-core {
-  width: 26px;
-  height: 26px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 18px currentColor, 0 0 32px #fff;
-  animation: void-core 0.4s ease-out forwards;
+  background: radial-gradient(circle, #efe6ff 0%, currentColor 55%, transparent 100%);
+  box-shadow: 0 0 10px color-mix(in srgb, currentColor 50%, transparent);
+  animation: void-core 0.42s ease-out forwards;
 }
 @keyframes void-core {
-  to { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+  to { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
 }

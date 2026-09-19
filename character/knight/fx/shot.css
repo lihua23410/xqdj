@@ -1,0 +1,23 @@
+.fx-knight-shock {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, currentColor 75%, transparent);
+  animation: knight-shock 0.38s ease-out forwards;
+}
+@keyframes knight-shock {
+  0% { transform: translate(-50%, -50%) scale(0.35); opacity: 0.75; }
+  100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+}
+.fx-knight-blink {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #fff8;
+  box-shadow: 0 0 8px color-mix(in srgb, currentColor 35%, transparent);
+  animation: knight-blink 0.32s ease-out forwards;
+}
+@keyframes knight-blink {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
+}

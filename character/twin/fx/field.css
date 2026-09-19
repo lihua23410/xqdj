@@ -1,8 +1,8 @@
 .guide.bond {
-  opacity: 0.42;
-  border-top-width: 2px;
+  opacity: 0.32;
+  border-top-width: 1px;
   border-top-style: dashed;
-  filter: drop-shadow(0 0 6px currentColor);
+  filter: none;
 }
 .field-ring {
   position: absolute;
@@ -10,20 +10,20 @@
   top: 50%;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  border: 1px dashed currentColor;
+  border: 1px solid color-mix(in srgb, currentColor 55%, transparent);
   color: var(--kind);
-  background: color-mix(in srgb, var(--kind) 10%, transparent);
+  background: color-mix(in srgb, var(--kind) 6%, transparent);
   pointer-events: none;
   box-sizing: border-box;
-  opacity: 0.5;
+  opacity: 0.42;
 }
 .field-ring i {
   position: absolute;
-  inset: 22%;
+  inset: 24%;
   border-radius: 50%;
   border: 1px solid currentColor;
-  opacity: 0.45;
-  box-shadow: 0 0 10px currentColor;
+  opacity: 0.28;
+  box-shadow: none;
 }
 .field-ring.pull {
   animation: field-pull 1.35s ease-in-out infinite;

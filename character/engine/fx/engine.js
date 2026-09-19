@@ -33,14 +33,14 @@ window.lookFX.engine = {
     host.style.setProperty("--r", `${Math.max(36, vis * scale * 2)}px`);
     if (vis < 1) return;
     const now = (ctx && ctx.now) || performance.now();
-    const gap = st.frail ? 700 : 500;
+    const gap = st.frail ? 900 : 720;
     if (now - (host._last || 0) < gap) return;
     host._last = now;
     const wave = document.createElement("i");
     wave.className = "engine-ripple";
     host.appendChild(wave);
     wave.addEventListener("animationend", () => wave.remove());
-    const n = 8 + gear * 2;
+    const n = 3 + Math.min(3, gear);
     const spin = Math.random() * 360;
     for (let i = 0; i < n; i++) {
       const p = document.createElement("i");

@@ -1,0 +1,12 @@
+.fx-wolf-phase {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, currentColor 70%, #e8d9a0);
+  box-shadow: inset 0 0 8px color-mix(in srgb, #e8d9a0 22%, transparent);
+  animation: wolf-phase 0.5s ease-out forwards;
+}
+@keyframes wolf-phase {
+  0% { transform: translate(-50%, -50%) scale(0.35); opacity: 0.75; }
+  100% { transform: translate(-50%, -50%) scale(2.1); opacity: 0; }
+}

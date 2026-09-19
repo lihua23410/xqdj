@@ -45,8 +45,7 @@ arena.registerShot("hammer", (fx, ctx) => {
       .to(spin, { rotation: -360, duration: 0.07, ease: "power1.inOut" });
   }
   arena.spawnFx("fx-shock", x, y, kind);
-  arena.spawnFx("fx-ring", x, y, kind);
-  arena.burst(x, y, kind, 10);
+  arena.burst(x, y, kind, 5);
 });
 
 arena.registerShot("nail-spawn", (fx, ctx) => {
@@ -61,7 +60,6 @@ arena.registerShot("nail-spawn", (fx, ctx) => {
         { scale: 1.2, duration: 0.19, ease: "power2.out" })
       .to(el, { scale: 0.95, opacity: 0, duration: 0.15, ease: "power1.out" });
   }
-  arena.spawnFx("fx-flash", x, y, kind);
 });
 
 arena.registerShot("nail-hit", (fx, ctx) => {
@@ -76,7 +74,7 @@ arena.registerShot("nail-hit", (fx, ctx) => {
       .to(el, { x: "16%", opacity: 0, duration: 0.3, ease: "power1.out" });
   }
   arena.spawnFx("fx-shock", x, y, kind);
-  arena.burst(x, y, kind, 10);
+  arena.burst(x, y, kind, 5);
 });
 
 arena.registerShot("doll-spawn", (fx, ctx) => {
@@ -91,6 +89,4 @@ arena.registerShot("doll-spawn", (fx, ctx) => {
         { scale: 1.15, rotation: 3, opacity: 0.95, duration: 0.28, ease: "power2.out" })
       .to(el, { scale: 1.45, rotation: 0, opacity: 0, duration: 0.42, ease: "power1.out" });
   }
-  arena.spawnFx("fx-flash", x, y, kind);
-  arena.spawnFx("fx-ring", x, y, kind);
 });

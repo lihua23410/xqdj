@@ -136,13 +136,13 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  height: 8px;
+  height: 3px;
   width: var(--beam-len, 560px);
   transform: translate(0, -50%) rotate(var(--beam-ang, 0rad));
   transform-origin: 0 50%;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #fff 0%, #ffe08a 18%, #e4b43c 70%, transparent 100%);
-  box-shadow: 0 0 12px #ffe08a, 0 0 24px #e4b43c;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #fff4c8 0%, #e4b43c 28%, #b08a28 72%, transparent 100%);
+  box-shadow: 0 0 8px color-mix(in srgb, #e4b43c 40%, transparent);
   pointer-events: none;
 }
 
@@ -156,48 +156,72 @@
 .guide.ningyushi-laser {
   height: 0;
   border: none;
-  border-top: 5px solid #ffe08a;
-  opacity: 1;
-  box-shadow: 0 0 10px #ffe08a, 0 0 22px #e4b43c;
+  border-top: 2px solid #e4b43c;
+  opacity: 0.85;
+  box-shadow: 0 0 6px color-mix(in srgb, #e4b43c 40%, transparent);
   z-index: 18;
 }
 
+.fx-ningyushi-muzzle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff8e0 0%, #e4b43c 48%, transparent 74%);
+  box-shadow: 0 0 7px color-mix(in srgb, #e4b43c 40%, transparent);
+  animation: ningyushi-muzzle 0.28s ease-out forwards;
+}
+@keyframes ningyushi-muzzle {
+  0% { transform: translate(-50%, -50%) scale(0.55); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+.fx-ningyushi-beam {
+  height: 2px;
+  width: 34px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, #e4b43c 40%, #fff4c8 78%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, #e4b43c 35%, transparent);
+  transform-origin: 0 50%;
+  animation: ningyushi-shot-beam 0.24s ease-out forwards;
+}
+@keyframes ningyushi-shot-beam {
+  to { width: 54px; opacity: 0; }
+}
 .fx-ningyushi-ring {
   width: var(--r, 140px);
   height: var(--r, 140px);
   border-radius: 50%;
-  border: 3px solid #ffd24a;
-  box-shadow: 0 0 18px #e4b43c, inset 0 0 24px #ffe08a;
+  border: 1.5px solid #e4b43c;
+  box-shadow: inset 0 0 12px color-mix(in srgb, #ffe08a 35%, transparent);
   animation: ningyushi-ring 0.55s ease-out forwards;
 }
 @keyframes ningyushi-ring {
-  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+  0% { transform: translate(-50%, -50%) scale(0.22); opacity: 0.85; }
   100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
 }
 .fx-ningyushi-blast-core {
-  width: 28px;
-  height: 28px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: radial-gradient(circle, #fff 0%, #ffe08a 28%, #e4b43c 62%, transparent 100%);
-  box-shadow: 0 0 28px #fff, 0 0 64px #e4b43c;
-  animation: ningyushi-blast-core 0.55s ease-out forwards;
+  background: radial-gradient(circle, #fff4c8 0%, #e4b43c 55%, transparent 100%);
+  box-shadow: 0 0 12px color-mix(in srgb, #e4b43c 50%, transparent);
+  animation: ningyushi-blast-core 0.5s ease-out forwards;
 }
 @keyframes ningyushi-blast-core {
-  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
-  40% { transform: translate(-50%, -50%) scale(1.8); opacity: 1; }
-  100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0.9; }
+  40% { transform: translate(-50%, -50%) scale(1.35); opacity: 0.7; }
+  100% { transform: translate(-50%, -50%) scale(1.9); opacity: 0; }
 }
 .fx-ningyushi-blast-wave {
   width: var(--r, 200px);
   height: var(--r, 200px);
   border-radius: 50%;
-  border: 4px solid #ffe08a;
-  box-shadow: 0 0 28px #e4b43c, inset 0 0 36px color-mix(in srgb, #e4b43c 80%, transparent);
-  animation: ningyushi-blast-wave 0.85s cubic-bezier(0.12, 0.72, 0.2, 1) both;
+  border: 1.5px solid color-mix(in srgb, #ffe08a 75%, transparent);
+  box-shadow: inset 0 0 16px color-mix(in srgb, #e4b43c 22%, transparent);
+  animation: ningyushi-blast-wave 0.75s cubic-bezier(0.16, 0.72, 0.2, 1) both;
 }
 @keyframes ningyushi-blast-wave {
-  0% { transform: translate(-50%, -50%) scale(0.12); opacity: 1; }
-  55% { opacity: 0.85; }
+  0% { transform: translate(-50%, -50%) scale(0.16); opacity: 0.8; }
+  55% { opacity: 0.4; }
   100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
 }
 

@@ -132,7 +132,7 @@
   height: 100%;
   overflow: visible;
   transform: rotate(var(--ang, 0rad));
-  filter: drop-shadow(0 0 4px #c0c0c0);
+  filter: drop-shadow(0 0 2px #c0c0c0);
 }
 
 .fx-nail-hit {
@@ -144,7 +144,7 @@
   height: 100%;
   overflow: visible;
   transform: rotate(var(--ang, 0rad));
-  filter: drop-shadow(0 0 5px #e8e8e8);
+  filter: drop-shadow(0 0 2px #d0d0d0);
 }
 
 .fx-doll-spawn {
