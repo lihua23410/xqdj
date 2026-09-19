@@ -5,10 +5,13 @@
   const cutinSrc = `${base}/fx/wolf.jpg`;
   const howl = new Audio(howlSrc);
   howl.preload = "auto";
+  howl.preservesPitch = true;
+  howl.webkitPreservesPitch = true;
   howl.load();
 
   let howlGen = 0;
   let howling = false;
+  let howlPlays = 0;
 
   function unlock() {
     const gen = howlGen;
@@ -34,6 +37,8 @@
     howling = true;
     howl.pause();
     howl.muted = false;
+    howl.playbackRate = 1 + 0.2 * howlPlays;
+    howlPlays++;
     howl.currentTime = 0;
     const start = howl.play();
     if (start && typeof start.then === "function") {
