@@ -18,6 +18,7 @@ import (
 	"xqdj/character/radar"
 	"xqdj/character/ranged"
 	"xqdj/character/reaper"
+	"xqdj/character/rmiu"
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
 	"xqdj/character/waller"
@@ -72,6 +73,9 @@ const (
 	KindReap          = 收割者.KindReap
 	KindReaper        = 收割者.KindReaper
 	KindSickle        = 收割者.KindSickle
+	KindMiu           = r缪.KindMiu
+	KindMiuShot       = r缪.KindMiuShot
+	KindRMiu          = r缪.KindRMiu
 	KindTwin          = 无下限术士.KindTwin
 	KindTwinArc       = 无下限术士.KindTwinArc
 	KindTwinBlueArc   = 无下限术士.KindTwinBlueArc

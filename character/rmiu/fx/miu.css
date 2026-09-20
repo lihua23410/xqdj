@@ -1,0 +1,25 @@
+/* R.缪 / 缪 前端特效 */
+
+.miu-hp {
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 120%;
+  height: 4px;
+  transform: translate(-50%, -100%);
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.miu-hp i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: #7dff9a;
+}
+
+.ball.look-miu {
+  background: radial-gradient(circle at 35% 30%, #ffffff 0%, #f0f0f0 55%, #c8c8c8 100%);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+}
