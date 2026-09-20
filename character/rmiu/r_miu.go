@@ -54,7 +54,7 @@ const (
 	killBonusPer  = 100.0
 	lowHPBoost    = 100.0
 	lowHPRatio    = 0.5
-	dodgeSpeedDiv = 50.0
+	dodgeSpeedDiv = 25.0
 	speedDivisor  = 20.0
 	miuSpawnCount = 5
 
