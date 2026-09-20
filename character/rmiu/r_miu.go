@@ -143,34 +143,31 @@ type R缪 struct {
 	bestX, bestY   float64
 	bestVX, bestVY float64
 	hasBest        bool
+	marks          []unit.Mark
+	bestMarks      []unit.Mark
 
 	// 移动与近战（与缪同款）
 	arc            unit.AttachState
 	lockedTargetID uint64
 	retargetAt     float64
 	meleeReadyAt   float64
+	skipSync       bool // 本帧刚致死换位，Sense 不再二次互换
 }
 
 func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
-	// 本体受击：若这一发会致死且场上还有缪，先保命（换血换位，伤害转给血最高缪）
+	// 本体受击：若这一发会致死且场上还有缪，先保命（换身份，伤害打在替身缪上）
 	if d, ok := ev.(unit.IncomingDamage); ok {
 		if r.hasBest && r.hp <= d.Amount+1e-9 {
-			unit.BlockHit(ctx, d) // 取消对本体的致死伤害
-			// 伤害转给血最高缪尔：这个缪尔就是"本体"身份（引擎层面的替身）
+			unit.BlockHit(ctx, d)
+			bodyHP := r.hp
+			r.emitSwap(ctx, r.bestID, r.bestHP, r.bestX, r.bestY, r.bestVX, r.bestVY, bodyHP, r.bestMarks)
+			// 替身先接过本体血，再吃这一击（SetHP 负值会被引擎丢掉）
 			ctx.Out <- unit.Damage{From: d.From, To: r.bestID, Amount: d.Amount}
-			// 击杀归属记给攻击者：谁打死本体，谁就是杀死这个缪尔的人
 			miuMu.Lock()
 			miuLastAttacker[r.bestID] = d.From
 			miuMu.Unlock()
-			// 换血：本体继承血最高缪的血，缪承接残血
-			ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: r.bestHP, MaxHP: miuHP}
-			ctx.Out <- unit.SetHP{UnitID: r.bestID, HP: r.hp - d.Amount, MaxHP: miuHP}
-			// 换位、换速
-			ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: r.bestX, Y: r.bestY}
-			ctx.Out <- unit.Teleport{UnitID: r.bestID, X: r.x, Y: r.y}
-			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: r.bestVX, VY: r.bestVY}
-			ctx.Out <- unit.SetVelocity{UnitID: r.bestID, VX: r.vx, VY: r.vy}
-			r.hp = r.bestHP
+			r.skipSync = true
+			r.hasBest = false
 			return
 		}
 		unit.ConfirmHit(ctx, d)
@@ -183,6 +180,7 @@ func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 	r.hp = s.Self.HP
 	r.x, r.y = s.Self.X, s.Self.Y
 	r.vx, r.vy = s.Self.VX, s.Self.VY
+	r.marks = cloneMarks(s.Self.Marks)
 	if !r.booted {
 		r.booted = true
 		r.speed = miuBaseSpeed
@@ -194,6 +192,9 @@ func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 	// 击杀领奖（与缪同机制）+ 更新巡航速度
 	claimMiuKill(ctx, s, ctx.ID, &r.prevMiuIDs, &r.killBonus, r.vx, r.vy)
 	r.speed = miuBaseSpeed + r.killBonus
+	miuMu.Lock()
+	miuBonus[ctx.ID] = r.killBonus
+	miuMu.Unlock()
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: r.speed}
 
 	// 自主行为：近战弧 + 索敌移动（与缪同款）
@@ -201,6 +202,11 @@ func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 		unit.SpawnAttach(ctx, s, KindMiuArc)
 	}
 	r.moveAndMelee(ctx, s)
+	if r.skipSync {
+		r.skipSync = false
+		r.refreshBest(ctx, s)
+		return
+	}
 	r.syncState(ctx, s)
 }
 
@@ -331,8 +337,7 @@ func (r *R缪) facing() (float64, float64) {
 	return 0, 1
 }
 
-func (r *R缪) syncState(ctx unit.Context, s unit.Sense) {
-	// 收集存活缪
+func (r *R缪) aliveMinions(ctx unit.Context, s unit.Sense) []*unit.Snapshot {
 	var alive []*unit.Snapshot
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
@@ -340,14 +345,15 @@ func (r *R缪) syncState(ctx unit.Context, s unit.Sense) {
 			alive = append(alive, o)
 		}
 	}
+	return alive
+}
 
+func (r *R缪) refreshBest(ctx unit.Context, s unit.Sense) {
+	alive := r.aliveMinions(ctx, s)
 	if len(alive) == 0 {
-		// 缪尔全灭：本体是最后的活体，继续战斗（与敌人正常结算，被打死才判负）
 		r.hasBest = false
 		return
 	}
-
-	// 缓存血最高的缪快照（本体不算）
 	bestMiu := alive[0]
 	for _, o := range alive[1:] {
 		if o.HP > bestMiu.HP {
@@ -358,9 +364,59 @@ func (r *R缪) syncState(ctx unit.Context, s unit.Sense) {
 	r.bestHP = bestMiu.HP
 	r.bestX, r.bestY = bestMiu.X, bestMiu.Y
 	r.bestVX, r.bestVY = bestMiu.VX, bestMiu.VY
+	r.bestMarks = cloneMarks(bestMiu.Marks)
 	r.hasBest = true
+}
 
-	// 选血量最高的活体（本体也算进去）：本体血最高时它就是本体，不互换
+func (r *R缪) emitSwap(ctx unit.Context, other uint64, ohp, ox, oy, ovx, ovy, selfHP float64, otherMarks []unit.Mark) {
+	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: ohp, MaxHP: miuHP}
+	ctx.Out <- unit.SetHP{UnitID: other, HP: selfHP, MaxHP: miuHP}
+	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: ox, Y: oy}
+	ctx.Out <- unit.Teleport{UnitID: other, X: r.x, Y: r.y}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ovx, VY: ovy}
+	ctx.Out <- unit.SetVelocity{UnitID: other, VX: r.vx, VY: r.vy}
+	// 剑痕/诅咒留在原来那具身体上：单位走了，标记对调留下。
+	r.swapMarks(ctx, other, r.marks, otherMarks)
+	r.hp = ohp
+	r.x, r.y = ox, oy
+	r.vx, r.vy = ovx, ovy
+	r.marks = cloneMarks(otherMarks)
+	r.lockedTargetID = 0
+}
+
+func (r *R缪) swapMarks(ctx unit.Context, other uint64, mine, theirs []unit.Mark) {
+	ctx.Out <- unit.ClearMarks{UnitID: ctx.ID}
+	ctx.Out <- unit.ClearMarks{UnitID: other}
+	putMarks(ctx, ctx.ID, theirs)
+	putMarks(ctx, other, mine)
+}
+
+func putMarks(ctx unit.Context, id uint64, marks []unit.Mark) {
+	for _, m := range marks {
+		if m.Kind == "" || m.Stacks == 0 {
+			continue
+		}
+		ctx.Out <- unit.StackMark{UnitID: id, Kind: m.Kind, Delta: m.Stacks, Icon: m.Icon}
+	}
+}
+
+func cloneMarks(in []unit.Mark) []unit.Mark {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]unit.Mark, len(in))
+	copy(out, in)
+	return out
+}
+
+func (r *R缪) syncState(ctx unit.Context, s unit.Sense) {
+	alive := r.aliveMinions(ctx, s)
+	if len(alive) == 0 {
+		r.hasBest = false
+		return
+	}
+	r.refreshBest(ctx, s)
+
 	best := s.Self
 	for _, o := range alive {
 		if o.HP > best.HP {
@@ -368,17 +424,9 @@ func (r *R缪) syncState(ctx unit.Context, s unit.Sense) {
 		}
 	}
 	if best.ID == ctx.ID {
-		// 本体已是血最高：就是本体，自由行动（moveAndMelee 已发速度命令）
 		return
 	}
-
-	// 与血最高缪互换：位置、血量、速度向量（双向）
-	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: best.HP, MaxHP: miuHP}
-	ctx.Out <- unit.SetHP{UnitID: best.ID, HP: s.Self.HP, MaxHP: miuHP}
-	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: best.X, Y: best.Y}
-	ctx.Out <- unit.Teleport{UnitID: best.ID, X: s.Self.X, Y: s.Self.Y}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: best.VX, VY: best.VY}
-	ctx.Out <- unit.SetVelocity{UnitID: best.ID, VX: s.Self.VX, VY: s.Self.VY}
+	r.emitSwap(ctx, best.ID, best.HP, best.X, best.Y, best.VX, best.VY, s.Self.HP, best.Marks)
 }
 
 // ===================== 缪 活随从 =====================
