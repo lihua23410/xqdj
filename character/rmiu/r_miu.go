@@ -1,4 +1,5 @@
-// R.缪：透明球。免疫伤害，HP 随存活[缪]数量变化。位置跟随绑定的[缪]。
+// R.缪：一堆相同外形的克隆人互相残杀，活下来的那个就是本体。
+// 本体免疫伤害，HP 随存活[缪]数量变化，每帧跟随血量最高的[缪]（位置+速度向量）。
 // [缪]白色活随从，近战+开火+突刺。击杀同类永久加速，加速值继承。
 package r缪
 
@@ -17,11 +18,12 @@ const (
 	KindRMiu    = "R.缪"
 	KindMiu     = "缪"
 	KindMiuShot = "缪弹"
+	KindMiuArc  = "缪弧"
 )
 
 const (
-	rMiuRadius = 3.0 // 尽可能小，防骗子弹
-	rMiuMaxHP  = 5.0
+	rMiuRadius = miuRadius // 本体与缪同尺寸，伪装成克隆人
+	rMiuMaxHP  = miuHP     // 本体血量实时与缪互换，上限与缪一致
 
 	miuRadius    = 18.0
 	miuHP        = 100.0
@@ -29,9 +31,13 @@ const (
 	miuVision    = 9999.0
 	miuColor     = "#f0f0f0"
 
-	miuDamage   = 5.0
-	miuMeleeCD  = 0.35
-	miuMeleeGap = 8.0 // 半径之和外的额外近战范围
+	miuDamage    = 5.0
+	miuMeleeCD   = 0.35
+	miuMeleeGap  = 8.0 // 半径之和外的额外近战范围
+	miuMeleeSpan = 60.0
+	miuArcInner  = miuRadius - 5
+	miuArcOuter  = miuRadius
+	miuArcColor  = "#111111"
 
 	miuShotSpeed    = 500.0
 	miuShotRadius   = 5.0
@@ -46,7 +52,7 @@ const (
 	miuThrustDur   = 0.4
 
 	killBonusPer  = 100.0
-	speedDivisor  = 50.0
+	speedDivisor  = 20.0
 	miuSpawnCount = 5
 )
 
@@ -61,18 +67,18 @@ var (
 func init() {
 	p := unit.NewPack(KindRMiu, assets)
 
-	// R.缪 战斗机：透明、免伤、HP=存活缪数、跟随绑定缪位置
+	// R.缪 战斗机：与缪同外形、有碰撞、能移动、挂近战弧；血量/位置与血最高缪换位
 	p.Register(unit.Spec{
 		Kind:    KindRMiu,
 		Role:    unit.RoleFighter,
 		Radius:  rMiuRadius,
 		MaxHP:   rMiuMaxHP,
-		Speed:   0,
-		Vision:  0, // 自身随从始终可见
+		Speed:   miuBaseSpeed,
+		Vision:  miuVision,
 		Fighter: true,
-		Look:    unit.Look{Color: "#ffffff", Ghost: 500, Overlay: true},
-	}, func(unit.SpawnInfo) unit.Actor {
-		return &R缪{}
+		Look:    unit.Look{Color: miuColor, Ghost: 180, FX: []string{"miu"}},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &R缪{ownerID: info.OwnerID}
 	})
 
 	// 缪 活随从：白色、近战+开火+突刺、击杀同类加速
@@ -101,30 +107,100 @@ func init() {
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &缪弹{owner: info.OwnerID, slot: info.Slot}
 	})
+
+	p.Register(unit.Spec{
+		Kind:     KindMiuArc,
+		Role:     unit.RoleProjectile,
+		Radius:   miuArcOuter,
+		MaxHP:    1,
+		Speed:    miuBaseSpeed,
+		Vision:   0,
+		Attach:   true,
+		ArcSpan:  unit.Deg(miuMeleeSpan),
+		ArcInner: miuArcInner,
+		Look:     unit.Look{Color: miuArcColor, Overlay: true},
+	}, func(unit.SpawnInfo) unit.Actor {
+		return &缪弧{}
+	})
 }
 
 // ===================== R.缪 战斗机 =====================
 
 type R缪 struct {
+	ownerID uint64
 	booted  bool
-	boundID uint64
+
+	// 击杀加速（与缪同机制）
+	killBonus  float64
+	speed      float64
+	prevMiuIDs map[uint64]bool
+
+	// 每帧缓存：本体当前状态 + 血最高缪快照（IncomingDamage 里没有 Nearby，需提前记录）
+	hp             float64
+	x, y, vx, vy   float64
+	bestID         uint64
+	bestHP         float64
+	bestX, bestY   float64
+	bestVX, bestVY float64
+	hasBest        bool
+
+	// 移动与近战（与缪同款）
+	arc            unit.AttachState
+	lockedTargetID uint64
+	retargetAt     float64
+	meleeReadyAt   float64
 }
 
 func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
-	// 免疫所有伤害
+	// 本体受击：若这一发会致死且场上还有缪，先保命（换血换位，伤害转给血最高缪）
 	if d, ok := ev.(unit.IncomingDamage); ok {
-		unit.BlockHit(ctx, d)
+		if r.hasBest && r.hp <= d.Amount+1e-9 {
+			unit.BlockHit(ctx, d) // 取消对本体的致死伤害
+			// 伤害转给血最高缪尔：这个缪尔就是"本体"身份（引擎层面的替身）
+			ctx.Out <- unit.Damage{From: d.From, To: r.bestID, Amount: d.Amount}
+			// 击杀归属记给攻击者：谁打死本体，谁就是杀死这个缪尔的人
+			miuMu.Lock()
+			miuLastAttacker[r.bestID] = d.From
+			miuMu.Unlock()
+			// 换血：本体继承血最高缪的血，缪承接残血
+			ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: r.bestHP, MaxHP: miuHP}
+			ctx.Out <- unit.SetHP{UnitID: r.bestID, HP: r.hp - d.Amount, MaxHP: miuHP}
+			// 换位、换速
+			ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: r.bestX, Y: r.bestY}
+			ctx.Out <- unit.Teleport{UnitID: r.bestID, X: r.x, Y: r.y}
+			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: r.bestVX, VY: r.bestVY}
+			ctx.Out <- unit.SetVelocity{UnitID: r.bestID, VX: r.vx, VY: r.vy}
+			r.hp = r.bestHP
+			return
+		}
+		unit.ConfirmHit(ctx, d)
 		return
 	}
 	s, ok := ev.(unit.Sense)
 	if !ok {
 		return
 	}
+	r.hp = s.Self.HP
+	r.x, r.y = s.Self.X, s.Self.Y
+	r.vx, r.vy = s.Self.VX, s.Self.VY
 	if !r.booted {
 		r.booted = true
+		r.speed = miuBaseSpeed
 		r.spawnMinions(ctx, s)
+		r.meleeReadyAt = s.Time
 		return // 缪下一帧才出生，本帧跳过同步
 	}
+
+	// 击杀领奖（与缪同机制）+ 更新巡航速度
+	claimMiuKill(ctx, s, ctx.ID, &r.prevMiuIDs, &r.killBonus, r.vx, r.vy)
+	r.speed = miuBaseSpeed + r.killBonus
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: r.speed}
+
+	// 自主行为：近战弧 + 索敌移动（与缪同款）
+	if unit.RearmAttach(s, ctx.ID, KindMiuArc, 0, &r.arc) {
+		unit.SpawnAttach(ctx, s, KindMiuArc)
+	}
+	r.moveAndMelee(ctx, s)
 	r.syncState(ctx, s)
 }
 
@@ -140,8 +216,119 @@ func (r *R缪) spawnMinions(ctx unit.Context, s unit.Sense) {
 			Slot:    s.Self.Slot,
 		}
 	}
-	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
-	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+}
+
+func (r *R缪) moveAndMelee(ctx unit.Context, s unit.Sense) {
+	// 找目标：敌方活体 + 同主人缪尔（克隆人互殴，活下来的才是本体）
+	targets := r.findEnemies(s)
+
+	// 近战（同缪机制）
+	if s.Time+1e-9 >= r.meleeReadyAt {
+		hx, hy := r.facing()
+		reach := s.Self.Radius + miuMeleeGap
+		var best *unit.Snapshot
+		bestDist := math.Inf(1)
+		for i := range targets {
+			t := &targets[i]
+			if !inFan(s.Self, hx, hy, *t, reach, miuMeleeSpan) {
+				continue
+			}
+			d := math.Hypot(t.X-s.Self.X, t.Y-s.Self.Y)
+			if d < bestDist {
+				bestDist = d
+				best = t
+			}
+		}
+		if best != nil {
+			dmg := miuDamage
+			// 速度差加成，与缪一致（用巡航速度）
+			sp := r.speed
+			tsp := math.Hypot(best.VX, best.VY)
+			if sp > tsp {
+				dmg += (sp - tsp) / speedDivisor
+			}
+			ctx.Out <- unit.Damage{From: ctx.ID, To: best.ID, Amount: dmg}
+			// 追踪自己击杀的缪
+			if best.Kind == KindMiu && best.OwnerID == s.Self.ID {
+				miuMu.Lock()
+				miuLastAttacker[best.ID] = ctx.ID
+				miuMu.Unlock()
+			}
+			ctx.Out <- unit.FX{
+				Name: "miu-melee", Kind: ctx.Kind,
+				X: best.X, Y: best.Y, Slot: s.Self.Slot,
+			}
+			r.meleeReadyAt = s.Time + miuMeleeCD
+		}
+	}
+
+	// 索敌移动：锁一次目标直线走
+	if r.lockedTargetID != 0 {
+		alive := false
+		for i := range targets {
+			if targets[i].ID == r.lockedTargetID {
+				alive = true
+				break
+			}
+		}
+		if alive && s.Time+1e-9 < r.retargetAt {
+			return
+		}
+		r.lockedTargetID = 0
+	}
+	if len(targets) == 0 {
+		sp := math.Hypot(r.vx, r.vy)
+		if sp < 1e-6 {
+			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: r.speed, VY: 0}
+		}
+		return
+	}
+	best := &targets[0]
+	bestDist := math.Hypot(best.X-s.Self.X, best.Y-s.Self.Y)
+	for i := 1; i < len(targets); i++ {
+		d := math.Hypot(targets[i].X-s.Self.X, targets[i].Y-s.Self.Y)
+		if d < bestDist {
+			bestDist = d
+			best = &targets[i]
+		}
+	}
+	dx := best.X - s.Self.X
+	dy := best.Y - s.Self.Y
+	n := math.Hypot(dx, dy)
+	if n < 1e-6 {
+		return
+	}
+	r.lockedTargetID = best.ID
+	r.retargetAt = s.Time + 3.0
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * r.speed, VY: dy / n * r.speed}
+}
+
+func (r *R缪) findEnemies(s unit.Sense) []unit.Snapshot {
+	var out []unit.Snapshot
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.ID == s.Self.ID {
+			continue
+		}
+		// 克隆人互殴：自己 spawn 的缪也是目标（最后一个活着的才是本体）
+		if o.Kind == KindMiu && o.OwnerID == s.Self.ID {
+			out = append(out, *o)
+			continue
+		}
+		// 敌方战斗机或活随从
+		if o.Slot != s.Self.Slot && (o.Role == unit.RoleFighter || o.Mortal) {
+			out = append(out, *o)
+		}
+	}
+	return out
+}
+
+func (r *R缪) facing() (float64, float64) {
+	n := math.Hypot(r.vx, r.vy)
+	if n > 1e-6 {
+		return r.vx / n, r.vy / n
+	}
+	return 0, 1
 }
 
 func (r *R缪) syncState(ctx unit.Context, s unit.Sense) {
@@ -154,32 +341,44 @@ func (r *R缪) syncState(ctx unit.Context, s unit.Sense) {
 		}
 	}
 
-	// HP = 存活缪数量
-	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: float64(len(alive)), MaxHP: rMiuMaxHP}
-
 	if len(alive) == 0 {
-		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+		// 缪尔全灭：本体是最后的活体，继续战斗（与敌人正常结算，被打死才判负）
+		r.hasBest = false
 		return
 	}
 
-	// 检查绑定缪是否存活
-	var bound *unit.Snapshot
-	for _, o := range alive {
-		if o.ID == r.boundID {
-			bound = o
-			break
+	// 缓存血最高的缪快照（本体不算）
+	bestMiu := alive[0]
+	for _, o := range alive[1:] {
+		if o.HP > bestMiu.HP {
+			bestMiu = o
 		}
 	}
-	// 切换绑定
-	if bound == nil {
-		bound = alive[0]
-		r.boundID = bound.ID
+	r.bestID = bestMiu.ID
+	r.bestHP = bestMiu.HP
+	r.bestX, r.bestY = bestMiu.X, bestMiu.Y
+	r.bestVX, r.bestVY = bestMiu.VX, bestMiu.VY
+	r.hasBest = true
+
+	// 选血量最高的活体（本体也算进去）：本体血最高时它就是本体，不互换
+	best := s.Self
+	for _, o := range alive {
+		if o.HP > best.HP {
+			best = *o
+		}
+	}
+	if best.ID == ctx.ID {
+		// 本体已是血最高：就是本体，自由行动（moveAndMelee 已发速度命令）
+		return
 	}
 
-	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: bound.X, Y: bound.Y}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
-	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
-	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+	// 与血最高缪互换：位置、血量、速度向量（双向）
+	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: best.HP, MaxHP: miuHP}
+	ctx.Out <- unit.SetHP{UnitID: best.ID, HP: s.Self.HP, MaxHP: miuHP}
+	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: best.X, Y: best.Y}
+	ctx.Out <- unit.Teleport{UnitID: best.ID, X: s.Self.X, Y: s.Self.Y}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: best.VX, VY: best.VY}
+	ctx.Out <- unit.SetVelocity{UnitID: best.ID, VX: s.Self.VX, VY: s.Self.VY}
 }
 
 // ===================== 缪 活随从 =====================
@@ -214,6 +413,7 @@ type 缪 struct {
 	retargetAt     float64
 
 	prevMiuIDs map[uint64]bool
+	arc        unit.AttachState
 }
 
 func (m *缪) Handle(ctx unit.Context, ev unit.Event) {
@@ -252,12 +452,16 @@ func (m *缪) tick(ctx unit.Context, s unit.Sense) {
 	miuBonus[ctx.ID] = m.killBonus
 	miuMu.Unlock()
 
-	// 检测击杀
-	m.checkKills(ctx, s)
+	// 检测击杀（共享机制：本体与缪同用）
+	claimMiuKill(ctx, s, m.ownerID, &m.prevMiuIDs, &m.killBonus, m.vx, m.vy)
 
 	// 同步速度
 	m.speed = miuBaseSpeed + m.killBonus
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: m.speed}
+
+	if unit.RearmAttach(s, ctx.ID, KindMiuArc, 0, &m.arc) {
+		unit.SpawnAttach(ctx, s, KindMiuArc)
+	}
 
 	// 突刺中不执行其他行为
 	if m.thrusting {
@@ -282,8 +486,13 @@ func (m *缪) findTargets(s unit.Sense) []unit.Snapshot {
 		if o.ID == s.Self.ID {
 			continue
 		}
-		// 同主人的其他缪（友军互伤）
+		// 同主人的其他缪（保持互伤）
 		if o.Kind == KindMiu && o.OwnerID == m.ownerID {
+			out = append(out, *o)
+			continue
+		}
+		// 本体（同 slot 的 R.缪）也是克隆人之一，互殴
+		if o.Kind == KindRMiu && o.Slot == m.slot {
 			out = append(out, *o)
 			continue
 		}
@@ -299,29 +508,72 @@ func (m *缪) tryMelee(ctx unit.Context, s unit.Sense, targets []unit.Snapshot) 
 	if s.Time+1e-9 < m.meleeReadyAt {
 		return
 	}
+	hx, hy := m.facing()
+	reach := s.Self.Radius + miuMeleeGap
+	var best *unit.Snapshot
+	bestDist := math.Inf(1)
 	for i := range targets {
 		t := &targets[i]
-		dist := math.Hypot(t.X-s.Self.X, t.Y-s.Self.Y)
-		if dist > s.Self.Radius+t.Radius+miuMeleeGap {
+		if !inFan(s.Self, hx, hy, *t, reach, miuMeleeSpan) {
 			continue
 		}
-		dmg := miuDamage + m.speedBonus(t)
-		ctx.Out <- unit.Damage{From: ctx.ID, To: t.ID, Amount: dmg}
-
-		// 追踪同主人缪的击杀
-		if t.Kind == KindMiu && t.OwnerID == m.ownerID {
-			miuMu.Lock()
-			miuLastAttacker[t.ID] = ctx.ID
-			miuMu.Unlock()
+		d := math.Hypot(t.X-s.Self.X, t.Y-s.Self.Y)
+		if d < bestDist {
+			bestDist = d
+			best = t
 		}
-
-		ctx.Out <- unit.FX{
-			Name: "miu-melee", Kind: ctx.Kind,
-			X: t.X, Y: t.Y, Slot: s.Self.Slot,
-		}
-		m.meleeReadyAt = s.Time + miuMeleeCD
-		return // 一次只打一个
 	}
+	if best == nil {
+		return
+	}
+	dmg := miuDamage + m.speedBonus(best)
+	ctx.Out <- unit.Damage{From: ctx.ID, To: best.ID, Amount: dmg}
+
+	if best.Kind == KindMiu && best.OwnerID == m.ownerID {
+		miuMu.Lock()
+		miuLastAttacker[best.ID] = ctx.ID
+		miuMu.Unlock()
+	}
+
+	ctx.Out <- unit.FX{
+		Name: "miu-melee", Kind: ctx.Kind,
+		X: best.X, Y: best.Y, Slot: s.Self.Slot,
+	}
+	m.meleeReadyAt = s.Time + miuMeleeCD
+}
+
+func (m *缪) facing() (float64, float64) {
+	n := math.Hypot(m.vx, m.vy)
+	if n > 1e-6 {
+		return m.vx / n, m.vy / n
+	}
+	n = math.Hypot(m.thrustDX, m.thrustDY)
+	if n > 1e-6 {
+		return m.thrustDX, m.thrustDY
+	}
+	return 0, 1
+}
+
+func inFan(self unit.Snapshot, hx, hy float64, o unit.Snapshot, r, spanDeg float64) bool {
+	dx, dy := o.X-self.X, o.Y-self.Y
+	dist := math.Hypot(dx, dy)
+	if dist > r+o.Radius {
+		return false
+	}
+	if dist < 1e-6 {
+		return true
+	}
+	fn := math.Hypot(hx, hy)
+	if fn < 1e-6 {
+		return true
+	}
+	dot := (dx*hx + dy*hy) / (dist * fn)
+	if dot > 1 {
+		dot = 1
+	} else if dot < -1 {
+		dot = -1
+	}
+	return math.Acos(dot) <= unit.Deg(spanDeg)/2
 }
 
 func (m *缪) speedBonus(t *unit.Snapshot) float64 {
@@ -484,17 +736,18 @@ func (m *缪) moveToward(ctx unit.Context, s unit.Sense, targets []unit.Snapshot
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * m.speed, VY: dy / n * m.speed}
 }
 
-func (m *缪) checkKills(ctx unit.Context, s unit.Sense) {
+// claimMiuKill：扫描本阵营消失的缪尔，若最后攻击者是自己则认领击杀加速（本体与缪同机制）
+func claimMiuKill(ctx unit.Context, s unit.Sense, ownerID uint64, prev *map[uint64]bool, bonus *float64, vx, vy float64) {
 	currentIDs := map[uint64]bool{}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind == KindMiu && o.OwnerID == m.ownerID {
+		if o.Kind == KindMiu && o.OwnerID == ownerID {
 			currentIDs[o.ID] = true
 		}
 	}
 
-	if m.prevMiuIDs != nil {
-		for id := range m.prevMiuIDs {
+	if *prev != nil {
+		for id := range *prev {
 			if currentIDs[id] {
 				continue
 			}
@@ -505,26 +758,26 @@ func (m *缪) checkKills(ctx unit.Context, s unit.Sense) {
 				victimBonus := miuBonus[id]
 				miuMu.Unlock()
 
-				m.killBonus += killBonusPer + victimBonus
-				m.speed = miuBaseSpeed + m.killBonus
-				ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: m.speed}
+				*bonus += killBonusPer + victimBonus
+				speed := miuBaseSpeed + *bonus
+				ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: speed}
 				// 立刻把当前速度拉到新值（minion 无 decelerateLocked）
-				sp := math.Hypot(m.vx, m.vy)
+				sp := math.Hypot(vx, vy)
 				if sp > 1e-6 {
-					ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: m.vx / sp * m.speed, VY: m.vy / sp * m.speed}
+					ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx / sp * speed, VY: vy / sp * speed}
 				}
 
 				ctx.Out <- unit.FX{
 					Name: "miu-powerup", Kind: ctx.Kind,
 					X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot,
-					Amount: m.killBonus,
+					Amount: *bonus,
 				}
 			} else {
 				miuMu.Unlock()
 			}
 		}
 	}
-	m.prevMiuIDs = currentIDs
+	*prev = currentIDs
 }
 
 // ===================== 缪弹 投射物 =====================
@@ -543,7 +796,7 @@ func (b *缪弹) Handle(ctx unit.Context, ev unit.Event) {
 		if e.Other.Kind == KindMiu && e.Other.ID == b.owner {
 			return
 		}
-		if e.Other.Kind != KindMiu && !unit.Hittable(e.Other, b.slot) {
+		if e.Other.Kind != KindMiu && e.Other.Kind != KindRMiu && !unit.Hittable(e.Other, b.slot) {
 			return
 		}
 		b.hit(ctx, e.Other)
@@ -561,7 +814,7 @@ func (b *缪弹) onSense(ctx unit.Context, s unit.Sense) {
 	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind != KindMiu || o.Slot != b.slot || o.ID == b.owner {
+		if (o.Kind != KindMiu && o.Kind != KindRMiu) || o.Slot != b.slot || o.ID == b.owner {
 			continue
 		}
 		if shotHits(b.px, b.py, x, y, s.Self.Radius, o.X, o.Y, o.Radius) {
@@ -618,4 +871,18 @@ func (b *缪弹) hit(ctx unit.Context, target unit.Snapshot) {
 		X: target.X, Y: target.Y, Slot: b.slot,
 	}
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+}
+
+// ===================== 缪弧 近战范围 =====================
+
+type 缪弧 struct {
+	pass bool
+}
+
+func (a *缪弧) Handle(ctx unit.Context, ev unit.Event) {
+	if _, ok := ev.(unit.Sense); !ok || a.pass {
+		return
+	}
+	a.pass = true
+	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
 }

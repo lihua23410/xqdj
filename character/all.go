@@ -74,6 +74,7 @@ const (
 	KindReaper        = 收割者.KindReaper
 	KindSickle        = 收割者.KindSickle
 	KindMiu           = r缪.KindMiu
+	KindMiuArc        = r缪.KindMiuArc
 	KindMiuShot       = r缪.KindMiuShot
 	KindRMiu          = r缪.KindRMiu
 	KindTwin          = 无下限术士.KindTwin
