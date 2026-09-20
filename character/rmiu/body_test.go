@@ -24,6 +24,7 @@ func TestBodyLethalSwapsThenHitsClone(t *testing.T) {
 	r := &R缪{
 		booted: true, hp: 8, x: 0, y: 0, vx: 10, vy: 0,
 		hasBest: true, bestID: 2, bestHP: 90, bestX: 40, bestY: 0, bestVX: 0, bestVY: 20,
+		meleeReadyAt: 999, fireReadyAt: 999,
 	}
 	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.IncomingDamage{Token: 7, From: 99, Amount: 20})
@@ -110,7 +111,7 @@ func TestBodyChipConfirms(t *testing.T) {
 
 func TestBodySwapsWhenCloneHasMoreHP(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
-	r := &R缪{booted: true, speed: miuBaseSpeed, meleeReadyAt: 999}
+	r := &R缪{booted: true, speed: miuBaseSpeed, meleeReadyAt: 999, fireReadyAt: 999}
 	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.Sense{
 		Time:   1,
@@ -144,7 +145,7 @@ func TestBodySwapsWhenCloneHasMoreHP(t *testing.T) {
 func TestBodySwapLeavesMarksOnBodies(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	r := &R缪{
-		booted: true, speed: miuBaseSpeed, meleeReadyAt: 999,
+		booted: true, speed: miuBaseSpeed, meleeReadyAt: 999, fireReadyAt: 999,
 		marks: []unit.Mark{{Kind: "剑痕", Stacks: 2, Icon: "jianhen.png"}},
 	}
 	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
