@@ -59,9 +59,10 @@ func (h *hub) broadcast(msg []byte) {
 }
 
 type clientMsg struct {
-	Type string `json:"type"`
-	Slot int    `json:"slot"`
-	Kind string `json:"kind"`
+	Type  string `json:"type"`
+	Slot  int    `json:"slot"`
+	Kind  string `json:"kind"`
+	Field string `json:"field"`
 }
 
 func main() {
@@ -100,6 +101,8 @@ func main() {
 			switch msg.Type {
 			case "select":
 				match.SetSlot(msg.Slot, msg.Kind)
+			case "field":
+				match.SetField(msg.Field)
 			case "start":
 				match.Start()
 			case "pause":

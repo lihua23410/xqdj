@@ -95,7 +95,7 @@ func (r *雷达) emitBeam(ctx unit.Context, s unit.Sense, dx, dy float64) {
 		Y:      s.Self.Y,
 		VX:     dx, // 世界坐标方向；前端 Y 轴向上
 		VY:     dy,
-		Amount: 2 * unit.HexRadius, // 画多长；出伤仍按视野，场内够着
+		Amount: 9999,
 	}
 }
 

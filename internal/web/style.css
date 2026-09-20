@@ -72,6 +72,24 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   border-color: var(--kind);
   background: color-mix(in srgb, var(--kind) 22%, #21262d);
 }
+.fields {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 18px;
+  flex-wrap: wrap;
+}
+.fields button {
+  background: #21262d;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.fields button.active {
+  border-color: #8b9cb3;
+  background: color-mix(in srgb, #8b9cb3 22%, #21262d);
+}
 
 #btn-start, .controls button {
   background: #238636;
@@ -184,8 +202,14 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
   box-shadow: 0 0 40px #0008, inset 0 0 80px #3dd6c622;
 }
-.hex.hitstop {
-  filter: brightness(1.18) contrast(1.12) saturate(1.15);
+.hex.circle {
+  clip-path: circle(50% at 50% 50%);
+  width: 560px;
+  height: 560px;
+}
+.stage.circle {
+  width: 560px;
+  height: 560px;
 }
 #fx, #units, #walls, #guides { position: absolute; inset: 0; overflow: hidden; }
 #fx, #walls, #guides { pointer-events: none; }
@@ -294,6 +318,15 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   pointer-events: none;
   opacity: 0.92;
   animation: wall-grow 0.32s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+}
+.wall.field {
+  background: #8b9cb3;
+  color: #8b9cb3;
+  box-shadow: 0 0 10px #8b9cb388;
+}
+.wall.hard,
+.wall.square {
+  border-radius: 0;
 }
 @keyframes wall-grow {
   from {

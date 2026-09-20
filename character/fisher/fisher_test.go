@@ -506,14 +506,11 @@ func TestBigCatchStartsRamUntilAllFaces(t *testing.T) {
 	}
 
 	ap := unit.HexRadius * math.Sqrt(3) / 2
-	for i := 0; i < 6; i++ {
-		nx, ny := hexNormal(i)
-		a.x, a.y = nx*(ap-fisherRadius), ny*(ap-fisherRadius)
-		a.Handle(ctx, unit.WallHit{Time: float64(10 + i), NX: nx, NY: ny})
-		cmds = drain(out)
-	}
+	_ = ap
+	a.Handle(ctx, unit.Sense{Time: 10 + ramSecs, Self: selfAt(a.x, a.y)})
+	cmds = drain(out)
 	if a.ram {
-		t.Fatal("all faces should end ram")
+		t.Fatal("timer should end ram")
 	}
 	if lastCruise(cmds) != a.walkSpeed() {
 		t.Fatalf("restore cruise=%v want %v", lastCruise(cmds), a.walkSpeed())

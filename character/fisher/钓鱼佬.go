@@ -26,7 +26,8 @@ const (
 	pondN        = 3
 	pondRadius   = 42.0
 	pondColor    = "#3d8fd4"
-	floodRadius  = unit.HexRadius
+	floodRadius  = unit.MaxExtent
+	ramSecs      = 8.0
 
 	missBonus2 = 5.0
 	missBonus3 = 10.0
@@ -111,7 +112,7 @@ type 钓鱼佬 struct {
 	inside   bool
 	ram      bool
 	ramY     float64
-	faces    [6]bool
+	ramUntil float64
 	x, y     float64
 	slot     int
 	ramHitAt float64
@@ -128,7 +129,6 @@ func (a *钓鱼佬) Handle(ctx unit.Context, ev unit.Event) {
 	case unit.Collision:
 		a.onBump(ctx, e)
 	case unit.WallHit:
-		a.onWall(ctx, e)
 	case unit.Sense:
 		a.onSense(ctx, e)
 	}
@@ -171,20 +171,6 @@ func (a *钓鱼佬) onBump(ctx unit.Context, c unit.Collision) {
 	ctx.Out <- unit.Damage{From: ctx.ID, To: c.Other.ID, Amount: ramDamage(a.ramY)}
 }
 
-func (a *钓鱼佬) onWall(ctx unit.Context, w unit.WallHit) {
-	if !a.ram {
-		return
-	}
-	side, ok := hexHit(a.x, a.y, w.NX, w.NY, fisherRadius)
-	if !ok {
-		return
-	}
-	a.faces[side] = true
-	if ramDone(a.faces) {
-		a.endRam(ctx)
-	}
-}
-
 func (a *钓鱼佬) onSense(ctx unit.Context, s unit.Sense) {
 	a.x, a.y = s.Self.X, s.Self.Y
 	a.vx, a.vy = s.Self.VX, s.Self.VY
@@ -193,6 +179,9 @@ func (a *钓鱼佬) onSense(ctx unit.Context, s unit.Sense) {
 	if !a.booted {
 		a.booted = true
 		a.plantPonds(ctx)
+	}
+	if a.ram && a.ramUntil > 0 && s.Time+1e-9 >= a.ramUntil {
+		a.endRam(ctx)
 	}
 	a.emitHUD(ctx, s)
 
@@ -365,7 +354,7 @@ func (a *钓鱼佬) launch(ctx unit.Context, x, y, ux, uy, weight float64, i, n 
 func (a *钓鱼佬) beginRam(ctx unit.Context, s unit.Sense, y float64) {
 	a.ram = true
 	a.ramY = y
-	a.faces = [6]bool{}
+	a.ramUntil = s.Time + ramSecs
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: ramCruise}
 	ux, uy := 1.0, 0.0
 	if n := math.Hypot(s.Self.VX, s.Self.VY); n > 8 {
@@ -390,7 +379,6 @@ func (a *钓鱼佬) endRam(ctx unit.Context) {
 	held := a.held
 	a.held = nil
 	a.ram = false
-	a.faces = [6]bool{}
 	a.ramY = 0
 	sp := a.walkSpeed()
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: sp}
@@ -436,29 +424,28 @@ func (a *钓鱼佬) plantPonds(ctx unit.Context) {
 
 func (a *钓鱼佬) placePond(used [][2]float64) (float64, float64) {
 	minGap := pondRadius*2 + 24
+	f := unit.LiveField()
 	for n := 0; n < 40; n++ {
-		t := a.rng.Float64() * 6
-		x, y := hexRim(t, pondRadius+28)
-		if !unit.HexContains(x, y, pondRadius) {
-			continue
+		x, y, ok := f.RandomWalkable(a.rng, pondRadius)
+		if !ok {
+			break
 		}
-		ok := true
+		good := true
 		for _, p := range used {
 			if math.Hypot(x-p[0], y-p[1]) < minGap {
-				ok = false
+				good = false
 				break
 			}
 		}
-		if ok {
+		if good {
 			return x, y
 		}
 	}
-	t := float64(len(used)) * 2
-	x, y := hexRim(t, pondRadius+36)
-	if unit.HexContains(x, y, pondRadius) {
+	x, y, ok := f.RandomWalkable(a.rng, pondRadius)
+	if ok {
 		return x, y
 	}
-	return x * 0.82, y * 0.82
+	return f.Clamp(0, 80, pondRadius)
 }
 
 func (a *钓鱼佬) emitHUD(ctx unit.Context, s unit.Sense) {
@@ -582,59 +569,4 @@ func fishKind(y float64) (string, float64) {
 	default:
 		return KindFishBig, 28
 	}
-}
-
-func ramDone(faces [6]bool) bool {
-	for _, f := range faces {
-		if !f {
-			return false
-		}
-	}
-	return true
-}
-
-func hexNormal(i int) (float64, float64) {
-	a := (float64(i) + 0.5) * math.Pi / 3
-	return math.Cos(a), math.Sin(a)
-}
-
-func hexVertex(i int) (float64, float64) {
-	a := float64(i) * math.Pi / 3
-	return unit.HexRadius * math.Cos(a), unit.HexRadius * math.Sin(a)
-}
-
-func hexRim(t, inset float64) (float64, float64) {
-	for t < 0 {
-		t += 6
-	}
-	side := int(t) % 6
-	f := t - math.Floor(t)
-	x0, y0 := hexVertex(side)
-	x1, y1 := hexVertex(side + 1)
-	x := x0 + (x1-x0)*f
-	y := y0 + (y1-y0)*f
-	nx, ny := hexNormal(side)
-	return x - nx*inset, y - ny*inset
-}
-
-func hexHit(x, y, nx, ny, radius float64) (int, bool) {
-	ap := unit.HexRadius * math.Sqrt(3) / 2
-	best := -1
-	bestDot := 0.92
-	for i := 0; i < 6; i++ {
-		hx, hy := hexNormal(i)
-		d := hx*nx + hy*ny
-		if d > bestDot {
-			bestDot = d
-			best = i
-		}
-	}
-	if best < 0 {
-		return 0, false
-	}
-	hx, hy := hexNormal(best)
-	if hx*x+hy*y <= ap-radius-8 {
-		return 0, false
-	}
-	return best, true
 }

@@ -30,7 +30,7 @@ func TestCapsuleWallDoesNotPlant(t *testing.T) {
 	ctx := unit.Context{ID: 1, Kind: KindPrisoner, Out: out}
 	a.Handle(ctx, unit.Sense{Self: selfAt(0, 0, 180, 0)})
 	_ = drain(out)
-	a.Handle(ctx, unit.WallHit{NX: 1, NY: 0})
+	a.Handle(ctx, unit.WallHit{NX: 1, NY: 0, Kind: unit.WallCapsule})
 	a.Handle(ctx, unit.Sense{Self: selfAt(0, 0, 180, 0)})
 	if lastNamed(drain(out), "chain") != nil {
 		t.Fatal("capsule 墙 should not plant 钩爪")
@@ -171,7 +171,7 @@ func TestCapsuleBounceFollowsTangent(t *testing.T) {
 	if first == nil || first.VY >= 0 {
 		t.Fatalf("first=%v", first)
 	}
-	a.Handle(ctx, unit.WallHit{NX: 0, NY: -1})
+	a.Handle(ctx, unit.WallHit{NX: 0, NY: -1, Kind: unit.WallCapsule})
 	if a.hx != -prisonerRadius || a.hy != 0 {
 		t.Fatal("capsule should not move 钩爪")
 	}

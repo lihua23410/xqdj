@@ -723,19 +723,7 @@ func enemyFighter(s unit.Sense) *unit.Snapshot {
 }
 
 func clampInHex(x, y, r float64) (float64, float64) {
-	if unit.HexContains(x, y, r) {
-		return x, y
-	}
-	lo, hi := 0.0, 1.0
-	for i := 0; i < 16; i++ {
-		mid := (lo + hi) / 2
-		if unit.HexContains(x*mid, y*mid, r) {
-			lo = mid
-		} else {
-			hi = mid
-		}
-	}
-	return x * lo, y * lo
+	return unit.LiveField().Clamp(x, y, r)
 }
 
 func (h *钉与锤) nextFSToken(owner uint64) uint64 {

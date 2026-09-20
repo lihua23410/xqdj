@@ -37,11 +37,10 @@ const (
 	glitchArcSpan     = 60.0
 	glitchColor       = "#4ec4ff"
 
-	glitchShotRadius  = 12.0
-	glitchShotSpeed   = 600.0
-	glitchShotDamage  = 9.0
-	glitchCagePad     = glitchRadius + 4
-	glitchCageCorners = 8
+	glitchShotRadius = 12.0
+	glitchShotSpeed  = 600.0
+	glitchShotDamage = 9.0
+	glitchCagePad    = glitchRadius + 4
 )
 
 //go:embed fx status
@@ -230,6 +229,9 @@ func (g *地慧星) Handle(ctx unit.Context, ev unit.Event) {
 		g.applyBoost(ctx, e)
 		g.maybeSlash(ctx, e)
 	case unit.WallHit:
+		if e.Kind.Capsule() {
+			return
+		}
 		g.boostPending++
 	}
 }
@@ -252,7 +254,11 @@ func (g *地慧星) onIncoming(ctx unit.Context, d unit.IncomingDamage) {
 		if g.slashHolding {
 			return
 		}
-		nx, ny := farthestCageSpot(g.enemyX, g.enemyY)
+		rng := rand.New(rand.NewPCG(uint64(d.Time*1e6)^ctx.ID, ctx.ID^0x9e3779b97f4a7c15))
+		nx, ny, ok := unit.LiveField().RandomWalkable(rng, glitchCagePad)
+		if !ok {
+			nx, ny = unit.LiveField().Clamp(g.x, g.y, glitchCagePad)
+		}
 		ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: nx, Y: ny}
 		g.x, g.y = nx, ny
 		g.fireDodgeShot(ctx, nx, ny)
@@ -461,37 +467,6 @@ func (g *地慧星) fireDodgeShot(ctx unit.Context, x, y float64) {
 		OwnerID: ctx.ID,
 		Slot:    g.slot,
 	}
-}
-
-func farthestCageSpot(ex, ey float64) (float64, float64) {
-	ap := unit.HexRadius * math.Sqrt(3) / 2
-	limit := ap - glitchCagePad
-	bestX, bestY, bestD := 0.0, 0.0, -1.0
-	for i := 0; i < glitchCageCorners; i++ {
-		ang := float64(i) * 2 * math.Pi / glitchCageCorners
-		ux, uy := math.Cos(ang), math.Sin(ang)
-		r := math.Inf(1)
-		for j := 0; j < 6; j++ {
-			a := (float64(j) + 0.5) * math.Pi / 3
-			den := ux*math.Cos(a) + uy*math.Sin(a)
-			if den <= 1e-9 {
-				continue
-			}
-			if cand := limit / den; cand < r {
-				r = cand
-			}
-		}
-		if math.IsInf(r, 1) {
-			continue
-		}
-		x, y := ux*r, uy*r
-		d := (x-ex)*(x-ex) + (y-ey)*(y-ey)
-		if d > bestD {
-			bestD = d
-			bestX, bestY = x, y
-		}
-	}
-	return bestX, bestY
 }
 
 func markStacks(u unit.Snapshot, kind string) int {

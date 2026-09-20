@@ -22,7 +22,7 @@ func (l *leaveDrive) begin(ctx unit.Context, now float64) {
 	}
 	l.on = true
 	l.pauseUntil = now + leavePause
-	l.dx, l.dy = nearestEdgeDir(l.x, l.y)
+	l.dx, l.dy = unit.LiveField().NearestEdgeDir(l.x, l.y)
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
 	ctx.Out <- unit.FX{Name: "aim", Kind: KindGodfather, UnitID: ctx.ID, Amount: -1}
@@ -35,6 +35,9 @@ func (l *leaveDrive) handle(ctx unit.Context, ev unit.Event) bool {
 	switch e := ev.(type) {
 	case unit.WallHit:
 		if l.fadeUntil > 0 || e.Time+1e-9 < l.pauseUntil {
+			return true
+		}
+		if !e.Kind.Edge() {
 			return true
 		}
 		if l.dx*e.NX+l.dy*e.NY <= 0.35 {

@@ -449,6 +449,7 @@ const guidesEl = document.getElementById("guides");
 const banner = document.getElementById("banner");
 const kinds0 = document.getElementById("kinds-0");
 const kinds1 = document.getElementById("kinds-1");
+const fieldsEl = document.getElementById("fields");
 
 let state = { phase: "select", slots: ["", ""], kinds: [], units: [] };
 let hexR = 280;
@@ -479,11 +480,23 @@ let lobbyKey = "";
 
 function renderLobby() {
   const kinds = state.kinds || [];
-  const key = `${(state.slots || []).join("\0")}\n${kinds.join("\0")}`;
+  const fields = state.fields || [];
+  const key = `${(state.slots || []).join("\0")}\n${kinds.join("\0")}\n${state.field || ""}\n${fields.join("\0")}`;
   if (key === lobbyKey) {
     return;
   }
   lobbyKey = key;
+  if (fieldsEl) {
+    fieldsEl.innerHTML = "";
+    for (const name of fields) {
+      const b = document.createElement("button");
+      b.textContent = name;
+      b.type = "button";
+      if ((state.field || "") === name) b.classList.add("active");
+      b.onclick = () => send({ type: "field", field: name });
+      fieldsEl.appendChild(b);
+    }
+  }
   for (const [el, slot] of [
     [kinds0, 0],
     [kinds1, 1],
@@ -577,6 +590,9 @@ function renderWalls(scale, cx, cy) {
       el.className = "wall";
       wallsEl.appendChild(el);
     }
+    el.classList.toggle("hard", !!w.hard);
+    el.classList.toggle("square", !!w.square);
+    el.classList.toggle("field", !!w.field || !!w.hard);
     const [x1, y1] = screenPos(w.x1, w.y1, scale, cx, cy);
     const [x2, y2] = screenPos(w.x2, w.y2, scale, cx, cy);
     const dx = x2 - x1;
@@ -588,7 +604,11 @@ function renderWalls(scale, cx, cy) {
     el.style.left = `${(x1 + x2) / 2}px`;
     el.style.top = `${(y1 + y2) / 2}px`;
     el.style.setProperty("--ang", `${Math.atan2(dy, dx)}rad`);
-    el.style.setProperty("--kind", kindColor(w.kind));
+    if (w.field || w.hard) {
+      el.style.setProperty("--kind", "#8b9cb3");
+    } else {
+      el.style.setProperty("--kind", kindColor(w.kind));
+    }
   }
   for (const child of [...wallsEl.children]) {
     const id = child.id.slice("wall-".length);
@@ -597,6 +617,9 @@ function renderWalls(scale, cx, cy) {
 }
 
 function renderArena() {
+  const isCircle = (state.fieldShape || "") === "circle";
+  hex.classList.toggle("circle", isCircle);
+  hex.closest(".stage")?.classList.toggle("circle", isCircle);
   const w = hex.clientWidth;
   const h = hex.clientHeight;
   const scale = w / (2 * hexR);

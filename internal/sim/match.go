@@ -83,6 +83,9 @@ type barrier struct {
 	until  float64
 	amount float64
 	hitAt  map[uint64]float64
+	hard   bool
+	square bool
+	field  bool
 }
 
 type wallSnap struct {
@@ -94,6 +97,9 @@ type wallSnap struct {
 	Radius float64 `json:"radius"`
 	Kind   string  `json:"kind"`
 	Slot   int     `json:"slot"`
+	Hard   bool    `json:"hard,omitempty"`
+	Square bool    `json:"square,omitempty"`
+	Field  bool    `json:"field,omitempty"`
 }
 
 type Match struct {
@@ -106,6 +112,7 @@ type Match struct {
 	nextID     uint64
 	time       float64
 	hex        hexagon
+	spec       fieldSpec
 	winner     string
 	winnerID   uint64
 	seq        uint64
@@ -139,12 +146,15 @@ func NewMatchSeeded(seed uint64) *Match {
 	if len(kinds) >= 2 {
 		slots = [2]string{kinds[0], kinds[1]}
 	}
+	spec := fieldByName(unitpkg.NameHex)
+	unitpkg.SetLiveField(spec.toUnitField())
 	return &Match{
 		phase:      PhaseSelect,
 		slots:      slots,
 		units:      make(map[uint64]*unit),
 		cmds:       make(chan unitpkg.Cmd, 512),
-		hex:        newHexagon(HexRadius),
+		hex:        spec.hex(),
+		spec:       spec,
 		rng:        rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
 		pendingDmg: make(map[uint64]dmgOffer),
 		wardAbsorb: make(map[uint64]bool),
@@ -169,6 +179,9 @@ func (m *Match) SnapshotJSON() []byte {
 		Time     float64                     `json:"time"`
 		Seq      uint64                      `json:"seq"`
 		HexR     float64                     `json:"hexRadius"`
+		Fields   []string                    `json:"fields"`
+		Field    string                      `json:"field"`
+		Shape    string                      `json:"fieldShape"`
 		HitStop  int                         `json:"hitStop"`
 		Units    []unitpkg.Snapshot          `json:"units"`
 		Walls    []wallSnap                  `json:"walls"`
@@ -184,7 +197,10 @@ func (m *Match) SnapshotJSON() []byte {
 		WinnerID: m.winnerID,
 		Time:     m.time,
 		Seq:      m.seq,
-		HexR:     HexRadius,
+		HexR:     m.spec.extent,
+		Fields:   fieldNames(),
+		Field:    m.spec.name,
+		Shape:    m.spec.shape,
 		HitStop:  m.hitStop,
 		Units:    make([]unitpkg.Snapshot, 0, len(m.order)),
 		Walls:    make([]wallSnap, 0, len(m.walls)),
@@ -201,7 +217,23 @@ func (m *Match) SnapshotJSON() []byte {
 		msg.Walls = append(msg.Walls, wallSnap{
 			ID: w.id, X1: w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
 			Radius: w.radius, Kind: w.kind, Slot: w.slot,
+			Hard: w.hard, Square: w.square, Field: w.field,
 		})
+	}
+	if m.phase == PhaseSelect {
+		for i, h := range m.spec.hard {
+			msg.Walls = append(msg.Walls, wallSnap{
+				ID: uint64(i + 1), X1: h.x1, Y1: h.y1, X2: h.x2, Y2: h.y2,
+				Radius: h.halfW, Hard: true, Square: true, Field: true,
+			})
+		}
+		for i, c := range m.spec.caps {
+			msg.Walls = append(msg.Walls, wallSnap{
+				ID: uint64(len(m.spec.hard) + i + 1),
+				X1: c.x1, Y1: c.y1, X2: c.x2, Y2: c.y2,
+				Radius: c.radius, Field: true,
+			})
+		}
 	}
 	b, _ := json.Marshal(msg)
 	return b
@@ -274,6 +306,17 @@ func (u *unit) noteFaction(f string) {
 	u.factionSeen[f] = true
 }
 
+func (m *Match) SetField(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect {
+		return
+	}
+	m.spec = fieldByName(name)
+	m.hex = m.spec.hex()
+	unitpkg.SetLiveField(m.spec.toUnitField())
+}
+
 func (m *Match) SetSlot(slot int, kind string) {
 	if slot < 0 || slot > 1 {
 		return
@@ -300,6 +343,7 @@ func (m *Match) Start() {
 		return
 	}
 	m.resetLocked()
+	m.installFieldLocked()
 	var spots []spawnSpot
 	for slot := 0; slot < 2; slot++ {
 		kind := m.slots[slot]
@@ -317,14 +361,14 @@ func (m *Match) Start() {
 }
 
 func (m *Match) randomSpawnLocked(radius float64, others []spawnSpot) vec {
-	R := HexRadius
-	ap := R * math.Sqrt(3) / 2
+	f := m.liveFieldLocked()
 	for try := 0; try < 128; try++ {
-		p := vec{(m.rng.Float64()*2 - 1) * R, (m.rng.Float64()*2 - 1) * ap}
-		if !m.hex.containsCenter(p, radius+4) {
-			continue
+		x, y, ok := f.RandomWalkable(m.rng, radius+4)
+		if !ok {
+			break
 		}
-		ok := true
+		p := vec{x, y}
+		ok = true
 		for _, o := range others {
 			if p.sub(o.p).len() < radius+o.r+8 {
 				ok = false
@@ -335,10 +379,8 @@ func (m *Match) randomSpawnLocked(radius float64, others []spawnSpot) vec {
 			return p
 		}
 	}
-	if len(others) == 0 {
-		return vec{}
-	}
-	return vec{120, 0}
+	x, y := f.Clamp(120, 0, radius+4)
+	return vec{x, y}
 }
 
 func (m *Match) Pause() {
@@ -488,6 +530,59 @@ func (m *Match) resetLocked() {
 	m.dmgSeq = 0
 	m.pendingDmg = make(map[uint64]dmgOffer)
 	m.wardAbsorb = make(map[uint64]bool)
+	m.hex = m.spec.hex()
+	unitpkg.SetLiveField(m.spec.toUnitField())
+}
+
+func (m *Match) installFieldLocked() {
+	m.hex = m.spec.hex()
+	unitpkg.SetLiveField(m.spec.toUnitField())
+	for _, h := range m.spec.hard {
+		m.nextID++
+		m.walls = append(m.walls, &barrier{
+			id:     m.nextID,
+			a:      vec{h.x1, h.y1},
+			b:      vec{h.x2, h.y2},
+			radius: h.halfW,
+			until:  math.Inf(1),
+			hard:   true,
+			square: true,
+			field:  true,
+			hitAt:  map[uint64]float64{},
+		})
+	}
+	for _, c := range m.spec.caps {
+		until := math.Inf(1)
+		if c.life > 0 {
+			until = m.time + c.life
+		}
+		m.nextID++
+		m.walls = append(m.walls, &barrier{
+			id:     m.nextID,
+			a:      vec{c.x1, c.y1},
+			b:      vec{c.x2, c.y2},
+			radius: c.radius,
+			until:  until,
+			amount: c.amount,
+			field:  true,
+			hitAt:  map[uint64]float64{},
+		})
+	}
+}
+
+func (m *Match) liveFieldLocked() unitpkg.Field {
+	f := m.spec.toUnitField()
+	for _, w := range m.walls {
+		if w.hard {
+			continue
+		}
+		f.Walls = append(f.Walls, unitpkg.FieldWall{
+			Kind: unitpkg.WallCapsule,
+			X1:   w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
+			Radius: w.radius,
+		})
+	}
+	return f
 }
 
 func (m *Match) stopAllLocked() {
@@ -989,12 +1084,19 @@ func (m *Match) popShellLocked(shell *unit, from uint64) {
 }
 
 func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
-	if c.Life <= 0 || c.Radius <= 0 {
+	if c.Radius <= 0 {
+		return
+	}
+	if !c.Hard && c.Life <= 0 {
 		return
 	}
 	a, b := vec{c.X1, c.Y1}, vec{c.X2, c.Y2}
 	if a.sub(b).len2() < 1 {
 		return
+	}
+	until := math.Inf(1)
+	if c.Life > 0 {
+		until = m.time + c.Life
 	}
 	m.nextID++
 	m.fx = append(m.fx, unitpkg.FX{
@@ -1009,8 +1111,10 @@ func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
 		a:      a,
 		b:      b,
 		radius: c.Radius,
-		until:  m.time + c.Life,
+		until:  until,
 		amount: c.Amount,
+		hard:   c.Hard,
+		square: c.Square || c.Hard,
 		hitAt:  map[uint64]float64{},
 	})
 }
@@ -1018,7 +1122,7 @@ func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
 func (m *Match) expireWallsLocked() {
 	n := 0
 	for _, w := range m.walls {
-		if m.time < w.until {
+		if w.hard || m.time < w.until {
 			m.walls[n] = w
 			n++
 			continue
@@ -1186,7 +1290,7 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 			continue
 		}
 		if !u.passWalls && !u.shell && !u.attach {
-			if h, ok := sweptShapeVsHex(u.p, u.v, u.face, u.radius, dt, m.hex, u.semi); ok {
+			if h, ok := sweptShapeVsOutline(u.p, u.v, u.face, u.radius, dt, m.spec, u.semi); ok {
 				if h.t < best.t {
 					h.a = u.id
 					best = h
@@ -1198,8 +1302,18 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 				if ignoreUW[uwID{u.id, w.id}] {
 					continue
 				}
-				R := cr + w.radius + skin
-				t, nrm, ok := sweptPointVsCapsule(cc, u.v, dt, w.a, w.b, R)
+				if u.breakWalls && w.hard {
+					continue
+				}
+				var t float64
+				var nrm vec
+				var ok bool
+				if w.square {
+					t, nrm, ok = sweptPointVsOBB(cc, u.v, dt, w.a, w.b, w.radius, cr+skin)
+				} else {
+					R := cr + w.radius + skin
+					t, nrm, ok = sweptPointVsCapsule(cc, u.v, dt, w.a, w.b, R)
+				}
 				if !ok {
 					continue
 				}
@@ -1273,15 +1387,8 @@ func (m *Match) resolveLocked(h ccdHit) {
 		if u == nil {
 			return
 		}
-		limit := m.hex.d[0] - u.radius - skin
-		if u.semi {
-			limit = m.hex.d[0] - semiExtent(u.face, u.radius, h.n) - skin
-		}
-		pen := u.p.dot(h.n) - limit
-		if pen > 0 {
-			u.p = u.p.sub(h.n.mul(pen))
-		}
-		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
+		m.constrainOutlineLocked(u, h.n)
+		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y, Kind: unitpkg.WallEdge})
 		u.setVel(reflectVelocity(u.v, h.n))
 		m.cycleFactionLocked(u)
 		u.expireOnWallFS()
@@ -1291,28 +1398,36 @@ func (m *Match) resolveLocked(h ccdHit) {
 		if u == nil || w == nil {
 			return
 		}
-		if u.breakWalls {
+		if u.breakWalls && !w.hard {
 			m.breakWallLocked(w.id)
 			return
 		}
 		cc, cr := colOf(u.p, u.face, u.radius, u.semi)
-		R := cr + w.radius + skin
-		q := closestOnSeg(cc, w.a, w.b)
-		d := cc.sub(q)
-		dist := d.len()
-		if dist < 1e-9 {
-			d = perp(w.b.sub(w.a))
-			dist = d.len()
+		if w.square {
+			m.pushOutOBB(u, w, cc, cr)
+		} else {
+			R := cr + w.radius + skin
+			q := closestOnSeg(cc, w.a, w.b)
+			d := cc.sub(q)
+			dist := d.len()
+			if dist < 1e-9 {
+				d = perp(w.b.sub(w.a))
+				dist = d.len()
+			}
+			if dist > 1e-9 && dist < R {
+				corr := q.add(d.norm().mul(R)).sub(cc)
+				u.p = u.p.add(corr)
+			}
 		}
-		if dist > 1e-9 && dist < R {
-			corr := q.add(d.norm().mul(R)).sub(cc)
-			u.p = u.p.add(corr)
+		kind := unitpkg.WallCapsule
+		if w.hard {
+			kind = unitpkg.WallHard
 		}
-		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y})
+		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y, Kind: kind})
 		u.setVel(reflectVelocity(u.v, h.n))
 		m.cycleFactionLocked(u)
 		u.expireOnWallFS()
-		if u.takesHit() && u.slot != w.slot && u.id != w.owner {
+		if w.amount > 0 && u.takesHit() && u.slot != w.slot && u.id != w.owner {
 			if at, ok := w.hitAt[u.id]; !ok || m.time >= at {
 				w.hitAt[u.id] = m.time + 0.1
 				m.pending = append(m.pending, unitpkg.Damage{From: w.owner, To: u.id, Amount: w.amount})
@@ -1406,20 +1521,17 @@ func (m *Match) constrainUnitLocked(u *unit) {
 	if u == nil || !u.solid || u.passWalls || u.shell || u.attach {
 		return
 	}
-	for i := 0; i < 6; i++ {
-		n := m.hex.n[i]
-		ext := u.radius
-		if u.semi {
-			ext = semiExtent(u.face, u.radius, n)
-		}
-		limit := m.hex.d[0] - ext - skin
-		pen := u.p.dot(n) - limit
-		if pen > 0 {
-			u.p = u.p.sub(n.mul(pen))
-		}
-	}
+	m.constrainOutlineLocked(u, vec{})
 	cc, cr := colOf(u.p, u.face, u.radius, u.semi)
 	for _, w := range m.walls {
+		if u.breakWalls && w.hard {
+			continue
+		}
+		if w.square {
+			m.pushOutOBB(u, w, cc, cr)
+			cc, cr = colOf(u.p, u.face, u.radius, u.semi)
+			continue
+		}
 		R := cr + w.radius + skin
 		q := closestOnSeg(cc, w.a, w.b)
 		d := cc.sub(q)
@@ -1440,7 +1552,67 @@ func (m *Match) constrainUnitLocked(u *unit) {
 	}
 }
 
+func (m *Match) constrainOutlineLocked(u *unit, n vec) {
+	if m.spec.shape == unitpkg.ShapeCircle {
+		limit := m.spec.extent - u.radius - skin
+		if limit < 8 {
+			limit = 8
+		}
+		d := u.p.len()
+		if d > limit {
+			if d < 1e-9 {
+				u.p = vec{limit, 0}
+			} else {
+				u.p = u.p.mul(limit / d)
+			}
+		}
+		return
+	}
+	if n.len2() > 1e-12 {
+		limit := m.hex.d[0] - u.radius - skin
+		if u.semi {
+			limit = m.hex.d[0] - semiExtent(u.face, u.radius, n) - skin
+		}
+		pen := u.p.dot(n) - limit
+		if pen > 0 {
+			u.p = u.p.sub(n.mul(pen))
+		}
+		return
+	}
+	for i := 0; i < 6; i++ {
+		hn := m.hex.n[i]
+		ext := u.radius
+		if u.semi {
+			ext = semiExtent(u.face, u.radius, hn)
+		}
+		limit := m.hex.d[0] - ext - skin
+		pen := u.p.dot(hn) - limit
+		if pen > 0 {
+			u.p = u.p.sub(hn.mul(pen))
+		}
+	}
+}
+
+func (m *Match) pushOutOBB(u *unit, w *barrier, cc vec, cr float64) {
+	need := cr + skin
+	d := distPointOBB(cc, w.a, w.b, w.radius)
+	if d >= need {
+		return
+	}
+	q := closestOnOBB(cc, w.a, w.b, w.radius)
+	n := cc.sub(q)
+	if n.len2() < 1e-12 {
+		n = perp(w.b.sub(w.a))
+	}
+	if n.len2() < 1e-12 {
+		return
+	}
+	u.p = u.p.add(n.norm().mul(need - d))
+}
+
 func (m *Match) emitLocked() {
+	field := m.liveFieldLocked()
+	unitpkg.SetLiveField(field)
 	snaps := make([]unitpkg.Snapshot, 0, len(m.order))
 	for _, id := range m.order {
 		u := m.units[id]
@@ -1453,7 +1625,7 @@ func (m *Match) emitLocked() {
 		if u == nil || u.stopped || u.stun {
 			continue
 		}
-		sense := unitpkg.Sense{Time: m.time, Self: u.snap()}
+		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field}
 		vr2 := u.vision * u.vision
 		for _, o := range snaps {
 			if o.ID == u.id {
