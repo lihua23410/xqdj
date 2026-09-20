@@ -27,6 +27,7 @@ func TestMortalMinionTakesDamageWithoutHitStop(t *testing.T) {
 	}
 	before := min.hp
 	m.offerDamageLocked(unitpkg.Damage{From: boss.id, To: min.id, Amount: 12})
+	m.settleHitsLocked()
 	if math.Abs(min.hp-(before-12)) > 1e-6 {
 		t.Fatalf("hp=%v want %v", min.hp, before-12)
 	}

@@ -887,12 +887,6 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 	if !u.takesHit() {
 		return
 	}
-	if u.role != unitpkg.RoleFighter {
-		from := m.units[c.From]
-		amt := m.scaleDamage(m.factionBearer(from), u, c.Amount)
-		m.applyHurtLocked(from, u, amt, false, false)
-		return
-	}
 	m.dmgSeq++
 	token := m.dmgSeq
 	absorb := m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id]
@@ -921,7 +915,17 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	}
 	delete(m.pendingDmg, c.Token)
 	u := m.units[off.to]
-	if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
+	if u == nil || u.stopped || !u.takesHit() {
+		return
+	}
+	from := m.units[off.from]
+	if u.role != unitpkg.RoleFighter {
+		amt := off.amount
+		if c.Amount > 0 && c.Amount < amt {
+			amt = c.Amount
+		}
+		amt = m.scaleDamage(m.factionBearer(from), u, amt)
+		m.applyHurtLocked(from, u, amt, false, false)
 		return
 	}
 	if off.absorb || m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id] {
@@ -936,7 +940,6 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	if c.Amount > 0 && c.Amount < amt {
 		amt = c.Amount
 	}
-	from := m.units[off.from]
 	amt = m.scaleDamage(m.factionBearer(from), u, amt)
 	if off.markKind != "" && amt > 0 {
 		delta := off.markDelta

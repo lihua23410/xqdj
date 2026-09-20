@@ -23,6 +23,7 @@ func miuSelf() unit.Snapshot {
 	return unit.Snapshot{
 		ID: 10, Kind: KindMiu, Role: unit.RoleMinion, Slot: 0, OwnerID: 1,
 		X: 0, Y: 0, VX: miuBaseSpeed, VY: 0, Radius: miuRadius,
+		HP: miuHP, MaxHP: miuHP,
 	}
 }
 

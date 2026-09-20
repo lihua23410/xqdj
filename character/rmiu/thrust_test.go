@@ -115,6 +115,7 @@ func TestThrustTimeoutSnapsSpeed(t *testing.T) {
 		Self: unit.Snapshot{
 			ID: 1, Kind: KindMiu, Role: unit.RoleMinion, Slot: 0,
 			X: 0, Y: 0, VX: miuThrustSpeed, VY: 0, Radius: miuRadius,
+			HP: miuHP, MaxHP: miuHP,
 		},
 	})
 	if m.thrusting {
