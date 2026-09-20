@@ -65,17 +65,5 @@ func segHits(x1, y1, x2, y2, half float64, e unit.Snapshot) bool {
 }
 
 func clampHex(x, y, radius float64) (float64, float64) {
-	if unit.HexContains(x, y, radius) {
-		return x, y
-	}
-	n := math.Hypot(x, y)
-	if n < 1e-6 {
-		return 0, 0
-	}
-	limit := unit.HexRadius - radius - 4
-	if limit < 8 {
-		limit = 8
-	}
-	s := limit / n
-	return x * s, y * s
+	return unit.LiveField().Clamp(x, y, radius)
 }

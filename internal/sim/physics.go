@@ -518,3 +518,104 @@ func sweptCircles(pa, va vec, ra float64, pb, vb vec, rb, dt float64) (float64, 
 	at := relP.add(relV.mul(t))
 	return t, at.norm(), true
 }
+
+func sweptShapeVsOutline(p, vel, face vec, radius, dt float64, spec fieldSpec, semi bool) (ccdHit, bool) {
+	if spec.shape == unitpkg.ShapeCircle {
+		return sweptShapeVsCircle(p, vel, radius, dt, spec.extent)
+	}
+	return sweptShapeVsHex(p, vel, face, radius, dt, spec.hex(), semi)
+}
+
+func sweptShapeVsCircle(p, vel vec, radius, dt, circum float64) (ccdHit, bool) {
+	limit := circum - radius
+	if limit < 8 {
+		limit = 8
+	}
+	r2 := p.len2()
+	lim2 := limit * limit
+	if r2 > lim2+1e-6 {
+		return ccdHit{kind: hitWall, t: 0, n: p.norm()}, true
+	}
+	if p.dot(vel) <= 1e-9 {
+		return ccdHit{}, false
+	}
+	a := vel.len2()
+	if a < 1e-16 {
+		return ccdHit{}, false
+	}
+	b := 2 * p.dot(vel)
+	c := r2 - lim2
+	disc := b*b - 4*a*c
+	if disc < 0 {
+		return ccdHit{}, false
+	}
+	t := (-b + math.Sqrt(disc)) / (2 * a)
+	if t < -1e-9 || t > dt {
+		return ccdHit{}, false
+	}
+	if t < 0 {
+		t = 0
+	}
+	at := p.add(vel.mul(t))
+	return ccdHit{kind: hitWall, t: t, n: at.norm()}, true
+}
+
+func sweptPointVsOBB(p, vel vec, dt float64, a, b vec, halfW, R float64) (float64, vec, bool) {
+	ab := b.sub(a)
+	alen := ab.len()
+	if alen < 1e-9 {
+		t, n, ok := sweptCircles(p, vel, 0, a, vec{}, R+halfW, dt)
+		return t, n, ok
+	}
+	u := ab.norm()
+	n0 := perp(u)
+	hw := n0.mul(halfW)
+	a1, a2 := a.add(hw), a.sub(hw)
+	b1, b2 := b.add(hw), b.sub(hw)
+	edges := [4][2]vec{{a1, b1}, {b1, b2}, {b2, a2}, {a2, a1}}
+	bestT := dt + 1
+	var bestN vec
+	found := false
+	for _, e := range edges {
+		t, nrm, ok := sweptPointVsCapsule(p, vel, dt, e[0], e[1], R)
+		if !ok {
+			continue
+		}
+		if t < bestT {
+			bestT = t
+			bestN = nrm
+			found = true
+		}
+	}
+	if !found {
+		return 0, vec{}, false
+	}
+	return bestT, bestN, true
+}
+
+func closestOnOBB(p vec, a, b vec, halfW float64) vec {
+	ab := b.sub(a)
+	alen := ab.len()
+	if alen < 1e-12 {
+		return a
+	}
+	u := ab.norm()
+	n := perp(u)
+	lx := p.sub(a).dot(u)
+	ly := p.sub(a).dot(n)
+	if lx < 0 {
+		lx = 0
+	} else if lx > alen {
+		lx = alen
+	}
+	if ly < -halfW {
+		ly = -halfW
+	} else if ly > halfW {
+		ly = halfW
+	}
+	return a.add(u.mul(lx)).add(n.mul(ly))
+}
+
+func distPointOBB(p vec, a, b vec, halfW float64) float64 {
+	return p.sub(closestOnOBB(p, a, b, halfW)).len()
+}

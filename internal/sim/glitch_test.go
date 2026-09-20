@@ -190,9 +190,9 @@ func TestGlitchDodgeBlocksAndLeavesGhost(t *testing.T) {
 		t.Fatalf("dodged hit still dropped hp %.1f -> %.1f", hp0, u.hp)
 	}
 	moved := math.Hypot(u.p.X-x0, u.p.Y-y0) > 1
-	if u.p.X >= -80 {
+	if !moved || !unitpkg.HexContains(u.p.X, u.p.Y, u.radius) {
 		m.mu.Unlock()
-		t.Fatalf("dodge dest %+v want far left cage corner", u.p)
+		t.Fatalf("dodge dest %+v want a walkable move", u.p)
 	}
 	shot := ownedKind(m, id, character.KindGlitchShot)
 	ghosts := 0
@@ -376,7 +376,6 @@ func TestGlitchSlashUsesMarksAndGhostsThenClears(t *testing.T) {
 	m.SetSlot(1, character.KindWaller)
 	m.Start()
 	defer m.End()
-	waitTicks(m, 4)
 	m.mu.Lock()
 	g, o := parkGlitch(m)
 	if g == nil || o == nil {

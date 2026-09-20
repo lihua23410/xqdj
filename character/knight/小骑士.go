@@ -143,7 +143,7 @@ func beside(self, enemy unit.Snapshot) (float64, float64) {
 		ang := base + extra
 		x := ex + math.Cos(ang)*gap
 		y := ey + math.Sin(ang)*gap
-		if unit.HexContains(x, y, self.Radius+4) {
+		if unit.LiveField().Walkable(x, y, self.Radius+4) {
 			return x, y
 		}
 	}

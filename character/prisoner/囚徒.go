@@ -145,6 +145,11 @@ func (a *囚徒) Handle(ctx unit.Context, ev unit.Event) {
 		a.constrain(ctx, e)
 		a.emitChain(ctx, e)
 	case unit.WallHit:
+		if e.Kind.Capsule() || e.Kind.Hard() {
+			a.spin = 0
+			a.matchSpin = true
+			return
+		}
 		a.plant(ctx, e.NX, e.NY)
 	}
 }
@@ -153,11 +158,6 @@ func (a *囚徒) plant(ctx unit.Context, nx, ny float64) {
 	r := a.r
 	if r <= 0 {
 		r = prisonerRadius
-	}
-	if _, ok := hexEdge(a.x, a.y, nx, ny, r); !ok {
-		a.spin = 0
-		a.matchSpin = true
-		return
 	}
 	n := math.Hypot(nx, ny)
 	if n < 1e-9 {
@@ -288,7 +288,11 @@ func (a *囚徒) planDrop(s unit.Sense) {
 }
 
 func (a *囚徒) randSpot(rng *rand.Rand, avoid ...vec) vec {
-	reach := unit.HexRadius*math.Sqrt(3)/2 - cageFit
+	reach := unit.LiveField().Extent
+	if reach < unit.MinExtent {
+		reach = unit.HexRadius
+	}
+	reach -= cageFit
 	if reach < 20 {
 		reach = 20
 	}
@@ -325,19 +329,8 @@ func (a *囚徒) emitChain(ctx unit.Context, s unit.Sense) {
 }
 
 func clampFit(x, y float64) vec {
-	if unit.HexContains(x, y, cageFit) {
-		return vec{x, y}
-	}
-	lo, hi := 0.0, 1.0
-	for i := 0; i < 24; i++ {
-		mid := (lo + hi) / 2
-		if unit.HexContains(x*mid, y*mid, cageFit) {
-			lo = mid
-		} else {
-			hi = mid
-		}
-	}
-	return vec{x * lo, y * lo}
+	nx, ny := unit.LiveField().Clamp(x, y, cageFit)
+	return vec{nx, ny}
 }
 
 func hasMark(s unit.Snapshot, kind string) bool {
@@ -352,33 +345,6 @@ func hasMark(s unit.Snapshot, kind string) bool {
 func hexNormal(i int) (float64, float64) {
 	a := (float64(i) + 0.5) * math.Pi / 3
 	return math.Cos(a), math.Sin(a)
-}
-
-func hexEdge(x, y, nx, ny, radius float64) (int, bool) {
-	n := math.Hypot(nx, ny)
-	if n < 1e-9 {
-		return 0, false
-	}
-	nx, ny = nx/n, ny/n
-	ap := unit.HexRadius * math.Sqrt(3) / 2
-	best := -1
-	bestDot := 0.92
-	for i := 0; i < 6; i++ {
-		hx, hy := hexNormal(i)
-		d := hx*nx + hy*ny
-		if d > bestDot {
-			bestDot = d
-			best = i
-		}
-	}
-	if best < 0 {
-		return 0, false
-	}
-	hx, hy := hexNormal(best)
-	if hx*x+hy*y <= ap-radius-8 {
-		return 0, false
-	}
-	return best, true
 }
 
 func segHits(ax, ay, bx, by, px, py, pr, halfW float64) bool {

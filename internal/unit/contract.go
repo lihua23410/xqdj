@@ -31,6 +31,7 @@ type Sense struct {
 	Time   float64
 	Self   Snapshot
 	Nearby []Snapshot
+	Field  Field
 }
 
 type Collision struct {
@@ -44,6 +45,7 @@ type WallHit struct {
 	Time float64
 	NX   float64
 	NY   float64
+	Kind WallKind
 }
 
 // FactionChanged 阵营刚变时发给该战斗机。撞墙轮换和 MarkFaction 改派系都会发；Stun 拦不住。
@@ -223,6 +225,8 @@ type PlaceWall struct {
 	Radius  float64
 	Life    float64
 	Amount  float64
+	Hard    bool // 硬墙：不拆、拆墙弹穿过
+	Square  bool // 方端判定
 }
 
 type FX struct {

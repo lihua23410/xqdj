@@ -11,7 +11,7 @@ type Spec struct {
 	Semi       bool
 	PassWalls  bool
 	Mortal     bool    // 活随从：吃 Damage / Heal，不计入胜负
-	BreakWalls bool    // 击中砌墙则该截提前消失并穿过；场边仍撞
+	BreakWalls bool    // 击中胶囊墙则该截提前消失并穿过；硬墙穿过不拆；场边仍撞
 	StartHP    float64 // 0 表示开局满血（MaxHP）
 	Shell      bool    // 贴在主人身上的环，撞到东西会碎并通知主人
 	Attach     bool    // 每帧贴主人；不挡伤、不碎。不撞墙。只和敌方战斗机、活随从做 CCD

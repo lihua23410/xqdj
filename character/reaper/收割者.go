@@ -1,4 +1,4 @@
-// 收割者不转向。撞场边钉镰刀，六条场边都有至少一把才收回。
+// 收割者不转向。撞场边或硬墙钉镰刀，场上 10 把才收回。
 package 收割者
 
 import (
@@ -18,6 +18,7 @@ const (
 	reaperCruise = 175.0
 	reaperVision = 0.0
 	reaperColor  = "#5a2a4a"
+	sickleNeed   = 10
 
 	sickleRadius = 18.0
 	reapRadius   = 36.0
@@ -79,9 +80,8 @@ func init() {
 }
 
 type 收割者 struct {
-	sides [6]int
-	x, y  float64
-	slot  int
+	x, y float64
+	slot int
 }
 
 func (r *收割者) Handle(ctx unit.Context, ev unit.Event) {
@@ -99,11 +99,14 @@ func (r *收割者) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 func (r *收割者) onWall(ctx unit.Context, w unit.WallHit) {
-	side, ok := hexHit(r.x, r.y, w.NX, w.NY, reaperRadius)
-	if !ok {
+	if w.Kind.Capsule() {
 		return
 	}
-	nx, ny := hexNormal(side)
+	n := math.Hypot(w.NX, w.NY)
+	if n < 1e-9 {
+		return
+	}
+	nx, ny := w.NX/n, w.NY/n
 	ctx.Out <- unit.Spawn{
 		Kind:    KindSickle,
 		X:       r.x + nx*reaperRadius,
@@ -111,14 +114,19 @@ func (r *收割者) onWall(ctx unit.Context, w unit.WallHit) {
 		OwnerID: ctx.ID,
 		Slot:    r.slot,
 	}
-	r.sides[side]++
 }
 
 func (r *收割者) maybeReap(ctx unit.Context, s unit.Sense) {
-	for _, n := range r.sides {
-		if n <= 0 {
-			return
+	n := 0
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Kind != KindSickle || o.OwnerID != ctx.ID {
+			continue
 		}
+		n++
+	}
+	if n < sickleNeed {
+		return
 	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
@@ -127,7 +135,6 @@ func (r *收割者) maybeReap(ctx unit.Context, s unit.Sense) {
 		}
 		recallingIDs.Store(o.ID, struct{}{})
 	}
-	r.sides = [6]int{}
 }
 
 type 镰刀 struct {

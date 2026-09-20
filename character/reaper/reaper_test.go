@@ -36,19 +36,28 @@ func TestWallHitPlantsSickleOnHexEdge(t *testing.T) {
 	if sp == nil || sp.Kind != KindSickle {
 		t.Fatalf("spawn=%v", cmds)
 	}
-	if e.sides[2] != 1 {
-		t.Fatalf("sides=%v", e.sides)
-	}
 }
 
 func TestCapsuleWallDoesNotPlant(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	e := &收割者{x: 10, y: 10}
 	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
-		Time: 1, NX: 1, NY: 0,
+		Time: 1, NX: 1, NY: 0, Kind: unit.WallCapsule,
 	})
-	if lastSpawn(drain(out)) != nil || e.sides != [6]int{} {
+	if lastSpawn(drain(out)) != nil {
 		t.Fatal("capsule must not plant")
+	}
+}
+
+func TestHardWallPlantsSickle(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	e := &收割者{x: 10, y: 10}
+	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
+		Time: 1, NX: 0, NY: 1, Kind: unit.WallHard,
+	})
+	sp := lastSpawn(drain(out))
+	if sp == nil || sp.Kind != KindSickle {
+		t.Fatal("硬墙 should plant")
 	}
 }
 
@@ -62,21 +71,20 @@ func TestSameSideStacks(t *testing.T) {
 	e.Handle(ctx, unit.WallHit{Time: 1, NX: nx, NY: ny})
 	_ = drain(out)
 	e.Handle(ctx, unit.WallHit{Time: 2, NX: nx, NY: ny})
-	_ = drain(out)
-	if e.sides[1] != 2 {
-		t.Fatalf("stack=%d", e.sides[1])
+	cmds := drain(out)
+	if lastSpawn(cmds) == nil {
+		t.Fatal("should stack another sickle")
 	}
 }
 
-func TestSixSidesRecall(t *testing.T) {
+func TestTenSicklesRecall(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
-	e := &收割者{sides: [6]int{1, 1, 1, 2, 1, 1}}
-	nearby := make([]unit.Snapshot, 0, 7)
-	for i := 0; i < 6; i++ {
-		nx, ny := hexNormal(i)
+	e := &收割者{}
+	nearby := make([]unit.Snapshot, 0, sickleNeed)
+	for i := 0; i < sickleNeed; i++ {
 		nearby = append(nearby, unit.Snapshot{
 			ID: uint64(10 + i), Kind: KindSickle, OwnerID: 1, Slot: 0,
-			X: nx * 200, Y: ny * 200, Radius: sickleRadius,
+			X: float64(i) * 20, Y: 200, Radius: sickleRadius,
 		})
 	}
 	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.Sense{
@@ -87,11 +95,8 @@ func TestSixSidesRecall(t *testing.T) {
 	if len(drain(out)) != 0 {
 		t.Fatal("收割者 itself should not spawn")
 	}
-	if e.sides != [6]int{} {
-		t.Fatalf("sides after reap=%v", e.sides)
-	}
 	nReap := 0
-	for i := 0; i < 6; i++ {
+	for i := 0; i < sickleNeed; i++ {
 		kout := make(chan unit.Cmd, 8)
 		k := &镰刀{owner: 1, slot: 0}
 		k.Handle(unit.Context{ID: uint64(10 + i), Kind: KindSickle, Out: kout}, unit.Sense{
@@ -108,7 +113,7 @@ func TestSixSidesRecall(t *testing.T) {
 		}
 		nReap++
 	}
-	if nReap != 6 {
+	if nReap != sickleNeed {
 		t.Fatalf("reap=%d", nReap)
 	}
 }

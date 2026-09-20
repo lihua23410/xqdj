@@ -15,8 +15,11 @@ func TestBootSpawnsMoonAtCenter(t *testing.T) {
 	})
 	cmds := drain(out)
 	sp := mustSpawn(t, cmds)
-	if sp.Kind != KindMoon || sp.X != 0 || sp.Y != 0 || sp.OwnerID != 1 {
+	if sp.Kind != KindMoon || sp.OwnerID != 1 {
 		t.Fatalf("spawn=%+v", sp)
+	}
+	if !unit.HexContains(sp.X, sp.Y, moonRadius) {
+		t.Fatalf("moon (%v,%v) not walkable", sp.X, sp.Y)
 	}
 	ph := mustPhase(t, cmds)
 	if ph.Amount != 0 {
