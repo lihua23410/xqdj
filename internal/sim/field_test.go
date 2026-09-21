@@ -22,7 +22,7 @@ func TestSelectSnapshotListsFields(t *testing.T) {
 	if err := json.Unmarshal(m.SnapshotJSON(), &msg); err != nil {
 		t.Fatal(err)
 	}
-	if len(msg.Fields) < 2 || msg.Fields[0] != unitpkg.NameHex || msg.Fields[1] != unitpkg.NameCircle {
+	if len(msg.Fields) < 2 || msg.Fields[0] != unitpkg.NameCircle || msg.Fields[1] != unitpkg.NameHex {
 		t.Fatalf("fields=%v", msg.Fields)
 	}
 	if msg.Field != unitpkg.NameHex || msg.Shape != unitpkg.ShapeHex {
@@ -37,6 +37,24 @@ func TestSelectSnapshotListsFields(t *testing.T) {
 	}
 	if len(msg.Walls) != 1 || !msg.Walls[0].Hard || !msg.Walls[0].Square || !msg.Walls[0].Field {
 		t.Fatalf("select walls=%+v", msg.Walls)
+	}
+}
+
+func TestSetFieldUnknownIgnored(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetField("没有这份")
+	m.mu.Lock()
+	if m.spec.name != unitpkg.NameHex {
+		m.mu.Unlock()
+		t.Fatalf("default changed: %s", m.spec.name)
+	}
+	m.mu.Unlock()
+	m.SetField(unitpkg.NameCircle)
+	m.SetField("没有这份")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.spec.name != unitpkg.NameCircle {
+		t.Fatalf("circle replaced: %s", m.spec.name)
 	}
 }
 

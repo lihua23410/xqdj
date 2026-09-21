@@ -1,6 +1,9 @@
 package sim
 
-import unitpkg "xqdj/internal/unit"
+import (
+	unitpkg "xqdj/internal/unit"
+	_ "xqdj/map"
+)
 
 type fieldSpec struct {
 	name   string
@@ -18,34 +21,46 @@ type fieldCapSpec struct {
 	x1, y1, x2, y2, radius, life, amount float64
 }
 
-func fieldCatalog() []fieldSpec {
-	return []fieldSpec{
-		{name: unitpkg.NameHex, shape: unitpkg.ShapeHex, extent: HexRadius},
-		{
-			name:   unitpkg.NameCircle,
-			shape:  unitpkg.ShapeCircle,
-			extent: HexRadius,
-			hard:   []fieldWallSpec{{x1: -110, y1: 0, x2: 110, y2: 0, halfW: 6}},
-		},
-	}
-}
-
 func fieldNames() []string {
-	cat := fieldCatalog()
-	out := make([]string, len(cat))
-	for i, f := range cat {
-		out[i] = f.name
-	}
-	return out
+	return unitpkg.FieldNames()
 }
 
-func fieldByName(name string) fieldSpec {
-	for _, f := range fieldCatalog() {
-		if f.name == name {
-			return f
+func lookupField(name string) (fieldSpec, bool) {
+	f, ok := unitpkg.LookupField(name)
+	if !ok {
+		return fieldSpec{}, false
+	}
+	return specFromField(f), true
+}
+
+func defaultField() fieldSpec {
+	if spec, ok := lookupField(unitpkg.NameHex); ok {
+		return spec
+	}
+	names := unitpkg.FieldNames()
+	if len(names) > 0 {
+		if spec, ok := lookupField(names[0]); ok {
+			return spec
 		}
 	}
-	return fieldCatalog()[0]
+	return specFromField(unitpkg.HexField())
+}
+
+func specFromField(f unitpkg.Field) fieldSpec {
+	s := fieldSpec{name: f.Name, shape: f.Shape, extent: f.Extent}
+	for _, w := range f.Walls {
+		switch {
+		case w.Kind.Hard():
+			s.hard = append(s.hard, fieldWallSpec{
+				x1: w.X1, y1: w.Y1, x2: w.X2, y2: w.Y2, halfW: w.Radius,
+			})
+		case w.Kind.Capsule():
+			s.caps = append(s.caps, fieldCapSpec{
+				x1: w.X1, y1: w.Y1, x2: w.X2, y2: w.Y2, radius: w.Radius,
+			})
+		}
+	}
+	return s
 }
 
 func (s fieldSpec) hex() hexagon {

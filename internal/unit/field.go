@@ -54,12 +54,50 @@ func CircleField() Field {
 		Shape:  ShapeCircle,
 		Extent: HexRadius,
 		Walls: []FieldWall{{
-			Kind:   WallHard,
-			X1:     -110, Y1: 0,
-			X2:     110, Y2: 0,
+			Kind: WallHard,
+			X1:   -110, Y1: 0,
+			X2: 110, Y2: 0,
 			Radius: 6,
 		}},
 	}
+}
+
+var (
+	fieldsByName = map[string]Field{}
+	fieldOrder   []string
+)
+
+func RegisterField(f Field) {
+	if f.Name == "" {
+		panic("unit: empty field name")
+	}
+	if _, ok := fieldsByName[f.Name]; ok {
+		panic("unit: duplicate field " + f.Name)
+	}
+	fieldsByName[f.Name] = cloneField(f)
+	fieldOrder = append(fieldOrder, f.Name)
+}
+
+func FieldNames() []string {
+	out := make([]string, len(fieldOrder))
+	copy(out, fieldOrder)
+	return out
+}
+
+func LookupField(name string) (Field, bool) {
+	f, ok := fieldsByName[name]
+	if !ok {
+		return Field{}, false
+	}
+	return cloneField(f), true
+}
+
+func cloneField(f Field) Field {
+	out := f
+	if len(f.Walls) > 0 {
+		out.Walls = append([]FieldWall(nil), f.Walls...)
+	}
+	return out
 }
 
 var (
@@ -76,11 +114,7 @@ func SetLiveField(f Field) {
 func LiveField() Field {
 	liveMu.RLock()
 	defer liveMu.RUnlock()
-	out := liveField
-	if len(liveField.Walls) > 0 {
-		out.Walls = append([]FieldWall(nil), liveField.Walls...)
-	}
-	return out
+	return cloneField(liveField)
 }
 
 func (f Field) size() float64 {

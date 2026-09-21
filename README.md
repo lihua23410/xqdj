@@ -47,7 +47,7 @@ taskkill /PID <PID> /F
 go test ./...
 ```
 
-加球或改了子包之后，先 `go generate ./character` 再测。`character/all.go` 过期时 `TestAllGoListsEveryPack` 会失败。
+加球或改了战斗机子包之后，先 `go generate ./character` 再测。加场地子包则 `go generate ./map`。对应的 `all.go` 过期时 `TestAllGoListsEveryPack` 会失败。
 
 无头胜率（所有战斗机两两对打，不含自己打自己；奇数场换槽）：
 
@@ -75,8 +75,13 @@ character/character.go   //go:generate go run generate.go
 character/generate.go    扫描子目录，写出 all.go（自身带 //go:build ignore）
 character/all.go         生成：import 每个子包 + 把各包导出的 Kind* 再导出到 xqdj/character
 character/all_test.go    清单过期 / 空 import 会失败
+map/<ascii>/             一份可选场地一个子包。目录名必须是 ASCII（Go import 不能含中文）
+map/场地.go              //go:generate go run generate.go（包名 场地；不能 package map）
+map/generate.go          扫描子目录，写出 all.go（自身带 //go:build ignore）
+map/all.go               生成：blank import 每个子包，触发 init 登记
+map/all_test.go          清单过期 / 空 import 会失败
 internal/unit/           Actor / Cmd / Sense / Look / Pack / Field，sim 与 character 的唯一协议
-internal/sim/            物理、对局状态机、CCD、场地、墙
+internal/sim/            物理、对局状态机、CCD、墙
 internal/web/            选人页（含场地）+ 战场 + 引擎级特效（embed）；lib/ 放 gsap 等第三方脚本。不要为新球改这里
 cmd/winrate/             无头胜率矩阵
 docs/adr/                架构决策（巡航带子、活随从、场地可选、胶囊墙改名、硬墙穿透、索敌看可瞄准）
@@ -88,7 +93,9 @@ PLAN.md                  尚未做的混战 / 分队
 winrate.md               无头对战胜率（生成物，球改过之后要重跑）
 ```
 
-`main.go` 用 `_ "xqdj/character"` 拉起所有子包 `init()`。生产代码里 **`internal/sim` 不要 import `character`**，只走 `internal/unit`。角色包 **只 import `xqdj/internal/unit`**，不要 import `internal/sim` 或 `internal/web`。测试里可以 import `xqdj/character`，用生成的 `KindXxx` 点名某只球。
+`main.go` 用 `_ "xqdj/character"` 拉起战斗机子包 `init()`。生产代码里 **`internal/sim` 不要 import `character`**，只走 `internal/unit`。角色包 **只 import `xqdj/internal/unit`**，不要 import `internal/sim` 或 `internal/web`。测试里可以 import `xqdj/character`，用生成的 `KindXxx` 点名某只球。
+
+场地相反：一场必须有场地，所以 `internal/sim` 用 `_ "xqdj/map"` 拉起子包。列表和查找走 `unit.FieldNames` / `unit.LookupField`。场地包同样只 import `xqdj/internal/unit`。
 
 页面经 `/ws` 发 `select` / `field` / `start` / `pause` / `end`。`select` 和 `field` 只在选人阶段生效（`SetSlot` / `SetField` 里判断 `phase`）；`start` 兼作继续。引擎每帧广播快照。
 
@@ -149,6 +156,21 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 | `waller` | `筑墙者` |
 | `warden` | `盾士` |
 | `wolf` | `狼人` |
+
+## 加一份场地
+
+目标：只在 `map/` 下丢一个 ASCII 目录，跑 `go generate ./map`，选人页出现新场地。**不要改** `main.go`、`internal/sim`、`internal/web`。
+
+选人按钮顺序 = `unit.FieldNames()` = 目录字母序（所以 `circle` 在 `hex` 前面）。开局默认按名字找六边形，不是列表第一项。`SetField` 不认识的名字不改当前这份（和 `SetSlot` 一样）。重名登记 panic。
+
+一份场地包只能填 `unit.Field`：名字、现有形状（`hex` / `circle`）、Extent、预放墙。新外轮廓要改 unit / sim / 页面，不是丢包能解决的。
+
+```
+map/maze/
+  迷宫.go    init 里 unit.RegisterField(...)
+```
+
+现有两份：`map/hex`（`package 六边形`，`unit.HexField()`）、`map/circle`（`package 圆`，`unit.CircleField()`）。
 
 ## 加一只新球
 
@@ -561,7 +583,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 
 这些是改角色或物理时不要随便推翻的约定。巡航带子的来由见 `docs/adr/0001-cruise-is-a-band.md`；活随从见 `docs/adr/0002-living-minions-take-damage.md`；场地可选见 `docs/adr/0003-field-is-selectable-data.md`；胶囊墙改名见 `docs/adr/0004-masonry-renamed-capsule-wall.md`；硬墙穿透见 `docs/adr/0005-break-walls-pass-through-hard-walls.md`；索敌看可瞄准见 `docs/adr/0006-seek-by-aim-priority.md`；无下限术士两半叠中扣两次见 `docs/adr/0007-twin-halves-stack-hits.md`。
 
-- **场地是数据**。`unit.Field` 有形状、场心到场边距离和预放墙；库里默认六边形（平顶、`Extent = HexRadius = 280`、无硬墙），另有圆（`Extent = 280`，场心一道 `x ∈ [-110, 110]`、半宽 6（横向总厚 12）的方端硬墙，两端各留约 170 的绕行缺口）。`Match.SetField` 只在选人阶段生效，开打后忽略；非法名字回落到第一份（六边形）。落点、夹紧、撞边都走 `unit.Field`，角色不要自己算。
+- **场地是数据**。库在 `map/`（包名 `场地`）：一份场地一个 ASCII 子包，`init` 里 `unit.RegisterField`；`go generate ./map` 写出 `all.go`。`unit.Field` 有形状、场心到场边距离和预放墙；库里默认六边形（平顶、`Extent = HexRadius = 280`、无硬墙），另有圆（`Extent = 280`，场心一道 `x ∈ [-110, 110]`、半宽 6（横向总厚 12）的方端硬墙，两端各留约 170 的绕行缺口）。`Match.SetField` 只在选人阶段生效，开打后忽略；不认识的名字不改当前这份。`NewMatch` 按名字装六边形，没有则列表第一份，登记表空则用 `unit.HexField()` 垫底（不进选人列表）。落点、夹紧、撞边都走 `unit.Field`，角色不要自己算。
 - **时间**：`sim.TickHz = 60`，`DT = 1/60`，hit-stop `HitStopFrames = 3`。引擎每 tick 广播一次快照。
 - **帧序**（`Match.Tick`）：hit-stop 中只消化指令并递减计数（归零那拍判胜负）；否则 FS 过期 → 同步巡航 → 巡航带子 → 消化指令 → 施加瞬时 FS → 结算碰撞 → 物理推进 → 应用本帧伤害 → 再结算碰撞 → 清掉没打中的附着弹 → 贴壳 / 贴随从 → 推进时间 → 墙和眩晕过期 → 发快照 → 判胜负。
 - **出生**：战斗机在可进入区域随机落点（两个圆心至少隔 `r+R+8`），初速大小 = `Spec.Speed`、方向随机。

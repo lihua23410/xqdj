@@ -148,7 +148,7 @@ func NewMatchSeeded(seed uint64) *Match {
 	if len(kinds) >= 2 {
 		slots = [2]string{kinds[0], kinds[1]}
 	}
-	spec := fieldByName(unitpkg.NameHex)
+	spec := defaultField()
 	unitpkg.SetLiveField(spec.toUnitField())
 	return &Match{
 		phase:      PhaseSelect,
@@ -317,7 +317,11 @@ func (m *Match) SetField(name string) {
 	if m.phase != PhaseSelect {
 		return
 	}
-	m.spec = fieldByName(name)
+	spec, ok := lookupField(name)
+	if !ok {
+		return
+	}
+	m.spec = spec
 	m.hex = m.spec.hex()
 	unitpkg.SetLiveField(m.spec.toUnitField())
 }
