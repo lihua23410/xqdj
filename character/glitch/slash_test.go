@@ -124,6 +124,66 @@ func TestSlashHitsIfEnemyStaysOnFrozenLine(t *testing.T) {
 	}
 }
 
+func TestSlashHitsMortalMinionOnLine(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	g := &地慧星{slashReadyAt: glitchSlashCD}
+	ctx := unit.Context{ID: 1, Kind: KindGlitch, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindGlitch, Role: unit.RoleFighter, Slot: 0,
+		X: -80, Y: 0, VX: 165, VY: 0, Radius: glitchRadius,
+	}
+	boss := unit.Snapshot{
+		ID: 2, Kind: "教父", Role: unit.RoleFighter, Slot: 1,
+		X: 90, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim,
+	}
+	minion := unit.Snapshot{
+		ID: 3, Kind: "教父暗杀者", Role: unit.RoleMinion, Slot: 1,
+		X: 40, Y: 0, Radius: 14, Mortal: true, AimPriority: unit.DefaultMortalAim,
+		Marks: []unit.Mark{{Kind: glitchMarkKind, Stacks: 2}},
+	}
+	g.Handle(ctx, unit.Sense{Time: 20, Self: self, Nearby: []unit.Snapshot{boss, minion}})
+	_ = drainCmds(out)
+
+	bossOff := boss
+	bossOff.Y = 220
+	g.Handle(ctx, unit.Sense{Time: 22, Self: self, Nearby: []unit.Snapshot{bossOff, minion}})
+	cmds := drainCmds(out)
+	d := mustDamage(t, cmds)
+	want := (6.0 + 2.0*2.0) * (1.0 + 0.0)
+	if math.Abs(d.Amount-want) > 1e-9 || d.To != 3 {
+		t.Fatalf("damage=%+v want %v to minion", d, want)
+	}
+	if !hasClearMarksOn(cmds, 3) {
+		t.Fatalf("hit minion should spend its marks: %v", cmds)
+	}
+}
+
+func TestSlashHitsFighterAndMinionTogether(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	g := &地慧星{slashReadyAt: glitchSlashCD}
+	ctx := unit.Context{ID: 1, Kind: KindGlitch, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindGlitch, Role: unit.RoleFighter, Slot: 0,
+		X: -80, Y: 0, VX: 165, VY: 0, Radius: glitchRadius,
+	}
+	boss := unit.Snapshot{
+		ID: 2, Role: unit.RoleFighter, Slot: 1,
+		X: 90, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim,
+	}
+	minion := unit.Snapshot{
+		ID: 3, Role: unit.RoleMinion, Slot: 1,
+		X: 40, Y: 4, Radius: 14, Mortal: true, AimPriority: unit.DefaultMortalAim,
+	}
+	g.Handle(ctx, unit.Sense{Time: 20, Self: self, Nearby: []unit.Snapshot{boss, minion}})
+	_ = drainCmds(out)
+	g.Handle(ctx, unit.Sense{Time: 22, Self: self, Nearby: []unit.Snapshot{boss, minion}})
+	cmds := drainCmds(out)
+	got := damageTargets(cmds)
+	if !got[2] || !got[3] {
+		t.Fatalf("want fighter and minion, got %v from %v", got, cmds)
+	}
+}
+
 func drainCmds(out <-chan unit.Cmd) []unit.Cmd {
 	var cmds []unit.Cmd
 	for {
@@ -188,6 +248,25 @@ func hasClearMarks(cmds []unit.Cmd) bool {
 		}
 	}
 	return false
+}
+
+func hasClearMarksOn(cmds []unit.Cmd, id uint64) bool {
+	for _, c := range cmds {
+		if v, ok := c.(unit.ClearMarks); ok && v.UnitID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func damageTargets(cmds []unit.Cmd) map[uint64]bool {
+	got := map[uint64]bool{}
+	for _, c := range cmds {
+		if d, ok := c.(unit.Damage); ok {
+			got[d.To] = true
+		}
+	}
+	return got
 }
 
 func hasDespawnGhosts(cmds []unit.Cmd) bool {

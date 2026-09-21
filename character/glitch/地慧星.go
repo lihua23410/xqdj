@@ -372,7 +372,6 @@ func (g *地慧星) lockSlashPose(ctx unit.Context) {
 }
 
 func (g *地慧星) releaseSlash(ctx unit.Context, s unit.Sense) {
-	enemy := fighterOf(s)
 	ghosts := 0
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
@@ -380,13 +379,23 @@ func (g *地慧星) releaseSlash(ctx unit.Context, s unit.Sense) {
 			ghosts++
 		}
 	}
-	hit := enemy != nil && slashHits(g.slashLockX, g.slashLockY, g.slashUX, g.slashUY, *enemy)
-	if hit {
-		amt := slashAmount(int(glitchDamage), markStacks(*enemy, glitchMarkKind), ghosts)
-		if amt > 0 {
-			ctx.Out <- unit.Damage{From: ctx.ID, To: enemy.ID, Amount: amt}
+	hit := false
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if !unit.Hittable(*o, s.Self.Slot) {
+			continue
 		}
-		ctx.Out <- unit.ClearMarks{UnitID: enemy.ID, Kind: glitchMarkKind}
+		if !slashHits(g.slashLockX, g.slashLockY, g.slashUX, g.slashUY, *o) {
+			continue
+		}
+		hit = true
+		amt := slashAmount(int(glitchDamage), markStacks(*o, glitchMarkKind), ghosts)
+		if amt > 0 {
+			ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: amt}
+		}
+		ctx.Out <- unit.ClearMarks{UnitID: o.ID, Kind: glitchMarkKind}
+	}
+	if hit {
 		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindGlitchGhost}
 		g.slashReadyAt = s.Time + glitchSlashCD
 		return
