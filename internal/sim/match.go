@@ -21,52 +21,53 @@ const (
 )
 
 type unit struct {
-	id             uint64
-	kind           string
-	role           string
-	slot           int
-	owner          uint64
-	p, v           vec
-	radius         float64
-	hp             float64
-	maxHP          float64
-	actor          unitpkg.Actor
-	inbox          chan unitpkg.Event
-	stop           chan struct{}
-	stopped        bool
-	solid          bool
-	vision         float64
-	cruise         float64
-	cruiseFS       *cruiseFS
-	fsList         []impulseFS
-	decelT         float64
-	stunUntil      float64
-	semi           bool
-	face           vec
-	passWalls      bool
-	breakWalls     bool
-	mortal         bool
-	aimPriority    uint8
-	pass           bool
-	stand          bool
-	stun           bool
-	noFrameFreeze  bool
-	shell          bool
-	attach         bool
-	arcSpan        float64
-	arcInner       float64
-	faction        string
-	factionCycle   bool
-	factionAmpOut  float64
-	factionAmpIn   float64
-	factionCollect bool
-	factionSeen    map[string]bool
-	factionNext    float64
-	factionBarrage []string
-	factionBlastR  float64
-	factionBlastD  float64
-	marks          map[string]*stackMark
-	tap            func(unitpkg.Event)
+	id              uint64
+	kind            string
+	role            string
+	slot            int
+	owner           uint64
+	p, v            vec
+	radius          float64
+	hp              float64
+	maxHP           float64
+	actor           unitpkg.Actor
+	inbox           chan unitpkg.Event
+	stop            chan struct{}
+	stopped         bool
+	solid           bool
+	vision          float64
+	cruise          float64
+	cruiseFS        *cruiseFS
+	fsList          []impulseFS
+	decelT          float64
+	stunUntil       float64
+	semi            bool
+	face            vec
+	passWalls       bool
+	breakWalls      bool
+	mortal          bool
+	aimPriority     uint8
+	pass            bool
+	stand           bool
+	stun            bool
+	noFrameFreeze   bool
+	noHealthNumbers bool
+	shell           bool
+	attach          bool
+	arcSpan         float64
+	arcInner        float64
+	faction         string
+	factionCycle    bool
+	factionAmpOut   float64
+	factionAmpIn    float64
+	factionCollect  bool
+	factionSeen     map[string]bool
+	factionNext     float64
+	factionBarrage  []string
+	factionBlastR   float64
+	factionBlastD   float64
+	marks           map[string]*stackMark
+	tap             func(unitpkg.Event)
 }
 
 type spawnSpot struct {
@@ -242,31 +243,33 @@ func (m *Match) SnapshotJSON() []byte {
 
 func (u *unit) snap() unitpkg.Snapshot {
 	return unitpkg.Snapshot{
-		ID:          u.id,
-		Kind:        u.kind,
-		Role:        u.role,
-		X:           u.p.X,
-		Y:           u.p.Y,
-		VX:          u.v.X,
-		VY:          u.v.Y,
-		Radius:      u.radius,
-		HP:          u.hp,
-		MaxHP:       u.maxHP,
-		Vision:      u.vision,
-		OwnerID:     u.owner,
-		Slot:        u.slot,
-		Semi:        u.semi,
-		FaceX:       u.face.X,
-		FaceY:       u.face.Y,
-		PassWalls:   u.passWalls,
-		Mortal:      u.mortal,
-		BreakWalls:  u.breakWalls,
-		ArcSpan:     u.arcSpan,
-		ArcInner:    u.arcInner,
-		Faction:     u.faction,
-		Seen:        u.seenList(),
-		Marks:       u.markList(),
-		AimPriority: u.aimPriority,
+		ID:              u.id,
+		Kind:            u.kind,
+		Role:            u.role,
+		X:               u.p.X,
+		Y:               u.p.Y,
+		VX:              u.v.X,
+		VY:              u.v.Y,
+		Radius:          u.radius,
+		HP:              u.hp,
+		MaxHP:           u.maxHP,
+		Vision:          u.vision,
+		OwnerID:         u.owner,
+		Slot:            u.slot,
+		Semi:            u.semi,
+		FaceX:           u.face.X,
+		FaceY:           u.face.Y,
+		PassWalls:       u.passWalls,
+		Mortal:          u.mortal,
+		BreakWalls:      u.breakWalls,
+		ArcSpan:         u.arcSpan,
+		ArcInner:        u.arcInner,
+		Faction:         u.faction,
+		Seen:            u.seenList(),
+		Marks:           u.markList(),
+		AimPriority:     u.aimPriority,
+		Nonsolid:        !u.solid,
+		NoHealthNumbers: u.noHealthNumbers,
 	}
 }
 
@@ -282,7 +285,7 @@ func (u *unit) inSnapshot() bool {
 	if u == nil || u.stopped {
 		return false
 	}
-	return u.solid || u.role == unitpkg.RoleHelper
+	return u.solid || u.role == unitpkg.RoleHelper || u.role == unitpkg.RoleFighter
 }
 
 func (u *unit) seenList() []string {
@@ -468,7 +471,7 @@ func (m *Match) decelerateLocked(dt float64) {
 	const rise = drop / 2
 	for _, id := range m.order {
 		u := m.units[id]
-		if u == nil || !u.solid || u.role != unitpkg.RoleFighter {
+		if u == nil || !u.solid || u.cruiseFS == nil {
 			continue
 		}
 		if u.skipDecel() {
@@ -635,7 +638,7 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 		actor:       actor,
 		inbox:       make(chan unitpkg.Event, 64),
 		stop:        make(chan struct{}),
-		solid:       spec.Role != unitpkg.RoleHelper,
+		solid:       spec.Role != unitpkg.RoleHelper && !spec.Nonsolid,
 		semi:        spec.Semi,
 		face:        vec{1, 0},
 		passWalls:   spec.PassWalls,
@@ -650,7 +653,7 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
 	}
-	if spec.Role == unitpkg.RoleFighter {
+	if spec.Role == unitpkg.RoleFighter || spec.Cruise {
 		u.cruiseFS = newCruiseFS(v, spec.Speed)
 		u.syncCruise()
 	}
@@ -871,6 +874,12 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		u.noFrameFreeze = c.Hold
+	case unitpkg.NoHealthNumbers:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		u.noHealthNumbers = c.Hold
 	case unitpkg.Stun:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -1210,7 +1219,6 @@ func (m *Match) removeLocked(u *unit) {
 		return
 	}
 	id := u.id
-	role := u.role
 	m.killLocked(u)
 	delete(m.units, u.id)
 	for tok, off := range m.pendingDmg {
@@ -1223,9 +1231,6 @@ func (m *Match) removeLocked(u *unit) {
 			m.order = append(m.order[:i], m.order[i+1:]...)
 			break
 		}
-	}
-	if role != unitpkg.RoleFighter {
-		return
 	}
 	var extras []*unit
 	for _, oid := range m.order {

@@ -14,6 +14,8 @@ type Spec struct {
 	BreakWalls  bool    // 击中胶囊墙则该截提前消失并穿过；硬墙穿过不拆；场边仍撞
 	StartHP     float64 // 0 表示开局满血（MaxHP）
 	AimPriority uint8   // 0 = 未写：战斗机 15、活随从 60、其余 0
+	Nonsolid    bool    // 不实心：不碰、不进 Hittable。战斗机仍进快照
+	Cruise      bool    // 吃巡航带子。战斗机默认有；活随从要写
 	Shell       bool    // 贴在主人身上的环，撞到东西会碎并通知主人
 	Attach      bool    // 每帧贴主人；不挡伤、不碎。不撞墙。只和敌方战斗机、活随从做 CCD
 	ArcSpan     float64 // 扇环张角（弧度）。0 = 不是扇环。2π = 整圈细环

@@ -664,6 +664,13 @@ function renderArena() {
   const now = performance.now();
   for (const u of state.units || []) {
     seen.add(String(u.id));
+    if (!(u.radius > 0)) {
+      const stale = document.getElementById(`u-${u.id}`);
+      if (stale) stale.remove();
+      const tag = document.getElementById(`hp-${u.id}`);
+      if (tag) tag.remove();
+      continue;
+    }
     const look = lookOf(u.kind);
     let el = document.getElementById(`u-${u.id}`);
     const layer = look.overlay && overEl ? overEl : unitsEl;
@@ -738,17 +745,18 @@ function renderArena() {
       fxRoot: overEl || fxRoot,
       spawnGhost: spawnGhostFrom,
     });
-    const shownHP =
-      u.role === "twin"
-        ? fighters.find((f) => f.slot === u.slot)?.hp ?? u.hp
-        : u.hp;
+    const shareHP = !!look.shareHp;
+    const shownHP = shareHP
+      ? fighters.find((f) => f.slot === u.slot)?.hp ?? u.hp
+      : u.hp;
     const prev = prevHP.get(u.id);
     if (prev != null && shownHP < prev - 0.5) {
       burst(sx, sy, u.kind, 8);
     }
-    if (u.role === "fighter" || u.role === "twin") prevHP.set(u.id, shownHP);
+    const showHP = (u.role === "fighter" || shareHP) && !u.noHealthNumbers;
+    if (showHP) prevHP.set(u.id, shownHP);
     let tag = document.getElementById(`hp-${u.id}`);
-    if (u.role === "fighter" || u.role === "twin") {
+    if (showHP) {
       if (!tag) {
         tag = document.createElement("span");
         tag.id = `hp-${u.id}`;

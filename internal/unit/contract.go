@@ -1,31 +1,33 @@
 package unit
 
 type Snapshot struct {
-	ID          uint64   `json:"id"`
-	Kind        string   `json:"kind"`
-	Role        string   `json:"role"`
-	X           float64  `json:"x"`
-	Y           float64  `json:"y"`
-	VX          float64  `json:"vx"`
-	VY          float64  `json:"vy"`
-	Radius      float64  `json:"radius"`
-	HP          float64  `json:"hp"`
-	MaxHP       float64  `json:"maxHp"`
-	Vision      float64  `json:"vision"`
-	OwnerID     uint64   `json:"ownerId"`
-	Slot        int      `json:"slot"`
-	Semi        bool     `json:"semi"`
-	FaceX       float64  `json:"faceX"`
-	FaceY       float64  `json:"faceY"`
-	PassWalls   bool     `json:"passWalls"`
-	Mortal      bool     `json:"mortal,omitempty"`
-	BreakWalls  bool     `json:"breakWalls,omitempty"`
-	ArcSpan     float64  `json:"arcSpan,omitempty"`
-	ArcInner    float64  `json:"arcInner,omitempty"`
-	Faction     string   `json:"faction,omitempty"`
-	Seen        []string `json:"seen,omitempty"`
-	Marks       []Mark   `json:"marks,omitempty"`
-	AimPriority uint8    `json:"aimPriority,omitempty"`
+	ID              uint64   `json:"id"`
+	Kind            string   `json:"kind"`
+	Role            string   `json:"role"`
+	X               float64  `json:"x"`
+	Y               float64  `json:"y"`
+	VX              float64  `json:"vx"`
+	VY              float64  `json:"vy"`
+	Radius          float64  `json:"radius"`
+	HP              float64  `json:"hp"`
+	MaxHP           float64  `json:"maxHp"`
+	Vision          float64  `json:"vision"`
+	OwnerID         uint64   `json:"ownerId"`
+	Slot            int      `json:"slot"`
+	Semi            bool     `json:"semi"`
+	FaceX           float64  `json:"faceX"`
+	FaceY           float64  `json:"faceY"`
+	PassWalls       bool     `json:"passWalls"`
+	Mortal          bool     `json:"mortal,omitempty"`
+	BreakWalls      bool     `json:"breakWalls,omitempty"`
+	ArcSpan         float64  `json:"arcSpan,omitempty"`
+	ArcInner        float64  `json:"arcInner,omitempty"`
+	Faction         string   `json:"faction,omitempty"`
+	Seen            []string `json:"seen,omitempty"`
+	Marks           []Mark   `json:"marks,omitempty"`
+	AimPriority     uint8    `json:"aimPriority,omitempty"`
+	Nonsolid        bool     `json:"nonsolid,omitempty"`
+	NoHealthNumbers bool     `json:"noHealthNumbers,omitempty"`
 }
 
 type Sense struct {
@@ -271,6 +273,12 @@ type Pass struct {
 
 // NoFrameFreeze 令牌。Hold 时该单位（及其随从）造成的伤害不停帧。Hold=false 放下。
 type NoFrameFreeze struct {
+	UnitID uint64
+	Hold   bool
+}
+
+// NoHealthNumbers 令牌。Hold 时不画该单位自己的头顶数字，不跟到随从。Hold=false 放下。
+type NoHealthNumbers struct {
 	UnitID uint64
 	Hold   bool
 }

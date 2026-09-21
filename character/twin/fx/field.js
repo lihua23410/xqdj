@@ -22,11 +22,12 @@ function fieldTick(mode) {
 
 window.lookFX.bond = {
   guide(u, ctx) {
-    if (!u || u.role !== "fighter" || !ctx.ensureGuide || !ctx.placeSeg) return;
+    const fx = (arena.lookOf(u.kind).fx || []);
+    if (!u || !fx.includes("bond") || !ctx.ensureGuide || !ctx.placeSeg) return;
     const other = (ctx.units || []).find(
       (o) => o.slot === u.slot && o.id !== u.id && (arena.lookOf(o.kind).fx || []).includes("bond")
     );
-    if (!other) return;
+    if (!other || u.id > other.id) return;
     const [x1, y1] = arena.screenPos(u.x, u.y, ctx.scale, ctx.cx, ctx.cy);
     const [x2, y2] = arena.screenPos(other.x, other.y, ctx.scale, ctx.cx, ctx.cy);
     const g = ctx.ensureGuide(`guide-bond-${u.slot}`, "bond");

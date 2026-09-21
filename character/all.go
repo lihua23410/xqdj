@@ -77,6 +77,8 @@ const (
 	KindMiuArc        = r缪.KindMiuArc
 	KindMiuShot       = r缪.KindMiuShot
 	KindRMiu          = r缪.KindRMiu
+	KindBlue          = 无下限术士.KindBlue
+	KindRed           = 无下限术士.KindRed
 	KindTwin          = 无下限术士.KindTwin
 	KindTwinArc       = 无下限术士.KindTwinArc
 	KindTwinBlueArc   = 无下限术士.KindTwinBlueArc

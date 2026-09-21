@@ -639,37 +639,82 @@ func TestTwinSplitsIntoTwoSharingFighter(t *testing.T) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	fighters, twins := 0, 0
+	fighters, red, blue := 0, 0, 0
 	var bodyID uint64
 	for _, id := range m.order {
 		u := m.units[id]
 		if u == nil {
 			continue
 		}
-		switch u.role {
-		case unitpkg.RoleFighter:
-			if u.kind == character.KindTwin {
-				fighters++
-				bodyID = u.id
-				if !u.semi {
-					t.Fatal("body should be a semicircle")
-				}
+		switch u.kind {
+		case character.KindTwin:
+			fighters++
+			bodyID = u.id
+			if u.solid || u.radius != 0 || u.role != unitpkg.RoleFighter {
+				t.Fatalf("body solid=%v r=%v role=%s", u.solid, u.radius, u.role)
 			}
-		case unitpkg.RoleTwin:
-			twins++
-			if u.owner != bodyID && bodyID != 0 {
-				t.Fatalf("twin owner=%d want body=%d", u.owner, bodyID)
+			if u.aimPriority != 0 {
+				t.Fatalf("body aim=%d", u.aimPriority)
 			}
-			if u.kind != "无下限" {
-				t.Fatalf("twin kind=%s", u.kind)
+			if !u.noHealthNumbers {
+				t.Fatal("body missing NoHealthNumbers")
 			}
-			if !u.semi {
-				t.Fatal("half should be a semicircle")
+			if !u.inSnapshot() {
+				t.Fatal("body should stay in snapshot")
+			}
+		case character.KindRed:
+			red++
+			if !u.mortal || !u.semi || u.cruiseFS == nil || u.aimPriority != unitpkg.DefaultFighterAim {
+				t.Fatalf("red mortal=%v semi=%v cruise=%v aim=%d", u.mortal, u.semi, u.cruiseFS != nil, u.aimPriority)
+			}
+			if bodyID != 0 && u.owner != bodyID {
+				t.Fatalf("red owner=%d want %d", u.owner, bodyID)
+			}
+		case character.KindBlue:
+			blue++
+			if !u.mortal || !u.semi || u.cruiseFS != nil || u.aimPriority != unitpkg.DefaultFighterAim {
+				t.Fatalf("blue mortal=%v semi=%v cruise=%v aim=%d", u.mortal, u.semi, u.cruiseFS != nil, u.aimPriority)
+			}
+			if bodyID != 0 && u.owner != bodyID {
+				t.Fatalf("blue owner=%d want %d", u.owner, bodyID)
 			}
 		}
 	}
-	if fighters != 1 || twins != 1 {
-		t.Fatalf("twin fighters=%d halves=%d", fighters, twins)
+	if fighters != 1 || red != 1 || blue != 1 {
+		t.Fatalf("twin fighters=%d red=%d blue=%d", fighters, red, blue)
+	}
+}
+
+func TestTwinHalfHitHurtsFighter(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindTwin)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 8; i++ {
+		m.Tick()
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	body := fighterByKind(m, character.KindTwin)
+	red := fighterByKind(m, character.KindRed)
+	src := fighterByKind(m, character.KindRanged)
+	if body == nil || red == nil || src == nil {
+		t.Fatal("missing units")
+	}
+	before := body.hp
+	m.offerDamageLocked(unitpkg.Damage{From: src.id, To: red.id, Amount: 9})
+	m.settleHitsLocked()
+	m.settleHitsLocked()
+	if math.Abs(red.hp-(red.maxHP-9)) > 1e-6 {
+		t.Fatalf("red hp=%v", red.hp)
+	}
+	if math.Abs(body.hp-(before-9)) > 1e-6 {
+		t.Fatalf("fighter hp=%v want %v", body.hp, before-9)
+	}
+	if m.hitStop != HitStopFrames {
+		t.Fatalf("hitStop=%d", m.hitStop)
 	}
 }
 

@@ -14,6 +14,7 @@ type Look struct {
 	Overlay    bool     `json:"overlay,omitempty"` // 画在 #over，不被六边形裁切
 	FX         []string `json:"fx,omitempty"`      // 常驻皮肤短名，如 "glitch"
 	Base       string   `json:"base,omitempty"`    // "/ball/<Kind>"，随从与主人相同
+	ShareHP    bool     `json:"shareHp,omitempty"` // 头顶数字跟同槽战斗机走
 }
 
 func Looks() map[string]Look {

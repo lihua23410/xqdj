@@ -25,9 +25,9 @@ func EnemyFighter(e Collision, slot int) bool {
 	return e.Other.Role == RoleFighter && e.Other.Slot != slot
 }
 
-// Hittable：敌方战斗机或敌方活随从。索敌用 Aimable / Seek；出伤用这个。
+// Hittable：敌方战斗机或敌方活随从。索敌用 Aimable / Seek；出伤用这个。不实心的不算。
 func Hittable(o Snapshot, slot int) bool {
-	if o.Slot == slot {
+	if o.Slot == slot || o.Nonsolid {
 		return false
 	}
 	return o.Role == RoleFighter || o.Mortal

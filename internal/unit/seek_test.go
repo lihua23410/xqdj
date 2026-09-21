@@ -59,3 +59,18 @@ func TestSeekSkipsZeroAndSameSlot(t *testing.T) {
 		t.Fatalf("got %#v", got)
 	}
 }
+
+func TestHittableSkipsNonsolid(t *testing.T) {
+	foe := Snapshot{ID: 2, Role: RoleFighter, Slot: 1}
+	if !Hittable(foe, 0) {
+		t.Fatal("solid fighter should be hittable")
+	}
+	foe.Nonsolid = true
+	if Hittable(foe, 0) {
+		t.Fatal("nonsolid fighter should not be hittable")
+	}
+	min := Snapshot{ID: 3, Role: RoleMinion, Mortal: true, Slot: 1}
+	if !Hittable(min, 0) {
+		t.Fatal("mortal minion should be hittable")
+	}
+}
