@@ -465,18 +465,7 @@ func (a *盾斧) turnToEnemy(ctx unit.Context, s unit.Sense) {
 		}
 	}
 	if hit == nil {
-		bestD := math.Inf(1)
-		for i := range s.Nearby {
-			o := &s.Nearby[i]
-			if !unit.Hittable(*o, s.Self.Slot) || o.Role != unit.RoleFighter {
-				continue
-			}
-			d := math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y)
-			if d < bestD {
-				bestD = d
-				hit = o
-			}
-		}
+		hit = unit.Seek(s)
 	}
 	if hit == nil {
 		return
@@ -565,16 +554,9 @@ func (a *盾斧) hitRect(ctx unit.Context, s unit.Sense, near, far, width, dmg f
 }
 
 func (a *盾斧) firstInFan(s unit.Sense, r, span float64) *unit.Snapshot {
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if !unit.Hittable(*o, s.Self.Slot) {
-			continue
-		}
-		if inFan(s.Self, a.hx, a.hy, *o, r, span) {
-			return o
-		}
-	}
-	return nil
+	return unit.SeekIf(s, func(o unit.Snapshot) bool {
+		return inFan(s.Self, a.hx, a.hy, o, r, span)
+	})
 }
 
 func inFan(self unit.Snapshot, hx, hy float64, o unit.Snapshot, r, spanDeg float64) bool {

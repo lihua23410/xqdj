@@ -80,7 +80,7 @@ func TestCyanCollectPinsWithoutWritingCruise(t *testing.T) {
 	enemy := unit.Snapshot{
 		ID: 2, Kind: "筑墙者", Role: unit.RoleFighter, Slot: 1,
 		X: 80, Y: 0, Radius: 18, Faction: unit.FactionCyan,
-		Seen: unit.AllFactions(),
+		Seen: unit.AllFactions(), AimPriority: unit.DefaultFighterAim,
 	}
 	m.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{enemy}})
 	hit := drain(out)
@@ -127,7 +127,7 @@ func TestCyanLostTargetClearsPin(t *testing.T) {
 	enemy := unit.Snapshot{
 		ID: 2, Kind: "筑墙者", Role: unit.RoleFighter, Slot: 1,
 		X: 80, Y: 0, Radius: 18, Faction: unit.FactionCyan,
-		Seen: unit.AllFactions(),
+		Seen: unit.AllFactions(), AimPriority: unit.DefaultFighterAim,
 	}
 	m.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{enemy}})
 	_ = drain(out)

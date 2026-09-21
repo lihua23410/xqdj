@@ -492,8 +492,7 @@ func (r *R缪) findEnemies(s unit.Sense) []unit.Snapshot {
 			out = append(out, *o)
 			continue
 		}
-		// 敌方战斗机或活随从
-		if o.Slot != s.Self.Slot && (o.Role == unit.RoleFighter || o.Mortal) {
+		if unit.Aimable(*o, s.Self.Slot) {
 			out = append(out, *o)
 		}
 	}
@@ -723,8 +722,7 @@ func (m *缪) findTargets(s unit.Sense) []unit.Snapshot {
 			out = append(out, *o)
 			continue
 		}
-		// 敌方战斗机或活随从
-		if o.Slot != m.slot && (o.Role == unit.RoleFighter || o.Mortal) {
+		if unit.Aimable(*o, m.slot) {
 			out = append(out, *o)
 		}
 	}

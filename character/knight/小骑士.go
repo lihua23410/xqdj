@@ -98,15 +98,7 @@ func (k *小骑士) tryRam(ctx unit.Context, sense unit.Sense) {
 	if sense.Time+1e-9 < k.readyAt {
 		return
 	}
-	var enemy *unit.Snapshot
-	for i := range sense.Nearby {
-		o := &sense.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == sense.Self.Slot {
-			continue
-		}
-		enemy = o
-		break
-	}
+	enemy := unit.Seek(sense)
 	if enemy == nil {
 		return
 	}

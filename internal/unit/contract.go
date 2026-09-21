@@ -1,30 +1,31 @@
 package unit
 
 type Snapshot struct {
-	ID         uint64   `json:"id"`
-	Kind       string   `json:"kind"`
-	Role       string   `json:"role"`
-	X          float64  `json:"x"`
-	Y          float64  `json:"y"`
-	VX         float64  `json:"vx"`
-	VY         float64  `json:"vy"`
-	Radius     float64  `json:"radius"`
-	HP         float64  `json:"hp"`
-	MaxHP      float64  `json:"maxHp"`
-	Vision     float64  `json:"vision"`
-	OwnerID    uint64   `json:"ownerId"`
-	Slot       int      `json:"slot"`
-	Semi       bool     `json:"semi"`
-	FaceX      float64  `json:"faceX"`
-	FaceY      float64  `json:"faceY"`
-	PassWalls  bool     `json:"passWalls"`
-	Mortal     bool     `json:"mortal,omitempty"`
-	BreakWalls bool     `json:"breakWalls,omitempty"`
-	ArcSpan    float64  `json:"arcSpan,omitempty"`
-	ArcInner   float64  `json:"arcInner,omitempty"`
-	Faction    string   `json:"faction,omitempty"`
-	Seen       []string `json:"seen,omitempty"`
-	Marks      []Mark   `json:"marks,omitempty"`
+	ID          uint64   `json:"id"`
+	Kind        string   `json:"kind"`
+	Role        string   `json:"role"`
+	X           float64  `json:"x"`
+	Y           float64  `json:"y"`
+	VX          float64  `json:"vx"`
+	VY          float64  `json:"vy"`
+	Radius      float64  `json:"radius"`
+	HP          float64  `json:"hp"`
+	MaxHP       float64  `json:"maxHp"`
+	Vision      float64  `json:"vision"`
+	OwnerID     uint64   `json:"ownerId"`
+	Slot        int      `json:"slot"`
+	Semi        bool     `json:"semi"`
+	FaceX       float64  `json:"faceX"`
+	FaceY       float64  `json:"faceY"`
+	PassWalls   bool     `json:"passWalls"`
+	Mortal      bool     `json:"mortal,omitempty"`
+	BreakWalls  bool     `json:"breakWalls,omitempty"`
+	ArcSpan     float64  `json:"arcSpan,omitempty"`
+	ArcInner    float64  `json:"arcInner,omitempty"`
+	Faction     string   `json:"faction,omitempty"`
+	Seen        []string `json:"seen,omitempty"`
+	Marks       []Mark   `json:"marks,omitempty"`
+	AimPriority uint8    `json:"aimPriority,omitempty"`
 }
 
 type Sense struct {
@@ -252,6 +253,14 @@ type Teleport struct {
 	UnitID uint64
 	X      float64
 	Y      float64
+}
+
+// SetAimPriority 改瞄准优先度。From 是改的人，UnitID 是被改的。
+// 只能改战斗机或活随从。当前为 0 时只有自己（From == UnitID）能改。
+type SetAimPriority struct {
+	From   uint64
+	UnitID uint64
+	Value  uint8
 }
 
 // Pass 令牌。Hold 时与其他单位相撞不改双方速度；墙和胶囊墙仍弹。Hold=false 放下。

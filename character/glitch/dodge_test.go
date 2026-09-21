@@ -10,7 +10,7 @@ func TestDodgeTeleportsWalkableAndShoots(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	g := &地慧星{slashReadyAt: glitchSlashCD}
 	ctx := unit.Context{ID: 1, Kind: KindGlitch, Out: out}
-	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 120, Y: 0, Radius: 18}
+	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 120, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
 	g.Handle(ctx, unit.Sense{
 		Time:   1,
 		Self:   unit.Snapshot{ID: 1, Kind: KindGlitch, Role: unit.RoleFighter, Slot: 0, X: -120, Y: 0, VX: 0, VY: 165, Radius: glitchRadius},

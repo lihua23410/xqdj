@@ -46,6 +46,7 @@ type unit struct {
 	passWalls      bool
 	breakWalls     bool
 	mortal         bool
+	aimPriority    uint8
 	pass           bool
 	stand          bool
 	stun           bool
@@ -241,30 +242,31 @@ func (m *Match) SnapshotJSON() []byte {
 
 func (u *unit) snap() unitpkg.Snapshot {
 	return unitpkg.Snapshot{
-		ID:         u.id,
-		Kind:       u.kind,
-		Role:       u.role,
-		X:          u.p.X,
-		Y:          u.p.Y,
-		VX:         u.v.X,
-		VY:         u.v.Y,
-		Radius:     u.radius,
-		HP:         u.hp,
-		MaxHP:      u.maxHP,
-		Vision:     u.vision,
-		OwnerID:    u.owner,
-		Slot:       u.slot,
-		Semi:       u.semi,
-		FaceX:      u.face.X,
-		FaceY:      u.face.Y,
-		PassWalls:  u.passWalls,
-		Mortal:     u.mortal,
-		BreakWalls: u.breakWalls,
-		ArcSpan:    u.arcSpan,
-		ArcInner:   u.arcInner,
-		Faction:    u.faction,
-		Seen:       u.seenList(),
-		Marks:      u.markList(),
+		ID:          u.id,
+		Kind:        u.kind,
+		Role:        u.role,
+		X:           u.p.X,
+		Y:           u.p.Y,
+		VX:          u.v.X,
+		VY:          u.v.Y,
+		Radius:      u.radius,
+		HP:          u.hp,
+		MaxHP:       u.maxHP,
+		Vision:      u.vision,
+		OwnerID:     u.owner,
+		Slot:        u.slot,
+		Semi:        u.semi,
+		FaceX:       u.face.X,
+		FaceY:       u.face.Y,
+		PassWalls:   u.passWalls,
+		Mortal:      u.mortal,
+		BreakWalls:  u.breakWalls,
+		ArcSpan:     u.arcSpan,
+		ArcInner:    u.arcInner,
+		Faction:     u.faction,
+		Seen:        u.seenList(),
+		Marks:       u.markList(),
+		AimPriority: u.aimPriority,
 	}
 }
 
@@ -618,31 +620,32 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 	m.nextID++
 	id := m.nextID
 	u := &unit{
-		id:         id,
-		kind:       kind,
-		role:       spec.Role,
-		slot:       slot,
-		owner:      owner,
-		p:          p,
-		v:          v,
-		radius:     spec.Radius,
-		hp:         spec.MaxHP,
-		maxHP:      spec.MaxHP,
-		vision:     spec.Vision,
-		cruise:     spec.Speed,
-		actor:      actor,
-		inbox:      make(chan unitpkg.Event, 64),
-		stop:       make(chan struct{}),
-		solid:      spec.Role != unitpkg.RoleHelper,
-		semi:       spec.Semi,
-		face:       vec{1, 0},
-		passWalls:  spec.PassWalls,
-		breakWalls: spec.BreakWalls,
-		mortal:     spec.Mortal,
-		shell:      spec.Shell,
-		attach:     spec.Attach,
-		arcSpan:    spec.ArcSpan,
-		arcInner:   spec.ArcInner,
+		id:          id,
+		kind:        kind,
+		role:        spec.Role,
+		slot:        slot,
+		owner:       owner,
+		p:           p,
+		v:           v,
+		radius:      spec.Radius,
+		hp:          spec.MaxHP,
+		maxHP:       spec.MaxHP,
+		vision:      spec.Vision,
+		cruise:      spec.Speed,
+		actor:       actor,
+		inbox:       make(chan unitpkg.Event, 64),
+		stop:        make(chan struct{}),
+		solid:       spec.Role != unitpkg.RoleHelper,
+		semi:        spec.Semi,
+		face:        vec{1, 0},
+		passWalls:   spec.PassWalls,
+		breakWalls:  spec.BreakWalls,
+		mortal:      spec.Mortal,
+		aimPriority: unitpkg.DefaultAimPriority(spec),
+		shell:       spec.Shell,
+		attach:      spec.Attach,
+		arcSpan:     spec.ArcSpan,
+		arcInner:    spec.ArcInner,
 	}
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
@@ -761,6 +764,18 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 				u.hp = u.maxHP
 			}
 		}
+	case unitpkg.SetAimPriority:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		if u.role != unitpkg.RoleFighter && !u.mortal {
+			return
+		}
+		if u.aimPriority == 0 && c.From != u.id {
+			return
+		}
+		u.aimPriority = c.Value
 	case unitpkg.Damage:
 		m.offerDamageLocked(c)
 	case unitpkg.ConfirmDamage:

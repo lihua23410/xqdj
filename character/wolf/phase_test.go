@@ -56,7 +56,7 @@ func TestEnemyTouchAdvancesPhase(t *testing.T) {
 	w := bootedWolf()
 	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
 	moon := moonSnap(1)
-	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 8, Y: 0, Radius: 18}
+	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 8, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
 	w.Handle(ctx, unit.Sense{Time: 1, Self: selfAt(120, 0), Nearby: []unit.Snapshot{moon, enemy}})
 	if got := lastPhase(drain(out)); got != 1 {
 		t.Fatalf("enemy touch phase=%v", got)
@@ -68,7 +68,7 @@ func TestFullMoonStartsLockThenDash(t *testing.T) {
 	w := bootedWolf()
 	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
 	moon := moonSnap(1)
-	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 90, Y: 0, Radius: 18}
+	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 90, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
 
 	for i := 0; i < fullMoon-1; i++ {
 		touch(w, ctx, float64(i)+1, true)
@@ -119,7 +119,7 @@ func TestLockTracksThenDashFreezesAim(t *testing.T) {
 	w.Handle(ctx, unit.Sense{
 		Time:   1.05,
 		Self:   selfAt(0, 0),
-		Nearby: []unit.Snapshot{{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 0, Y: 80, Radius: 18}},
+		Nearby: []unit.Snapshot{{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 0, Y: 80, Radius: 18, AimPriority: unit.DefaultFighterAim}},
 	})
 	if w.aimY <= 0 {
 		t.Fatalf("lock should track +y aimY=%v", w.aimY)
@@ -131,7 +131,7 @@ func TestLockTracksThenDashFreezesAim(t *testing.T) {
 	w.Handle(ctx, unit.Sense{
 		Time:   1.1,
 		Self:   selfAt(0, 0),
-		Nearby: []unit.Snapshot{{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 0, Y: 80, Radius: 18}},
+		Nearby: []unit.Snapshot{{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 0, Y: 80, Radius: 18, AimPriority: unit.DefaultFighterAim}},
 	})
 	if w.bite != biteDash {
 		t.Fatalf("bite=%d want dash", w.bite)
@@ -148,7 +148,7 @@ func TestLockTracksThenDashFreezesAim(t *testing.T) {
 	w.Handle(ctx, unit.Sense{
 		Time:   1.2,
 		Self:   selfAt(0, 20),
-		Nearby: []unit.Snapshot{{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 80, Y: 0, Radius: 18}},
+		Nearby: []unit.Snapshot{{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 80, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}},
 	})
 	if abs(w.aimX) > 0.2 || w.aimY <= 0 {
 		t.Fatalf("dash must not retarget, aim=(%v,%v)", w.aimX, w.aimY)
@@ -202,7 +202,7 @@ func TestWallEndsDashAndRelocks(t *testing.T) {
 		t.Fatalf("second wall while locking should not count: left=%d", w.dashesLeft)
 	}
 
-	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 90, Y: 0, Radius: 18}
+	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 90, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
 	w.Handle(ctx, unit.Sense{Time: 3.3, Self: selfAt(200, 0), Nearby: []unit.Snapshot{enemy}})
 	if w.bite != biteLock {
 		t.Fatalf("still seeking at 0.3s bite=%d", w.bite)

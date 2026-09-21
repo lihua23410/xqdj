@@ -493,13 +493,7 @@ func (a *人偶使) emitCall(ctx unit.Context, s unit.Sense, sk uint8) {
 }
 
 func enemyOf(s unit.Sense) *unit.Snapshot {
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role == unit.RoleFighter && o.Slot != s.Self.Slot {
-			return o
-		}
-	}
-	return nil
+	return unit.Seek(s)
 }
 
 func noteDealt(owner uint64) {

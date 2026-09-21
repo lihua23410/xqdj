@@ -50,15 +50,7 @@ func (w *筑墙者) Handle(ctx unit.Context, ev unit.Event) {
 	if s.Time+1e-9 < w.nextBuild {
 		return
 	}
-	var enemy *unit.Snapshot
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter {
-			continue
-		}
-		enemy = o
-		break
-	}
+	enemy := unit.Seek(s)
 	if enemy == nil {
 		return
 	}

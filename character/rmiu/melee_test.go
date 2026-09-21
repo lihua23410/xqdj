@@ -30,7 +30,7 @@ func miuSelf() unit.Snapshot {
 func foe(id uint64, x, y float64) unit.Snapshot {
 	return unit.Snapshot{
 		ID: id, Kind: "靶子", Role: unit.RoleFighter, Slot: 1,
-		X: x, Y: y, Radius: 18,
+		X: x, Y: y, Radius: 18, AimPriority: unit.DefaultFighterAim,
 	}
 }
 

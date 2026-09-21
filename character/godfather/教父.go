@@ -288,13 +288,7 @@ func overlap(a, b unit.Snapshot) bool {
 }
 
 func enemyFighter(s unit.Sense) *unit.Snapshot {
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role == unit.RoleFighter && o.Slot != s.Self.Slot {
-			return o
-		}
-	}
-	return nil
+	return unit.Seek(s)
 }
 
 func pickupDrug(ctx unit.Context, s unit.Sense, extra func()) bool {

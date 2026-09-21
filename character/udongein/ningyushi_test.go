@@ -735,7 +735,7 @@ func meVX(x, y, vx, vy float64) unit.Snapshot {
 func foe(x, y float64) unit.Snapshot {
 	return unit.Snapshot{
 		ID: 2, Kind: "原型机_远程", Role: unit.RoleFighter,
-		X: x, Y: y, Radius: 18, HP: 100, MaxHP: 100, Slot: 1,
+		X: x, Y: y, Radius: 18, HP: 100, MaxHP: 100, Slot: 1, AimPriority: unit.DefaultFighterAim,
 	}
 }
 

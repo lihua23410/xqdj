@@ -13,7 +13,7 @@ func TestDodgeChance(t *testing.T) {
 		t.Fatal("slower must not dodge")
 	}
 	p := dodgeChance(220, 170)
-	want := (50.0 / 50.0) / 100.0
+	want := (50.0 / dodgeSpeedDiv) / 100.0
 	if mathAbs(p-want) > 1e-12 {
 		t.Fatalf("p=%v want %v", p, want)
 	}

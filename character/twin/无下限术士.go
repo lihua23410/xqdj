@@ -150,14 +150,9 @@ func (d *无下限术士) Handle(ctx unit.Context, ev unit.Event) {
 func (d *无下限术士) remember(s unit.Sense) {
 	d.selfX, d.selfY = s.Self.X, s.Self.Y
 	d.hasEnemy = false
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || o.Slot == s.Self.Slot {
-			continue
-		}
+	if o := unit.Seek(s); o != nil {
 		d.enemyX, d.enemyY = o.X, o.Y
 		d.hasEnemy = true
-		break
 	}
 }
 

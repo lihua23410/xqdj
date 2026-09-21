@@ -622,7 +622,7 @@ func selfAt(x, y float64) unit.Snapshot {
 }
 
 func enemyAt(x, y float64) unit.Snapshot {
-	return unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: x, Y: y, Radius: 18}
+	return unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: x, Y: y, Radius: 18, AimPriority: unit.DefaultFighterAim}
 }
 
 func pondAt(x, y float64) unit.Snapshot {

@@ -72,15 +72,7 @@ func (r *原型机_远程) shoot(ctx unit.Context, s unit.Sense) {
 	if s.Time < r.fireReadyAt {
 		return
 	}
-	var target *unit.Snapshot
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter {
-			continue
-		}
-		target = o
-		break
-	}
+	target := unit.Seek(s)
 	if target == nil {
 		return
 	}

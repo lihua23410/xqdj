@@ -620,13 +620,7 @@ func maskDmg(faction string) float64 {
 }
 
 func enemyOf(s unit.Sense) *unit.Snapshot {
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role == unit.RoleFighter && o.Slot != s.Self.Slot {
-			return o
-		}
-	}
-	return nil
+	return unit.Seek(s)
 }
 
 func hitTarget(other unit.Snapshot, slot int) bool {

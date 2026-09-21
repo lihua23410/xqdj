@@ -28,7 +28,7 @@ func me(vx, vy float64) unit.Snapshot {
 func foeAt(x, y float64) unit.Snapshot {
 	return unit.Snapshot{
 		ID: 2, Kind: "筑墙者", Role: unit.RoleFighter, Slot: 1,
-		X: x, Y: y, Radius: 18,
+		X: x, Y: y, Radius: 18, AimPriority: unit.DefaultFighterAim,
 	}
 }
 

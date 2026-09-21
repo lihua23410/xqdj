@@ -275,12 +275,8 @@ func (a *囚徒) planDrop(s unit.Sense) {
 	rng.Shuffle(3, func(i, j int) { kinds[i], kinds[j] = kinds[j], kinds[i] })
 	copy(a.kinds[:], kinds)
 	ex, ey := 0.0, 0.0
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role == unit.RoleFighter && o.Slot != s.Self.Slot {
-			ex, ey = o.X, o.Y
-			break
-		}
+	if o := unit.Seek(s); o != nil {
+		ex, ey = o.X, o.Y
 	}
 	a.spots[0] = clampFit(ex, ey)
 	a.spots[1] = a.randSpot(rng, a.spots[0])

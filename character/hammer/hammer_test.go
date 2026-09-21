@@ -485,7 +485,7 @@ func me(x, y float64) unit.Snapshot {
 func foe(x, y float64) unit.Snapshot {
 	return unit.Snapshot{
 		ID: 2, Kind: KindHammer, Role: unit.RoleFighter, Slot: 1,
-		X: x, Y: y, Radius: fighterRadius,
+		X: x, Y: y, Radius: fighterRadius, AimPriority: unit.DefaultFighterAim,
 	}
 }
 

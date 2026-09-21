@@ -178,12 +178,8 @@ func (h *钉与锤) Handle(ctx unit.Context, ev unit.Event) {
 		}
 	}
 	h.enemySlot = 1 - s.Self.Slot
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role == unit.RoleFighter && o.Slot != s.Self.Slot {
-			rememberFoe(ctx.ID, o.ID)
-			break
-		}
+	if o := unit.Seek(s); o != nil {
+		rememberFoe(ctx.ID, o.ID)
 	}
 
 	h.checkHammer(ctx, s)
@@ -713,13 +709,7 @@ func ritualAng(i int) float64 {
 }
 
 func enemyFighter(s unit.Sense) *unit.Snapshot {
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role == unit.RoleFighter && o.Slot != s.Self.Slot {
-			return o
-		}
-	}
-	return nil
+	return unit.Seek(s)
 }
 
 func clampInHex(x, y, r float64) (float64, float64) {

@@ -16,7 +16,7 @@ func TestSlashWindupLocksThenCutsOldAngle(t *testing.T) {
 	}
 	enemy := unit.Snapshot{
 		ID: 2, Role: unit.RoleFighter, Slot: 1,
-		X: 40, Y: 10, Radius: 18,
+		X: 40, Y: 10, Radius: 18, AimPriority: unit.DefaultFighterAim,
 		Marks: []unit.Mark{{Kind: glitchMarkKind, Stacks: 3}},
 	}
 	ghost := unit.Snapshot{ID: 9, Kind: KindGlitchGhost, Role: unit.RoleHelper, OwnerID: 1, X: -40, Y: 0}
@@ -88,7 +88,7 @@ func TestSlashHitsIfEnemyStaysOnFrozenLine(t *testing.T) {
 	}
 	enemy := unit.Snapshot{
 		ID: 2, Role: unit.RoleFighter, Slot: 1,
-		X: 90, Y: 0, Radius: 18,
+		X: 90, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim,
 		Marks: []unit.Mark{{Kind: glitchMarkKind, Stacks: 3}},
 	}
 	ghosts := []unit.Snapshot{

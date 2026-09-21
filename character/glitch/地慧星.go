@@ -395,13 +395,7 @@ func (g *地慧星) releaseSlash(ctx unit.Context, s unit.Sense) {
 }
 
 func fighterOf(s unit.Sense) *unit.Snapshot {
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role == unit.RoleFighter {
-			return o
-		}
-	}
-	return nil
+	return unit.Seek(s)
 }
 
 func slashHits(x, y, ux, uy float64, enemy unit.Snapshot) bool {

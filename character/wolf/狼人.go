@@ -343,13 +343,7 @@ func findMoon(s unit.Sense, owner uint64) *unit.Snapshot {
 }
 
 func enemyOf(s unit.Sense) *unit.Snapshot {
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role == unit.RoleFighter && o.Slot != s.Self.Slot {
-			return o
-		}
-	}
-	return nil
+	return unit.Seek(s)
 }
 
 func touching(a, b unit.Snapshot) bool {

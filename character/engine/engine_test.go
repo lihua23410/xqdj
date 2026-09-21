@@ -240,7 +240,7 @@ func selfAt(x, y, vx, vy float64) unit.Snapshot {
 }
 
 func enemyAt(x, y float64) unit.Snapshot {
-	return unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: x, Y: y, Radius: 18}
+	return unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: x, Y: y, Radius: 18, AimPriority: unit.DefaultFighterAim}
 }
 
 func drain(out <-chan unit.Cmd) []unit.Cmd {

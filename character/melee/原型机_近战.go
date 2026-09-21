@@ -112,15 +112,7 @@ func (a *近战弧) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 func (m *原型机_近战) seek(ctx unit.Context, s unit.Sense) {
-	var target *unit.Snapshot
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter {
-			continue
-		}
-		target = o
-		break
-	}
+	target := unit.Seek(s)
 	inside := target != nil
 	entered := inside && !m.enemyInside
 	m.enemyInside = inside
