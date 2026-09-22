@@ -60,6 +60,7 @@ const (
 
 	dollRadius    = 14.0
 	dollSpawnTime = 30.0
+	dollLife      = 10.0
 	dollColor     = "#c4a060"
 )
 
@@ -655,10 +656,24 @@ func (n *钉) markStruck(id uint64) {
 
 // ========== 替身人偶 ==========
 
-type 人偶 struct{}
+type 人偶 struct {
+	booted bool
+	dieAt  float64
+}
 
-func (d *人偶) Handle(unit.Context, unit.Event) {
-	// 被动单位，不处理任何事件
+func (d *人偶) Handle(ctx unit.Context, ev unit.Event) {
+	s, ok := ev.(unit.Sense)
+	if !ok {
+		return
+	}
+	if !d.booted {
+		d.booted = true
+		d.dieAt = s.Time + dollLife
+		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+	}
+	if s.Time+1e-9 >= d.dieAt {
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+	}
 }
 
 // ========== 工具函数 ==========

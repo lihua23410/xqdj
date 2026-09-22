@@ -115,6 +115,32 @@ func TestHammerSmashHitsOwnDoll(t *testing.T) {
 	}
 }
 
+func TestDollHoldsPassAndExpires(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	d := &人偶{}
+	ctx := unit.Context{ID: 10, Kind: KindDoll, Out: out}
+	self := unit.Snapshot{ID: 10, Kind: KindDoll, Role: unit.RoleMinion, Slot: 1, Mortal: true, Radius: dollRadius}
+	d.Handle(ctx, unit.Sense{Time: 30, Self: self})
+	boot := drain(out)
+	p := lastPass(boot)
+	if p == nil || p.UnitID != 10 || !p.Hold {
+		t.Fatalf("doll should hold Pass: %v", boot)
+	}
+	if hasDespawn(boot, 10) {
+		t.Fatal("must not despawn on boot")
+	}
+
+	d.Handle(ctx, unit.Sense{Time: 30 + dollLife - 0.01, Self: self})
+	if hasDespawn(drain(out), 10) {
+		t.Fatal("must not despawn before 10s")
+	}
+
+	d.Handle(ctx, unit.Sense{Time: 30 + dollLife, Self: self})
+	if !hasDespawn(drain(out), 10) {
+		t.Fatal("doll should despawn at 10s")
+	}
+}
+
 func TestArcCopiesDollHitImmediately(t *testing.T) {
 	rememberFoe(1, 2)
 	t.Cleanup(func() { rememberFoe(1, 0) })
