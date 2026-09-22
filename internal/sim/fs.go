@@ -81,6 +81,9 @@ func (u *unit) skipDecel() bool {
 	if u == nil {
 		return true
 	}
+	if u.held {
+		return true
+	}
 	if len(u.fsList) > 0 {
 		return true
 	}

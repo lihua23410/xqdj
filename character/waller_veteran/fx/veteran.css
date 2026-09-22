@@ -1,0 +1,48 @@
+.ball.look-veteran {
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, #e0a080 0%, #b85c38 58%, #6e341c 100%);
+}
+
+.ball.look-veteran::before,
+.ball.look-veteran::after {
+  content: "";
+  position: absolute;
+  background: rgba(48, 22, 12, 0.45);
+  pointer-events: none;
+  border-radius: 1px;
+}
+
+.ball.look-veteran::before {
+  width: 1.5px;
+  height: 42%;
+  left: 60%;
+  top: 22%;
+  transform: rotate(22deg);
+}
+
+.ball.look-veteran::after {
+  width: 34%;
+  height: 1.5px;
+  left: 24%;
+  top: 64%;
+  transform: rotate(-28deg);
+}
+
+.fx-slam-ring {
+  width: var(--r, 48px);
+  height: var(--r, 48px);
+  border-radius: 50%;
+  border: 3px solid currentColor;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, currentColor 34%, transparent) 0%,
+    transparent 68%
+  );
+  box-shadow: 0 0 22px currentColor;
+  animation: slam-ring 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes slam-ring {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}

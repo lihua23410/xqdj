@@ -22,6 +22,7 @@ import (
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
 	"xqdj/character/waller"
+	"xqdj/character/waller_veteran"
 	"xqdj/character/warden"
 	"xqdj/character/wolf"
 )
@@ -88,6 +89,7 @@ const (
 	KindNingyushiDoll = 人偶使.KindNingyushiDoll
 	KindNingyushiShot = 人偶使.KindNingyushiShot
 	KindWaller        = 筑墙者.KindWaller
+	KindVeteran       = 筑墙者_百战.KindVeteran
 	KindWarden        = 盾士.KindWarden
 	KindMoon          = 狼人.KindMoon
 	KindWolf          = 狼人.KindWolf

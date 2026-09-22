@@ -50,6 +50,9 @@ type unit struct {
 	pass            bool
 	stand           bool
 	stun            bool
+	held            bool
+	holdUntil       float64
+	holdVel         vec
 	noFrameFreeze   bool
 	noHealthNumbers bool
 	shell           bool
@@ -78,24 +81,31 @@ type spawnSpot struct {
 }
 
 type barrier struct {
-	id      uint64
-	owner   uint64
-	slot    int
-	kind    string
-	a, b    vec
-	radius  float64
-	until   float64
-	amount  float64
-	hitAt   map[uint64]float64
-	hard    bool
-	square  bool
-	field   bool
-	spin    float64 // 顺时针为负。0 表示不动。+Y 朝上。
-	ang     float64
-	base    float64
-	pivot   vec
-	halfLen float64
-	riding  map[uint64]struct{}
+	id        uint64
+	owner     uint64
+	slot      int
+	kind      string
+	a, b      vec
+	radius    float64
+	until     float64
+	amount    float64
+	hitAt     map[uint64]float64
+	hard      bool
+	square    bool
+	field     bool
+	spin      float64 // 弧度每秒，逆时针为正。0 表示不转。
+	ang       float64
+	base      float64
+	pivot     vec
+	halfLen   float64
+	vx, vy    float64
+	hitGap    float64
+	withOwner bool
+	ram       float64
+	rammed    map[uint64]struct{}
+	stunR     float64
+	stunDur   float64
+	riding    map[uint64]struct{}
 }
 
 type wallSnap struct {
@@ -428,6 +438,7 @@ func (m *Match) Tick() {
 	if m.hitStop > 0 {
 		m.drainCmdsLocked()
 	} else {
+		m.pinHeldLocked()
 		m.expireFSLocked()
 		m.syncCruiseLocked()
 		m.decelerateLocked(DT)
@@ -444,16 +455,16 @@ func (m *Match) Tick() {
 		return
 	}
 	m.physicsLocked(DT)
-	for _, d := range m.pending {
-		m.applyCmdLocked(d)
-	}
-	m.pending = m.pending[:0]
+	m.flushPendingLocked()
 	m.settleHitsLocked()
 	m.reapAttachLocked()
 	m.stickFollowersLocked()
 	m.spinWallsLocked(DT)
+	m.flushPendingLocked()
+	m.pinHeldLocked()
 	m.time += DT
 	m.expireWallsLocked()
+	m.releaseHoldLocked()
 	m.expireStunLocked()
 	m.seq++
 	m.emitLocked()
@@ -878,6 +889,10 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		m.swapOwnedLocked(c.UnitID)
 	case unitpkg.PlaceWall:
 		m.placeWallLocked(c)
+	case unitpkg.SetWallMotion:
+		m.setWallMotionLocked(c)
+	case unitpkg.HoldStill:
+		m.holdStillLocked(c.UnitID, c.Until)
 	case unitpkg.FX:
 		m.fx = append(m.fx, c)
 	case unitpkg.Force:
@@ -1154,7 +1169,7 @@ func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
 	if c.Radius <= 0 {
 		return
 	}
-	if !c.Hard && c.Life <= 0 {
+	if !c.Hard && c.Life == 0 {
 		return
 	}
 	a, b := vec{c.X1, c.Y1}, vec{c.X2, c.Y2}
@@ -1170,20 +1185,24 @@ func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
 		Name: "wall-spawn", Kind: c.Kind, Slot: c.Slot,
 		X: a.X, Y: a.Y, VX: b.X, VY: b.Y,
 	})
-	m.walls = append(m.walls, &barrier{
-		id:     m.nextID,
-		owner:  c.OwnerID,
-		slot:   c.Slot,
-		kind:   c.Kind,
-		a:      a,
-		b:      b,
-		radius: c.Radius,
-		until:  until,
-		amount: c.Amount,
-		hard:   c.Hard,
-		square: c.Square || c.Hard,
-		hitAt:  map[uint64]float64{},
-	})
+	w := &barrier{
+		id:        m.nextID,
+		owner:     c.OwnerID,
+		slot:      c.Slot,
+		kind:      c.Kind,
+		a:         a,
+		b:         b,
+		radius:    c.Radius,
+		until:     until,
+		amount:    c.Amount,
+		hitGap:    c.HitGap,
+		withOwner: c.WithOwner,
+		hard:      c.Hard,
+		square:    c.Square || c.Hard,
+		hitAt:     map[uint64]float64{},
+	}
+	w.bindPose()
+	m.walls = append(m.walls, w)
 }
 
 func (m *Match) expireWallsLocked() {
@@ -1272,6 +1291,7 @@ func (m *Match) removeLocked(u *unit) {
 			break
 		}
 	}
+	m.dropOwnerWallsLocked(id)
 	var extras []*unit
 	for _, oid := range m.order {
 		o := m.units[oid]
@@ -1338,14 +1358,291 @@ func (m *Match) nailToWallLocked(u *unit, c unitpkg.Spawn) {
 
 func (m *Match) spinWallsLocked(dt float64) {
 	for _, w := range m.walls {
-		if w.spin == 0 {
+		moved := false
+		if w.spin != 0 {
+			w.ang += w.spin * dt
+			moved = true
+		}
+		if w.vx != 0 || w.vy != 0 {
+			w.pivot = w.pivot.add(vec{w.vx, w.vy}.mul(dt))
+			moved = true
+		}
+		if !moved {
 			continue
 		}
-		w.ang += w.spin * dt
 		w.pose()
 		m.carryNailsLocked(w)
 		m.shoveWallLocked(w)
+		m.ramWallLocked(w)
 	}
+	m.slamWallsLocked()
+}
+
+func (m *Match) flushPendingLocked() {
+	for _, d := range m.pending {
+		m.applyCmdLocked(d)
+	}
+	m.pending = m.pending[:0]
+}
+
+func (m *Match) pinHeldLocked() {
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.stopped || !u.held {
+			continue
+		}
+		u.setVel(vec{})
+	}
+}
+
+func (m *Match) releaseHoldLocked() {
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.stopped || !u.held {
+			continue
+		}
+		if m.time+1e-9 < u.holdUntil {
+			continue
+		}
+		u.setVel(u.holdVel)
+		u.held = false
+		if u.stun && u.stunUntil > 0 && u.stunUntil <= u.holdUntil+1e-6 {
+			u.stun = false
+			u.stunUntil = 0
+		}
+	}
+}
+
+func (m *Match) holdStillLocked(id uint64, until float64) {
+	u := m.units[id]
+	if u == nil || u.stopped {
+		return
+	}
+	u.holdVel = u.v
+	u.held = true
+	u.holdUntil = until
+	u.setVel(vec{})
+	u.stun = true
+	u.stunUntil = until
+}
+
+func (m *Match) dropOwnerWallsLocked(id uint64) {
+	n := 0
+	for _, w := range m.walls {
+		if w.withOwner && w.owner == id {
+			m.fx = append(m.fx, unitpkg.FX{
+				Name: "wall-fade", Kind: w.kind, Slot: w.slot,
+				X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
+			})
+			continue
+		}
+		m.walls[n] = w
+		n++
+	}
+	m.walls = m.walls[:n]
+}
+
+func (m *Match) setWallMotionLocked(c unitpkg.SetWallMotion) {
+	w := m.wallByID(c.WallID)
+	if w == nil {
+		return
+	}
+	w.bindPose()
+	wasRam := w.ram > 0
+	w.spin = c.Spin
+	w.vx, w.vy = c.VX, c.VY
+	w.ram = c.Ram
+	w.stunR = c.StunRadius
+	w.stunDur = c.StunDur
+	if c.Ram > 0 && !wasRam {
+		w.rammed = map[uint64]struct{}{}
+	}
+}
+
+func (w *barrier) bindPose() {
+	if w.halfLen >= 1e-6 {
+		return
+	}
+	d := w.b.sub(w.a)
+	w.halfLen = d.len() / 2
+	if w.halfLen < 1e-6 {
+		return
+	}
+	w.pivot = vec{(w.a.X + w.b.X) / 2, (w.a.Y + w.b.Y) / 2}
+	w.base = math.Atan2(d.Y, d.X)
+	w.ang = 0
+}
+
+func (m *Match) scrapeWallLocked(u *unit, w *barrier) {
+	if w.amount <= 0 || !u.takesHit() || u.slot == w.slot || u.id == w.owner {
+		return
+	}
+	gap := w.hitGap
+	if gap <= 0 {
+		gap = 0.1
+	}
+	if at, ok := w.hitAt[u.id]; ok && m.time < at {
+		return
+	}
+	if w.hitAt == nil {
+		w.hitAt = map[uint64]float64{}
+	}
+	w.hitAt[u.id] = m.time + gap
+	m.pending = append(m.pending, unitpkg.Damage{From: w.owner, To: u.id, Amount: w.amount})
+}
+
+func (m *Match) ramWallLocked(w *barrier) {
+	if w.ram <= 0 {
+		return
+	}
+	if w.rammed == nil {
+		w.rammed = map[uint64]struct{}{}
+	}
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.stopped || u.id == w.owner || u.slot == w.slot || !u.takesHit() {
+			continue
+		}
+		if _, ok := w.rammed[u.id]; ok {
+			continue
+		}
+		cc, cr := colOf(u.p, u.face, u.radius, u.semi)
+		if distPointOBB(cc, w.a, w.b, w.radius) >= cr {
+			continue
+		}
+		w.rammed[u.id] = struct{}{}
+		m.pending = append(m.pending, unitpkg.Damage{From: w.owner, To: u.id, Amount: w.ram})
+	}
+}
+
+func (m *Match) slamWallsLocked() {
+	for i := 0; i < len(m.walls); i++ {
+		a := m.walls[i]
+		if a.stunR <= 0 || a.owner == 0 {
+			continue
+		}
+		for j := i + 1; j < len(m.walls); j++ {
+			b := m.walls[j]
+			if b.owner != a.owner || b.stunR <= 0 {
+				continue
+			}
+			if segDist(a.a, a.b, b.a, b.b) > a.radius+b.radius {
+				continue
+			}
+			m.resolveSlamLocked(a, b)
+			return
+		}
+	}
+}
+
+func (m *Match) resolveSlamLocked(a, b *barrier) {
+	c := a.pivot.add(b.pivot).mul(0.5)
+	dur := a.stunDur
+	if dur <= 0 {
+		dur = b.stunDur
+	}
+	r := a.stunR
+	until := m.time + dur
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.stopped || u.id == a.owner {
+			continue
+		}
+		if u.p.sub(c).len() > u.radius+r {
+			continue
+		}
+		if u.takesHit() && u.slot != a.slot {
+			m.holdStillLocked(u.id, until)
+		}
+	}
+	owner := m.units[a.owner]
+	m.breakWallLocked(a.id)
+	m.breakWallLocked(b.id)
+	m.fx = append(m.fx, unitpkg.FX{
+		Name: "slam", Kind: a.kind, Slot: a.slot,
+		X: c.X, Y: c.Y, Amount: r,
+	})
+	if owner != nil && !owner.stopped {
+		m.send(owner, unitpkg.WallSlam{
+			Time: m.time, X: c.X, Y: c.Y,
+		})
+	}
+}
+
+func (m *Match) wallViewsLocked() []unitpkg.WallView {
+	if len(m.walls) == 0 {
+		return nil
+	}
+	out := make([]unitpkg.WallView, 0, len(m.walls))
+	for _, w := range m.walls {
+		out = append(out, unitpkg.WallView{
+			ID: w.id, OwnerID: w.owner, Slot: w.slot,
+			X1: w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
+			Radius: w.radius,
+		})
+	}
+	return out
+}
+
+func segDist(p1, q1, p2, q2 vec) float64 {
+	u := q1.sub(p1)
+	v := q2.sub(p2)
+	w := p1.sub(p2)
+	a := u.dot(u)
+	b := u.dot(v)
+	c := v.dot(v)
+	d := u.dot(w)
+	e := v.dot(w)
+	D := a*c - b*b
+	sN, sD := D, D
+	tN, tD := D, D
+	if D < 1e-12 {
+		sN = 0
+		sD = 1
+		tN = e
+		tD = c
+	} else {
+		sN = b*e - c*d
+		tN = a*e - b*d
+		if sN < 0 {
+			sN = 0
+			tN = e
+			tD = c
+		} else if sN > sD {
+			sN = sD
+			tN = e + b
+			tD = c
+		}
+	}
+	if tN < 0 {
+		tN = 0
+		if -d < 0 {
+			sN = 0
+		} else if -d > a {
+			sN = sD
+		} else {
+			sN = -d
+			sD = a
+		}
+	} else if tN > tD {
+		tN = tD
+		if -d+b < 0 {
+			sN = 0
+		} else if -d+b > a {
+			sN = sD
+		} else {
+			sN = -d + b
+			sD = a
+		}
+	}
+	sc, tc := 0.0, 0.0
+	if math.Abs(sN) > 1e-12 {
+		sc = sN / sD
+	}
+	if math.Abs(tN) > 1e-12 {
+		tc = tN / tD
+	}
+	return w.add(u.mul(sc)).sub(v.mul(tc)).len()
 }
 
 func (m *Match) carryNailsLocked(w *barrier) {
@@ -1396,6 +1693,8 @@ func (m *Match) shoveWallLocked(w *barrier) {
 			if !was {
 				cc, _ = colOf(u.p, u.face, u.radius, u.semi)
 				m.bounceBarrierLocked(u, w, barrierNormal(cc, w))
+			} else {
+				m.scrapeWallLocked(u, w)
 			}
 		}
 		if was || d < need {
@@ -1410,7 +1709,7 @@ func (m *Match) bounceBarrierLocked(u *unit, w *barrier, n vec) {
 	if w.hard {
 		kind = unitpkg.WallHard
 	}
-	if w.spin != 0 {
+	if w.spin != 0 || w.vx != 0 || w.vy != 0 {
 		if w.riding == nil {
 			w.riding = map[uint64]struct{}{}
 		}
@@ -1423,12 +1722,7 @@ func (m *Match) bounceBarrierLocked(u *unit, w *barrier, n vec) {
 	u.setVel(reflectVelocity(u.v, n))
 	m.cycleFactionLocked(u)
 	u.expireOnWallFS()
-	if w.amount > 0 && u.takesHit() && u.slot != w.slot && u.id != w.owner {
-		if at, ok := w.hitAt[u.id]; !ok || m.time >= at {
-			w.hitAt[u.id] = m.time + 0.1
-			m.pending = append(m.pending, unitpkg.Damage{From: w.owner, To: u.id, Amount: w.amount})
-		}
-	}
+	m.scrapeWallLocked(u, w)
 }
 
 func (m *Match) physicsLocked(dt float64) {
@@ -1811,12 +2105,13 @@ func (m *Match) emitLocked() {
 			snaps = append(snaps, u.snap())
 		}
 	}
+	views := m.wallViewsLocked()
 	for _, id := range m.order {
 		u := m.units[id]
 		if u == nil || u.stopped || u.stun {
 			continue
 		}
-		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field}
+		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field, Walls: views}
 		vr2 := u.vision * u.vision
 		for _, o := range snaps {
 			if o.ID == u.id {

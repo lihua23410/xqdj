@@ -30,10 +30,21 @@ type Snapshot struct {
 	NoHealthNumbers bool     `json:"noHealthNumbers,omitempty"`
 }
 
+// WallView 是感知里看见的一截墙。不含寿命和伤害，只够认主人、端点和粗细。
+type WallView struct {
+	ID      uint64
+	OwnerID uint64
+	Slot    int
+	X1, Y1  float64
+	X2, Y2  float64
+	Radius  float64
+}
+
 type Sense struct {
 	Time   float64
 	Self   Snapshot
 	Nearby []Snapshot
+	Walls  []WallView
 	Field  Field
 }
 
@@ -52,6 +63,14 @@ type WallHit struct {
 	// X, Y 是撞上之后单位自己的位置。不要用上一拍记着的坐标。
 	X float64
 	Y float64
+}
+
+// WallSlam 两截同一主人的墙胶囊重叠、并已从场上拿掉。Time 是重叠那一拍的时间。
+// 主人不进眩晕圈。
+type WallSlam struct {
+	Time        float64
+	X, Y        float64
+	SelfStunned bool
 }
 
 // FactionChanged 阵营刚变时发给该战斗机。撞墙轮换和 MarkFaction 改派系都会发；Stun 拦不住。
@@ -225,16 +244,38 @@ type SwapOwned struct {
 }
 
 type PlaceWall struct {
-	OwnerID uint64
-	Slot    int
-	Kind    string
-	X1, Y1  float64
-	X2, Y2  float64
-	Radius  float64
-	Life    float64
-	Amount  float64
-	Hard    bool // 硬墙：不拆、拆墙弹穿过
-	Square  bool // 方端判定
+	OwnerID   uint64
+	Slot      int
+	Kind      string
+	X1, Y1    float64
+	X2, Y2    float64
+	Radius    float64
+	Life      float64 // >0 为秒数；<0 一直留到被拆、相撞消失或主人倒下。0 丢掉
+	Amount    float64
+	HitGap    float64 // 刮伤间隔。0 用 0.1 秒
+	WithOwner bool    // 主人倒下时这截一起消失
+	Hard      bool    // 硬墙：不拆、拆墙弹穿过
+	Square    bool    // 方端判定
+}
+
+// SetWallMotion 改一截墙绕自己墙心的转速，以及墙心的平移速度。
+// Spin 弧度每秒，逆时针为正。Ram > 0 时这截在平移途中对每个敌方目标结一次这个伤害。
+// StunRadius > 0 的两截同一主人的墙，胶囊重叠时一起消失，并让圈里的敌方站死 StunDur 秒。主人不晕。
+type SetWallMotion struct {
+	WallID     uint64
+	Spin       float64
+	VX, VY     float64
+	Ram        float64
+	StunRadius float64
+	StunDur    float64
+}
+
+// HoldStill 到 Until 之前不发感知，速度保持为 0。
+// 施加时记下当前速度。再次施加则刷新 Until，并按这一瞬的速度重新记。
+// 到点把记下的速度还回去。
+type HoldStill struct {
+	UnitID uint64
+	Until  float64
 }
 
 type FX struct {
