@@ -14,7 +14,7 @@ type fieldSpec struct {
 }
 
 type fieldWallSpec struct {
-	x1, y1, x2, y2, halfW float64
+	x1, y1, x2, y2, halfW, period float64
 }
 
 type fieldCapSpec struct {
@@ -52,7 +52,7 @@ func specFromField(f unitpkg.Field) fieldSpec {
 		switch {
 		case w.Kind.Hard():
 			s.hard = append(s.hard, fieldWallSpec{
-				x1: w.X1, y1: w.Y1, x2: w.X2, y2: w.Y2, halfW: w.Radius,
+				x1: w.X1, y1: w.Y1, x2: w.X2, y2: w.Y2, halfW: w.Radius, period: w.Period,
 			})
 		case w.Kind.Capsule():
 			s.caps = append(s.caps, fieldCapSpec{

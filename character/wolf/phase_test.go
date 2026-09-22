@@ -18,12 +18,32 @@ func TestBootSpawnsMoonAtCenter(t *testing.T) {
 	if sp.Kind != KindMoon || sp.OwnerID != 1 {
 		t.Fatalf("spawn=%+v", sp)
 	}
-	if !unit.HexContains(sp.X, sp.Y, moonRadius) {
+	if !unit.HexField().Walkable(sp.X, sp.Y, moonRadius) {
 		t.Fatalf("moon (%v,%v) not walkable", sp.X, sp.Y)
 	}
 	ph := mustPhase(t, cmds)
 	if ph.Amount != 0 {
 		t.Fatalf("initial phase=%v", ph.Amount)
+	}
+}
+
+func TestMoonSpawnVariesAcrossBoots(t *testing.T) {
+	f := unit.HexField()
+	seen := map[[2]int]bool{}
+	for i := 0; i < 8; i++ {
+		out := make(chan unit.Cmd, 16)
+		w := &狼人{}
+		w.Handle(unit.Context{ID: 1, Kind: KindWolf, Out: out}, unit.Sense{
+			Time: 0, Field: f, Self: selfAt(80, 0),
+		})
+		sp := mustSpawn(t, drain(out))
+		if !f.Walkable(sp.X, sp.Y, moonRadius) {
+			t.Fatalf("moon (%v,%v) not walkable", sp.X, sp.Y)
+		}
+		seen[[2]int{int(sp.X), int(sp.Y)}] = true
+	}
+	if len(seen) < 2 {
+		t.Fatal("moon position pinned to wolf id")
 	}
 }
 

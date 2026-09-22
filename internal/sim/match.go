@@ -68,6 +68,8 @@ type unit struct {
 	factionBlastD   float64
 	marks           map[string]*stackMark
 	tap             func(unitpkg.Event)
+	nailWall        uint64
+	nailLocal       vec
 }
 
 type spawnSpot struct {
@@ -76,18 +78,24 @@ type spawnSpot struct {
 }
 
 type barrier struct {
-	id     uint64
-	owner  uint64
-	slot   int
-	kind   string
-	a, b   vec
-	radius float64
-	until  float64
-	amount float64
-	hitAt  map[uint64]float64
-	hard   bool
-	square bool
-	field  bool
+	id      uint64
+	owner   uint64
+	slot    int
+	kind    string
+	a, b    vec
+	radius  float64
+	until   float64
+	amount  float64
+	hitAt   map[uint64]float64
+	hard    bool
+	square  bool
+	field   bool
+	spin    float64 // 顺时针为负。0 表示不动。+Y 朝上。
+	ang     float64
+	base    float64
+	pivot   vec
+	halfLen float64
+	riding  map[uint64]struct{}
 }
 
 type wallSnap struct {
@@ -443,6 +451,7 @@ func (m *Match) Tick() {
 	m.settleHitsLocked()
 	m.reapAttachLocked()
 	m.stickFollowersLocked()
+	m.spinWallsLocked(DT)
 	m.time += DT
 	m.expireWallsLocked()
 	m.expireStunLocked()
@@ -548,7 +557,7 @@ func (m *Match) installFieldLocked() {
 	unitpkg.SetLiveField(m.spec.toUnitField())
 	for _, h := range m.spec.hard {
 		m.nextID++
-		m.walls = append(m.walls, &barrier{
+		w := &barrier{
 			id:     m.nextID,
 			a:      vec{h.x1, h.y1},
 			b:      vec{h.x2, h.y2},
@@ -558,7 +567,17 @@ func (m *Match) installFieldLocked() {
 			square: true,
 			field:  true,
 			hitAt:  map[uint64]float64{},
-		})
+		}
+		if h.period > 0 {
+			dx, dy := h.x2-h.x1, h.y2-h.y1
+			w.halfLen = math.Hypot(dx, dy) / 2
+			w.pivot = vec{(h.x1 + h.x2) / 2, (h.y1 + h.y2) / 2}
+			w.base = math.Atan2(dy, dx)
+			w.spin = -2 * math.Pi / h.period
+			w.riding = map[uint64]struct{}{}
+			w.pose()
+		}
+		m.walls = append(m.walls, w)
 	}
 	for _, c := range m.spec.caps {
 		until := math.Inf(1)
@@ -581,6 +600,22 @@ func (m *Match) installFieldLocked() {
 
 func (m *Match) liveFieldLocked() unitpkg.Field {
 	f := m.spec.toUnitField()
+	hard := make([]*barrier, 0, 1)
+	for _, w := range m.walls {
+		if w.hard && w.field {
+			hard = append(hard, w)
+		}
+	}
+	hi := 0
+	for i := range f.Walls {
+		if !f.Walls[i].Kind.Hard() || hi >= len(hard) {
+			continue
+		}
+		w := hard[hi]
+		hi++
+		f.Walls[i].X1, f.Walls[i].Y1 = w.a.X, w.a.Y
+		f.Walls[i].X2, f.Walls[i].Y2 = w.b.X, w.b.Y
+	}
 	for _, w := range m.walls {
 		if w.hard {
 			continue
@@ -829,7 +864,8 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if !ok || spec.Fighter {
 			return
 		}
-		m.addUnitLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot)
+		u := m.addUnitLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot)
+		m.nailToWallLocked(u, c)
 	case unitpkg.Despawn:
 		u := m.units[c.UnitID]
 		if u == nil {
@@ -1257,6 +1293,144 @@ func canonPair(a, b uint64) pairID {
 	return pairID{a, b}
 }
 
+func (w *barrier) theta() float64 { return w.base + w.ang }
+
+func (w *barrier) pose() {
+	if w.halfLen < 1e-9 {
+		return
+	}
+	th := w.theta()
+	dir := vec{math.Cos(th), math.Sin(th)}
+	w.a = w.pivot.sub(dir.mul(w.halfLen))
+	w.b = w.pivot.add(dir.mul(w.halfLen))
+}
+
+func (w *barrier) worldToLocal(p vec) vec {
+	d := p.sub(w.pivot)
+	th := w.theta()
+	c, s := math.Cos(th), math.Sin(th)
+	return vec{c*d.X + s*d.Y, -s*d.X + c*d.Y}
+}
+
+func (w *barrier) localToWorld(l vec) vec {
+	th := w.theta()
+	c, s := math.Cos(th), math.Sin(th)
+	return w.pivot.add(vec{c*l.X - s*l.Y, s*l.X + c*l.Y})
+}
+
+func (m *Match) nailToWallLocked(u *unit, c unitpkg.Spawn) {
+	if u == nil || !c.HardNail {
+		return
+	}
+	var wall *barrier
+	for _, w := range m.walls {
+		if w.spin != 0 {
+			wall = w
+			break
+		}
+	}
+	if wall == nil {
+		return
+	}
+	u.nailWall = wall.id
+	u.nailLocal = wall.worldToLocal(u.p)
+}
+
+func (m *Match) spinWallsLocked(dt float64) {
+	for _, w := range m.walls {
+		if w.spin == 0 {
+			continue
+		}
+		w.ang += w.spin * dt
+		w.pose()
+		m.carryNailsLocked(w)
+		m.shoveWallLocked(w)
+	}
+}
+
+func (m *Match) carryNailsLocked(w *barrier) {
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.stopped || u.nailWall != w.id {
+			continue
+		}
+		u.p = w.localToWorld(u.nailLocal)
+	}
+}
+
+func barrierNormal(cc vec, w *barrier) vec {
+	q := closestOnOBB(cc, w.a, w.b, w.radius)
+	n := q.sub(cc)
+	if n.len2() < 1e-12 {
+		n = perp(w.b.sub(w.a))
+	}
+	if n.len2() < 1e-12 {
+		return vec{0, 1}
+	}
+	return n.norm()
+}
+
+func (m *Match) shoveWallLocked(w *barrier) {
+	const sep = 2.0
+	if w.riding == nil {
+		w.riding = map[uint64]struct{}{}
+	}
+	still := map[uint64]struct{}{}
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.stopped || !u.solid || u.passWalls || u.shell || u.attach || u.role == unitpkg.RoleHelper {
+			continue
+		}
+		if u.breakWalls && w.hard {
+			continue
+		}
+		cc, cr := colOf(u.p, u.face, u.radius, u.semi)
+		d := distPointOBB(cc, w.a, w.b, w.radius)
+		need := cr + skin
+		if d >= need+sep {
+			continue
+		}
+		_, was := w.riding[u.id]
+		if d < need {
+			m.pushOutOBB(u, w, cc, cr)
+			if !was {
+				cc, _ = colOf(u.p, u.face, u.radius, u.semi)
+				m.bounceBarrierLocked(u, w, barrierNormal(cc, w))
+			}
+		}
+		if was || d < need {
+			still[u.id] = struct{}{}
+		}
+	}
+	w.riding = still
+}
+
+func (m *Match) bounceBarrierLocked(u *unit, w *barrier, n vec) {
+	kind := unitpkg.WallCapsule
+	if w.hard {
+		kind = unitpkg.WallHard
+	}
+	if w.spin != 0 {
+		if w.riding == nil {
+			w.riding = map[uint64]struct{}{}
+		}
+		w.riding[u.id] = struct{}{}
+	}
+	m.send(u, unitpkg.WallHit{
+		Time: m.time, NX: n.X, NY: n.Y, Kind: kind,
+		X: u.p.X, Y: u.p.Y,
+	})
+	u.setVel(reflectVelocity(u.v, n))
+	m.cycleFactionLocked(u)
+	u.expireOnWallFS()
+	if w.amount > 0 && u.takesHit() && u.slot != w.slot && u.id != w.owner {
+		if at, ok := w.hitAt[u.id]; !ok || m.time >= at {
+			w.hitAt[u.id] = m.time + 0.1
+			m.pending = append(m.pending, unitpkg.Damage{From: w.owner, To: u.id, Amount: w.amount})
+		}
+	}
+}
+
 func (m *Match) physicsLocked(dt float64) {
 	const maxIter = 24
 	remain := dt
@@ -1415,7 +1589,10 @@ func (m *Match) resolveLocked(h ccdHit) {
 			return
 		}
 		m.constrainOutlineLocked(u, h.n)
-		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y, Kind: unitpkg.WallEdge})
+		m.send(u, unitpkg.WallHit{
+			Time: m.time, NX: h.n.X, NY: h.n.Y, Kind: unitpkg.WallEdge,
+			X: u.p.X, Y: u.p.Y,
+		})
 		u.setVel(reflectVelocity(u.v, h.n))
 		m.cycleFactionLocked(u)
 		u.expireOnWallFS()
@@ -1446,20 +1623,7 @@ func (m *Match) resolveLocked(h ccdHit) {
 				u.p = u.p.add(corr)
 			}
 		}
-		kind := unitpkg.WallCapsule
-		if w.hard {
-			kind = unitpkg.WallHard
-		}
-		m.send(u, unitpkg.WallHit{Time: m.time, NX: h.n.X, NY: h.n.Y, Kind: kind})
-		u.setVel(reflectVelocity(u.v, h.n))
-		m.cycleFactionLocked(u)
-		u.expireOnWallFS()
-		if w.amount > 0 && u.takesHit() && u.slot != w.slot && u.id != w.owner {
-			if at, ok := w.hitAt[u.id]; !ok || m.time >= at {
-				w.hitAt[u.id] = m.time + 0.1
-				m.pending = append(m.pending, unitpkg.Damage{From: w.owner, To: u.id, Amount: w.amount})
-			}
-		}
+		m.bounceBarrierLocked(u, w, h.n)
 	case hitPair:
 		a := m.units[h.a]
 		b := m.units[h.b]

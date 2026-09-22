@@ -27,9 +27,9 @@ func TestWallHitPlantsSickleOnHexEdge(t *testing.T) {
 	e := &收割者{}
 	nx, ny := hexNormal(2)
 	ap := unit.HexRadius * math.Sqrt(3) / 2
-	e.x, e.y = nx*(ap-18), ny*(ap-18)
+	x, y := nx*(ap-18), ny*(ap-18)
 	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
-		Time: 1, NX: nx, NY: ny,
+		Time: 1, NX: nx, NY: ny, X: x, Y: y,
 	})
 	cmds := drain(out)
 	sp := lastSpawn(cmds)
@@ -40,7 +40,7 @@ func TestWallHitPlantsSickleOnHexEdge(t *testing.T) {
 
 func TestCapsuleWallDoesNotPlant(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
-	e := &收割者{x: 10, y: 10}
+	e := &收割者{}
 	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
 		Time: 1, NX: 1, NY: 0, Kind: unit.WallCapsule,
 	})
@@ -51,13 +51,28 @@ func TestCapsuleWallDoesNotPlant(t *testing.T) {
 
 func TestHardWallPlantsSickle(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
-	e := &收割者{x: 10, y: 10}
+	e := &收割者{}
 	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
 		Time: 1, NX: 0, NY: 1, Kind: unit.WallHard,
 	})
 	sp := lastSpawn(drain(out))
-	if sp == nil || sp.Kind != KindSickle {
-		t.Fatal("硬墙 should plant")
+	if sp == nil || sp.Kind != KindSickle || !sp.HardNail {
+		t.Fatalf("spawn=%+v", sp)
+	}
+}
+
+func TestWallHitPlantsAtContactNotStalePosition(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	e := &收割者{}
+	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
+		Time: 1, NX: 0, NY: 1, Kind: unit.WallHard, X: 40, Y: 10,
+	})
+	sp := lastSpawn(drain(out))
+	if sp == nil || !sp.HardNail {
+		t.Fatalf("spawn=%+v", sp)
+	}
+	if math.Abs(sp.X-40) > 1e-6 || math.Abs(sp.Y-(10+reaperRadius)) > 1e-6 {
+		t.Fatalf("pos=%v,%v", sp.X, sp.Y)
 	}
 }
 
@@ -66,9 +81,9 @@ func TestSameSideStacks(t *testing.T) {
 	e := &收割者{}
 	nx, ny := hexNormal(1)
 	ap := unit.HexRadius * math.Sqrt(3) / 2
-	e.x, e.y = nx*(ap-18), ny*(ap-18)
+	x, y := nx*(ap-18), ny*(ap-18)
 	ctx := unit.Context{ID: 1, Kind: KindReaper, Out: out}
-	e.Handle(ctx, unit.WallHit{Time: 1, NX: nx, NY: ny})
+	e.Handle(ctx, unit.WallHit{Time: 1, NX: nx, NY: ny, X: x, Y: y})
 	_ = drain(out)
 	e.Handle(ctx, unit.WallHit{Time: 2, NX: nx, NY: ny})
 	cmds := drain(out)

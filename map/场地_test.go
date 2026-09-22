@@ -23,7 +23,7 @@ func TestCircleHasHardBar(t *testing.T) {
 	if !ok {
 		t.Fatal("missing 圆")
 	}
-	if f.Shape != unit.ShapeCircle || len(f.Walls) != 1 || !f.Walls[0].Kind.Hard() {
+	if f.Shape != unit.ShapeCircle || len(f.Walls) != 1 || !f.Walls[0].Kind.Hard() || f.Walls[0].Period != 8 {
 		t.Fatalf("circle=%+v", f)
 	}
 	if f.Walkable(0, 0, 18) {

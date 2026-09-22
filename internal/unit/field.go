@@ -35,6 +35,8 @@ type FieldWall struct {
 	X1, Y1 float64
 	X2, Y2 float64
 	Radius float64
+	// Period 是绕中点顺时针转一圈的秒数。0 表示不动。
+	Period float64
 }
 
 type Field struct {
@@ -58,6 +60,7 @@ func CircleField() Field {
 			X1:   -110, Y1: 0,
 			X2: 110, Y2: 0,
 			Radius: 6,
+			Period: 8,
 		}},
 	}
 }

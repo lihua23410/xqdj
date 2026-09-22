@@ -80,7 +80,6 @@ func init() {
 }
 
 type 收割者 struct {
-	x, y float64
 	slot int
 }
 
@@ -90,7 +89,6 @@ func (r *收割者) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	switch e := ev.(type) {
 	case unit.Sense:
-		r.x, r.y = e.Self.X, e.Self.Y
 		r.slot = e.Self.Slot
 		r.maybeReap(ctx, e)
 	case unit.WallHit:
@@ -108,11 +106,12 @@ func (r *收割者) onWall(ctx unit.Context, w unit.WallHit) {
 	}
 	nx, ny := w.NX/n, w.NY/n
 	ctx.Out <- unit.Spawn{
-		Kind:    KindSickle,
-		X:       r.x + nx*reaperRadius,
-		Y:       r.y + ny*reaperRadius,
-		OwnerID: ctx.ID,
-		Slot:    r.slot,
+		Kind:     KindSickle,
+		X:        w.X + nx*reaperRadius,
+		Y:        w.Y + ny*reaperRadius,
+		OwnerID:  ctx.ID,
+		Slot:     r.slot,
+		HardNail: w.Kind.Hard(),
 	}
 }
 

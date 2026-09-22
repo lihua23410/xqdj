@@ -49,6 +49,9 @@ type WallHit struct {
 	NX   float64
 	NY   float64
 	Kind WallKind
+	// X, Y 是撞上之后单位自己的位置。不要用上一拍记着的坐标。
+	X float64
+	Y float64
 }
 
 // FactionChanged 阵营刚变时发给该战斗机。撞墙轮换和 MarkFaction 改派系都会发；Stun 拦不住。
@@ -204,6 +207,8 @@ type Spawn struct {
 	VY      float64
 	OwnerID uint64
 	Slot    int
+	// HardNail 钉在硬墙上。墙在转的话，这个点跟着墙走。
+	HardNail bool
 }
 
 type Despawn struct {
