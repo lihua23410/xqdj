@@ -79,6 +79,66 @@ func TestEnterShovesAway(t *testing.T) {
 	}
 }
 
+func TestBandLocksWithoutShove(t *testing.T) {
+	a := fighter()
+	ctx, out := newCtx()
+	a.Handle(ctx, sense(0, 80, 0, []unit.Snapshot{aim(2, 400, 0, 15)}))
+	_ = drain(out)
+	a.Handle(ctx, sense(0.02, 80, 0, []unit.Snapshot{aim(2, 150, 0, 15)}))
+	cmds := drain(out)
+	if a.trackID != 2 {
+		t.Fatalf("track=%d", a.trackID)
+	}
+	if velocity(cmds, 1) != nil {
+		t.Fatal("shoved inside the band")
+	}
+}
+
+func TestReenterFleeShovesWithoutRelock(t *testing.T) {
+	a := fighter()
+	ctx, out := newCtx()
+	a.Handle(ctx, sense(0, 80, 0, []unit.Snapshot{aim(2, 400, 0, 15)}))
+	_ = drain(out)
+	a.Handle(ctx, sense(0.02, 80, 0, []unit.Snapshot{aim(2, 150, 0, 15)}))
+	_ = drain(out)
+	other := aim(4, 40, 0, 1)
+	a.Handle(ctx, sense(0.04, 80, 0, []unit.Snapshot{aim(2, 80, 0, 15), other}))
+	cmds := drain(out)
+	if a.trackID != 2 {
+		t.Fatalf("switched to %d", a.trackID)
+	}
+	v := velocity(cmds, 1)
+	if v == nil || math.Abs(v.VX-(-150)) > 1e-6 || math.Abs(v.VY) > 1e-6 {
+		t.Fatalf("shove=%+v", v)
+	}
+}
+
+func TestFleeCone(t *testing.T) {
+	a := fighter()
+	a.roll = func() float64 { return 1 }
+	ctx, out := newCtx()
+	a.Handle(ctx, sense(0, 80, 0, []unit.Snapshot{aim(2, 400, 0, 15)}))
+	_ = drain(out)
+	a.Handle(ctx, sense(0.02, 80, 0, []unit.Snapshot{aim(2, 80, 0, 15)}))
+	v := velocity(drain(out), 1)
+	wantX, wantY := -150*math.Cos(cone), -150*math.Sin(cone)
+	if v == nil || math.Abs(v.VX-wantX) > 1e-6 || math.Abs(v.VY-wantY) > 1e-6 {
+		t.Fatalf("shove=%+v want %v,%v", v, wantX, wantY)
+	}
+}
+
+func TestOpeningInsideFleeDoesNotShove(t *testing.T) {
+	a := fighter()
+	ctx, out := newCtx()
+	a.Handle(ctx, sense(0, 80, 0, []unit.Snapshot{aim(2, 40, 0, 15)}))
+	if a.trackID != 2 {
+		t.Fatalf("track=%d", a.trackID)
+	}
+	if velocity(drain(out), 1) != nil {
+		t.Fatal("opening shove")
+	}
+}
+
 func TestFleeExtraCapsAt300(t *testing.T) {
 	a := fighter()
 	ctx, out := newCtx()

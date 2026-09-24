@@ -20,6 +20,7 @@ const (
 	vision       = 9999.0
 	bodyHP       = 100.0
 	nearRadius   = 185.0
+	fleeRadius   = 100.0
 	fleeBoost    = 70.0
 	fleeExtraMax = 300.0
 	trackSeconds = 5.0
@@ -73,6 +74,7 @@ type 原型机_整合 struct {
 	trackUntil  float64
 	prevAim     uint8
 	inside      map[uint64]bool
+	fleeInside  map[uint64]bool
 	tracking    bool
 }
 
@@ -89,6 +91,9 @@ func (a *原型机_整合) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	if a.inside == nil {
 		a.inside = map[uint64]bool{}
+	}
+	if a.fleeInside == nil {
+		a.fleeInside = map[uint64]bool{}
 	}
 	a.track(ctx, s)
 	if a.trackID != 0 {
@@ -107,11 +112,11 @@ func (a *原型机_整合) track(ctx unit.Context, s unit.Sense) {
 	if a.trackID != 0 && !a.stillTracked(s) {
 		a.clear(ctx, s)
 	}
-	entered := a.entrants(s)
+	entered := a.crossed(s, nearRadius, a.inside)
 	if a.trackID == 0 {
 		a.lock(ctx, s, aimableOf(s, entered))
 	}
-	a.shove(ctx, s, entered)
+	a.shove(ctx, s, a.crossed(s, fleeRadius, a.fleeInside))
 	a.remember(s)
 }
 
@@ -145,9 +150,9 @@ func (a *原型机_整合) insideNow(s unit.Sense) []unit.Snapshot {
 	return out
 }
 
-func (a *原型机_整合) entrants(s unit.Sense) []unit.Snapshot {
+func (a *原型机_整合) crossed(s unit.Sense, radius float64, prev map[uint64]bool) []unit.Snapshot {
 	var out []unit.Snapshot
-	r2 := nearRadius * nearRadius
+	r2 := radius * radius
 	for i := range s.Nearby {
 		o := s.Nearby[i]
 		if !unit.Hittable(o, s.Self.Slot) {
@@ -155,8 +160,8 @@ func (a *原型机_整合) entrants(s unit.Sense) []unit.Snapshot {
 		}
 		dx, dy := o.X-s.Self.X, o.Y-s.Self.Y
 		nowIn := dx*dx+dy*dy <= r2
-		prev, seen := a.inside[o.ID]
-		if seen && !prev && nowIn {
+		was, seen := prev[o.ID]
+		if seen && !was && nowIn {
 			out = append(out, o)
 		}
 	}
@@ -186,6 +191,10 @@ func (a *原型机_整合) shove(ctx unit.Context, s unit.Sense, entered []unit.
 	if n < 1e-6 {
 		return
 	}
+	ux, uy := dx/n, dy/n
+	ang := (a.sample()*2 - 1) * cone
+	c, sn := math.Cos(ang), math.Sin(ang)
+	ux, uy = ux*c-uy*sn, ux*sn+uy*c
 	sp := math.Hypot(s.Self.VX, s.Self.VY)
 	if sp < 1e-6 {
 		sp = cruise
@@ -198,12 +207,13 @@ func (a *原型机_整合) shove(ctx unit.Context, s unit.Sense, entered []unit.
 		}
 		sp += add
 	}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * sp, VY: dy / n * sp}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * sp, VY: uy * sp}
 }
 
 func (a *原型机_整合) remember(s unit.Sense) {
 	seen := map[uint64]bool{}
-	r2 := nearRadius * nearRadius
+	near2 := nearRadius * nearRadius
+	flee2 := fleeRadius * fleeRadius
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if !unit.Hittable(*o, s.Self.Slot) {
@@ -211,11 +221,14 @@ func (a *原型机_整合) remember(s unit.Sense) {
 		}
 		seen[o.ID] = true
 		dx, dy := o.X-s.Self.X, o.Y-s.Self.Y
-		a.inside[o.ID] = dx*dx+dy*dy <= r2
+		d2 := dx*dx + dy*dy
+		a.inside[o.ID] = d2 <= near2
+		a.fleeInside[o.ID] = d2 <= flee2
 	}
 	for id := range a.inside {
 		if !seen[id] {
 			delete(a.inside, id)
+			delete(a.fleeInside, id)
 		}
 	}
 }

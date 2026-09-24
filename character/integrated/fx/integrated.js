@@ -2,7 +2,24 @@ window.lookFX = window.lookFX || {};
 window.integratedTrack = window.integratedTrack || {};
 
 const nearRadius = 185;
+const fleeRadius = 100;
 const fleeTrailAt = 148;
+
+function placeRing(ctx, u, id, cls, radius) {
+  const g = ctx.ensureGuide(id, cls);
+  const d = radius * 2 * ctx.scale;
+  g.style.width = `${d}px`;
+  g.style.height = `${d}px`;
+  g.style.left = `${ctx.cx + u.x * ctx.scale}px`;
+  g.style.top = `${ctx.cy - u.y * ctx.scale}px`;
+  const engaged = (ctx.units || []).some((o) => {
+    if (!o || o.id === u.id || o.slot === u.slot) return false;
+    if (o.role !== "fighter" && !o.mortal) return false;
+    return Math.hypot(o.x - u.x, o.y - u.y) <= radius;
+  });
+  g.classList.toggle("alert", engaged);
+  if (ctx.seenGuides) ctx.seenGuides.add(g.id);
+}
 
 window.lookFX.integrated = {
   tick(el, u, ctx) {
@@ -16,19 +33,8 @@ window.lookFX.integrated = {
   },
   guide(u, ctx) {
     if (!u || u.role !== "fighter" || !ctx || !ctx.ensureGuide) return;
-    const g = ctx.ensureGuide(`guide-near-${u.id}`, "integrated-ring");
-    const d = nearRadius * 2 * ctx.scale;
-    g.style.width = `${d}px`;
-    g.style.height = `${d}px`;
-    g.style.left = `${ctx.cx + u.x * ctx.scale}px`;
-    g.style.top = `${ctx.cy - u.y * ctx.scale}px`;
-    const engaged = (ctx.units || []).some((o) => {
-      if (!o || o.id === u.id || o.slot === u.slot) return false;
-      if (o.role !== "fighter" && !o.mortal) return false;
-      return Math.hypot(o.x - u.x, o.y - u.y) <= nearRadius;
-    });
-    g.classList.toggle("alert", engaged);
-    if (ctx.seenGuides) ctx.seenGuides.add(g.id);
+    placeRing(ctx, u, `guide-near-${u.id}`, "integrated-ring", nearRadius);
+    placeRing(ctx, u, `guide-flee-${u.id}`, "integrated-flee", fleeRadius);
     const tid = window.integratedTrack[u.id];
     if (!tid) return;
     const target = (ctx.units || []).find((o) => o.id === tid);
