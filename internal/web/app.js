@@ -846,6 +846,8 @@ function render() {
   const inLobby = state.phase === "select";
   lobby.classList.toggle("hidden", !inLobby);
   arenaEl.classList.toggle("hidden", inLobby);
+  if (state.phase === "ended" || inLobby) window.youthBuff = {};
+  if (inLobby) window.youthDoses = {};
   if (inLobby) {
     prevHP.clear();
     if (fxRoot) fxRoot.innerHTML = "";

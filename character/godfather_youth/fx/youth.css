@@ -1,0 +1,64 @@
+.ball.look-youth {
+  background: radial-gradient(circle at 35% 30%, #5c534c 0%, #3a322c 55%, #241c18 100%);
+  box-shadow: inset 0 0 0 2px #c9a227, 0 0 0 4px #6e2424, 0 0 10px rgba(201, 162, 39, 0.35);
+  overflow: visible;
+}
+
+.ball.look-youth.youth-buff {
+  box-shadow: inset 0 0 0 2px #c9a227, 0 0 0 4px #ff5a4a, 0 0 16px rgba(255, 90, 74, 0.85);
+}
+
+.youth-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 160%;
+  height: 160%;
+  margin: -80% 0 0 -80%;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: #ff5a4a;
+  border-right-color: #ff8a72;
+  transform: rotate(var(--ang, 0rad));
+  pointer-events: none;
+}
+
+.youth-doses {
+  position: absolute;
+  inset: 0;
+  animation: youth-orbit 3.2s linear infinite;
+  pointer-events: none;
+}
+
+.youth-doses i {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: transparent;
+}
+
+.youth-doses i.full {
+  background: #fff;
+  border-color: #fff;
+  box-shadow: 0 0 6px #fff;
+}
+
+@keyframes youth-orbit {
+  to { transform: rotate(360deg); }
+}
+
+.ghost.youth-ghost {
+  background: radial-gradient(circle at 35% 30%, #8a7a68 0%, #3a322c 55%, #241c18 100%);
+  box-shadow: inset 0 0 0 2px #c9a227, 0 0 0 4px #ff5a4a, 0 0 16px rgba(255, 90, 74, 0.9);
+  opacity: 0.9;
+  animation: ghost-fade 0.42s linear forwards;
+}
+
+.ball.look-youth-shot {
+  background: #c9a227;
+  box-shadow: 0 0 6px rgba(201, 162, 39, 0.8);
+}
