@@ -1,0 +1,130 @@
+/* 吹笛人：紫球 + 笛声；老鼠：小灰球带尾巴。 */
+.ball.look-piper {
+  background: radial-gradient(circle at 35% 30%, #b79bf5 0%, #7b5cd6 55%, #3a2568 100%);
+  box-shadow: inset 0 0 0 2px #e6d9ff, 0 0 14px rgba(123, 92, 214, 0.65);
+  overflow: visible;
+}
+
+.ball.look-rat {
+  background: radial-gradient(circle at 35% 30%, #d2d2d2 0%, #8d8d8d 60%, #4a4a4a 100%);
+  box-shadow: inset 0 0 0 1px #2b2b2b, 0 0 6px rgba(0, 0, 0, 0.5);
+  overflow: visible;
+}
+
+.ball.look-rat::after {
+  content: "";
+  position: absolute;
+  right: 85%;
+  top: 60%;
+  width: 130%;
+  height: 10%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7d7d7d, rgba(125, 125, 125, 0));
+  transform-origin: 100% 50%;
+  animation: piper-tail 0.45s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes piper-tail {
+  from { transform: rotate(-14deg); }
+  to { transform: rotate(14deg); }
+}
+
+/* 赃物计数：绕着球转的小金点，由 piper.js 画。 */
+.piper-loot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  animation: piper-orbit 6s linear infinite;
+}
+
+.piper-loot i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.piper-loot i.full {
+  background: #ffd76a;
+  box-shadow: 0 0 7px #ffd76a;
+}
+
+@keyframes piper-orbit {
+  to { transform: rotate(360deg); }
+}
+
+/* 吹笛：一圈紫色波纹。 */
+.fx-pipe {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: 3px solid #c9b3ff;
+  box-shadow: 0 0 18px rgba(123, 92, 214, 0.9), inset 0 0 20px rgba(201, 179, 255, 0.6);
+  animation: piper-ring 0.55s ease-out forwards;
+}
+
+/* 叼走：一小团抓痕。 */
+.fx-snatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px dashed #d8d8d8;
+  box-shadow: 0 0 12px rgba(220, 220, 220, 0.7);
+  animation: piper-ring 0.35s ease-out forwards;
+}
+
+/* 入洞：赃物被吸进鼠洞。 */
+.fx-stash {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffd76a 0%, rgba(255, 215, 106, 0) 70%);
+  animation: piper-stash 0.45s ease-in forwards;
+}
+
+@keyframes piper-stash {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(0.1); opacity: 0; }
+}
+
+/* 物归原主：东西掉回地上。 */
+.fx-spill {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid #9be29b;
+  box-shadow: 0 0 14px rgba(120, 220, 120, 0.8);
+  animation: piper-ring 0.5s ease-out forwards;
+}
+
+/* 指挥：挥棒时一圈金色刻度环。 */
+.fx-command {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 3px solid #ffd76a;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 215, 106, 0.4) 0deg 4deg,
+    rgba(255, 215, 106, 0) 4deg 24deg
+  );
+  box-shadow: 0 0 22px rgba(255, 215, 106, 0.9);
+  animation: piper-ring 0.5s ease-out forwards;
+}
+
+/* 咬：一口红。 */
+.fx-bite {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ff6a6a 0%, rgba(255, 106, 106, 0) 70%);
+  animation: piper-stash 0.3s ease-in forwards;
+}
+
+@keyframes piper-ring {
+  0% { transform: translate(-50%, -50%) scale(0.25); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+}

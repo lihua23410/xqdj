@@ -499,18 +499,17 @@ func (a *盾斧) strikeDmg(base float64) float64 {
 }
 
 func (a *盾斧) hitFan(ctx unit.Context, s unit.Sense, r, span, dmg float64, energy bool) {
-	fighter := false
+	hit := false
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if !unit.Hittable(*o, s.Self.Slot) || !inFan(s.Self, a.hx, a.hy, *o, r, span) {
 			continue
 		}
 		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: dmg}
-		if o.Role == unit.RoleFighter {
-			fighter = true
-		}
+		hit = true
 	}
-	if energy && fighter && a.energy < 2 {
+	// 只要这一刀造成了伤害就回能量：打活随从也算，不再只认本体。
+	if energy && hit && a.energy < 2 {
 		a.energy++
 		a.emitPhial(ctx)
 	}

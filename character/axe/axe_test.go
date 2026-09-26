@@ -96,7 +96,7 @@ func TestSlashHitsFighterForFiveThenEnergy(t *testing.T) {
 	}
 }
 
-func TestMinionTakesSlashButNoEnergy(t *testing.T) {
+func TestMinionAlsoGrantsEnergy(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	a := &盾斧{form: formSword, hx: 0, hy: 1, step: stepSlash1, until: slashLife}
 	ctx := unit.Context{ID: 1, Kind: KindAxe, Out: out}
@@ -109,8 +109,8 @@ func TestMinionTakesSlashButNoEnergy(t *testing.T) {
 	if n != 1 || math.Abs(sum-slashDmg) > 1e-9 {
 		t.Fatalf("minion dmg n=%d sum=%v", n, sum)
 	}
-	if a.energy != 0 {
-		t.Fatalf("minion must not grant energy, got %d", a.energy)
+	if a.energy != 1 {
+		t.Fatalf("只要造成伤害就该回能量，minion got %d", a.energy)
 	}
 }
 
