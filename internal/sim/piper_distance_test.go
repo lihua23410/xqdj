@@ -31,12 +31,7 @@ func TestPiperRatsKeepDistance(t *testing.T) {
 	type pos struct {
 		x, y, r float64
 	}
-	var (
-		ratFrames, touchFrames, ratOverlap, piperOverlap int
-		lastHP                                           float64
-		first                                            = true
-		bites                                            int
-	)
+	var ratFrames, touchFrames, ratOverlap, piperOverlap int
 	for i := 0; i < 60*40; i++ {
 		m.Tick()
 		if err := json.Unmarshal(m.SnapshotJSON(), &msg); err != nil {
@@ -48,12 +43,6 @@ func TestPiperRatsKeepDistance(t *testing.T) {
 			switch u.Kind {
 			case character.KindDummy:
 				ex, ey, er = u.X, u.Y, u.Radius
-				if first {
-					lastHP, first = u.HP, false
-				} else if u.HP < lastHP-1e-9 {
-					bites++
-					lastHP = u.HP
-				}
 			case character.KindPiper:
 				px, py, pr = u.X, u.Y, u.Radius
 			case character.KindRat:
@@ -80,11 +69,7 @@ func TestPiperRatsKeepDistance(t *testing.T) {
 	if ratFrames == 0 {
 		t.Fatal("整场没有老鼠出场")
 	}
-	if bites == 0 {
-		t.Fatal("一次都没咬到：指挥没接上")
-	}
-	t.Logf("老鼠·帧=%d 咬中=%d 贴敌人=%d 压本体=%d 鼠互相重叠=%d", ratFrames, bites, touchFrames, piperOverlap, ratOverlap)
-	// 贴着敌人应当是「扑上去咬一口」的瞬间，不是常态。
+	t.Logf("老鼠·帧=%d 贴敌人=%d 压本体=%d 鼠互相重叠=%d", ratFrames, touchFrames, piperOverlap, ratOverlap)
 	if touchFrames*100 > ratFrames*5 {
 		t.Fatalf("老鼠贴敌人太久：%d/%d 老鼠·帧", touchFrames, ratFrames)
 	}

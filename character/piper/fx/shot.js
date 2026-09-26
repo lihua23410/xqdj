@@ -15,12 +15,10 @@ arena.registerShot("spill", (fx, ctx) => {
   arena.spawnFx("fx-spill", ctx.x, ctx.y, ctx.kind);
 });
 
-arena.registerShot("command", (fx, ctx) => {
-  arena.spawnFx("fx-command", ctx.x, ctx.y, ctx.kind, {
-    "--bonus": String(fx.amount || 0),
-  });
+arena.registerShot("plague", (fx, ctx) => {
+  arena.spawnFx("fx-plague", ctx.x, ctx.y, ctx.kind);
 });
 
-arena.registerShot("bite", (fx, ctx) => {
-  arena.spawnFx("fx-bite", ctx.x, ctx.y, ctx.kind);
+arena.registerShot("plague-tick", (fx, ctx) => {
+  arena.spawnFx("fx-plague-tick", ctx.x, ctx.y, ctx.kind);
 });

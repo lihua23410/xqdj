@@ -30,32 +30,6 @@
   to { transform: rotate(14deg); }
 }
 
-/* 赃物计数：绕着球转的小金点，由 piper.js 画。 */
-.piper-loot {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  animation: piper-orbit 6s linear infinite;
-}
-
-.piper-loot i {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.piper-loot i.full {
-  background: #ffd76a;
-  box-shadow: 0 0 7px #ffd76a;
-}
-
-@keyframes piper-orbit {
-  to { transform: rotate(360deg); }
-}
-
 /* 吹笛：一圈紫色波纹。 */
 .fx-pipe {
   width: 70px;
@@ -100,27 +74,23 @@
   animation: piper-ring 0.5s ease-out forwards;
 }
 
-/* 指挥：挥棒时一圈金色刻度环。 */
-.fx-command {
-  width: 96px;
-  height: 96px;
+/* 老鼠死亡：倒下处一小圈瘟疫。 */
+.fx-plague {
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  border: 3px solid #ffd76a;
-  background: repeating-conic-gradient(
-    from 0deg,
-    rgba(255, 215, 106, 0.4) 0deg 4deg,
-    rgba(255, 215, 106, 0) 4deg 24deg
-  );
-  box-shadow: 0 0 22px rgba(255, 215, 106, 0.9);
-  animation: piper-ring 0.5s ease-out forwards;
+  border: 3px solid #7dcf4a;
+  background: radial-gradient(circle, rgba(125, 207, 74, 0.35) 0%, rgba(125, 207, 74, 0) 70%);
+  box-shadow: 0 0 18px rgba(125, 207, 74, 0.85);
+  animation: piper-ring 0.55s ease-out forwards;
 }
 
-/* 咬：一口红。 */
-.fx-bite {
+/* 瘟疫跳血：一小团绿。 */
+.fx-plague-tick {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: radial-gradient(circle, #ff6a6a 0%, rgba(255, 106, 106, 0) 70%);
+  background: radial-gradient(circle, #7dcf4a 0%, rgba(125, 207, 74, 0) 70%);
   animation: piper-stash 0.3s ease-in forwards;
 }
 
