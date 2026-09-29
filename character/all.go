@@ -4,6 +4,7 @@ package character
 
 import (
 	"xqdj/character/axe"
+	"xqdj/character/charcoal"
 	"xqdj/character/doppel"
 	"xqdj/character/dummy"
 	"xqdj/character/engine"
@@ -32,6 +33,8 @@ import (
 
 const (
 	KindAxe             = 盾斧.KindAxe
+	KindCharcoal        = 炭翁.KindCharcoal
+	KindCharcoalEmber   = 炭翁.KindCharcoalEmber
 	KindClone           = 分身者.KindClone
 	KindCloneArc        = 分身者.KindCloneArc
 	KindDoppel          = 分身者.KindDoppel

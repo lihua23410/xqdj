@@ -151,6 +151,7 @@ type dmgOffer struct {
 	to        uint64
 	amount    float64
 	absorb    bool
+	noFreeze  bool
 	markKind  string
 	markDelta int
 	markIcon  string
@@ -974,6 +975,7 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 		to:        c.To,
 		amount:    c.Amount,
 		absorb:    absorb,
+		noFreeze:  c.NoFreeze,
 		markKind:  c.MarkKind,
 		markDelta: c.MarkDelta,
 		markIcon:  c.MarkIcon,
@@ -1032,7 +1034,7 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 			Icon:   off.markIcon,
 		})
 	}
-	m.applyHurtLocked(from, u, amt, true, true)
+	m.applyHurtLocked(from, u, amt, !off.noFreeze, true)
 }
 
 func (m *Match) applyHurtLocked(from, u *unit, amt float64, freeze, swap bool) {

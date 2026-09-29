@@ -173,6 +173,8 @@ type Damage struct {
 	MarkKind  string
 	MarkDelta int
 	MarkIcon  string
+	// NoFreeze 为真时，这记确认伤害不停帧。
+	NoFreeze bool
 }
 
 // IncomingDamage 引擎准备扣血。战斗机必须回 ConfirmDamage 才会真正掉 HP；回 BlockDamage 则整包取消。

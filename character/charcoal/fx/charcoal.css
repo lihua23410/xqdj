@@ -1,0 +1,31 @@
+.ball.look-charcoal {
+  background: radial-gradient(circle at 50% 42%, #c5cad1 0%, #8d939b 46%, #5c636b 100%);
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.18), 0 0 10px rgba(90, 96, 104, 0.45);
+}
+
+.coal-dot {
+  position: absolute;
+  z-index: 2;
+  border: none;
+  border-radius: 50%;
+  background: #e0622a;
+  box-shadow: 0 0 6px #e0622a;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.coal-dot.white {
+  background: #f7f4ef;
+  box-shadow: 0 0 8px #fff6ea;
+}
+
+.coal-hand {
+  position: absolute;
+  z-index: 5;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e0622a;
+  box-shadow: 0 0 8px #e0622a, 0 0 18px rgba(224, 98, 42, 0.75);
+  pointer-events: none;
+}
