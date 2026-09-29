@@ -1,0 +1,30 @@
+.ball.look-pastor {
+  background-color: #fff;
+  background-image: url("face.png");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  overflow: hidden;
+  box-shadow: none;
+}
+.ball.look-pastor.is-scream {
+  background-image: url("scream.png");
+}
+.ball.look-pastor-glyph {
+  background: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  overflow: visible;
+  color: #141414;
+}
+.ball.look-pastor-glyph > i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  pointer-events: none;
+  white-space: nowrap;
+}
