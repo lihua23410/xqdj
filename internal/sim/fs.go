@@ -70,6 +70,46 @@ func (c *cruiseFS) output() (speed float64, suppressed bool) {
 	return speed, math.Abs(m) < 1e-12
 }
 
+func (c *cruiseFS) mul() float64 {
+	if c == nil {
+		return 1
+	}
+	m := 1.0
+	for _, comp := range c.components {
+		if comp.zone == unitpkg.FSZoneM {
+			m *= comp.value
+		}
+	}
+	return m
+}
+
+func (u *unit) cruiseMul() float64 {
+	if u == nil || u.cruiseFS == nil {
+		return 1
+	}
+	return u.cruiseFS.mul()
+}
+
+// bakeCruiseMul 把当前速度从已经乘过的 M 调到新的 M。M=0 不在这里清速度，好让钳位先记下朝向。
+func (u *unit) bakeCruiseMul(next float64) {
+	if u == nil {
+		return
+	}
+	if math.Abs(next) < 1e-12 {
+		u.velM = 0
+		return
+	}
+	prev := u.velM
+	if prev < 1e-12 {
+		u.velM = next
+		return
+	}
+	if math.Abs(next-prev) > 1e-12 {
+		u.setVel(u.v.mul(next / prev))
+	}
+	u.velM = next
+}
+
 func (u *unit) syncCruise() {
 	if u == nil || u.cruiseFS == nil {
 		return
@@ -191,6 +231,7 @@ func (u *unit) applyImpulseOrClamp() {
 			u.cruiseFS.dir = u.v.norm()
 		}
 		u.setVel(vec{})
+		u.velM = 0
 	}
 }
 
@@ -221,6 +262,7 @@ func (m *Match) syncCruiseLocked() {
 			continue
 		}
 		u.syncCruise()
+		u.bakeCruiseMul(u.cruiseMul())
 	}
 }
 
@@ -282,6 +324,7 @@ func (m *Match) applyAddFSComponentLocked(c unitpkg.AddFSComponent) {
 		expiresAt: c.ExpiresAt,
 	}
 	u.syncCruise()
+	u.bakeCruiseMul(u.cruiseMul())
 	u.applyImpulseOrClamp()
 }
 
@@ -292,6 +335,7 @@ func (m *Match) applyRemoveFSComponentLocked(c unitpkg.RemoveFSComponent) {
 	}
 	delete(u.cruiseFS.components, c.Token)
 	u.syncCruise()
+	u.bakeCruiseMul(u.cruiseMul())
 	u.applyImpulseOrClamp()
 }
 

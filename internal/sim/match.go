@@ -38,6 +38,7 @@ type unit struct {
 	vision          float64
 	cruise          float64
 	cruiseFS        *cruiseFS
+	velM            float64 // 已经乘进当前速度的巡航 M，出生为 1
 	fsList          []impulseFS
 	decelT          float64
 	stunUntil       float64
@@ -686,6 +687,7 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 		maxHP:       spec.MaxHP,
 		vision:      spec.Vision,
 		cruise:      spec.Speed,
+		velM:        1,
 		actor:       actor,
 		inbox:       make(chan unitpkg.Event, 64),
 		stop:        make(chan struct{}),
@@ -765,7 +767,9 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if u == nil || u.stopped {
 			return
 		}
-		u.setVel(vec{c.VX, c.VY})
+		mul := u.cruiseMul()
+		u.setVel(vec{c.VX, c.VY}.mul(mul))
+		u.velM = mul
 	case unitpkg.SetCruise:
 		m.applySetCruiseLocked(c)
 	case unitpkg.AddFS:

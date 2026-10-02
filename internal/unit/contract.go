@@ -80,6 +80,7 @@ type FactionChanged struct {
 
 type Cmd any
 
+// SetVelocity 改自己的速度向量。若身上巡航 FS 的 M ≠ 1，写入后再乘 M。
 type SetVelocity struct {
 	UnitID uint64
 	VX     float64

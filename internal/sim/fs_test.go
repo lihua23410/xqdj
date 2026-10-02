@@ -252,6 +252,28 @@ func TestFSImpulseOnWallExpiresSameFrame(t *testing.T) {
 	}
 }
 
+func TestFSMScalesCurrentVelocity(t *testing.T) {
+	m := startFSMatch(t)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u := mustWaller(t, m)
+	u.setVel(vec{200, 0})
+	m.applyCmdLocked(unitpkg.AddFSComponent{
+		UnitID: u.id, Zone: unitpkg.FSZoneM, Token: 11, Value: 0.8,
+	})
+	if math.Abs(u.v.X-160) > 1e-9 || u.v.Y != 0 {
+		t.Fatalf("M 该立刻改当前速率: %+v", u.v)
+	}
+	m.applyCmdLocked(unitpkg.SetVelocity{UnitID: u.id, VX: 250, VY: 0})
+	if math.Abs(u.v.X-200) > 1e-9 || u.v.Y != 0 {
+		t.Fatalf("SetVelocity 也该乘 M: %+v", u.v)
+	}
+	m.applyCmdLocked(unitpkg.RemoveFSComponent{UnitID: u.id, Token: 11})
+	if math.Abs(u.v.X-250) > 1e-9 || u.v.Y != 0 {
+		t.Fatalf("拿掉 M 该按比例还回去: %+v", u.v)
+	}
+}
+
 func TestFSSetDirectionDoesNotChangeVelocity(t *testing.T) {
 	m := startFSMatch(t)
 	m.mu.Lock()

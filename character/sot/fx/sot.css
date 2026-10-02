@@ -1,0 +1,55 @@
+.ball.look-sot {
+  box-shadow: 0 0 16px color-mix(in srgb, #b1a78d 55%, transparent);
+}
+
+.ball.look-sot-wine {
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.ball.look-sot-wine > .sot-jar {
+  position: absolute;
+  inset: -12%;
+  background: url("jar.png") center / contain no-repeat;
+  transform: rotate(var(--sot-ang, 0rad));
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(177, 167, 141, 0.55));
+}
+
+.ball.look-sot-stain {
+  background: radial-gradient(
+    circle,
+    rgba(122, 59, 40, 0.42) 0%,
+    rgba(122, 59, 40, 0.28) 46%,
+    rgba(177, 167, 141, 0.12) 72%,
+    transparent 78%
+  );
+  box-shadow: 0 0 18px rgba(122, 59, 40, 0.35);
+}
+.ball.look-sot-stain > .sot-jar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54%;
+  height: 54%;
+  transform: translate(-50%, -50%);
+  background: url("jar.png") center / contain no-repeat;
+  pointer-events: none;
+  opacity: 0.92;
+  filter: drop-shadow(0 0 8px rgba(122, 59, 40, 0.45));
+}
+
+.fx-sot-shatter {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  border: 2px solid rgba(177, 167, 141, 0.7);
+  pointer-events: none;
+  animation: sot-shatter 0.35s ease-out forwards;
+}
+@keyframes sot-shatter {
+  from { transform: scale(0.4); opacity: 0.9; }
+  to { transform: scale(1.8); opacity: 0; }
+}

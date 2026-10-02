@@ -24,6 +24,7 @@ import (
 	"xqdj/character/ranged"
 	"xqdj/character/reaper"
 	"xqdj/character/rmiu"
+	"xqdj/character/sot"
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
 	"xqdj/character/waller"
@@ -94,6 +95,9 @@ const (
 	KindMiuArc          = r缪.KindMiuArc
 	KindMiuShot         = r缪.KindMiuShot
 	KindRMiu            = r缪.KindRMiu
+	KindSot             = 酒翁.KindSot
+	KindSotStain        = 酒翁.KindSotStain
+	KindSotWine         = 酒翁.KindSotWine
 	KindBlue            = 无下限术士.KindBlue
 	KindRed             = 无下限术士.KindRed
 	KindTwin            = 无下限术士.KindTwin
