@@ -23,6 +23,7 @@ import (
 	"xqdj/character/radar"
 	"xqdj/character/ranged"
 	"xqdj/character/reaper"
+	"xqdj/character/relay"
 	"xqdj/character/rmiu"
 	"xqdj/character/sot"
 	"xqdj/character/twin"
@@ -91,6 +92,9 @@ const (
 	KindReap            = 收割者.KindReap
 	KindReaper          = 收割者.KindReaper
 	KindSickle          = 收割者.KindSickle
+	KindRelay           = 中转站.KindRelay
+	KindRelayNode       = 中转站.KindRelayNode
+	KindRelayShot       = 中转站.KindRelayShot
 	KindMiu             = r缪.KindMiu
 	KindMiuArc          = r缪.KindMiuArc
 	KindMiuShot         = r缪.KindMiuShot
