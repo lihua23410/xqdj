@@ -13,6 +13,7 @@ import (
 	"xqdj/character/godfather"
 	"xqdj/character/godfather_youth"
 	"xqdj/character/hammer"
+	"xqdj/character/hero"
 	"xqdj/character/integrated"
 	"xqdj/character/knight"
 	"xqdj/character/melee"
@@ -67,6 +68,16 @@ const (
 	KindHammer          = 钉与锤.KindHammer
 	KindHammerArc       = 钉与锤.KindHammerArc
 	KindNail            = 钉与锤.KindNail
+	KindHero            = 勇者.KindHero
+	KindMage            = 勇者.KindMage
+	KindMagePick        = 勇者.KindMagePick
+	KindMageShot        = 勇者.KindMageShot
+	KindSaint           = 勇者.KindSaint
+	KindSaintPick       = 勇者.KindSaintPick
+	KindSlime           = 勇者.KindSlime
+	KindSwordPick       = 勇者.KindSwordPick
+	KindWarrior         = 勇者.KindWarrior
+	KindWarriorPick     = 勇者.KindWarriorPick
 	KindIntegrated      = 原型机_整合.KindIntegrated
 	KindIntegratedRound = 原型机_整合.KindIntegratedRound
 	KindKnight          = 小骑士.KindKnight

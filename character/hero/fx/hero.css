@@ -1,0 +1,80 @@
+/* 勇者：手里的村好剑、等级/经验徽标、已收编同伴的小点。 */
+
+.ball.look-hero {
+  /* 金球，靠 --kind 上色；这里只管挂在身上的附加件 */
+  overflow: visible;
+}
+
+/* 村好剑：一件握在手里的武器图，绕球心转向面朝方向（和盾斧武器图同一套挂法）。 */
+.hero-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.hero-weapon {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 40px;
+  margin-left: -20px;
+  margin-top: -31px;
+  object-fit: contain;
+  pointer-events: none;
+  transform-origin: 50% 78%;
+  filter: drop-shadow(0 0 4px #0008);
+}
+
+/* 等级 / 经验 / 同伴小点，挂在球右侧。 */
+.ball.look-hero .hero-badge {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #0d1420d9;
+  border: 1px solid #e0bc6a66;
+  color: #f2e6c4;
+  font-size: 10px;
+  line-height: 15px;
+  pointer-events: none;
+}
+.ball.look-hero .hero-badge b {
+  color: #e0bc6a;
+  font-weight: 700;
+}
+.ball.look-hero .hero-badge span {
+  opacity: 0.75;
+}
+.ball.look-hero .hero-badge em {
+  display: flex;
+  gap: 2px;
+  font-style: normal;
+}
+.ball.look-hero .hero-badge em i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff26;
+}
+.ball.look-hero .hero-badge em i.on.warrior {
+  background: #d1483c;
+  box-shadow: 0 0 4px #d1483c;
+}
+.ball.look-hero .hero-badge em i.on.mage {
+  background: #4a72d8;
+  box-shadow: 0 0 4px #4a72d8;
+}
+.ball.look-hero .hero-badge em i.on.saint {
+  background: #f2f4ef;
+  box-shadow: 0 0 4px #f2f4ef;
+}

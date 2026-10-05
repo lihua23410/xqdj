@@ -156,6 +156,10 @@ type dmgOffer struct {
 	markKind  string
 	markDelta int
 	markIcon  string
+	// credit 是「这笔伤害记谁的功」，在发起那一刻就定下来。
+	// 不能等确认时才去找发起者：剑弧、子弹这类发起者往往发完伤害就自己消失了，
+	// 到确认那一拍 m.units[from] 已经是 nil，击杀就记丢了。
+	credit uint64
 }
 
 func NewMatch() *Match {
@@ -983,6 +987,7 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 		markKind:  c.MarkKind,
 		markDelta: c.MarkDelta,
 		markIcon:  c.MarkIcon,
+		credit:    m.creditOfLocked(c.From),
 	}
 	m.send(u, unitpkg.IncomingDamage{
 		Token:  token,
@@ -1003,7 +1008,11 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	if u == nil || u.stopped || !u.takesHit() {
 		return
 	}
-	from := m.units[off.from]
+	// 用发起那一刻记下的记功对象；找不到才退回原始的 from（比如记功对象也同拍没了）。
+	from := m.units[off.credit]
+	if from == nil {
+		from = m.units[off.from]
+	}
 	if u.role != unitpkg.RoleFighter {
 		amt := off.amount
 		if c.Amount > 0 && c.Amount < amt {
@@ -1060,10 +1069,49 @@ func (m *Match) applyHurtLocked(from, u *unit, amt float64, freeze, swap bool) {
 	}
 	if u.hp <= 0 {
 		u.hp = 0
+		m.creditKillLocked(from, u)
 		m.removeLocked(u)
 	} else if swap {
 		m.swapOwnedLocked(u.id)
 	}
+}
+
+// creditOfLocked 算「这笔伤害记谁的功」：一般是发起者本人；发起者是别人的弹或随从时
+// 记到它的主人头上（owner 链只走一层，和 holdsNoFrameFreeze 同一套口径）。
+func (m *Match) creditOfLocked(fromID uint64) uint64 {
+	f := m.units[fromID]
+	if f == nil {
+		return fromID
+	}
+	if f.owner != 0 {
+		if o := m.units[f.owner]; o != nil && !o.stopped {
+			return o.id
+		}
+	}
+	return f.id
+}
+
+// creditKillLocked 把「谁打死了谁」记到该记的人头上。
+// from 传的已经是记功对象（见 dmgOffer.credit），所以这里一般直接用。
+func (m *Match) creditKillLocked(from, victim *unit) {
+	if from == nil || victim == nil {
+		return
+	}
+	killer := from
+	if from.owner != 0 {
+		if o := m.units[from.owner]; o != nil && !o.stopped {
+			killer = o
+		}
+	}
+	if killer == nil || killer.stopped || killer.id == victim.id {
+		return
+	}
+	m.send(killer, unitpkg.Kill{
+		VictimID:   victim.id,
+		VictimKind: victim.kind,
+		VictimRole: victim.role,
+		Mortal:     victim.mortal,
+	})
 }
 
 func (m *Match) hitStopIfNeeded(from *unit) {

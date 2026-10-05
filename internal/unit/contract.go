@@ -178,6 +178,16 @@ type Damage struct {
 	NoFreeze bool
 }
 
+// Kill 单位被打死时发给「记功对象」：一般是击杀者本人；击杀者是别人的弹或随从时，
+// 记到它主人头上（owner 链只走一层，和 holdsNoFrameFreeze 同一套口径）。
+// 活随从靠 Mortal 认；环境致死（没来源）不发。收不收这个事件由角色自己决定。
+type Kill struct {
+	VictimID   uint64
+	VictimKind string
+	VictimRole string
+	Mortal     bool
+}
+
 // IncomingDamage 引擎准备扣血。战斗机必须回 ConfirmDamage 才会真正掉 HP；回 BlockDamage 则整包取消。
 type IncomingDamage struct {
 	Token  uint64
