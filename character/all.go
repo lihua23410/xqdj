@@ -16,6 +16,7 @@ import (
 	"xqdj/character/hero"
 	"xqdj/character/integrated"
 	"xqdj/character/knight"
+	"xqdj/character/maggot"
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
 	"xqdj/character/pastor"
@@ -83,6 +84,10 @@ const (
 	KindIntegratedRound = 原型机_整合.KindIntegratedRound
 	KindKnight          = 小骑士.KindKnight
 	KindKnightArc       = 小骑士.KindKnightArc
+	KindBaby            = 蛆.KindBaby
+	KindEgg             = 蛆.KindEgg
+	KindFly             = 蛆.KindFly
+	KindMaggot          = 蛆.KindMaggot
 	KindMelee           = 原型机_近战.KindMelee
 	KindMeleeArc        = 原型机_近战.KindMeleeArc
 	KindMenreiki        = 面灵气.KindMenreiki
