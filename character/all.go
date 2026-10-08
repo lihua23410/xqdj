@@ -27,6 +27,7 @@ import (
 	"xqdj/character/relay"
 	"xqdj/character/rmiu"
 	"xqdj/character/sot"
+	"xqdj/character/tachi"
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
 	"xqdj/character/waller"
@@ -113,6 +114,7 @@ const (
 	KindSot             = 酒翁.KindSot
 	KindSotStain        = 酒翁.KindSotStain
 	KindSotWine         = 酒翁.KindSotWine
+	KindTachi           = 太刀.KindTachi
 	KindBlue            = 无下限术士.KindBlue
 	KindRed             = 无下限术士.KindRed
 	KindTwin            = 无下限术士.KindTwin

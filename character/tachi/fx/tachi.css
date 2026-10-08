@@ -1,0 +1,273 @@
+/* 太刀：小球手里的刀、刃色/纳刀徽标，以及居合/登龙/见切的一次性特效。
+ * 居合刀光用 居合.png，登龙无双斩用红色剑气 剑气.png。 */
+
+.ball.look-tachi {
+  overflow: visible;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #e5ebf8 45%, #b7c1d6 100%);
+  box-shadow:
+    inset 0 0 0 1px #ffffffcc,
+    0 0 0 1.5px #8f9bb4,
+    0 0 10px rgba(160, 180, 220, 0.45);
+}
+
+/* 纳刀状态：一圈静态的青白色呼吸圈。 */
+.ball.look-tachi.sheathed {
+  box-shadow:
+    inset 0 0 0 2px #dff6ff,
+    0 0 0 3px rgba(150, 220, 255, 0.35),
+    0 0 18px rgba(120, 210, 255, 0.95),
+    0 0 34px rgba(90, 190, 255, 0.55);
+}
+.ball.look-tachi.sheathed::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  border: 2px solid rgba(190, 236, 255, 0.95);
+  box-shadow: 0 0 12px rgba(120, 210, 255, 0.9), inset 0 0 8px rgba(120, 210, 255, 0.6);
+  animation: tachi-sheathe-pulse 1s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes tachi-sheathe-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+/* 见切无敌后撤：小球抖动。 */
+.ball.look-tachi.shaking {
+  animation: tachi-shake 0.16s linear infinite;
+}
+@keyframes tachi-shake {
+  0% { transform: translate(-50%, -50%) translate(0, 0); }
+  25% { transform: translate(-50%, -50%) translate(-2.5px, 1.5px) rotate(-3deg); }
+  50% { transform: translate(-50%, -50%) translate(2.5px, -1.5px) rotate(3deg); }
+  75% { transform: translate(-50%, -50%) translate(-1.5px, 2px) rotate(-2deg); }
+  100% { transform: translate(-50%, -50%) translate(0, 0); }
+}
+
+.tachi-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tachi-weapon {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 50px;
+  height: 125px;
+  margin-left: -25px;
+  margin-top: -97px;
+  object-fit: contain;
+  pointer-events: none;
+  transform-origin: 50% 78%;
+  filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.55));
+  will-change: transform, filter;
+}
+
+.tachi-badge {
+  position: absolute;
+  left: 50%;
+  top: -12px;
+  transform: translate(-50%, -100%);
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 9px;
+  line-height: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: #0d1420d9;
+  border: 1px solid #ffffff33;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 线状挥砍（常态挥刀 / 大回旋 / 突刺）。 */
+.fx-tachi-swing,
+.fx-tachi-spin,
+.fx-tachi-thrust {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
+  pointer-events: none;
+  z-index: 30;
+}
+.fx-tachi-swing::before,
+.fx-tachi-spin::before,
+.fx-tachi-thrust::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--len, 120px) / -2);
+  top: calc(var(--thick, 6px) / -2);
+  width: var(--len, 120px);
+  height: var(--thick, 6px);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color, #fff) 20%,
+    #fff 50%,
+    var(--color, #fff) 80%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 6px var(--color, #fff),
+    0 0 16px var(--color, #fff);
+  opacity: 0;
+}
+
+.fx-tachi-swing::before {
+  animation: tachi-swing 0.26s ease-out forwards;
+}
+@keyframes tachi-swing {
+  0% { transform: rotate(-0.5rad) scaleX(0.4); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: rotate(0.5rad) scaleX(1); opacity: 0; }
+}
+
+.fx-tachi-spin::before {
+  height: 10px;
+  animation: tachi-spin 0.34s cubic-bezier(0.25, 0.6, 0.3, 1) forwards;
+}
+@keyframes tachi-spin {
+  0% { transform: rotate(-1.55rad) scaleX(0.35); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: rotate(1.55rad) scaleX(1); opacity: 0; }
+}
+
+.fx-tachi-thrust::before {
+  animation: tachi-thrust 0.2s ease-out forwards;
+}
+@keyframes tachi-thrust {
+  0% { transform: scaleX(0.2); opacity: 0; }
+  40% { opacity: 1; }
+  100% { transform: scaleX(1.15); opacity: 0; }
+}
+
+/* 图片刀光：居合用 居合.png，登龙剑气用 剑气.png。 */
+.fx-tachi-iaido,
+.fx-tachi-qi {
+	position: absolute;
+	width: 0;
+	height: 0;
+	pointer-events: none;
+	z-index: 31;
+}
+.fx-tachi-iaido .tachi-sprite,
+.fx-tachi-qi .tachi-sprite {
+	position: absolute;
+	left: calc(var(--len, 180px) / -2);
+	top: calc(var(--len, 180px) / -2);
+	width: var(--len, 180px);
+	height: var(--len, 180px);
+	object-fit: contain;
+	transform: rotate(var(--ang, 0rad));
+	filter: drop-shadow(0 0 8px var(--color, #fff)) drop-shadow(0 0 22px var(--color, #fff));
+	animation: tachi-sprite 0.32s ease-out forwards;
+}
+@keyframes tachi-sprite {
+	0% { opacity: 0; }
+	25% { opacity: 1; }
+	100% { opacity: 0; }
+}
+
+/* 登龙红色爆发。 */
+.fx-tachi-burst {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 32;
+}
+.fx-tachi-burst::before {
+  content: "";
+  position: absolute;
+  left: -46px;
+  top: -46px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 70, 90, 0.95) 0%, rgba(255, 70, 90, 0.3) 42%, transparent 72%);
+  filter: blur(1px);
+  animation: tachi-burst 0.34s ease-out forwards;
+}
+@keyframes tachi-burst {
+  0% { transform: scale(0.3); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+/* 升级闪光。 */
+.fx-tachi-levelup {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 34;
+}
+.fx-tachi-levelup::before {
+  content: "";
+  position: absolute;
+  left: -34px;
+  top: -34px;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 2px solid var(--color, #fff);
+  box-shadow: 0 0 14px var(--color, #fff), inset 0 0 12px var(--color, #fff);
+  animation: tachi-levelup 0.5s ease-out forwards;
+}
+@keyframes tachi-levelup {
+  0% { transform: scale(0.3); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+/* 见切后撤残影。 */
+.fx-tachi-foresight {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 28;
+}
+.fx-tachi-foresight::before {
+  content: "";
+  position: absolute;
+  left: -24px;
+  top: -24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--color, #dfe8ff);
+  box-shadow: 0 0 16px var(--color, #dfe8ff);
+  animation: tachi-foresight 0.42s ease-out forwards;
+}
+@keyframes tachi-foresight {
+  0% { transform: scale(0.85); opacity: 0.95; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
+/* 居合 / 登龙的全屏闪光。 */
+.tachi-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, var(--color, #fff) 0%, transparent 55%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: 40;
+  animation: tachi-flash 0.24s ease-out forwards;
+}
+@keyframes tachi-flash {
+  0% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
