@@ -3,7 +3,7 @@
 // 三位同伴跟在他身后，分别提供免伤 / 弹幕 / 治疗。
 // 史莱姆是活随从，只敌视勇者、不敌视敌人——靠把它的 Slot 设成敌人的槽来实现：
 // Hittable 只认「不同槽」，所以它咬得到勇者、咬不到敌人，敌人也打不到它。
-// 击杀活随从涨经验，每 2^当前等级 升一级：回满血、上限 +10、攻击 +1，可无限叠。
+// 击杀活随从涨经验，每 2^当前等级 升一级：回当时最大生命值的 20%、上限 +10、攻击 +1，可无限叠。
 package 勇者
 
 import (
@@ -82,8 +82,9 @@ const (
 	followTrailMax = 48
 
 	// 升级
-	levelHPGain  = 10.0
-	levelAtkGain = 1.0
+	levelHPGain   = 10.0
+	levelAtkGain  = 1.0
+	levelHealRatio = 0.2 // 升级恢复当时最大生命值的比例
 )
 
 //go:embed fx
@@ -550,7 +551,7 @@ func (h *勇者) tickSlimes(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-// gainExp 经验够就升级：回满血 → 上限 +10 → 攻击 +1，可无限叠。
+// gainExp 经验够就升级：按当时的最大生命值回 20% → 上限 +10 → 攻击 +1，可无限叠。
 func (h *勇者) gainExp(ctx unit.Context, n int) {
 	h.exp += n
 	for h.exp >= h.expNeed() {
@@ -562,8 +563,10 @@ func (h *勇者) gainExp(ctx unit.Context, n int) {
 			oldMax = heroHP
 		}
 		h.maxHP = oldMax + levelHPGain
-		// 先回满（到旧上限），再把上限抬上去 —— 所以升完是 100/110，不是满血。
-		ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: oldMax, MaxHP: h.maxHP}
+		// 先在旧上限下回 20%（满了就浪费，恢复不越过当时的上限），再把上限抬上去。
+		// 回血走 Heal：引擎按真实血量结算、自动夹上限并弹 +n 绿字。
+		ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: oldMax * levelHealRatio}
+		ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: -1, MaxHP: h.maxHP}
 		ctx.Out <- unit.FX{
 			Name: "levelup", Kind: ctx.Kind, UnitID: ctx.ID, Slot: h.slot,
 			X: h.x, Y: h.y, Amount: float64(h.level),
