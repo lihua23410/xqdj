@@ -57,6 +57,48 @@ func TestBodySacrificeClaimsKill(t *testing.T) {
 	}
 }
 
+func TestClaimKillHealsHalfLostHP(t *testing.T) {
+	resetMiuKillState()
+	out := make(chan unit.Cmd, 32)
+	m := meleeMiu()
+	m.prevMiuIDs = map[uint64]bool{2: true}
+	noteMiuHit(2, 10, KindMiu)
+	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	self := miuSelf()
+	self.HP = 40
+	m.Handle(ctx, unit.Sense{Time: 1, Self: self})
+	want := (miuHP - 40) * miuHealRatio
+	found := false
+	for _, c := range drain(out) {
+		h, ok := c.(unit.Heal)
+		if !ok || h.UnitID != 10 {
+			continue
+		}
+		found = true
+		if mathAbs(h.Amount-want) > 1e-9 {
+			t.Fatalf("heal=%v want %v", h.Amount, want)
+		}
+	}
+	if !found {
+		t.Fatal("kill claim should heal half of lost HP")
+	}
+}
+
+func TestClaimKillNoHealAtFullHP(t *testing.T) {
+	resetMiuKillState()
+	out := make(chan unit.Cmd, 32)
+	m := meleeMiu()
+	m.prevMiuIDs = map[uint64]bool{2: true}
+	noteMiuHit(2, 10, KindMiu)
+	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	m.Handle(ctx, unit.Sense{Time: 1, Self: miuSelf()})
+	for _, c := range drain(out) {
+		if h, ok := c.(unit.Heal); ok {
+			t.Fatalf("full HP kill must not heal, got %v", h.Amount)
+		}
+	}
+}
+
 func TestLowHPSpeedNotInherited(t *testing.T) {
 	resetMiuKillState()
 	out := make(chan unit.Cmd, 16)

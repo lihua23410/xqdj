@@ -1,22 +1,19 @@
 /* R.缪 / 缪 前端特效 */
 
-.miu-hp {
+/* 头顶血量数字：与主程序给战斗机画的 hp-float 同款 */
+.miu-hp-num {
   position: absolute;
   left: 50%;
-  top: -7px;
-  width: 120%;
-  height: 4px;
+  top: -4px;
   transform: translate(-50%, -100%);
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 2px;
-  overflow: hidden;
+  color: #fff;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-shadow: 0 1px 2px #000, 0 0 6px #000;
   pointer-events: none;
-}
-.miu-hp i {
-  display: block;
-  height: 100%;
-  width: 100%;
-  background: #7dff9a;
+  white-space: nowrap;
+  z-index: 3;
 }
 
 .ball.look-miu {
