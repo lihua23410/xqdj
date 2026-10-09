@@ -1,6 +1,39 @@
 window.lookFX = window.lookFX || {};
 window.lookFX.pull = { tick: fieldTick("pull") };
 window.lookFX.push = { tick: fieldTick("push") };
+window.lookFX["twin-arc"] = {
+  unmount(el) {
+    el?.querySelector(":scope > .blade-glow")?.remove();
+    el?.querySelector(":scope > .blade-edge")?.remove();
+    el?.querySelector(":scope > .blade-core")?.remove();
+  },
+  tick(el) {
+    if (!el || !el.classList.contains("look-twin-arc")) return;
+    for (const name of ["blade-glow", "blade-edge", "blade-core"]) {
+      if (!el.querySelector(`:scope > .${name}`)) {
+        const layer = document.createElement("i");
+        layer.className = name;
+        el.appendChild(layer);
+      }
+    }
+  },
+};
+window.lookFX["void-orb"] = {
+  unmount(el) {
+    el?.querySelector(":scope > .void-rim")?.remove();
+    el?.querySelector(":scope > .void-cross")?.remove();
+  },
+  tick(el) {
+    if (!el || !el.classList.contains("look-void-orb")) return;
+    for (const name of ["void-rim", "void-cross"]) {
+      if (!el.querySelector(`:scope > .${name}`)) {
+        const layer = document.createElement("i");
+        layer.className = name;
+        el.appendChild(layer);
+      }
+    }
+  },
+};
 
 function fieldTick(mode) {
   return function (el, u, ctx) {

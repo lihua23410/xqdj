@@ -1,0 +1,95 @@
+/* 远程弹：暗金工镖体 + 青绿芯线 + 短橙热边。对齐概念图，不是圆点。 */
+.ball.look-tracer,
+.ball.look-tracer.projectile,
+.ball.look-tracer.glow,
+.ball.look-tracer.dashing {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none;
+  overflow: visible !important;
+  border: none !important;
+}
+.ball.look-tracer > .tracer-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--tracer-len, 92px);
+  height: 18px;
+  transform: translate(-50%, -50%) rotate(var(--tracer-ang, 0rad));
+  pointer-events: none;
+  overflow: visible;
+  z-index: 5;
+}
+.ball.look-tracer .tracer-wake-glow,
+.ball.look-tracer .tracer-wake,
+.ball.look-tracer .tracer-heat,
+.ball.look-tracer .tracer-core {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.ball.look-tracer .tracer-wake-glow {
+  left: 0;
+  width: 58%;
+  height: 10px;
+  background: linear-gradient(90deg, transparent 0%, #0a4a58 40%, #2ec8e0 100%);
+  filter: blur(5px);
+  opacity: 0.34;
+}
+.ball.look-tracer .tracer-wake {
+  left: 0;
+  width: 58%;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent 0%, #1a8aaa 35%, #6af0ff 100%);
+  box-shadow: 0 0 3px #3ec8e0;
+}
+.ball.look-tracer .tracer-heat {
+  left: 18%;
+  width: 36%;
+  height: 7px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 9px,
+    #ff6a18 9px 11px,
+    transparent 11px 20px
+  );
+  opacity: 0.72;
+  clip-path: polygon(0% 40%, 100% 18%, 100% 82%, 0% 60%);
+}
+.ball.look-tracer .tracer-core {
+  left: 8%;
+  right: 6%;
+  height: 1.2px;
+  background: linear-gradient(90deg, transparent 0%, #3ec8e0 28%, #9cffff 78%, #6af0ff 100%);
+  box-shadow: 0 0 1px #9cffff, 0 0 5px #2ec8e0;
+}
+.ball.look-tracer .tracer-body {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 48%;
+  height: 16px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  overflow: visible;
+}
+.ball.look-tracer .tracer-body svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.ball.look-tracer .tracer-tip {
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  width: 10px;
+  height: 8px;
+  transform: translate(0, -50%);
+  pointer-events: none;
+  background: linear-gradient(90deg, #ff7a22, #ffd08a);
+  clip-path: polygon(0% 28%, 100% 50%, 0% 72%);
+  filter: drop-shadow(0 0 3px #ff6a18);
+}

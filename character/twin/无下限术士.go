@@ -82,7 +82,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  unit.Deg(twinArcSpan),
 		ArcInner: twinArcInner,
-		Look:     unit.Look{Color: twinRedColor, Overlay: true},
+		Look:     unit.Look{Color: twinRedColor, Overlay: true, FX: []string{"twin-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &术士弧{slot: info.Slot, dmg: twinDamage}
 	})
@@ -112,7 +112,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  unit.Deg(twinArcSpan),
 		ArcInner: twinArcInner,
-		Look:     unit.Look{Color: twinBlueColor, Overlay: true},
+		Look:     unit.Look{Color: twinBlueColor, Overlay: true, FX: []string{"twin-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &术士弧{slot: info.Slot, dmg: twinDamage}
 	})
@@ -125,7 +125,7 @@ func init() {
 		Vision:    0,
 		Fighter:   false,
 		PassWalls: true,
-		Look:      unit.Look{Color: "#b44cff", Glow: true, Trail: true, Overlay: true},
+		Look:      unit.Look{Color: "#b44cff", Glow: true, Trail: true, Overlay: true, FX: []string{"void-orb"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &紫弹{slot: info.Slot}
 	})

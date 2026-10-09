@@ -13,6 +13,11 @@ window.lookFX.radar = {
     if (!beam) {
       beam = document.createElement("i");
       beam.className = "radar-beam";
+      for (const name of ["radar-glow", "radar-core", "radar-flare"]) {
+        const layer = document.createElement("i");
+        layer.className = name;
+        beam.appendChild(layer);
+      }
       el.appendChild(beam);
     }
     const scale = (ctx && ctx.scale) || 1;

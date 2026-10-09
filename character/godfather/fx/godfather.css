@@ -35,21 +35,47 @@
   left: 50%;
   top: 50%;
   width: var(--len, 560px);
-  height: 2px;
-  margin-top: -1px;
-  border-radius: 1px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 92, 82, 0.55) 0%,
-    rgba(255, 80, 70, 0.28) 42%,
-    rgba(255, 80, 70, 0.08) 78%,
-    transparent
-  );
-  box-shadow: 0 0 6px rgba(255, 70, 60, 0.35);
+  height: 10px;
+  margin-top: -5px;
+  background: none;
+  box-shadow: none;
   transform-origin: 0 50%;
   transform: rotate(var(--ang, 0rad));
   pointer-events: none;
   z-index: 0;
+  overflow: visible;
+}
+.sniper-laser > .sniper-glow,
+.sniper-laser > .sniper-core {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.sniper-laser > .sniper-glow {
+  height: 10px;
+  background: linear-gradient(
+    90deg,
+    #0a3a58 0%,
+    #2ec8e0 18%,
+    rgba(46, 200, 224, 0.32) 70%,
+    transparent 100%
+  );
+  filter: blur(5px);
+  opacity: 0.3;
+}
+.sniper-laser > .sniper-core {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    #9cffff 0%,
+    #6af0ff 22%,
+    rgba(106, 240, 255, 0.32) 78%,
+    transparent 100%
+  );
+  box-shadow: 0 0 1px #6af0ff, 0 0 5px #2ec8e0;
 }
 
 .fx-dealer-scream {

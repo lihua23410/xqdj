@@ -192,3 +192,95 @@
     opacity: 0;
   }
 }
+
+.ball.look-chroma-bolt,
+.ball.look-chroma-bolt.projectile,
+.ball.look-chroma-bolt.glow,
+.ball.look-chroma-bolt.dashing {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none;
+  overflow: visible !important;
+  border: none !important;
+}
+.ball.look-chroma-bolt > .chroma-bolt {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--bolt-len, 42px);
+  height: 12px;
+  transform: translate(-50%, -50%) rotate(var(--bolt-ang, 0rad));
+  pointer-events: none;
+  overflow: visible;
+  z-index: 5;
+}
+.ball.look-chroma-bolt .bolt-glow,
+.ball.look-chroma-bolt .bolt-body,
+.ball.look-chroma-bolt .bolt-core,
+.ball.look-chroma-bolt .bolt-fringe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.ball.look-chroma-bolt .bolt-glow {
+  height: 12px;
+  background: linear-gradient(90deg, transparent, #3ec8e0 40%, transparent);
+  filter: blur(5px);
+  opacity: 0.32;
+  clip-path: polygon(4% 50%, 28% 10%, 96% 50%, 28% 90%);
+}
+.ball.look-chroma-bolt .bolt-body {
+  height: 6px;
+  background: linear-gradient(90deg, #1a6a80, #3ec8e0 40%, #fff 100%);
+  clip-path: polygon(6% 50%, 30% 8%, 100% 50%, 30% 92%);
+}
+.ball.look-chroma-bolt .bolt-core {
+  height: 1px;
+  left: 22%;
+  right: 2%;
+  background: #fff;
+  box-shadow: 0 0 1px #fff, 0 0 5px #3ec8e0;
+}
+.ball.look-chroma-bolt .bolt-fringe {
+  height: 1px;
+  left: 28%;
+  right: 8%;
+  top: calc(50% + 2px);
+  background: color-mix(in srgb, #ff4a8a 70%, transparent);
+  opacity: 0.7;
+}
+.fx-chroma-muzzle {
+  width: 32px;
+  height: 10px;
+  pointer-events: none;
+  animation: chroma-muzzle 0.2s ease-out forwards;
+}
+.fx-chroma-muzzle::before,
+.fx-chroma-muzzle::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.fx-chroma-muzzle::before {
+  width: 100%;
+  height: 8px;
+  background: linear-gradient(90deg, #3ec8e0, transparent);
+  filter: blur(4px);
+  opacity: 0.45;
+}
+.fx-chroma-muzzle::after {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, #fff, #3ec8e0 60%, transparent);
+  box-shadow: 0 0 4px #3ec8e0;
+}
+@keyframes chroma-muzzle {
+  0% { opacity: 1; width: 16px; }
+  100% { opacity: 0; width: 46px; }
+}

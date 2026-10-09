@@ -100,14 +100,38 @@
 .fx-bolt {
   position: absolute;
   width: var(--len, 40px);
-  height: 4px;
+  height: 10px;
   margin: 0;
-  border-radius: 2px;
-  background: linear-gradient(90deg, #fcf05a, #32b1cc 55%, #e8ff7a);
-  box-shadow: 0 0 8px #fcf05a, 0 0 16px #32b1cc;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
   transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
   pointer-events: none;
   animation: prisoner-bolt 0.45s ease-out forwards;
+  overflow: visible;
+}
+.fx-bolt::before,
+.fx-bolt::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  clip-path: polygon(0% 50%, 18% 0%, 42% 70%, 68% 10%, 100% 50%, 68% 90%, 42% 30%, 18% 100%);
+}
+.fx-bolt::before {
+  height: 8px;
+  background: #32b1cc;
+  filter: blur(4px);
+  opacity: 0.45;
+  clip-path: none;
+}
+.fx-bolt::after {
+  height: 1.4px;
+  background: linear-gradient(90deg, #fcf05a, #fff, #32b1cc);
+  box-shadow: 0 0 4px #fcf05a, 0 0 10px #32b1cc;
 }
 @keyframes prisoner-bolt {
   0% { opacity: 1; filter: brightness(1.8); }

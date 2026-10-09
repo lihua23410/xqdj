@@ -79,7 +79,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  unit.Deg(wolfArcSpan),
 		ArcInner: wolfArcInner,
-		Look:     unit.Look{Color: wolfColor, Overlay: true},
+		Look:     unit.Look{Color: wolfColor, Overlay: true, FX: []string{"wolf-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &狼弧{slot: info.Slot, dmg: wolfDamage}
 	})
@@ -94,7 +94,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  unit.Deg(wolfBiteSpan),
 		ArcInner: wolfArcInner,
-		Look:     unit.Look{Color: "#ffd0c8", Overlay: true},
+		Look:     unit.Look{Color: "#ffd0c8", Overlay: true, FX: []string{"wolf-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &狼弧{slot: info.Slot, dmg: wolfBiteDmg}
 	})

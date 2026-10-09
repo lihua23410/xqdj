@@ -59,6 +59,11 @@ window.lookFX.sniper = {
     while (beams.length < 2) {
       const i = document.createElement("i");
       i.className = "sniper-laser";
+      for (const name of ["sniper-glow", "sniper-core"]) {
+        const layer = document.createElement("i");
+        layer.className = name;
+        i.appendChild(layer);
+      }
       el.appendChild(i);
       beams.push(i);
     }

@@ -1,0 +1,77 @@
+.ball.look-knight-arc {
+  overflow: visible !important;
+}
+.ball.look-knight-arc.arc {
+  border-color: transparent;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.ball.look-knight-arc > .blade-glow,
+.ball.look-knight-arc > .blade-core,
+.ball.look-knight-arc > .blade-edge {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  box-sizing: border-box;
+  -webkit-mask-image: conic-gradient(
+    from var(--arc-from, 45deg),
+    #000 0 var(--arc-span, 90deg),
+    transparent 0
+  );
+  mask-image: conic-gradient(
+    from var(--arc-from, 45deg),
+    #000 0 var(--arc-span, 90deg),
+    transparent 0
+  );
+}
+.ball.look-knight-arc > .blade-glow {
+  border: calc(var(--arc-thick, 2px) + 6px) solid color-mix(in srgb, var(--kind) 75%, transparent);
+  filter: blur(5px);
+  opacity: 0.36;
+}
+.ball.look-knight-arc > .blade-edge {
+  border: calc(var(--arc-thick, 2px) + 1px) solid var(--kind);
+  opacity: 0.92;
+}
+.ball.look-knight-arc > .blade-core {
+  border: 1.2px solid #fff;
+  box-shadow: 0 0 3px var(--kind), 0 0 8px color-mix(in srgb, var(--kind) 70%, transparent);
+}
+
+.fx-knight-flare {
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  background: radial-gradient(ellipse 55% 80% at 50% 50%, #fff 0%, #ff6a6a 32%, transparent 72%);
+  mix-blend-mode: screen;
+  animation: knight-flare 0.22s ease-out forwards;
+}
+.fx-knight-flare::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: #fff;
+  box-shadow: 0 0 6px #ff2a2a, 0 0 12px #ff2a2a;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.fx-knight-ring {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 8px #ff2a2a;
+  animation: knight-ring 0.4s cubic-bezier(0.12, 0.7, 0.3, 1) var(--delay, 0s) both;
+}
+@keyframes knight-flare {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.55); opacity: 0; }
+}
+@keyframes knight-ring {
+  0% { transform: translate(-50%, -50%) scale(0.25); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+}

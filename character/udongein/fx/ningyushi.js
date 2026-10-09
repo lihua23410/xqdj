@@ -178,7 +178,29 @@ window.lookFX["ningyushi-bomb"] = {
   },
 };
 
-window.lookFX["ningyushi-shot"] = { unmount() {}, tick() {} };
+window.lookFX["ningyushi-shot"] = {
+  unmount(el) {
+    el?.querySelector(":scope > .ningyushi-pin")?.remove();
+  },
+  tick(el, u) {
+    if (!el) return;
+    let art = el.querySelector(":scope > .ningyushi-pin");
+    if (!art) {
+      art = document.createElement("span");
+      art.className = "ningyushi-pin";
+      for (const name of ["pin-glow", "pin-body", "pin-core"]) {
+        const layer = document.createElement("i");
+        layer.className = name;
+        art.appendChild(layer);
+      }
+      el.appendChild(art);
+    }
+    const ang = Math.atan2(-(u.vy || 0), u.vx || 1);
+    const r = el.clientWidth || 10;
+    art.style.setProperty("--pin-ang", `${ang}rad`);
+    art.style.setProperty("--pin-len", `${Math.max(28, r * 3.2)}px`);
+  },
+};
 
 window.lookFX["ningyushi-beam"] = {
   unmount(el) {

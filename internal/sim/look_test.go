@@ -179,4 +179,26 @@ func TestLooksComeFromCharacterSpecs(t *testing.T) {
 			t.Fatalf("收割者 pack missing %s in %v", f, rpk.Files)
 		}
 	}
+
+	tr, ok := looks["子弹"]
+	if !ok || tr.Color == "" || !tr.Overlay || len(tr.FX) == 0 || tr.FX[0] != "tracer" {
+		t.Fatalf("远程子弹 look=%+v", tr)
+	}
+	sg, ok := looks[character.KindGodfatherShot]
+	if !ok || sg.Color == "" || !sg.Glow || !sg.Overlay || len(sg.FX) == 0 || sg.FX[0] != "slug" {
+		t.Fatalf("教父狙击弹 look=%+v", sg)
+	}
+	rp3, ok := unitpkg.Packs()[character.KindRanged]
+	if !ok {
+		t.Fatal("missing ranged pack")
+	}
+	have = map[string]bool{}
+	for _, f := range rp3.Files {
+		have[f] = true
+	}
+	for _, f := range []string{"fx/shot.js", "fx/shot.css", "fx/tracer.js", "fx/tracer.css"} {
+		if !have[f] {
+			t.Fatalf("原型机_远程 pack missing %s in %v", f, rp3.Files)
+		}
+	}
 }

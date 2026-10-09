@@ -69,7 +69,7 @@ func init() {
 		Speed:   shardMaxSpeed,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: "#8b9cb3"},
+		Look:    unit.Look{Color: "#8b9cb3", Overlay: true, FX: []string{"shard"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &盾碎片{owner: info.OwnerID, slot: info.Slot, dmg: fullShardDmg}
 	})
@@ -81,7 +81,7 @@ func init() {
 		Speed:   shardMaxSpeed,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: "#c47a4a"},
+		Look:    unit.Look{Color: "#c47a4a", Overlay: true, FX: []string{"shard"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &盾碎片{owner: info.OwnerID, slot: info.Slot, dmg: weakShardDmg}
 	})

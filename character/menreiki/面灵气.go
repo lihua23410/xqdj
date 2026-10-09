@@ -105,7 +105,7 @@ func init() {
 		Speed:   shotSpeed,
 		Vision:  9999,
 		Fighter: false,
-		Look:    unit.Look{Color: "#3ec8e0", Trail: true},
+		Look:    unit.Look{Color: "#3ec8e0", Trail: true, Overlay: true, FX: []string{"chroma-bolt"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &面灵气弹{owner: info.OwnerID, slot: info.Slot}
 	})

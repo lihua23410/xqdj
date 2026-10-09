@@ -120,9 +120,54 @@
   opacity: 0.7;
 }
 
-.ball.look-ningyushi-shot {
-  background: radial-gradient(circle at 34% 30%, #fff 0 14%, #ffe08a 40%, #e4b43c 100%);
-  box-shadow: 0 0 10px #ffe08a;
+.ball.look-ningyushi-shot,
+.ball.look-ningyushi-shot.projectile,
+.ball.look-ningyushi-shot.glow,
+.ball.look-ningyushi-shot.dashing {
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  filter: none;
+  border: none !important;
+}
+.ball.look-ningyushi-shot > .ningyushi-pin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--pin-len, 36px);
+  height: 10px;
+  transform: translate(-50%, -50%) rotate(var(--pin-ang, 0rad));
+  pointer-events: none;
+  overflow: visible;
+  z-index: 5;
+}
+.ball.look-ningyushi-shot .pin-glow,
+.ball.look-ningyushi-shot .pin-body,
+.ball.look-ningyushi-shot .pin-core {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.ball.look-ningyushi-shot .pin-glow {
+  height: 10px;
+  background: linear-gradient(90deg, transparent, #e4b43c 40%, transparent);
+  filter: blur(4px);
+  opacity: 0.34;
+}
+.ball.look-ningyushi-shot .pin-body {
+  height: 3px;
+  background: linear-gradient(90deg, #8a6a18, #ffe08a 45%, #fff 100%);
+  clip-path: polygon(0% 20%, 12% 0%, 88% 30%, 100% 50%, 88% 70%, 12% 100%, 0% 80%);
+}
+.ball.look-ningyushi-shot .pin-core {
+  height: 1px;
+  left: 10%;
+  right: 2%;
+  background: #fff8e0;
+  box-shadow: 0 0 1px #fff8e0, 0 0 5px #ffe08a;
 }
 
 .ball.look-ningyushi-beam {
@@ -136,14 +181,36 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  height: 8px;
+  height: 12px;
   width: var(--beam-len, 560px);
   transform: translate(0, -50%) rotate(var(--beam-ang, 0rad));
   transform-origin: 0 50%;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #fff 0%, #ffe08a 18%, #e4b43c 70%, transparent 100%);
-  box-shadow: 0 0 12px #ffe08a, 0 0 24px #e4b43c;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
   pointer-events: none;
+  overflow: visible;
+}
+.ball.look-ningyushi-beam > .ningyushi-ray::before,
+.ball.look-ningyushi-beam > .ningyushi-ray::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.ball.look-ningyushi-beam > .ningyushi-ray::before {
+  height: 12px;
+  background: linear-gradient(90deg, #8a6a18, #ffe08a 22%, #e4b43c 70%, transparent 100%);
+  filter: blur(5px);
+  opacity: 0.3;
+}
+.ball.look-ningyushi-beam > .ningyushi-ray::after {
+  height: 1px;
+  background: linear-gradient(90deg, #fff 0%, #ffe08a 18%, #e4b43c 70%, transparent 100%);
+  box-shadow: 0 0 1px #fff, 0 0 6px #ffe08a;
 }
 
 .guide.ningyushi-line {
@@ -156,9 +223,9 @@
 .guide.ningyushi-laser {
   height: 0;
   border: none;
-  border-top: 5px solid #ffe08a;
+  border-top: 1.2px solid #fff;
   opacity: 1;
-  box-shadow: 0 0 10px #ffe08a, 0 0 22px #e4b43c;
+  box-shadow: 0 0 4px #ffe08a, 0 0 12px #e4b43c, 0 0 22px #e4b43c;
   z-index: 18;
 }
 
@@ -166,8 +233,8 @@
   width: var(--r, 140px);
   height: var(--r, 140px);
   border-radius: 50%;
-  border: 3px solid #ffd24a;
-  box-shadow: 0 0 18px #e4b43c, inset 0 0 24px #ffe08a;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 10px #e4b43c, 0 0 18px #ffe08a;
   animation: ningyushi-ring 0.55s ease-out forwards;
 }
 @keyframes ningyushi-ring {
@@ -175,12 +242,25 @@
   100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
 }
 .fx-ningyushi-blast-core {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff 0%, #ffe08a 28%, #e4b43c 62%, transparent 100%);
-  box-shadow: 0 0 28px #fff, 0 0 64px #e4b43c;
+  width: 22px;
+  height: 22px;
+  border-radius: 0;
+  background: radial-gradient(ellipse 55% 80% at 50% 50%, #fff 0%, #ffe08a 28%, transparent 72%);
+  box-shadow: none;
+  mix-blend-mode: screen;
   animation: ningyushi-blast-core 0.55s ease-out forwards;
+}
+.fx-ningyushi-blast-core::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: #fff;
+  box-shadow: 0 0 8px #e4b43c, 0 0 16px #e4b43c;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 @keyframes ningyushi-blast-core {
   0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
@@ -191,8 +271,8 @@
   width: var(--r, 200px);
   height: var(--r, 200px);
   border-radius: 50%;
-  border: 4px solid #ffe08a;
-  box-shadow: 0 0 28px #e4b43c, inset 0 0 36px color-mix(in srgb, #e4b43c 80%, transparent);
+  border: 1.6px solid #fff;
+  box-shadow: 0 0 12px #e4b43c, 0 0 22px #ffe08a;
   animation: ningyushi-blast-wave 0.85s cubic-bezier(0.12, 0.72, 0.2, 1) both;
 }
 @keyframes ningyushi-blast-wave {
@@ -216,6 +296,38 @@
   font-size: 18px;
   color: #fafab2;
   text-shadow: 0 0 10px #fafab2, 0 0 18px #fafab2, 0 1px 0 #000;
+}
+
+.fx-ningyushi-muzzle {
+  width: 34px;
+  height: 10px;
+  pointer-events: none;
+  animation: ningyushi-muzzle 0.2s ease-out forwards;
+}
+.fx-ningyushi-muzzle::before,
+.fx-ningyushi-muzzle::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.fx-ningyushi-muzzle::before {
+  width: 100%;
+  height: 8px;
+  background: linear-gradient(90deg, #e4b43c, transparent);
+  filter: blur(4px);
+  opacity: 0.45;
+}
+.fx-ningyushi-muzzle::after {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, #fff, #ffe08a 55%, transparent);
+  box-shadow: 0 0 4px #ffe08a;
+}
+@keyframes ningyushi-muzzle {
+  0% { opacity: 1; width: 16px; }
+  100% { opacity: 0; width: 48px; }
 }
 @keyframes ningyushi-call {
   0% { opacity: 1; transform: translate(-50%, -50%) scale(0.85); }

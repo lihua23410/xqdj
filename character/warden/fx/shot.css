@@ -1,0 +1,88 @@
+.ball.look-shard,
+.ball.look-shard.projectile,
+.ball.look-shard.glow,
+.ball.look-shard.dashing {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  filter: none;
+  overflow: visible !important;
+  border: none !important;
+}
+.ball.look-shard > .shard-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--shard-len, 28px);
+  height: 12px;
+  transform: translate(-50%, -50%) rotate(var(--shard-ang, 0rad));
+  pointer-events: none;
+  overflow: visible;
+  z-index: 5;
+}
+.ball.look-shard .shard-glow,
+.ball.look-shard .shard-body,
+.ball.look-shard .shard-core {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.ball.look-shard .shard-glow {
+  height: 12px;
+  background: currentColor;
+  filter: blur(4px);
+  opacity: 0.32;
+  clip-path: polygon(0% 50%, 22% 0%, 100% 50%, 22% 100%);
+}
+.ball.look-shard .shard-body {
+  height: 8px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--kind) 70%, #1a1a1a), var(--kind) 40%, #fff 100%);
+  clip-path: polygon(0% 50%, 24% 8%, 100% 50%, 24% 92%);
+}
+.ball.look-shard .shard-core {
+  height: 1px;
+  left: 18%;
+  right: 4%;
+  background: #fff;
+  box-shadow: 0 0 1px #fff, 0 0 5px currentColor;
+}
+
+.fx-warden-flare {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  background: radial-gradient(ellipse 55% 80% at 50% 50%, #fff 0%, currentColor 32%, transparent 72%);
+  mix-blend-mode: screen;
+  animation: warden-flare 0.22s ease-out forwards;
+}
+.fx-warden-flare::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: #fff;
+  box-shadow: 0 0 6px currentColor, 0 0 12px currentColor;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.fx-warden-ring {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.4px solid #fff;
+  box-shadow: 0 0 8px currentColor;
+  animation: warden-ring 0.42s cubic-bezier(0.12, 0.7, 0.3, 1) var(--delay, 0s) both;
+}
+@keyframes warden-flare {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+@keyframes warden-ring {
+  0% { transform: translate(-50%, -50%) scale(0.25); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+}

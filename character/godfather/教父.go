@@ -127,7 +127,7 @@ func init() {
 		Speed:      shotSpeed,
 		Vision:     0,
 		BreakWalls: true,
-		Look:       unit.Look{Color: shotColor, Glow: true},
+		Look:       unit.Look{Color: shotColor, Glow: true, Overlay: true, FX: []string{"slug"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &狙击弹{slot: info.Slot, hit: map[uint64]bool{}}
 	})
