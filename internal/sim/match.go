@@ -33,6 +33,7 @@ type unit struct {
 	actor           unitpkg.Actor
 	inbox           chan unitpkg.Event
 	stop            chan struct{}
+	exited          chan struct{} // 角色协程退出时关闭，停场要等它
 	stopped         bool
 	solid           bool
 	vision          float64
@@ -129,6 +130,7 @@ type Match struct {
 	slots      [2]string
 	units      map[uint64]*unit
 	order      []uint64
+	actors     []*unit // 本场开过的所有角色（离场的也留着，停场要等它们的协程真退出）
 	cmds       chan unitpkg.Cmd
 	nextID     uint64
 	time       float64
@@ -650,12 +652,39 @@ func (m *Match) liveFieldLocked() unitpkg.Field {
 }
 
 func (m *Match) stopAllLocked() {
-	for _, u := range m.units {
+	us := m.actors
+	for _, u := range us {
 		m.killLocked(u)
 	}
 	m.units = make(map[uint64]*unit)
 	m.order = nil
 	m.walls = nil
+	m.actors = nil
+	// 停场不等于收工：角色协程手上那一次 Handle 可能还没写完，而 ctx.Out 就是 m.cmds。
+	// 这些指令要是留到下一场，就会打在重新从 1 开始的 ID 上——火山的减速（没寿命，谁也摘不掉）
+	// 和熔岩 Spawn 都是这么漏进下一场的。所以这里等它们真退出，边等边把队列读空。
+	// 名单要用 actors（含已离场的）：子弹、熔岩这些小东西整场都在 despawn，只等 m.units 会漏。
+	// 角色只会在 ctx.Out 上阻塞（不会卡在别处），边读边等不会死锁。
+	for _, u := range us {
+		for done := false; !done; {
+			select {
+			case <-u.exited:
+				done = true
+			case <-m.cmds:
+			}
+		}
+	}
+	for {
+		select {
+		case <-m.cmds:
+		default:
+			// 上一场的特效和顿帧一起清掉：快照是每帧原样推 effects 的，留着就会在
+			// 选人界面和下一场开头把上一场的喷发/熔岩再演一遍。（读空之后才清，免得又把残留指令里的 FX 写回来。）
+			m.fx = m.fx[:0]
+			m.hitStop = 0
+			return
+		}
+	}
 }
 
 func (m *Match) killLocked(u *unit) {
@@ -698,6 +727,7 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 		actor:       actor,
 		inbox:       make(chan unitpkg.Event, 64),
 		stop:        make(chan struct{}),
+		exited:      make(chan struct{}),
 		solid:       spec.Role != unitpkg.RoleHelper && !spec.Nonsolid,
 		semi:        spec.Semi,
 		face:        vec{1, 0},
@@ -720,6 +750,7 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 	u.aimFace()
 	m.units[id] = u
 	m.order = append(m.order, id)
+	m.actors = append(m.actors, u)
 	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds}
 	go runActor(u, ctx)
 	return u
@@ -743,6 +774,7 @@ func (u *unit) setVel(v vec) {
 }
 
 func runActor(u *unit, ctx unitpkg.Context) {
+	defer close(u.exited)
 	for {
 		select {
 		case <-u.stop:

@@ -142,22 +142,13 @@
       .to(img, { scaleY: 1, duration: up, ease: "power2.inOut" });
   });
 
+  // 超解砸地：Go 侧一次只报一处圆（amount 恒 1，落点摊成三处、互不重叠），
+  // 圆的大小就是世界半径——直径 = 2×半径×scale，和出伤判定用同一个圆。
   arena.registerShot("wave", (fx, ctx) => {
-    const n = Math.max(1, Math.round(fx.amount || 1));
     const scale = ctx.scale || 1;
-    const slam = Math.hypot(fx.vx || 0, fx.vy || 0) || 28;
-    const r = Math.max(42, 1.2 * slam * scale);
-    const ux = slam > 1e-6 ? (fx.vx || 0) / slam : 1;
-    const uy = slam > 1e-6 ? (fx.vy || 0) / slam : 0;
-    const px = -uy * scale;
-    const py = -ux * scale;
-    const gap = r * 0.52;
-    for (let i = 0; i < n; i++) {
-      const t = n === 1 ? 0 : i - (n - 1) / 2;
-      arena.spawnFx("fx-axe-wave", ctx.x + px * t * gap, ctx.y + py * t * gap, fx.kind, {
-        "--r": `${r}px`,
-        "--delay": `${i * 0.05}s`,
-      });
-    }
+    const r = Math.hypot(fx.vx || 0, fx.vy || 0) || 26; // 世界半径
+    arena.spawnFx("fx-axe-wave", ctx.x, ctx.y, fx.kind, {
+      "--r": `${2 * r * scale}px`,
+    });
   });
 })();
