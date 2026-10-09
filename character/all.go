@@ -4,6 +4,7 @@ package character
 
 import (
 	"xqdj/character/axe"
+	"xqdj/character/bloodpact"
 	"xqdj/character/charcoal"
 	"xqdj/character/doppel"
 	"xqdj/character/dummy"
@@ -16,6 +17,7 @@ import (
 	"xqdj/character/hero"
 	"xqdj/character/integrated"
 	"xqdj/character/knight"
+	"xqdj/character/maggot"
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
 	"xqdj/character/pastor"
@@ -38,6 +40,9 @@ import (
 
 const (
 	KindAxe             = 盾斧.KindAxe
+	KindBloodArc        = 血契.KindBloodArc
+	KindBloodBat        = 血契.KindBloodBat
+	KindBloodPact       = 血契.KindBloodPact
 	KindCharcoal        = 炭翁.KindCharcoal
 	KindCharcoalEmber   = 炭翁.KindCharcoalEmber
 	KindClone           = 分身者.KindClone
@@ -83,6 +88,10 @@ const (
 	KindIntegratedRound = 原型机_整合.KindIntegratedRound
 	KindKnight          = 小骑士.KindKnight
 	KindKnightArc       = 小骑士.KindKnightArc
+	KindBaby            = 蛆.KindBaby
+	KindEgg             = 蛆.KindEgg
+	KindFly             = 蛆.KindFly
+	KindMaggot          = 蛆.KindMaggot
 	KindMelee           = 原型机_近战.KindMelee
 	KindMeleeArc        = 原型机_近战.KindMeleeArc
 	KindMenreiki        = 面灵气.KindMenreiki

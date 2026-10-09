@@ -25,9 +25,9 @@ const (
 	bladeYellow = 2
 	bladeRed    = 3
 
-	// 纳刀节奏：每 5 秒进入一次纳刀，窗口 0.8 秒。
-	sheathePeriod = 5.0
-	sheatheWindow = 0.8
+	// 纳刀节奏：每 3.5 秒进入一次纳刀，窗口 0.6 秒。
+	sheathePeriod = 3.5
+	sheatheWindow = 0.6
 
 	// 居合：原地瞬间拔刀斩，不突进。
 	iaidoReach = 125.0
@@ -38,14 +38,14 @@ const (
 	normalSwingPeriod = 0.55
 	swingReach        = 92.0
 	swingHalf         = 58.0
-	swingDmg          = 2.0
+	swingDmg          = 2.5
 
 	// 登龙 + 解放斩（红刃居合命中派生）。
 	helmSpeed  = 620.0
 	helmTime   = 0.55
 	helmMain   = 16.0
 	burstHits  = 6
-	burstDmg   = 5.0
+	burstDmg   = 4.0
 	burstGap   = 0.14
 	burstTail  = 0.10
 	spinSpeed  = 480.0
@@ -53,7 +53,7 @@ const (
 	spinReach  = 125.0
 	spinHalf   = 90.0 // 大回旋 180 度：半张角 90 度
 
-	// 见切：间隔小于 1 秒的两次及以上攻击触发。
+	// 见切：间隔小于 0.6 秒的两次及以上攻击触发。
 	foresightGap    = 0.5
 	foresightInvuln = 1.0
 	foresightSpinAt = 0.25
