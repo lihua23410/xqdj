@@ -1,0 +1,113 @@
+/* 血契：暗红球 + 寄生血管纹 / 蔫置灰瘪；身前 110° 咬合扇环；血线（细→粗→搏动）。
+   球自己的 transform 是页面在用的，所以"瘪下去"画在内层 .pact-skin 上。 */
+
+.ball.look-bloodpact {
+  overflow: visible;
+}
+
+.pact-skin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  background:
+    radial-gradient(circle at 50% 42%, #ff5a6e33 0%, transparent 58%),
+    repeating-conic-gradient(from 0deg, #0000 0deg 16deg, #ff2f4533 16deg 21deg);
+}
+
+/* 寄生：血管纹亮起。 */
+.look-bloodpact.feed .pact-skin {
+  opacity: 1;
+}
+
+/* 蔫置：整球灰、瘪。 */
+.look-bloodpact.wilt {
+  filter: grayscale(0.9) brightness(0.62);
+}
+.look-bloodpact.wilt .pact-skin {
+  opacity: 0;
+  transform: scale(0.82);
+}
+
+/* 熔断：烧血技能全熄，球暗下去、血管纹只剩一丝。 */
+.look-bloodpact.blackout {
+  filter: grayscale(0.8) brightness(0.48);
+}
+.look-bloodpact.blackout .pact-skin {
+  opacity: 0.22;
+  transform: scale(0.9);
+}
+
+/* 咬合弧由引擎通用层画；这里只留球皮。 */
+
+/* 血蝠：小、快，翅膀扑扇。球本体走通用红球渲染，翅膀画在球皮外侧。 */
+.ball.look-bloodpact-bat {
+  overflow: visible;
+}
+.pact-bat {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pact-bat-svg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 230%;
+  height: 230%;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 2px #8c1420aa);
+  pointer-events: none;
+}
+.pact-bat-svg .wing,
+.pact-bat-svg circle,
+.pact-bat-svg .ear {
+  fill: #a01a28;
+  stroke: #ff6076aa;
+  stroke-width: 0.7;
+}
+.pact-bat-svg .wing {
+  transform-box: fill-box;
+  transform-origin: 0% 50%;
+}
+.pact-bat-svg .wl {
+  animation: pact-flap-l 0.18s ease-in-out infinite alternate;
+}
+.pact-bat-svg .wr {
+  animation: pact-flap-r 0.18s ease-in-out infinite alternate;
+}
+@keyframes pact-flap-l {
+  from { transform: rotate(14deg) scaleY(1); }
+  to { transform: rotate(-10deg) scaleY(0.55); }
+}
+@keyframes pact-flap-r {
+  from { transform: rotate(-14deg) scaleY(1); }
+  to { transform: rotate(10deg) scaleY(0.55); }
+}
+
+/* 血线：细红线 → 变粗 → 深红搏动。 */
+.guide.pact-line {
+  opacity: 0.9;
+  border-top-style: solid;
+}
+.guide.pact-line.d1 {
+  border-top: 1.5px solid #e0344a;
+}
+.guide.pact-line.d2 {
+  border-top: 3px solid #e0344a;
+}
+.guide.pact-line.d3 {
+  border-top: 5px solid #b31427;
+  filter: drop-shadow(0 0 4px #ff2f45aa);
+  animation: pact-throb 0.6s ease-in-out infinite alternate;
+}
+@keyframes pact-throb {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
