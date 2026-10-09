@@ -2,9 +2,13 @@ package sim
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 	"xqdj/character"
 	unitpkg "xqdj/internal/unit"
+	圆 "xqdj/map/circle"
+	六边形 "xqdj/map/hex"
+	火山 "xqdj/map/volcano"
 )
 
 func TestSelectSnapshotListsFields(t *testing.T) {
@@ -22,17 +26,17 @@ func TestSelectSnapshotListsFields(t *testing.T) {
 	if err := json.Unmarshal(m.SnapshotJSON(), &msg); err != nil {
 		t.Fatal(err)
 	}
-	if len(msg.Fields) < 2 || msg.Fields[0] != unitpkg.NameCircle || msg.Fields[1] != unitpkg.NameHex {
+	if len(msg.Fields) < 3 || msg.Fields[0] != 圆.Name || msg.Fields[1] != 六边形.Name || msg.Fields[2] != 火山.Name {
 		t.Fatalf("fields=%v", msg.Fields)
 	}
-	if msg.Field != unitpkg.NameHex || msg.Shape != unitpkg.ShapeHex {
+	if msg.Field != 六边形.Name || msg.Shape != unitpkg.ShapeHex {
 		t.Fatalf("default field=%s shape=%s", msg.Field, msg.Shape)
 	}
-	m.SetField(unitpkg.NameCircle)
+	m.SetField(圆.Name)
 	if err := json.Unmarshal(m.SnapshotJSON(), &msg); err != nil {
 		t.Fatal(err)
 	}
-	if msg.Field != unitpkg.NameCircle || msg.Shape != unitpkg.ShapeCircle {
+	if msg.Field != 圆.Name || msg.Shape != unitpkg.ShapeCircle {
 		t.Fatalf("circle field=%s shape=%s", msg.Field, msg.Shape)
 	}
 	if len(msg.Walls) != 1 || !msg.Walls[0].Hard || !msg.Walls[0].Square || !msg.Walls[0].Field {
@@ -44,16 +48,16 @@ func TestSetFieldUnknownIgnored(t *testing.T) {
 	m := NewMatchSeeded(1)
 	m.SetField("没有这份")
 	m.mu.Lock()
-	if m.spec.name != unitpkg.NameHex {
+	if m.spec.name != 六边形.Name {
 		m.mu.Unlock()
 		t.Fatalf("default changed: %s", m.spec.name)
 	}
 	m.mu.Unlock()
-	m.SetField(unitpkg.NameCircle)
+	m.SetField(圆.Name)
 	m.SetField("没有这份")
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.spec.name != unitpkg.NameCircle {
+	if m.spec.name != 圆.Name {
 		t.Fatalf("circle replaced: %s", m.spec.name)
 	}
 }
@@ -64,17 +68,17 @@ func TestSetFieldIgnoredAfterStart(t *testing.T) {
 	m.SetSlot(1, character.KindRanged)
 	m.Start()
 	defer m.End()
-	m.SetField(unitpkg.NameCircle)
+	m.SetField(圆.Name)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.spec.name != unitpkg.NameHex {
+	if m.spec.name != 六边形.Name {
 		t.Fatalf("field changed after start: %s", m.spec.name)
 	}
 }
 
 func TestCircleFieldInstallsHardWallAndWalkableSpawn(t *testing.T) {
 	m := NewMatchSeeded(1)
-	m.SetField(unitpkg.NameCircle)
+	m.SetField(圆.Name)
 	m.SetSlot(0, character.KindMelee)
 	m.SetSlot(1, character.KindRanged)
 	m.Start()
@@ -106,7 +110,7 @@ func TestCircleFieldInstallsHardWallAndWalkableSpawn(t *testing.T) {
 
 func TestBreakWallsPassesHardWall(t *testing.T) {
 	m := NewMatchSeeded(1)
-	m.SetField(unitpkg.NameCircle)
+	m.SetField(圆.Name)
 	m.SetSlot(0, character.KindGodfather)
 	m.SetSlot(1, character.KindMelee)
 	m.Start()
@@ -150,7 +154,7 @@ func TestBreakWallsPassesHardWall(t *testing.T) {
 
 func TestCircleWallTurnsClockwise(t *testing.T) {
 	m := NewMatchSeeded(1)
-	m.SetField(unitpkg.NameCircle)
+	m.SetField(圆.Name)
 	m.SetSlot(0, character.KindMelee)
 	m.SetSlot(1, character.KindMelee)
 	m.Start()
@@ -172,7 +176,7 @@ func TestCircleWallTurnsClockwise(t *testing.T) {
 
 func TestHardNailFollowsSpin(t *testing.T) {
 	m := NewMatchSeeded(1)
-	m.SetField(unitpkg.NameCircle)
+	m.SetField(圆.Name)
 	m.SetSlot(0, character.KindMelee)
 	m.SetSlot(1, character.KindMelee)
 	m.Start()
@@ -199,7 +203,7 @@ func TestHardNailFollowsSpin(t *testing.T) {
 
 func TestSpinShovesOnce(t *testing.T) {
 	m := NewMatchSeeded(1)
-	m.SetField(unitpkg.NameCircle)
+	m.SetField(圆.Name)
 	m.SetSlot(0, character.KindReaper)
 	m.SetSlot(1, character.KindReaper)
 	m.Start()
@@ -246,4 +250,38 @@ func wallEndsNear(w *barrier, a, b vec) bool {
 	const tol = 1.0
 	return (w.a.sub(a).len() < tol && w.b.sub(b).len() < tol) ||
 		(w.a.sub(b).len() < tol && w.b.sub(a).len() < tol)
+}
+
+func TestVolcanoFieldBootsControllerAndCrater(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetField(火山.Name)
+	m.SetSlot(0, character.KindMelee)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < TickHz/2; i++ {
+		m.Tick()
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.spec.name != 火山.Name || m.spec.shape != unitpkg.ShapeHex {
+		t.Fatalf("field=%s shape=%s", m.spec.name, m.spec.shape)
+	}
+	var crater int
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.stopped || u.kind != 火山.KindVolcano {
+			continue
+		}
+		crater++
+		if math.Hypot(u.p.X, u.p.Y) > 1e-6 {
+			t.Fatalf("crater at %+v", u.p)
+		}
+		if math.Abs(u.radius-48) > 1e-6 {
+			t.Fatalf("crater radius=%v", u.radius)
+		}
+	}
+	if crater != 1 {
+		t.Fatalf("crater=%d", crater)
+	}
 }

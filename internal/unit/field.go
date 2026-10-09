@@ -14,8 +14,6 @@ const (
 const (
 	ShapeHex    = "hex"
 	ShapeCircle = "circle"
-	NameHex     = "六边形"
-	NameCircle  = "圆"
 )
 
 type WallKind int
@@ -39,30 +37,19 @@ type FieldWall struct {
 	Period float64
 }
 
+// Field 是一份场地的几何与可选开场演员。具体场地目录项由 map/* 构造并 RegisterField。
 type Field struct {
 	Name   string
 	Shape  string
 	Extent float64
 	Walls  []FieldWall
+	// BootKind 非空时，开打在场心冒出该 Kind（场地控制器等）。空则不冒。
+	BootKind string
 }
 
+// HexField 无名六边形几何，给测试和默认 liveField 用；不是场地目录项。
 func HexField() Field {
-	return Field{Name: NameHex, Shape: ShapeHex, Extent: HexRadius}
-}
-
-func CircleField() Field {
-	return Field{
-		Name:   NameCircle,
-		Shape:  ShapeCircle,
-		Extent: HexRadius,
-		Walls: []FieldWall{{
-			Kind: WallHard,
-			X1:   -110, Y1: 0,
-			X2: 110, Y2: 0,
-			Radius: 6,
-			Period: 8,
-		}},
-	}
+	return Field{Shape: ShapeHex, Extent: HexRadius}
 }
 
 var (

@@ -3,11 +3,14 @@ package 场地
 import (
 	"testing"
 	"xqdj/internal/unit"
+	"xqdj/map/circle"
+	"xqdj/map/hex"
+	"xqdj/map/volcano"
 )
 
 func TestNamesOrder(t *testing.T) {
 	got := unit.FieldNames()
-	if len(got) < 2 || got[0] != unit.NameCircle || got[1] != unit.NameHex {
+	if len(got) < 3 || got[0] != 圆.Name || got[1] != 六边形.Name || got[2] != 火山.Name {
 		t.Fatalf("names=%v", got)
 	}
 }
@@ -19,7 +22,7 @@ func TestLookupUnknownMisses(t *testing.T) {
 }
 
 func TestCircleHasHardBar(t *testing.T) {
-	f, ok := unit.LookupField(unit.NameCircle)
+	f, ok := unit.LookupField(圆.Name)
 	if !ok {
 		t.Fatal("missing 圆")
 	}
@@ -28,5 +31,12 @@ func TestCircleHasHardBar(t *testing.T) {
 	}
 	if f.Walkable(0, 0, 18) {
 		t.Fatal("场心硬墙 should block")
+	}
+}
+
+func TestVolcanoHasBootKind(t *testing.T) {
+	f, ok := unit.LookupField(火山.Name)
+	if !ok || f.BootKind != 火山.KindVolcano {
+		t.Fatalf("volcano=%+v ok=%v", f, ok)
 	}
 }

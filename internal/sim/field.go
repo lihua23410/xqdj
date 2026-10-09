@@ -6,11 +6,12 @@ import (
 )
 
 type fieldSpec struct {
-	name   string
-	shape  string
-	extent float64
-	hard   []fieldWallSpec
-	caps   []fieldCapSpec
+	name     string
+	shape    string
+	extent   float64
+	bootKind string
+	hard     []fieldWallSpec
+	caps     []fieldCapSpec
 }
 
 type fieldWallSpec struct {
@@ -34,7 +35,7 @@ func lookupField(name string) (fieldSpec, bool) {
 }
 
 func defaultField() fieldSpec {
-	if spec, ok := lookupField(unitpkg.NameHex); ok {
+	if spec, ok := lookupField("六边形"); ok {
 		return spec
 	}
 	names := unitpkg.FieldNames()
@@ -47,7 +48,7 @@ func defaultField() fieldSpec {
 }
 
 func specFromField(f unitpkg.Field) fieldSpec {
-	s := fieldSpec{name: f.Name, shape: f.Shape, extent: f.Extent}
+	s := fieldSpec{name: f.Name, shape: f.Shape, extent: f.Extent, bootKind: f.BootKind}
 	for _, w := range f.Walls {
 		switch {
 		case w.Kind.Hard():
@@ -68,7 +69,7 @@ func (s fieldSpec) hex() hexagon {
 }
 
 func (s fieldSpec) toUnitField() unitpkg.Field {
-	f := unitpkg.Field{Name: s.name, Shape: s.shape, Extent: s.extent}
+	f := unitpkg.Field{Name: s.name, Shape: s.shape, Extent: s.extent, BootKind: s.bootKind}
 	for _, h := range s.hard {
 		f.Walls = append(f.Walls, unitpkg.FieldWall{
 			Kind: unitpkg.WallHard,

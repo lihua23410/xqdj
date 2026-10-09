@@ -1,0 +1,193 @@
+/* 场地底板：暗岩 */
+#hex[data-field="火山"] {
+  background:
+    radial-gradient(circle at 50% 52%, #3a2418 0%, #1e1410 55%, #14100c 100%);
+  box-shadow: inset 0 0 0 3px #4a2818, 0 0 40px #0008;
+}
+
+/* 岩浆：红棕岩斑 + 亮橙熔融底，不要网纹线 */
+.ball.look-volcano-crater,
+.ball.look-volcano-lava {
+  overflow: visible;
+  box-shadow: none !important;
+  border: 2px solid #2a140c;
+  box-sizing: border-box;
+  background:
+    radial-gradient(ellipse 34% 28% at 28% 32%, #4a2818 0 55%, transparent 70%),
+    radial-gradient(ellipse 30% 36% at 72% 58%, #3a1c10 0 50%, transparent 68%),
+    radial-gradient(ellipse 24% 22% at 58% 22%, #5a3020 0 45%, transparent 65%),
+    radial-gradient(ellipse 20% 26% at 40% 70%, #2e180e 0 50%, transparent 70%),
+    radial-gradient(circle at 48% 42%, #ff9a28 0%, #e84810 42%, #8a2410 78%, #3a1408 100%) !important;
+  animation: volcano-lava-flicker 0.9s steps(2, end) infinite;
+}
+
+.ball.look-volcano-lava {
+  animation-duration: 0.7s;
+}
+
+.ball.look-volcano-crater > .volcano-rim {
+  position: absolute;
+  inset: -20%;
+  border-radius: 50%;
+  pointer-events: none;
+  box-sizing: border-box;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 46%, #3a2010 48%, #5a3820 56%, #2a180c 62%, transparent 64%);
+  clip-path: polygon(
+    50% 0%,
+    62% 10%,
+    74% 4%,
+    82% 16%,
+    96% 18%,
+    88% 32%,
+    100% 42%,
+    90% 54%,
+    98% 68%,
+    84% 74%,
+    88% 90%,
+    72% 84%,
+    62% 98%,
+    50% 88%,
+    38% 100%,
+    30% 84%,
+    14% 90%,
+    18% 72%,
+    2% 66%,
+    12% 52%,
+    0% 40%,
+    14% 30%,
+    6% 16%,
+    22% 14%,
+    28% 2%,
+    40% 10%
+  );
+}
+
+.ball.look-volcano-crater.is-erupt > .volcano-spray {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.ball.look-volcano-crater.is-erupt > .volcano-spray > i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--sz, 12px);
+  height: var(--sz, 12px);
+  margin: calc(var(--sz, 12px) / -2) 0 0 calc(var(--sz, 12px) / -2);
+  border-radius: 45% 40% 50% 45%;
+  background: linear-gradient(160deg, #ffe860 0%, #ff8020 50%, #a02810 100%);
+  border: 1px solid #4a1808;
+  box-sizing: border-box;
+  animation: volcano-spray-fly 0.65s ease-out forwards;
+  box-shadow: 0 0 10px rgba(255, 140, 40, 0.7);
+  --dx: 0px;
+  --dy: 0px;
+  --spin: 0deg;
+  --sz: 12px;
+}
+
+.ball.look-volcano-crater.is-erupt > .volcano-spray > i.is-ember {
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff2a0 0%, #ff9020 45%, #c03008 100%);
+  box-shadow: 0 0 14px rgba(255, 180, 60, 0.9);
+}
+
+.ball.look-volcano-lava.is-lobbing {
+  visibility: hidden;
+}
+
+#fx > .fx-volcano-warn {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  border: 3px solid #ffb020;
+  background: rgba(180, 50, 10, 0.28);
+  animation: volcano-warn-blink 0.35s steps(2, end) infinite;
+  z-index: 5;
+}
+
+#fx > .fx-volcano-lob {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  border: 2px solid #2a140c;
+  z-index: 6;
+  background:
+    radial-gradient(ellipse 40% 35% at 35% 40%, #4a2818 0 50%, transparent 65%),
+    radial-gradient(circle at 45% 40%, #ff9a28 0%, #e04010 55%, #5a1808 100%);
+  box-shadow: 0 0 8px rgba(255, 120, 30, 0.55);
+}
+
+#fx > .fx-volcano-land {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+}
+
+#fx > .fx-volcano-land > i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 11px;
+  height: 11px;
+  margin: -5px 0 0 -5px;
+  border-radius: 45%;
+  background: #ff8020;
+  border: 1px solid #4a1808;
+  box-sizing: border-box;
+  animation: volcano-land-bit 0.4s linear forwards;
+  --dx: 0px;
+  --dy: 0px;
+}
+
+@keyframes volcano-lava-flicker {
+  from {
+    filter: brightness(1);
+  }
+  to {
+    filter: brightness(1.1);
+  }
+}
+
+@keyframes volcano-spray-fly {
+  0% {
+    transform: translate(0, 0) scale(0.55) rotate(0deg);
+    opacity: 1;
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.25) rotate(var(--spin));
+    opacity: 0;
+  }
+}
+
+@keyframes volcano-warn-blink {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes volcano-land-bit {
+  to {
+    transform: translate(var(--dx), var(--dy));
+    opacity: 0;
+  }
+}

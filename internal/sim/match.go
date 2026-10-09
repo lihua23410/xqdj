@@ -390,6 +390,9 @@ func (m *Match) Start() {
 		m.spawnFighterLocked(kind, slot, p, v)
 		spots = append(spots, spawnSpot{p: p, r: spec.Radius})
 	}
+	if m.spec.bootKind != "" {
+		m.addUnitLocked(m.spec.bootKind, vec{}, vec{}, 0, 0)
+	}
 	m.phase = PhaseRunning
 }
 

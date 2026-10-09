@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"xqdj/internal/unit"
+	圆 "xqdj/map/circle"
 )
 
 func sotAt(x, y float64) unit.Snapshot {
@@ -131,7 +132,7 @@ func TestFirstSmashDropsOnEnemyHead(t *testing.T) {
 }
 
 func TestDropPointKeepsXOnCircle(t *testing.T) {
-	f := unit.CircleField()
+	f := 圆.Field()
 	x, y := dropPoint(f, 80, wineRadius)
 	if math.Abs(x-80) > 1e-6 {
 		t.Fatalf("圆场不该被中心墙横向推开: got x=%v", x)
@@ -166,12 +167,12 @@ func TestWineSpawnsInsetOnCircle(t *testing.T) {
 	near := []unit.Snapshot{sotAt(0, 0), enemyAt(200, 40)}
 	boot(a, out, near)
 	ctx := unit.Context{ID: 1, Kind: KindSot, Out: out}
-	a.Handle(ctx, unit.Sense{Time: smashFirst, Self: sotAt(0, 0), Nearby: near, Field: unit.CircleField()})
+	a.Handle(ctx, unit.Sense{Time: smashFirst, Self: sotAt(0, 0), Nearby: near, Field: 圆.Field()})
 	wines := spawns(drain(out), KindSotWine)
 	if len(wines) != 1 {
 		t.Fatalf("该出第 1 坛: %d", len(wines))
 	}
-	f := unit.CircleField()
+	f := 圆.Field()
 	if !f.OutlineContains(wines[0].X, wines[0].Y, wineRadius+wineSpawnPad) {
 		t.Fatalf("圆场不该贴边生成: (%v,%v) r=%v", wines[0].X, wines[0].Y, math.Hypot(wines[0].X, wines[0].Y))
 	}

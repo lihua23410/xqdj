@@ -620,6 +620,9 @@ function renderArena() {
   const isCircle = (state.fieldShape || "") === "circle";
   hex.classList.toggle("circle", isCircle);
   hex.closest(".stage")?.classList.toggle("circle", isCircle);
+  // 场地私产皮肤用 [data-field] 挂选择器，不要在这里按场地名分支。
+  if (state.field) hex.dataset.field = state.field;
+  else delete hex.dataset.field;
   const w = hex.clientWidth;
   const h = hex.clientHeight;
   const scale = w / (2 * hexR);
