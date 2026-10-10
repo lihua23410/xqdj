@@ -2,7 +2,9 @@ package 场地
 
 import (
 	"testing"
+
 	"xqdj/internal/unit"
+	"xqdj/map/chamber"
 	"xqdj/map/circle"
 	"xqdj/map/hex"
 	"xqdj/map/volcano"
@@ -10,7 +12,8 @@ import (
 
 func TestNamesOrder(t *testing.T) {
 	got := unit.FieldNames()
-	if len(got) < 3 || got[0] != 圆.Name || got[1] != 六边形.Name || got[2] != 火山.Name {
+	// 目录名排序：chamber, circle, hex, volcano
+	if len(got) < 4 || got[0] != 机关房.Name || got[1] != 圆.Name || got[2] != 六边形.Name || got[3] != 火山.Name {
 		t.Fatalf("names=%v", got)
 	}
 }
@@ -38,5 +41,12 @@ func TestVolcanoHasBootKind(t *testing.T) {
 	f, ok := unit.LookupField(火山.Name)
 	if !ok || f.BootKind != 火山.KindVolcano {
 		t.Fatalf("volcano=%+v ok=%v", f, ok)
+	}
+}
+
+func TestChamberSquareBoot(t *testing.T) {
+	f, ok := unit.LookupField(机关房.Name)
+	if !ok || f.Shape != unit.ShapeSquare || f.BootKind != 机关房.KindChamber {
+		t.Fatalf("chamber=%+v ok=%v", f, ok)
 	}
 }

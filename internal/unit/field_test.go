@@ -1,12 +1,10 @@
 package unit
 
-import (
-	"testing"
-)
+import "testing"
 
-func TestHexWalkableCenter(t *testing.T) {
-	SetLiveField(HexField())
-	if !HexContains(0, 0, 18) {
-		t.Fatal("hex center should be walkable")
+func TestHexFieldShape(t *testing.T) {
+	f := HexField()
+	if f.Shape != ShapeHex || f.Extent != HexRadius {
+		t.Fatalf("%+v", f)
 	}
 }

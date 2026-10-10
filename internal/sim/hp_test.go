@@ -89,7 +89,7 @@ func TestRandomSpawnInsideHex(t *testing.T) {
 			t.Fatalf("seed %d same position", seed)
 		}
 		for _, u := range fighters {
-			if !m.hex.containsCenter(u.p, u.radius) {
+			if !m.spec.outline.Contains(u.p.X, u.p.Y, u.radius) {
 				m.mu.Unlock()
 				m.End()
 				t.Fatalf("seed %d escaped spawn %+v", seed, u.p)

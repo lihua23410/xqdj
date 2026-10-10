@@ -7,6 +7,7 @@ import (
 
 	"xqdj/internal/unit"
 	圆 "xqdj/map/circle"
+	_ "xqdj/map/hex"
 )
 
 func sotAt(x, y float64) unit.Snapshot {

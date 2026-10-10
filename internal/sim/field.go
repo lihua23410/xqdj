@@ -10,6 +10,7 @@ type fieldSpec struct {
 	shape    string
 	extent   float64
 	bootKind string
+	outline  unitpkg.Outline
 	hard     []fieldWallSpec
 	caps     []fieldCapSpec
 }
@@ -48,7 +49,10 @@ func defaultField() fieldSpec {
 }
 
 func specFromField(f unitpkg.Field) fieldSpec {
-	s := fieldSpec{name: f.Name, shape: f.Shape, extent: f.Extent, bootKind: f.BootKind}
+	s := fieldSpec{
+		name: f.Name, shape: f.Shape, extent: f.Extent, bootKind: f.BootKind,
+		outline: unitpkg.MakeOutline(f.Shape, f.Extent),
+	}
 	for _, w := range f.Walls {
 		switch {
 		case w.Kind.Hard():
@@ -62,10 +66,6 @@ func specFromField(f unitpkg.Field) fieldSpec {
 		}
 	}
 	return s
-}
-
-func (s fieldSpec) hex() hexagon {
-	return newHexagon(s.extent)
 }
 
 func (s fieldSpec) toUnitField() unitpkg.Field {

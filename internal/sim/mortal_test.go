@@ -27,7 +27,18 @@ func TestMortalMinionTakesDamageWithoutHitStop(t *testing.T) {
 	}
 	before := min.hp
 	m.offerDamageLocked(unitpkg.Damage{From: boss.id, To: min.id, Amount: 12})
-	m.settleHitsLocked()
+	var token uint64
+	for tok, off := range m.pendingDmg {
+		if off.to == min.id {
+			token = tok
+			break
+		}
+	}
+	if token == 0 {
+		t.Fatal("missing pending damage")
+	}
+	// 暗杀者不处理 IncomingDamage，测试直接确认。
+	m.confirmDamageLocked(unitpkg.ConfirmDamage{Token: token, UnitID: min.id, Amount: 12})
 	if math.Abs(min.hp-(before-12)) > 1e-6 {
 		t.Fatalf("hp=%v want %v", min.hp, before-12)
 	}

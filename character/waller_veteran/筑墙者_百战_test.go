@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"xqdj/internal/unit"
+	_ "xqdj/map/hex"
 )
 
 func TestShortestMeetsInTheMiddle(t *testing.T) {

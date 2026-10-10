@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 	"testing"
 	"xqdj/internal/unit"
+	_ "xqdj/map/hex"
 )
 
 func TestNoHookNoChain(t *testing.T) {

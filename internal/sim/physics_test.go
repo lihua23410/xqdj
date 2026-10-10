@@ -16,13 +16,15 @@ func TestReflectIncidentEqualsReflected(t *testing.T) {
 	}
 }
 
-func TestHexagonContainsCenter(t *testing.T) {
-	h := newHexagon(HexRadius)
-	if !h.containsCenter(vec{0, 0}, 18) {
+func TestDefaultOutlineContainsCenter(t *testing.T) {
+	m := NewMatch()
+	defer m.End()
+	o := m.spec.outline
+	if !o.Contains(0, 0, 18) {
 		t.Fatal("origin should be inside")
 	}
-	if h.containsCenter(vec{HexRadius, 0}, 18) {
-		t.Fatal("right vertex is outside for a circle of r=18")
+	if o.Contains(HexRadius, 0, 18) {
+		t.Fatal("far point outside")
 	}
 }
 
@@ -150,14 +152,12 @@ func TestMatchNoOverlap(t *testing.T) {
 			if ua.passWalls || ua.attach {
 				continue
 			}
-			if ua.semi {
-				if !m.hex.containsSemi(ua.p, ua.face, ua.radius) {
-					m.mu.Unlock()
-					t.Fatalf("unit %d escaped hex at t=%v p=%+v", ua.id, m.time, ua.p)
-				}
-			} else if !m.hex.containsCenter(ua.p, ua.radius) {
+			ox, oy := m.spec.outline.Constrain(
+				ua.p.X, ua.p.Y, ua.radius, 0, 0, ua.face.X, ua.face.Y, 0, ua.semi,
+			)
+			if math.Hypot(ox-ua.p.X, oy-ua.p.Y) > 1e-2 {
 				m.mu.Unlock()
-				t.Fatalf("unit %d escaped hex at t=%v p=%+v", ua.id, m.time, ua.p)
+				t.Fatalf("unit %d escaped outline at t=%v p=%+v", ua.id, m.time, ua.p)
 			}
 			for b := a + 1; b < len(ids); b++ {
 				ub := m.units[ids[b]]

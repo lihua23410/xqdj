@@ -132,7 +132,6 @@ type Match struct {
 	cmds       chan unitpkg.Cmd
 	nextID     uint64
 	time       float64
-	hex        hexagon
 	spec       fieldSpec
 	winner     string
 	winnerID   uint64
@@ -179,7 +178,6 @@ func NewMatchSeeded(seed uint64) *Match {
 		slots:      slots,
 		units:      make(map[uint64]*unit),
 		cmds:       make(chan unitpkg.Cmd, 512),
-		hex:        spec.hex(),
 		spec:       spec,
 		rng:        rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
 		pendingDmg: make(map[uint64]dmgOffer),
@@ -346,7 +344,6 @@ func (m *Match) SetField(name string) {
 		return
 	}
 	m.spec = spec
-	m.hex = m.spec.hex()
 	unitpkg.SetLiveField(m.spec.toUnitField())
 }
 
@@ -568,12 +565,10 @@ func (m *Match) resetLocked() {
 	m.dmgSeq = 0
 	m.pendingDmg = make(map[uint64]dmgOffer)
 	m.wardAbsorb = make(map[uint64]bool)
-	m.hex = m.spec.hex()
 	unitpkg.SetLiveField(m.spec.toUnitField())
 }
 
 func (m *Match) installFieldLocked() {
-	m.hex = m.spec.hex()
 	unitpkg.SetLiveField(m.spec.toUnitField())
 	for _, h := range m.spec.hard {
 		m.nextID++
@@ -2095,44 +2090,10 @@ func (m *Match) constrainUnitLocked(u *unit) {
 }
 
 func (m *Match) constrainOutlineLocked(u *unit, n vec) {
-	if m.spec.shape == unitpkg.ShapeCircle {
-		limit := m.spec.extent - u.radius - skin
-		if limit < 8 {
-			limit = 8
-		}
-		d := u.p.len()
-		if d > limit {
-			if d < 1e-9 {
-				u.p = vec{limit, 0}
-			} else {
-				u.p = u.p.mul(limit / d)
-			}
-		}
-		return
-	}
-	if n.len2() > 1e-12 {
-		limit := m.hex.d[0] - u.radius - skin
-		if u.semi {
-			limit = m.hex.d[0] - semiExtent(u.face, u.radius, n) - skin
-		}
-		pen := u.p.dot(n) - limit
-		if pen > 0 {
-			u.p = u.p.sub(n.mul(pen))
-		}
-		return
-	}
-	for i := 0; i < 6; i++ {
-		hn := m.hex.n[i]
-		ext := u.radius
-		if u.semi {
-			ext = semiExtent(u.face, u.radius, hn)
-		}
-		limit := m.hex.d[0] - ext - skin
-		pen := u.p.dot(hn) - limit
-		if pen > 0 {
-			u.p = u.p.sub(hn.mul(pen))
-		}
-	}
+	ox, oy := m.spec.outline.Constrain(
+		u.p.X, u.p.Y, u.radius, n.X, n.Y, u.face.X, u.face.Y, skin, u.semi,
+	)
+	u.p = vec{ox, oy}
 }
 
 func (m *Match) pushOutOBB(u *unit, w *barrier, cc vec, cr float64) {
