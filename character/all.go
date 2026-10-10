@@ -20,6 +20,7 @@ import (
 	"xqdj/character/maggot"
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
+	"xqdj/character/mezhou"
 	"xqdj/character/pastor"
 	"xqdj/character/piper"
 	"xqdj/character/prisoner"
@@ -99,6 +100,9 @@ const (
 	KindMenreikiMask2   = 面灵气.KindMenreikiMask2
 	KindMenreikiMask3   = 面灵气.KindMenreikiMask3
 	KindMenreikiShot    = 面灵气.KindMenreikiShot
+	KindMe              = 我与周旋久.KindMe
+	KindVoidShot        = 我与周旋久.KindVoidShot
+	KindZhou            = 我与周旋久.KindZhou
 	KindGlyph           = 老牧师.KindGlyph
 	KindPastor          = 老牧师.KindPastor
 	KindPiper           = 吹笛人.KindPiper

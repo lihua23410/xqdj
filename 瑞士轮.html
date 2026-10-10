@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>16 机杯赛程</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --line: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --btn: #238636;
+      --btn-ghost: #21262d;
+      --warn: #9e6a03;
+      --ok: #3fb950;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: radial-gradient(ellipse at top, #182030, var(--bg));
+      color: var(--text);
+      font-family: "Segoe UI", "PingFang SC", sans-serif;
+    }
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    h1 { margin: 0 0 8px; letter-spacing: 0.06em; font-size: 28px; }
+    h2 { margin: 28px 0 12px; font-size: 18px; font-weight: 600; }
+    h3 { margin: 18px 0 8px; font-size: 15px; font-weight: 600; }
+    .sub { color: var(--muted); margin: 0 0 22px; line-height: 1.5; }
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 28px;
+      margin-bottom: 20px;
+    }
+    .stat b { display: block; font-size: 22px; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    .stat.ok b { color: var(--ok); }
+    .stat.warn b { color: #d29922; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .spacer { flex: 1; min-width: 8px; }
+    button, select {
+      font: inherit;
+      color: var(--text);
+    }
+    button {
+      background: var(--btn);
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.ghost {
+      background: var(--btn-ghost);
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    button.tab {
+      background: #21262d;
+      border: 1px solid var(--line);
+    }
+    button.tab.active {
+      border-color: #58a6ff;
+      background: color-mix(in srgb, #58a6ff 18%, #21262d);
+    }
+    button.swap {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      padding: 6px 8px;
+      min-width: 40px;
+    }
+    .note {
+      background: color-mix(in srgb, var(--warn) 16%, var(--panel));
+      border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line));
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #e3b341;
+      margin: 0 0 14px;
+      font-size: 14px;
+    }
+    .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+    table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+    }
+    .table-wrap.compact table { min-width: 560px; }
+    th, td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:nth-child(even) { background: #1b2230; }
+    tbody tr.done td:first-child { color: var(--ok); }
+    tbody tr.cut td { border-bottom: 2px solid #388bfd; }
+    .num, .right { text-align: right; font-variant-numeric: tabular-nums; }
+    .vs { text-align: center; width: 48px; }
+    .pick {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .face {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      flex: 0 0 40px;
+    }
+    .tbd { color: var(--muted); }
+    select {
+      background: #21262d;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 8px;
+      min-width: 132px;
+    }
+    #playoff[hidden] { display: none !important; }
+    details {
+      margin-top: 28px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    details p { line-height: 1.55; }
+    code {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 12px;
+      background: #21262d;
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: var(--text);
+    }
+    a { color: #58a6ff; }
+    @media (max-width: 720px) {
+      .wrap { padding: 20px 12px 48px; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>16 机杯赛程</h1>
+    <p class="sub">
+      3 轮瑞士轮筛前 8，再按积分签位打四分之一、半决、决赛。淘汰赛必须分出胜负，没有平局。
+      第一轮由熔岩灯熵源洗牌。头像取自 <a href="战斗机.md">战斗机介绍</a>。
+    </p>
+    <div class="stats" id="stats"></div>
+    <div class="toolbar">
+      <div class="tabs" id="tabs"></div>
+      <div class="spacer"></div>
+      <button type="button" id="btn-next">生成下一轮</button>
+      <button type="button" class="ghost" id="btn-reset">恢复熔岩灯分组</button>
+    </div>
+    <p class="note" id="warn" hidden></p>
+    <p class="hint" id="hint"></p>
+    <h2 id="round-title">瑞士第 1 轮</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">场</th>
+            <th>A</th>
+            <th></th>
+            <th>B</th>
+            <th>结果</th>
+          </tr>
+        </thead>
+        <tbody id="matches"></tbody>
+      </table>
+    </div>
+    <section id="playoff" hidden>
+      <h2>淘汰赛 · 前 8</h2>
+      <p class="hint">签位 1v8、4v5 进一半区，2v7、3v6 进另一半。改瑞士轮会清掉整棵淘汰树。</p>
+      <h3>四分之一决赛</h3>
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr><th>签</th><th>A</th><th></th><th>B</th><th>结果</th></tr>
+          </thead>
+          <tbody id="qf"></tbody>
+        </table>
+      </div>
+      <h3>半决赛</h3>
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr><th>签</th><th>A</th><th></th><th>B</th><th>结果</th></tr>
+          </thead>
+          <tbody id="sf"></tbody>
+        </table>
+      </div>
+      <h3>决赛</h3>
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr><th>签</th><th>A</th><th></th><th>B</th><th>结果</th></tr>
+          </thead>
+          <tbody id="final"></tbody>
+        </table>
+      </div>
+    </section>
+    <h2>积分榜</h2>
+    <p class="hint">瑞士轮：胜 1 分、平 0.5 分。对手分是已赛对手的积分和。3 轮后前 8 进淘汰赛；9～16 名以瑞士成绩排定。淘汰赛名次覆盖前 8。</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="right">#</th>
+            <th>战斗机</th>
+            <th>阶段</th>
+            <th class="right">胜</th>
+            <th class="right">负</th>
+            <th class="right">平</th>
+            <th class="right">分</th>
+            <th class="right">对手分</th>
+            <th class="right">已赛</th>
+          </tr>
+        </thead>
+        <tbody id="board"></tbody>
+      </table>
+    </div>
+    <details>
+      <summary>第一轮熵源与赛制</summary>
+      <p>
+        GET <code>https://csprng.xyz/v1/api</code> · lava-lamp CSPRNG · 2026-09-16T05:27:44.541Z<br />
+        Data <code>Ji5sg2G7HpOFZcfKOY1PtpsxOIOLSqDTR3L9mjcH7Ng=</code><br />
+        32 字节里用了前 15 个，拒绝采样做无偏下标，再 Fisher–Yates。相邻两名组成一场。
+        瑞士第 2、3 轮按积分配对，避开已对过的对手。淘汰赛无平局，半决赛败者并列 3、4（瑞士成绩高的排前）。
+      </p>
+    </details>
+  </main>
+  <script>
+    const MAX_SWISS = 3;
+    const STORE = "xqdj-swiss-v2";
+    const FIGHTERS = [
+      { slug: "doppel", name: "分身者" },
+      { slug: "engine", name: "内燃机" },
+      { slug: "fisher", name: "钓鱼佬" },
+      { slug: "glitch", name: "地慧星" },
+      { slug: "knight", name: "小骑士" },
+      { slug: "melee", name: "原型机_近战" },
+      { slug: "menreiki", name: "面灵气" },
+      { slug: "prisoner", name: "囚徒" },
+      { slug: "radar", name: "雷达" },
+      { slug: "ranged", name: "原型机_远程" },
+      { slug: "reaper", name: "收割者" },
+      { slug: "twin", name: "无下限术士" },
+      { slug: "udongein", name: "优昙华院" },
+      { slug: "waller", name: "筑墙者" },
+      { slug: "warden", name: "盾士" },
+      { slug: "wolf", name: "狼人" },
+    ];
+    const SEED = Object.fromEntries(FIGHTERS.map((f, i) => [f.slug, i]));
+    const BY_SLUG = Object.fromEntries(FIGHTERS.map((f) => [f.slug, f]));
+    const ROUND1 = [
+      { left: "knight", right: "wolf", result: "" },
+      { left: "ranged", right: "prisoner", result: "" },
+      { left: "fisher", right: "twin", result: "" },
+      { left: "radar", right: "melee", result: "" },
+      { left: "glitch", right: "waller", result: "" },
+      { left: "doppel", right: "udongein", result: "" },
+      { left: "warden", right: "reaper", result: "" },
+      { left: "engine", right: "menreiki", result: "" },
+    ];
+    const QF_LABELS = ["1 vs 8", "4 vs 5", "2 vs 7", "3 vs 6"];
+    const SF_LABELS = ["胜者 1v8 / 4v5", "胜者 2v7 / 3v6"];
+    const INITIAL = { rounds: [ROUND1.map((m) => ({ ...m }))], view: 0, playoff: null };
+
+    let state = load();
+
+    function cloneRounds(rounds) {
+      return rounds.map((round) => round.map((m) => ({ ...m })));
+    }
+    function clonePlayoff(p) {
+      if (!p) return null;
+      return {
+        qf: p.qf.map((m) => ({ ...m })),
+        sf: p.sf.map((m) => ({ ...m })),
+        final: p.final.map((m) => ({ ...m })),
+      };
+    }
+    function pairKey(a, b) {
+      return a < b ? a + "|" + b : b + "|" + a;
+    }
+    function playedSet(rounds) {
+      const seen = new Set();
+      for (const round of rounds) {
+        for (const match of round) seen.add(pairKey(match.left, match.right));
+      }
+      return seen;
+    }
+    function pendingCount(round) {
+      return round.filter((m) => !m.result).length;
+    }
+    function sameInit() {
+      if (state.playoff || state.rounds.length !== 1) return false;
+      return state.rounds[0].every((m, i) =>
+        m.left === ROUND1[i].left && m.right === ROUND1[i].right && m.result === "");
+    }
+    function face(slug, name) {
+      return `<img class="face" src="docs/fighters/${slug}-look.svg" alt="${name}" width="40" height="40">`;
+    }
+    function fighterSelect(slug, matchIndex, side) {
+      const opts = FIGHTERS.map((f) =>
+        `<option value="${f.slug}"${f.slug === slug ? " selected" : ""}>${f.name}</option>`
+      ).join("");
+      return `<div class="pick">${face(slug, BY_SLUG[slug].name)}<select data-act="fighter" data-i="${matchIndex}" data-side="${side}">${opts}</select></div>`;
+    }
+    function fighterFixed(slug) {
+      if (!slug) return `<span class="tbd">待定</span>`;
+      const name = BY_SLUG[slug].name;
+      return `<div class="pick">${face(slug, name)}<span>${name}</span></div>`;
+    }
+    function assignFighter(matches, matchIndex, side, slug) {
+      const next = matches.map((m) => ({ ...m }));
+      const current = next[matchIndex][side];
+      if (current === slug) return matches;
+      for (let i = 0; i < next.length; i++) {
+        if (next[i].left === slug) { next[i] = { ...next[i], left: current }; break; }
+        if (next[i].right === slug) { next[i] = { ...next[i], right: current }; break; }
+      }
+      next[matchIndex] = { ...next[matchIndex], [side]: slug };
+      return next;
+    }
+    function swapSides(matches, matchIndex) {
+      return matches.map((m, i) => {
+        if (i !== matchIndex) return m;
+        const result = m.result === "left" ? "right" : m.result === "right" ? "left" : m.result;
+        return { left: m.right, right: m.left, result };
+      });
+    }
+    function winnerOf(match) {
+      if (!match || !match.left || !match.right) return "";
+      if (match.result === "left") return match.left;
+      if (match.result === "right") return match.right;
+      return "";
+    }
+    function loserOf(match) {
+      const w = winnerOf(match);
+      if (!w) return "";
+      return w === match.left ? match.right : match.left;
+    }
+    function standings(rounds) {
+      const rows = {};
+      for (const f of FIGHTERS) {
+        rows[f.slug] = { slug: f.slug, wins: 0, losses: 0, draws: 0, points: 0, sos: 0, played: 0, opponents: [] };
+      }
+      for (const round of rounds) {
+        for (const match of round) {
+          if (!match.result) continue;
+          const a = rows[match.left];
+          const b = rows[match.right];
+          a.played += 1; b.played += 1;
+          a.opponents.push(match.right);
+          b.opponents.push(match.left);
+          if (match.result === "left") { a.wins += 1; a.points += 1; b.losses += 1; }
+          else if (match.result === "right") { b.wins += 1; b.points += 1; a.losses += 1; }
+          else { a.draws += 1; b.draws += 1; a.points += 0.5; b.points += 0.5; }
+        }
+      }
+      for (const row of Object.values(rows)) {
+        row.sos = row.opponents.reduce((sum, slug) => sum + rows[slug].points, 0);
+      }
+      return Object.values(rows).sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.sos !== a.sos) return b.sos - a.sos;
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        return SEED[a.slug] - SEED[b.slug];
+      });
+    }
+    function swissPair(order, history) {
+      const used = new Set();
+      const matches = [];
+      for (let i = 0; i < order.length; i++) {
+        const a = order[i];
+        if (used.has(a)) continue;
+        let pick = -1;
+        for (let j = i + 1; j < order.length; j++) {
+          if (used.has(order[j]) || history.has(pairKey(a, order[j]))) continue;
+          pick = j; break;
+        }
+        if (pick < 0) {
+          for (let j = i + 1; j < order.length; j++) {
+            if (!used.has(order[j])) { pick = j; break; }
+          }
+        }
+        const b = order[pick];
+        used.add(a); used.add(b);
+        matches.push({ left: a, right: b, result: "" });
+      }
+      return matches;
+    }
+    function seedPlayoff(board) {
+      const t = board.slice(0, 8).map((r) => r.slug);
+      return {
+        qf: [
+          { left: t[0], right: t[7], result: "" },
+          { left: t[3], right: t[4], result: "" },
+          { left: t[1], right: t[6], result: "" },
+          { left: t[2], right: t[5], result: "" },
+        ],
+        sf: [
+          { left: "", right: "", result: "" },
+          { left: "", right: "", result: "" },
+        ],
+        final: [{ left: "", right: "", result: "" }],
+      };
+    }
+    function syncPlayoff(playoff) {
+      const p = clonePlayoff(playoff);
+      const w = p.qf.map(winnerOf);
+      const nextSf = [
+        { left: w[0], right: w[1], result: "" },
+        { left: w[2], right: w[3], result: "" },
+      ];
+      for (let i = 0; i < 2; i++) {
+        if (p.sf[i].left === nextSf[i].left && p.sf[i].right === nextSf[i].right) {
+          nextSf[i].result = p.sf[i].result;
+        }
+      }
+      p.sf = nextSf;
+      const fw = p.sf.map(winnerOf);
+      const nextFinal = [{ left: fw[0], right: fw[1], result: "" }];
+      if (p.final[0].left === nextFinal[0].left && p.final[0].right === nextFinal[0].right) {
+        nextFinal[0].result = p.final[0].result;
+      }
+      p.final = nextFinal;
+      return p;
+    }
+    function phaseOf(slug, board, playoff) {
+      const swissRank = board.findIndex((r) => r.slug === slug);
+      if (!playoff) {
+        if (state.rounds.length === MAX_SWISS && pendingCount(state.rounds[MAX_SWISS - 1]) === 0) {
+          return swissRank < 8 ? "八强" : "未晋级";
+        }
+        return "瑞士轮";
+      }
+      const champ = winnerOf(playoff.final[0]);
+      if (champ === slug) return "冠军";
+      const runner = loserOf(playoff.final[0]);
+      if (runner === slug) return "亚军";
+      for (const m of playoff.sf) {
+        if (loserOf(m) === slug) return "半决赛";
+      }
+      for (const m of playoff.qf) {
+        if (loserOf(m) === slug) return "止步八强";
+        if (winnerOf(m) === slug) return "四强";
+      }
+      return swissRank < 8 ? "八强" : "未晋级";
+    }
+    function fmtPoints(n) {
+      return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    }
+    function swissDone() {
+      return state.rounds.length === MAX_SWISS && pendingCount(state.rounds[MAX_SWISS - 1]) === 0;
+    }
+    function patchRound(nextMatches) {
+      const view = Math.min(state.view, state.rounds.length - 1);
+      const rounds = cloneRounds(state.rounds).slice(0, view + 1);
+      rounds[view] = nextMatches;
+      state = { rounds, view, playoff: null };
+      save();
+      render();
+    }
+    function patchPlayoff(stage, nextMatches) {
+      const p = clonePlayoff(state.playoff);
+      p[stage] = nextMatches;
+      state = { ...state, playoff: syncPlayoff(p) };
+      save();
+      render();
+    }
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORE);
+        if (!raw) return structuredClone(INITIAL);
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed.rounds) || !parsed.rounds.length) return structuredClone(INITIAL);
+        if (parsed.rounds.length > MAX_SWISS) parsed.rounds = parsed.rounds.slice(0, MAX_SWISS);
+        if (!("playoff" in parsed)) parsed.playoff = null;
+        return parsed;
+      } catch {
+        return structuredClone(INITIAL);
+      }
+    }
+    function save() {
+      localStorage.setItem(STORE, JSON.stringify(state));
+    }
+    function koRows(stage, matches, labels) {
+      const koOpts = [
+        ["", "未赛"],
+        ["left", "A 胜"],
+        ["right", "B 胜"],
+      ];
+      return matches.map((match, i) => {
+        const ready = Boolean(match.left && match.right);
+        const opts = koOpts.map(([v, l]) =>
+          `<option value="${v}"${match.result === v ? " selected" : ""}>${l}</option>`
+        ).join("");
+        const swap = ready
+          ? `<button type="button" class="swap" data-act="ko-swap" data-stage="${stage}" data-i="${i}" title="对调双方">对调</button>`
+          : "";
+        return `<tr class="${match.result ? "done" : ""}">
+          <td>${labels[i]}</td>
+          <td>${fighterFixed(match.left)}</td>
+          <td class="vs">${swap}</td>
+          <td>${fighterFixed(match.right)}</td>
+          <td><select data-act="ko-result" data-stage="${stage}" data-i="${i}" ${ready ? "" : "disabled"}>${opts}</select></td>
+        </tr>`;
+      }).join("");
+    }
+
+    function render() {
+      const view = Math.min(state.view, state.rounds.length - 1);
+      state.view = view;
+      const round = state.rounds[view];
+      const board = standings(state.rounds);
+      const swissDecided = state.rounds.reduce((n, r) => n + r.filter((m) => m.result).length, 0);
+      const openSwiss = pendingCount(state.rounds[state.rounds.length - 1]);
+      const lastSwissDone = openSwiss === 0;
+      const canSwissNext = lastSwissDone && state.rounds.length < MAX_SWISS;
+      const canPlayoff = swissDone() && !state.playoff;
+      const laterSwiss = view < state.rounds.length - 1;
+      let koOpen = 0;
+      if (state.playoff) {
+        koOpen = [...state.playoff.qf, ...state.playoff.sf, ...state.playoff.final]
+          .filter((m) => m.left && m.right && !m.result).length;
+      }
+
+      document.getElementById("stats").innerHTML = `
+        <div class="stat"><b>${state.rounds.length} / ${MAX_SWISS}</b><span>瑞士轮</span></div>
+        <div class="stat"><b>${swissDecided} / ${state.rounds.length * 8}</b><span>瑞士已录入</span></div>
+        <div class="stat ${state.playoff ? (koOpen === 0 ? "ok" : "warn") : (openSwiss === 0 ? "ok" : "warn")}">
+          <b>${state.playoff ? koOpen : openSwiss}</b>
+          <span>${state.playoff ? "淘汰赛待赛" : "当前轮待赛"}</span>
+        </div>`;
+
+      document.getElementById("tabs").innerHTML = state.rounds.map((_, i) =>
+        `<button type="button" class="tab${i === view ? " active" : ""}" data-act="view" data-i="${i}">瑞士第 ${i + 1} 轮</button>`
+      ).join("");
+
+      const nextBtn = document.getElementById("btn-next");
+      if (canPlayoff) {
+        nextBtn.textContent = "生成八强";
+        nextBtn.disabled = false;
+      } else if (canSwissNext) {
+        nextBtn.textContent = "生成下一轮";
+        nextBtn.disabled = false;
+      } else {
+        nextBtn.textContent = state.playoff ? "八强已生成" : "生成下一轮";
+        nextBtn.disabled = true;
+      }
+      document.getElementById("btn-reset").disabled = sameInit();
+
+      const warn = document.getElementById("warn");
+      if (state.playoff && view <= state.rounds.length - 1) {
+        warn.hidden = false;
+        warn.textContent = "改瑞士轮对阵或结果会清掉淘汰赛。";
+      } else if (laterSwiss) {
+        warn.hidden = false;
+        warn.textContent = `瑞士第 ${view + 1} 轮之后还有赛程。改对阵或结果会删掉后面的瑞士轮和淘汰赛。`;
+      } else {
+        warn.hidden = true;
+      }
+
+      const hint = document.getElementById("hint");
+      if (canPlayoff) {
+        hint.textContent = "三轮瑞士已录完。生成八强后按积分签位进入淘汰赛。";
+      } else if (!lastSwissDone && view === state.rounds.length - 1 && !state.playoff) {
+        hint.textContent = `本轮还剩 ${openSwiss} 场未录入。`;
+      } else if (canSwissNext) {
+        hint.textContent = "";
+      } else {
+        hint.textContent = "";
+      }
+
+      document.getElementById("round-title").textContent = `瑞士第 ${view + 1} 轮`;
+      document.getElementById("matches").innerHTML = round.map((match, i) => {
+        const resultOpts = [
+          ["", "未赛"],
+          ["left", "A 胜"],
+          ["right", "B 胜"],
+          ["draw", "平"],
+        ].map(([v, l]) => `<option value="${v}"${match.result === v ? " selected" : ""}>${l}</option>`).join("");
+        return `<tr class="${match.result ? "done" : ""}">
+          <td class="num">${i + 1}</td>
+          <td>${fighterSelect(match.left, i, "left")}</td>
+          <td class="vs"><button type="button" class="swap" data-act="swap" data-i="${i}" title="对调双方">对调</button></td>
+          <td>${fighterSelect(match.right, i, "right")}</td>
+          <td><select data-act="result" data-i="${i}">${resultOpts}</select></td>
+        </tr>`;
+      }).join("");
+
+      const playoffEl = document.getElementById("playoff");
+      if (state.playoff) {
+        playoffEl.hidden = false;
+        document.getElementById("qf").innerHTML = koRows("qf", state.playoff.qf, QF_LABELS);
+        document.getElementById("sf").innerHTML = koRows("sf", state.playoff.sf, SF_LABELS);
+        document.getElementById("final").innerHTML = koRows("final", state.playoff.final, ["决赛"]);
+      } else {
+        playoffEl.hidden = true;
+      }
+
+      document.getElementById("board").innerHTML = board.map((row, i) => `
+        <tr class="${i === 7 && swissDone() ? "cut" : ""}">
+          <td class="right">${i + 1}</td>
+          <td><div class="pick">${face(row.slug, BY_SLUG[row.slug].name)}<span>${BY_SLUG[row.slug].name}</span></div></td>
+          <td>${phaseOf(row.slug, board, state.playoff)}</td>
+          <td class="right">${row.wins}</td>
+          <td class="right">${row.losses}</td>
+          <td class="right">${row.draws}</td>
+          <td class="right">${fmtPoints(row.points)}</td>
+          <td class="right">${fmtPoints(row.sos)}</td>
+          <td class="right">${row.played}</td>
+        </tr>`).join("");
+    }
+
+    document.body.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (!btn || btn.tagName !== "BUTTON") return;
+      const act = btn.dataset.act;
+      const i = Number(btn.dataset.i);
+      if (act === "view") {
+        state = { ...state, view: i };
+        save();
+        render();
+      } else if (act === "swap") {
+        const view = Math.min(state.view, state.rounds.length - 1);
+        patchRound(swapSides(state.rounds[view], i));
+      } else if (act === "ko-swap") {
+        const stage = btn.dataset.stage;
+        patchPlayoff(stage, swapSides(state.playoff[stage], i));
+      }
+    });
+    document.body.addEventListener("change", (e) => {
+      const el = e.target;
+      if (!(el instanceof HTMLSelectElement) || !el.dataset.act) return;
+      const i = Number(el.dataset.i);
+      if (el.dataset.act === "fighter") {
+        const view = Math.min(state.view, state.rounds.length - 1);
+        patchRound(assignFighter(state.rounds[view], i, el.dataset.side, el.value));
+      } else if (el.dataset.act === "result") {
+        const view = Math.min(state.view, state.rounds.length - 1);
+        const round = state.rounds[view];
+        patchRound(round.map((m, j) => j === i ? { ...m, result: el.value } : m));
+      } else if (el.dataset.act === "ko-result") {
+        const stage = el.dataset.stage;
+        patchPlayoff(stage, state.playoff[stage].map((m, j) => j === i ? { ...m, result: el.value } : m));
+      }
+    });
+    document.getElementById("btn-next").addEventListener("click", () => {
+      if (canCreatePlayoff()) {
+        const board = standings(state.rounds);
+        state = { ...state, playoff: seedPlayoff(board) };
+        save();
+        render();
+        document.getElementById("playoff").scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (state.rounds.length >= MAX_SWISS) return;
+      const last = state.rounds[state.rounds.length - 1];
+      if (pendingCount(last) > 0) return;
+      const order = standings(state.rounds).map((r) => r.slug);
+      const next = swissPair(order, playedSet(state.rounds));
+      const rounds = [...cloneRounds(state.rounds), next];
+      state = { rounds, view: rounds.length - 1, playoff: null };
+      save();
+      render();
+    });
+    function canCreatePlayoff() {
+      return swissDone() && !state.playoff;
+    }
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      state = structuredClone(INITIAL);
+      save();
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
