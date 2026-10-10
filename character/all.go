@@ -25,6 +25,7 @@ import (
 	"xqdj/character/piper"
 	"xqdj/character/prisoner"
 	"xqdj/character/radar"
+	"xqdj/character/radar_veteran"
 	"xqdj/character/ranged"
 	"xqdj/character/reaper"
 	"xqdj/character/relay"
@@ -113,6 +114,9 @@ const (
 	KindHook            = 囚徒.KindHook
 	KindPrisoner        = 囚徒.KindPrisoner
 	KindRadar           = 雷达.KindRadar
+	KindBarrage         = 雷达_百战.KindBarrage
+	KindRadarVeteran    = 雷达_百战.KindRadarVeteran
+	KindSmallBarrage    = 雷达_百战.KindSmallBarrage
 	KindRanged          = 原型机_远程.KindRanged
 	KindReap            = 收割者.KindReap
 	KindReaper          = 收割者.KindReaper
