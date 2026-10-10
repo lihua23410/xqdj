@@ -1,3 +1,6 @@
+// 盾斧（怪猎的充能斧）：盾形态正面减伤吃招 → 剑形态二连斩攒能量 → 金瓶转红盾/红剑/红斧 → 斧形态解放斩。
+// 数值一律走下面那个 const 块，单位约定：距离 px、速度 px/s、时间 s、角度 度（unit.Deg 转弧度）、伤害 HP 点。
+// 完整数值表见 README.md 的「盾斧」一行；改这里记得两边对齐。
 package 盾斧
 
 import (
@@ -12,70 +15,89 @@ var assets embed.FS
 const KindAxe = "盾斧"
 
 const (
-	axeRadius = 18.0
-	axeSpeed  = 165.0
-	axeSlow   = 90.0
-	axeHP     = 100.0
-	axeVision = 9999.0
+	// —— 本体 ——
+	axeRadius = 18.0   // 和所有小球一样的半径
+	axeSpeed  = 165.0  // 盾/剑形态的巡航速度
+	axeSlow   = 90.0   // 红斧形态的巡航速度（切斧时 165 → 90）
+	axeHP     = 100.0  // 标准血量
+	axeVision = 9999.0 // 全场视野
 	axeColor  = "#9a9a9a"
 
-	seekR      = 74.0 * 18.0 / 54.0
-	seekSpan   = 120.0
-	axeSeekR   = 104.0
-	chouR      = 104.0
-	chouSpan   = 60.0
-	shieldSpan = 300.0
+	// —— 索敌/判定范围 ——
+	// seekR 是剑形态「摸到人就起手」的距离：74 是原始量值，×18/54 是按半径比缩到本球（r=18），≈24.7。
+	seekR      = 36
+	seekSpan   = 120.0 // 索敌扇面：正面 ±60°
+	axeSeekR   = 124.0 // 红斧态索敌半径（大解、追解都按这个范围打）
+	chouR      = 124.0 // 超解扇半径
+	chouSpan   = 120.0 // 超解扇面：正面 ±30°。比索敌窄，所以要先突刺把球顶进落点
+	shieldSpan = 300.0 // 盾减伤生效的角度：正面 ±150°，只剩背后 60° 是空档
 
-	slashBeat  = 0.25
-	slashGap   = 0.25
-	slashLife  = 0.75
-	thrustSp   = 350.0
-	thrustLife = 1.5
-	fillStand  = 1.0
-	bottleWait = 0.5
-	axeWind    = 0.2
-	axeStand   = 1.0
-	spinT      = 0.35
-	tsuiGap    = 0.4
-	flipDown   = 0.8
-	flipUp     = 0.25
-	waveWait   = 0.4
-	waveGap    = 0.3
+	// —— 各招时长（秒）——
+	slashBeat  = 0.25  // 二连斩动画每一段（前端 gsap 用），3×0.25 正好是 slashLife
+	slashGap   = 0.25  // 二连斩两刀之间
+	slashLife  = 0.75  // 二连斩总时长：0s 第一刀、0.25s 第二刀，剩下 0.5s 收招
+	thrustSp   = 350.0 // 突刺速度
+	thrustLife = 0.8   // 突刺最长 1.5s ≈ 顶出去 525px（场地半径 280，所以基本会撞边或撞人）
+	fillStand  = 0.8   // 连招结束后站定灌瓶
+	bottleWait = 0.2   // 灌瓶到黄瓶转化的等待
+	axeWind    = 0.2   // 切斧起手
+	axeStand   = 0.8   // 切斧站定
+	spinT      = 0.5   // 大解/追解/超解旋每一拍的时长
+	tsuiGap    = 0.2   // 追解两刀之间
+	flipDown   = 0.3   // 超解翻转：把斧头压下去
+	flipUp     = 0.25  // 超解翻转：翻回来（合计 1.05s，就是 stepChouFlip 的时长）
+	waveWait   = 0.3   // 超解旋 → 第一波砸地
+	waveGap    = 0.15  // 三波砸地之间
 	// 超解前那一下突刺：距离短，只为把球顶进超解的落点里。
-	chouThrustLife = 0.5
+	chouThrustLife = 0.5 // 0.5s ≈ 顶 175px；碰到人当场伤 3 并提前接超解旋
 
-	slashDmg    = 5.0
-	thrustDmg   = 3.0
-	redBonus    = 2.0
-	daiDmg      = 18.0
-	tsuiDmg     = 15.0
-	chouSpinDmg = 15.0
-	chouFanDmg  = 30.0
-	waveDmg     = 15.0
+	// —— 各招伤害（HP 点）——
+	// 剑/突刺这类走 strikeDmg()，红剑态会再加 redBonus；下面这几个是固定值。
+	slashDmg    = 5.0  // 二连斩每一刀
+	thrustDmg   = 3.0  // 突刺（普通突刺和超解前那一下都是这个）
+	redBonus    = 3.0  // 红剑加成：二连斩 5→7、突刺 3→5
+	daiDmg      = 18.0 // 大解
+	tsuiDmg     = 15.0 // 追解每一刀（两刀）
+	chouSpinDmg = 15.0 // 超解旋
+	chouFanDmg  = 30.0 // 超解扇（104 半径、正面 ±30° 那一发）
+	waveDmg     = 15.0 // 超解砸地每一波
 
 	// 超解砸地：三处**互不重叠**的圆（圆心距离 ≥ 2×slamR），范围比原来的分环更远。
-	slamR = 26.0
+	slamR = 26.0 // 每一处砸地圆的半径，同时就是出伤判定半径（前端照着画同一个圆）
 
+	// 瓶与能量：energy 上限 2（每打中一段 +1），黄瓶才够换红。
 	phialEmpty = 0
 	phialWhite = 1
 	phialGold  = 2
 )
 
-// 三处砸地的落点：沿面朝方向转 ang 度、往前 dist。
-// 原来那套是「60° 扇环分 3 环」，三个圆叠在一起又都在 104 以内；
-// 现在摊成三处独立的圆，最远落到 125+26=151。
+// 三处砸地的落点，每项是 {沿面朝方向的距离, 偏转角}：正中 70 一处，左右各偏 32° 的 125 两处。
+// 原来那套是「60° 扇环分 3 环」，三个圆叠在一起、又都落在 104 以内；
+// 现在摊成三处独立的圆：圆心两两距离 75.4 / 132.5 / 75.4，都 ≥ 2×slamR = 52 → 三个圆互不重叠；
+// 最远够到 125+26 = 151（原来 ≤104）。三波按数组顺序一波一处。
 var slamSpots = [3][2]float64{
 	{70, 0},
 	{125, 32},
 	{125, -32},
 }
 
+// 形态编码：0/1/2 直接发给前端，前端 axeSrc 按它挑 sheild/sword/axe 素材。
 const (
 	formShield = iota
 	formSword
 	formAxe
 )
 
+// 招式流水线（每一步都靠 a.until 计时推进，数字见上面的 const 块）：
+//
+//	盾/剑 stepIdle --正面 seekR≈24.7、120° 摸到人--> stepSlash1（二连斩 5+5）
+//	  --slashLife 0.75s 后沿 thrustSp 350 突刺 1.5s，碰到人伤 3--> stepSlash2（再一套二连斩）
+//	  --打完--> stepFill 站定 1.0s 灌瓶--> stepBottle 等 0.5s 转黄瓶
+//	  --> stepAxeIn 0.2s--> stepAxeHold 1.0s--> stepAxeIdle（切斧，巡航降到 90）
+//	红斧 stepAxeIdle --104/120° 摸到人--> stepDai 18 --0.35s--> stepTsui1 15 --0.4s--> stepTsui2 15
+//	  --> stepChouThrust（350 顶 0.5s，碰到人伤 3）--> stepChouSpin 15
+//	  --翻转 0.8+0.25s--> stepChouFan 30 --0.4s--> stepWave1/2/3（各 15、r=26，间隔 0.3s）
+//	  --> 红态与瓶全掉、巡航回 165、切回盾
 const (
 	stepIdle = iota
 	stepSlash1
@@ -103,6 +125,7 @@ const (
 
 func init() {
 	p := unit.NewPack(KindAxe, assets)
+	// Look.Ghost = 220：速度超过 220px/s 时前端才拉残影（也就是 350 的突刺那一段），平时走位不拉。
 	p.Register(unit.Spec{
 		Kind:    KindAxe,
 		Role:    unit.RoleFighter,
@@ -118,19 +141,19 @@ func init() {
 }
 
 type 盾斧 struct {
-	form      int
-	redShield bool
-	redSword  bool
-	phial     int
-	energy    int
-	step      int
-	until     float64
-	slashN    int
-	lockID    uint64
-	thrustDir [2]float64
-	hx, hy    float64
-	x, y      float64
-	seen      map[uint64][2]float64
+	form      int                   // formShield / formSword / formAxe
+	redShield bool                  // 红盾：正面减伤 0.5 → 0.25
+	redSword  bool                  // 红剑：strikeDmg 给剑/突刺 +redBonus
+	phial     int                   // phialEmpty / phialWhite / phialGold，金瓶才够换红
+	energy    int                   // 攒瓶能量，0..2，每打中一段 +1
+	step      int                   // stepXxx
+	until     float64               // 当前这一步的截止时刻（s.Time 走的那条时间轴）
+	slashN    int                   // 二连斩已经出了几刀（0/1/2）
+	lockID    uint64                // 锁定目标，突刺/转向优先找它
+	thrustDir [2]float64            // 突刺方向（单位向量）
+	hx, hy    float64               // 面朝方向（单位向量），hitFan/rotate 都按它算
+	x, y      float64               // 自己的位置，front() 判定正面要用
+	seen      map[uint64][2]float64 // 见过的单位位置：盾只挡见过的来源，目标脱离视野后还能记住最后位置
 	slot      int
 	booted    bool
 }
@@ -149,6 +172,8 @@ func (a *盾斧) Handle(ctx unit.Context, ev unit.Event) {
 func (a *盾斧) confirm(ctx unit.Context, d unit.IncomingDamage) {
 	amt := d.Amount
 	if a.form == formShield {
+		// 盾形态才减伤，两个条件：来源得是「见过」的，且来源落在正面 shieldSpan=300°（±150°）里。
+		// 普通盾吃一半 ×0.5，红盾吃四分之一 ×0.25；背后剩的 60° 是空档，不减。
 		if src, ok := a.seen[d.From]; ok && a.front(src[0], src[1]) {
 			if a.redShield {
 				amt *= 0.25
@@ -543,6 +568,7 @@ func (a *盾斧) hold(ctx unit.Context, on bool) {
 	}
 }
 
+// strikeDmg 是剑/突刺类伤害的总入口：红剑态、且不在斧态时加 redBonus=2（二连斩 5→7、突刺 3→5）。
 func (a *盾斧) strikeDmg(base float64) float64 {
 	if a.redSword && a.form != formAxe {
 		return base + redBonus
@@ -560,15 +586,16 @@ func (a *盾斧) hitFan(ctx unit.Context, s unit.Sense, r, span, dmg float64, en
 		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: dmg}
 		hit = true
 	}
-	// 只要这一刀造成了伤害就回能量：打活随从也算，不再只认本体。
+	// 只要这一刀造成了伤害就回能量：打活随从也算，不再只认本体。上限 2（到金瓶就不再涨）。
 	if energy && hit && a.energy < 2 {
 		a.energy++
 		a.emitPhial(ctx)
 	}
 }
 
-// wave 超解砸地：一次落一处圆。三处（slamSpots）摊开摆，两两不重叠、最远推到 151。
-// 出伤判定就是这个圆本身——观众看见的圆和挨打的圈是同一个。
+// wave 超解砸地：一次落一处圆（i 是 slamSpots 下标，0/1/2 对应三波）。
+// 三处摊开摆、两两不重叠，最远推到 151；出伤判定就是这个圆本身——观众看见的圆和挨打的圈是同一个：
+// 命中条件是「目标圆心距 ≤ slamR + 目标半径」，也就是两个圆真的碰到了。
 func (a *盾斧) wave(ctx unit.Context, s unit.Sense, i int) {
 	dist, deg := slamSpots[i][0], slamSpots[i][1]
 	ux, uy := a.rotate(deg)
@@ -583,6 +610,8 @@ func (a *盾斧) wave(ctx unit.Context, s unit.Sense, i int) {
 		}
 		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: waveDmg}
 	}
+	// FX 把「方向 × 半径」压进 VX/VY：前端 hypot(VX,VY) 还原出 slamR=26，
+	// 再按世界坐标乘 scale 画直径 2r。Amount 这里前端不用（恒 1，只表示"一处"）。
 	ctx.Out <- unit.FX{
 		Name: "wave", Kind: ctx.Kind, UnitID: ctx.ID,
 		X: cx, Y: cy,
@@ -645,6 +674,7 @@ func (a *盾斧) note(s unit.Sense) {
 	}
 }
 
+// emitLook 三个字段各有约定，前端原样收：Amount=形态(0 盾/1 剑/2 斧)、VX=红盾(0/1)、VY=红剑(0/1)。
 func (a *盾斧) emitLook(ctx unit.Context) {
 	form := float64(a.form)
 	rs, rw := 0.0, 0.0
@@ -657,10 +687,14 @@ func (a *盾斧) emitLook(ctx unit.Context) {
 	ctx.Out <- unit.FX{Name: "look", Kind: ctx.Kind, UnitID: ctx.ID, Amount: form, VX: rs, VY: rw}
 }
 
+// emitPose 发一个「定格姿态角」（度）：90=盾（素材朝北就是 90）、120=剑/斧、300=大解起手。
+// 前端换成 CSS 是 poseCss = 90 - pose。
 func (a *盾斧) emitPose(ctx unit.Context, deg float64) {
 	ctx.Out <- unit.FX{Name: "pose", Kind: ctx.Kind, UnitID: ctx.ID, Amount: deg}
 }
 
+// emitAnim 前端动画三件套：VX/VY = 起止姿态角（度），Amount = 时长（秒）。
+// flip 是例外：这三个字段被当成 (压下秒, 翻回秒, 0) 用，见 fx/shot.js 的 flip。
 func (a *盾斧) emitAnim(ctx unit.Context, s unit.Sense, name string, from, to, dur float64) {
 	ctx.Out <- unit.FX{
 		Name: name, Kind: ctx.Kind, UnitID: ctx.ID,
@@ -668,6 +702,8 @@ func (a *盾斧) emitAnim(ctx unit.Context, s unit.Sense, name string, from, to,
 	}
 }
 
+// emitPhial 的 amt 是给前端的图号：斩击那几步发能量值 0..2（空/三瓶/过充），
+// 其余时候发瓶色码 0/10/20（空/满瓶/强化瓶）——前端 axePhialSrc 按这些数换图。
 func (a *盾斧) emitPhial(ctx unit.Context) {
 	amt := 0.0
 	if a.step == stepSlash1 || a.step == stepThrust || a.step == stepSlash2 {
