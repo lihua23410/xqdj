@@ -171,7 +171,7 @@
     <h1>16 机杯赛程</h1>
     <p class="sub">
       3 轮瑞士轮筛前 8，再按积分签位打四分之一、半决、决赛。淘汰赛必须分出胜负，没有平局。
-      第一轮由熔岩灯熵源洗牌。头像取自 <a href="战斗机.md">战斗机介绍</a>。
+      第一轮由熔岩灯熵源洗牌。      头像取自 <a href="../战斗机.md">战斗机介绍</a>。
     </p>
     <div class="stats" id="stats"></div>
     <div class="toolbar">
@@ -327,7 +327,7 @@
         m.left === ROUND1[i].left && m.right === ROUND1[i].right && m.result === "");
     }
     function face(slug, name) {
-      return `<img class="face" src="docs/fighters/${slug}-look.svg" alt="${name}" width="40" height="40">`;
+      return `<img class="face" src="fighters/${slug}-look.svg" alt="${name}" width="40" height="40">`;
     }
     function fighterSelect(slug, matchIndex, side) {
       const opts = FIGHTERS.map((f) =>

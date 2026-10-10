@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>32 机杯赛程</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --line: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --btn: #238636;
+      --btn-ghost: #21262d;
+      --warn: #9e6a03;
+      --ok: #3fb950;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: radial-gradient(ellipse at top, #182030, var(--bg));
+      color: var(--text);
+      font-family: "Segoe UI", "PingFang SC", sans-serif;
+    }
+    .wrap {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    h1 { margin: 0 0 8px; letter-spacing: 0.06em; font-size: 28px; }
+    h2 { margin: 28px 0 12px; font-size: 18px; font-weight: 600; }
+    h3 { margin: 18px 0 8px; font-size: 15px; font-weight: 600; }
+    .sub { color: var(--muted); margin: 0 0 22px; line-height: 1.6; }
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 28px;
+      margin-bottom: 20px;
+    }
+    .stat b { display: block; font-size: 22px; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    .stat.ok b { color: var(--ok); }
+    .stat.warn b { color: #d29922; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .spacer { flex: 1; min-width: 8px; }
+    button, select {
+      font: inherit;
+      color: var(--text);
+    }
+    button {
+      background: var(--btn);
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.ghost {
+      background: var(--btn-ghost);
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    button.tab {
+      background: #21262d;
+      border: 1px solid var(--line);
+    }
+    button.tab.active {
+      border-color: #58a6ff;
+      background: color-mix(in srgb, #58a6ff 18%, #21262d);
+    }
+    button.swap {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      padding: 4px 8px;
+      min-width: 40px;
+      font-size: 13px;
+    }
+    .note {
+      background: color-mix(in srgb, var(--warn) 16%, var(--panel));
+      border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line));
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #e3b341;
+      margin: 0 0 14px;
+      font-size: 14px;
+    }
+    .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+    }
+    .table-wrap.compact table { min-width: 560px; }
+    th, td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:nth-child(even) { background: #1b2230; }
+    tbody tr.done td:first-child { color: var(--ok); }
+    tbody tr.cut td { border-bottom: 2px solid #388bfd; }
+    .num, .right { text-align: right; font-variant-numeric: tabular-nums; }
+    .vs { text-align: center; width: 48px; }
+    .pick {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .face {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      flex: 0 0 40px;
+      position: relative;
+      z-index: 2;
+    }
+    .facebox {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      flex: 0 0 40px;
+      display: inline-block;
+    }
+    .facebox .badge {
+      display: none;
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: hsl(var(--h) 42% 52%);
+      color: #0d1117;
+      font-weight: 700;
+      font-size: 17px;
+      align-items: center;
+      justify-content: center;
+    }
+    .facebox.nopic .badge { display: flex; }
+    .tbd { color: var(--muted); }
+    select {
+      background: #21262d;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 8px;
+      min-width: 132px;
+    }
+    .field-select {
+      min-width: 84px;
+      padding: 5px 6px;
+      font-size: 13px;
+    }
+    .grow .field-select { min-width: 76px; margin-left: 8px; }
+    #playoff[hidden] { display: none !important; }
+    #groups[hidden] { display: none !important; }
+    #round-panel[hidden] { display: none !important; }
+    #round-title[hidden] { display: none !important; }
+    /* 小组卡片 */
+    .ggrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+      gap: 16px;
+    }
+    .gcard {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      padding: 14px 16px;
+    }
+    .gcard h4 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+    .gmembers {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed var(--line);
+      margin-bottom: 8px;
+    }
+    .grow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      border-bottom: 1px solid #1c2331;
+    }
+    .grow:last-of-type { border-bottom: 0; }
+    .grow .pick { gap: 6px; }
+    .grow .pick span { font-size: 14px; }
+    .vs-s { color: var(--muted); font-size: 12px; width: 22px; text-align: center; }
+    .grow select {
+      margin-left: auto;
+      min-width: 96px;
+      padding: 5px 6px;
+      font-size: 13px;
+    }
+    .gtable { margin-top: 10px; min-width: 0; }
+    .gtable th, .gtable td { padding: 5px 8px; font-size: 13px; }
+    .gtable tbody tr:nth-child(even) { background: transparent; }
+    .gtable tr.q td:first-child { color: var(--ok); font-weight: 700; }
+    details {
+      margin-top: 28px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    details p { line-height: 1.6; }
+    code {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 12px;
+      background: #21262d;
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: var(--text);
+      word-break: break-all;
+    }
+    a { color: #58a6ff; }
+    @media (max-width: 720px) {
+      .wrap { padding: 20px 12px 48px; }
+      h1 { font-size: 24px; }
+      .ggrid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>32 机杯赛程</h1>
+    <p class="sub">
+      两轮瑞士轮预选出 32 强名次 → 前 8 名领 1~8 组头名种子，后 8 名蛇形对位进组，中段 16 台熔岩灯随机填充 →
+      每组 4 机单循环取前 2，出线 16 机 → 积分清零再打 3 轮瑞士轮，前 8 进淘汰赛。
+      淘汰赛必须分出胜负，没有平局。预选第一轮对阵与小组抽签均由熔岩灯熵源驱动（凭证见页脚）。
+      每场对局的场地随机分配、跟着赛程存下来，页面上可以直接改（改场地不影响赛程）。
+      头像取自 <a href="../战斗机.md">战斗机介绍</a>。
+    </p>
+    <div class="stats" id="stats"></div>
+    <div class="toolbar">
+      <div class="tabs" id="tabs"></div>
+      <div class="spacer"></div>
+      <button type="button" id="btn-next">生成预选第 2 轮</button>
+      <button type="button" class="ghost" id="btn-reset">恢复初始赛程</button>
+    </div>
+    <p class="note" id="warn" hidden></p>
+    <p class="hint" id="hint"></p>
+    <h2 id="round-title">预选第 1 轮</h2>
+    <div class="table-wrap" id="round-panel">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">场</th>
+            <th>A</th>
+            <th></th>
+            <th>B</th>
+            <th>场地</th>
+            <th>结果</th>
+          </tr>
+        </thead>
+        <tbody id="matches"></tbody>
+      </table>
+    </div>
+    <section id="groups" hidden>
+      <h2>小组赛 · 8 组单循环</h2>
+      <p class="hint">
+        每组 4 机打 6 场，胜 1 分、平 0.5 分；小组排名：积分 → 对手分 → 相互胜负 → 预选名次。表中绿色前两名出线。
+        改小组结果会清掉已生成的决胜轮和淘汰赛。
+      </p>
+      <div class="ggrid" id="ggrid"></div>
+    </section>
+    <section id="playoff" hidden>
+      <h2>淘汰赛 · 前 8</h2>
+      <p class="hint">按决胜瑞士轮名次 1v8、4v5 进一半区，2v7、3v6 进另一半。改决胜轮会清掉整棵淘汰树。</p>
+      <h3>四分之一决赛</h3>
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr><th>签</th><th>A</th><th></th><th>B</th><th>场地</th><th>结果</th></tr>
+          </thead>
+          <tbody id="qf"></tbody>
+        </table>
+      </div>
+      <h3>半决赛</h3>
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr><th>签</th><th>A</th><th></th><th>B</th><th>场地</th><th>结果</th></tr>
+          </thead>
+          <tbody id="sf"></tbody>
+        </table>
+      </div>
+      <h3>决赛</h3>
+      <div class="table-wrap compact">
+        <table>
+          <thead>
+            <tr><th>签</th><th>A</th><th></th><th>B</th><th>场地</th><th>结果</th></tr>
+          </thead>
+          <tbody id="final"></tbody>
+        </table>
+      </div>
+    </section>
+    <h2>排名总览</h2>
+    <p class="hint">
+      9~16 名按决胜轮成绩排定；17~32 名（小组未出线）按小组积分 → 组内名次 → 预选名次排定；
+      淘汰赛名次覆盖前 8。半决赛败者并列 3、4（决胜名次高的排前）。
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="right">#</th>
+            <th>战斗机</th>
+            <th>阶段</th>
+            <th class="right">预选分</th>
+            <th class="right">小组分</th>
+            <th class="right">决胜分</th>
+          </tr>
+        </thead>
+        <tbody id="board"></tbody>
+      </table>
+    </div>
+    <details>
+      <summary>熵源与赛制</summary>
+      <p>
+        GET <code>https://csprng.xyz/v1/api</code> · lava-lamp CSPRNG，两次取数拼成 64 字节流：<br />
+        ① 2026-10-09T07:51:15.732Z · Data <code>uCn3BXDLHsFtoNMtTkkuIAatICmfV81Lha+j6EWD2Pw=</code><br />
+        ② 2026-10-09T07:51:14.739Z · Data <code>kI667lB6UlK53q2Utnb16cT93Gzhl2e0ZicWl4ccfuA=</code><br />
+        拒绝采样做无偏下标，再 Fisher–Yates。预选第一轮把 32 台按注册序洗牌（恰好用掉前 32 字节，31 步中 1 次拒绝），相邻两名组成一场；
+        小组抽签时把预选第 9~24 名按名次排序后从中段续接洗牌（用掉 15 字节），每 2 台依次填入第 1~8 组。合计消耗 47/64 字节。<br />
+        分组：预选第 1~8 名分别进 1~8 组当头名种子，第 25~32 名蛇形对位（25→8 组 … 32→1 组），中段 16 台随机填充。
+        小组 4 机单循环出前 2；出线 16 机积分清零打 3 轮瑞士轮（胜 1 平 0.5，回避仅限决胜轮内部，允许重遇预选/小组的老对手）。
+        淘汰赛无平局，半决赛败者并列 3、4（决胜成绩高的排前）。<br />
+        场地：每场对局随机抽一个（<code>FIELDS</code> = 圆 / 六边形 / 火山，名字与 <code>map/</code> 下注册的 <code>unit.FieldNames()</code> 一致），
+        只记在那一场上，改场地不会动赛程。<b>新地图加进脚本里的 <code>FIELDS</code> 数组就生效</b>，别处不用改。
+      </p>
+    </details>
+  </main>
+  <script>
+    const MAX_PRE = 2;
+    const MAX_FINAL = 3;
+    const GROUP_COUNT = 8;
+    const STORE = "xqdj-cup32-v1";
+    const FIGHTERS = [
+      { slug: "axe", name: "盾斧" },
+      { slug: "bloodpact", name: "血契" },
+      { slug: "charcoal", name: "炭翁" },
+      { slug: "doppel", name: "分身者" },
+      { slug: "engine", name: "内燃机" },
+      { slug: "fisher", name: "钓鱼佬" },
+      { slug: "glitch", name: "地慧星" },
+      { slug: "godfather", name: "教父" },
+      { slug: "godfather_youth", name: "教父(青年)" },
+      { slug: "hammer", name: "钉与锤" },
+      { slug: "hero", name: "勇者" },
+      { slug: "integrated", name: "原型机_整合" },
+      { slug: "knight", name: "小骑士" },
+      { slug: "maggot", name: "蛆" },
+      { slug: "melee", name: "原型机_近战" },
+      { slug: "menreiki", name: "面灵气" },
+      { slug: "pastor", name: "老牧师" },
+      { slug: "piper", name: "吹笛人" },
+      { slug: "prisoner", name: "囚徒" },
+      { slug: "radar", name: "雷达" },
+      { slug: "ranged", name: "原型机_远程" },
+      { slug: "reaper", name: "收割者" },
+      { slug: "relay", name: "中转站" },
+      { slug: "rmiu", name: "R.缪" },
+      { slug: "sot", name: "酒翁" },
+      { slug: "tachi", name: "太刀" },
+      { slug: "twin", name: "无下限术士" },
+      { slug: "udongein", name: "人偶使" },
+      { slug: "waller", name: "筑墙者" },
+      { slug: "waller_veteran", name: "筑墙者(百战)" },
+      { slug: "warden", name: "盾士" },
+      { slug: "wolf", name: "狼人" },
+    ];
+    const SEED = Object.fromEntries(FIGHTERS.map((f, i) => [f.slug, i]));
+    const BY_SLUG = Object.fromEntries(FIGHTERS.map((f) => [f.slug, f]));
+    const SLUGS = FIGHTERS.map((f) => f.slug);
+
+    const ENTROPY_DRAWS = [
+      { time: "2026-10-09T07:51:15.732Z", data: "uCn3BXDLHsFtoNMtTkkuIAatICmfV81Lha+j6EWD2Pw=" },
+      { time: "2026-10-09T07:51:14.739Z", data: "kI667lB6UlK53q2Utnb16cT93Gzhl2e0ZicWl4ccfuA=" },
+    ];
+    const STREAM = ENTROPY_DRAWS.map((d) => atob(d.data)).join("");
+
+    function shuffleStream(items, offset) {
+      const arr = items.slice();
+      let p = offset;
+      for (let i = arr.length - 1; i > 0; i--) {
+        const r = i + 1;
+        const limit = Math.floor(256 / r) * r;
+        for (;;) {
+          const b = STREAM.charCodeAt(p);
+          p += 1;
+          if (b < limit) {
+            const j = b % r;
+            const t = arr[i];
+            arr[i] = arr[j];
+            arr[j] = t;
+            break;
+          }
+        }
+      }
+      return { order: arr, used: p - offset };
+    }
+
+    const R1_DRAW = shuffleStream(SLUGS, 0);
+    const R1_BYTES = R1_DRAW.used;
+
+    // ── 场地（地图）接口 ──────────────────────────────────────────────
+    // 名字必须跟 map/ 下注册的 Field Name 一致（unit.FieldNames()，见 map/场地_test.go）。
+    // 新地图出来了就往 FIELDS 里加一个名字，其余地方都不用动：每场对局建的时候就随机分一个场地，
+    // 存进 localStorage 跟着赛程走，页面上每个场次都有一个「场地」下拉可以手改（改场地不影响赛程）。
+    const FIELDS = ["圆", "六边形", "火山"];
+    // 场地用 Math.random 现场抽（不占熵流那笔账，熵流只负责对阵），抽到就写进赛程持久化。
+    function nextField() {
+      return FIELDS[Math.floor(Math.random() * FIELDS.length)];
+    }
+    // 建新场次时补场地；读旧存档时把缺失/失效的场地也补上（没有就现抽一个）。
+    function withField(m) {
+      return FIELDS.includes(m.field) ? m : { ...m, field: nextField() };
+    }
+    function withFields(rounds) {
+      return rounds.map((round) => round.map(withField));
+    }
+
+    const ROUND1 = [];
+    for (let k = 0; k < R1_DRAW.order.length; k += 2) {
+      ROUND1.push(withField({ left: R1_DRAW.order[k], right: R1_DRAW.order[k + 1], result: "" }));
+    }
+
+    // 小组赛对阵（成员下标，圆桌法 3 轮）
+    const GROUP_PAIRS = [[0, 3], [1, 2], [0, 2], [3, 1], [0, 1], [3, 2]];
+    const RESULT_OPTS = [["", "未赛"], ["left", "A 胜"], ["right", "B 胜"], ["draw", "平"]];
+    const KO_OPTS = [["", "未赛"], ["left", "A 胜"], ["right", "B 胜"]];
+    const QF_LABELS = ["1 vs 8", "4 vs 5", "2 vs 7", "3 vs 6"];
+    const SF_LABELS = ["胜者 1v8 / 4v5", "胜者 2v7 / 3v6"];
+
+    function initialState() {
+      return {
+        pre: [ROUND1.map((m) => ({ ...m }))],
+        tab: 0,
+        groups: null,
+        final: [],
+        playoff: null,
+      };
+    }
+
+    let state = load();
+
+    function cloneRounds(rounds) {
+      return rounds.map((round) => round.map((m) => ({ ...m })));
+    }
+    function clonePlayoff(p) {
+      if (!p) return null;
+      return {
+        qf: p.qf.map((m) => ({ ...m })),
+        sf: p.sf.map((m) => ({ ...m })),
+        final: p.final.map((m) => ({ ...m })),
+      };
+    }
+    function cloneGroups(g) {
+      if (!g) return null;
+      return {
+        rosters: g.rosters.map((r) => r.slice()),
+        results: g.results.map((round) => round.map((m) => ({ ...m }))),
+      };
+    }
+    function pairKey(a, b) {
+      return a < b ? a + "|" + b : b + "|" + a;
+    }
+    function playedSet(rounds) {
+      const seen = new Set();
+      for (const round of rounds) {
+        for (const match of round) seen.add(pairKey(match.left, match.right));
+      }
+      return seen;
+    }
+    function pendingCount(round) {
+      return round.filter((m) => !m.result).length;
+    }
+    function preDone() {
+      return state.pre.length === MAX_PRE && pendingCount(state.pre[state.pre.length - 1]) === 0;
+    }
+    function groupsPending() {
+      if (!state.groups) return 0;
+      return state.groups.results.reduce((n, round) => n + pendingCount(round), 0);
+    }
+    function groupsDone() {
+      return Boolean(state.groups) && groupsPending() === 0;
+    }
+    function finalDone() {
+      return state.final.length === MAX_FINAL && pendingCount(state.final[state.final.length - 1]) === 0;
+    }
+    function sameInit() {
+      const init = initialState();
+      return (
+        !state.playoff && !state.groups && state.final.length === 0 &&
+        state.pre.length === 1 &&
+        state.pre[0].every((m, i) =>
+          m.left === init.pre[0][i].left && m.right === init.pre[0][i].right && m.result === "")
+      );
+    }
+    function face(slug) {
+      const name = BY_SLUG[slug].name;
+      let hue = 7;
+      for (const ch of slug) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
+      // 图都在 docs/fighters/ 下：页面放 docs/ 时是 fighters/…，放仓库根或别处时是 docs/fighters/…，
+      // 两条都试过还不行才退回首字母圆牌（nopic）。
+      // ?v=2 是版本号：之前那 14 只没有对应 svg，浏览器把"取不到"缓存下来了，
+      // 不换 URL 会一直显示圆牌——新加了 svg 就把它 +1。
+      const V = "v=2";
+      return `<span class="facebox"><img class="face" alt="${name}" width="40" height="40" loading="lazy" src="fighters/${slug}-look.svg?${V}" data-alt="docs/fighters/${slug}-look.svg?${V}" onerror="if(this.dataset.alt){this.src=this.dataset.alt;delete this.dataset.alt}else{this.parentNode.classList.add('nopic');this.remove()}"><span class="badge" style="--h:${hue}">${name[0]}</span></span>`;
+    }
+    function pickHtml(slug) {
+      if (!slug) return `<span class="tbd">待定</span>`;
+      return `<div class="pick">${face(slug)}<span>${BY_SLUG[slug].name}</span></div>`;
+    }
+    function fighterSelect(slug, matchIndex, side) {
+      const opts = FIGHTERS.map((f) =>
+        `<option value="${f.slug}"${f.slug === slug ? " selected" : ""}>${f.name}</option>`
+      ).join("");
+      return `<div class="pick">${face(slug)}<select data-act="fighter" data-i="${matchIndex}" data-side="${side}">${opts}</select></div>`;
+    }
+    function assignFighter(matches, matchIndex, side, slug) {
+      const next = matches.map((m) => ({ ...m }));
+      const current = next[matchIndex][side];
+      if (current === slug) return matches;
+      for (let i = 0; i < next.length; i++) {
+        if (next[i].left === slug) { next[i] = { ...next[i], left: current }; break; }
+        if (next[i].right === slug) { next[i] = { ...next[i], right: current }; break; }
+      }
+      next[matchIndex] = { ...next[matchIndex], [side]: slug };
+      return next;
+    }
+    function swapSides(matches, matchIndex) {
+      return matches.map((m, i) => {
+        if (i !== matchIndex) return m;
+        const result = m.result === "left" ? "right" : m.result === "right" ? "left" : m.result;
+        return { ...m, left: m.right, right: m.left, result };
+      });
+    }
+    function winnerOf(match) {
+      if (!match || !match.left || !match.right) return "";
+      if (match.result === "left") return match.left;
+      if (match.result === "right") return match.right;
+      return "";
+    }
+    function loserOf(match) {
+      const w = winnerOf(match);
+      if (!w) return "";
+      return w === match.left ? match.right : match.left;
+    }
+    function standings(rounds) {
+      const rows = {};
+      for (const f of FIGHTERS) {
+        rows[f.slug] = { slug: f.slug, wins: 0, losses: 0, draws: 0, points: 0, sos: 0, played: 0, opponents: [] };
+      }
+      for (const round of rounds) {
+        for (const match of round) {
+          if (!match.result) continue;
+          const a = rows[match.left];
+          const b = rows[match.right];
+          a.played += 1; b.played += 1;
+          a.opponents.push(match.right);
+          b.opponents.push(match.left);
+          if (match.result === "left") { a.wins += 1; a.points += 1; b.losses += 1; }
+          else if (match.result === "right") { b.wins += 1; b.points += 1; a.losses += 1; }
+          else { a.draws += 1; b.draws += 1; a.points += 0.5; b.points += 0.5; }
+        }
+      }
+      for (const row of Object.values(rows)) {
+        row.sos = row.opponents.reduce((sum, slug) => sum + rows[slug].points, 0);
+      }
+      return Object.values(rows).sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.sos !== a.sos) return b.sos - a.sos;
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        return SEED[a.slug] - SEED[b.slug];
+      });
+    }
+    function swissPair(order, history) {
+      const used = new Set();
+      const matches = [];
+      for (let i = 0; i < order.length; i++) {
+        const a = order[i];
+        if (used.has(a)) continue;
+        let pick = -1;
+        for (let j = i + 1; j < order.length; j++) {
+          if (used.has(order[j]) || history.has(pairKey(a, order[j]))) continue;
+          pick = j; break;
+        }
+        if (pick < 0) {
+          for (let j = i + 1; j < order.length; j++) {
+            if (!used.has(order[j])) { pick = j; break; }
+          }
+        }
+        const b = order[pick];
+        used.add(a); used.add(b);
+        matches.push(withField({ left: a, right: b, result: "" }));
+      }
+      return matches;
+    }
+    function preBoardRanked() {
+      return standings(state.pre).map((r) => r.slug);
+    }
+    function seedGroups() {
+      const rank = preBoardRanked();
+      const top = rank.slice(0, 8);
+      const mid = rank.slice(8, 24);
+      const bottom = rank.slice(24, 32);
+      const fill = shuffleStream(mid, R1_BYTES).order;
+      const rosters = [];
+      for (let g = 0; g < GROUP_COUNT; g++) {
+        rosters.push([top[g], bottom[GROUP_COUNT - 1 - g], fill[2 * g], fill[2 * g + 1]]);
+      }
+      const results = rosters.map((roster) =>
+        GROUP_PAIRS.map(([a, b]) => withField({ left: roster[a], right: roster[b], result: "" }))
+      );
+      return { rosters, results };
+    }
+    function groupTable(g) {
+      const roster = state.groups.rosters[g];
+      const matches = state.groups.results[g];
+      const rows = new Map(roster.map((s) => [s, { slug: s, wins: 0, draws: 0, losses: 0, points: 0, sos: 0, played: 0, opponents: [] }]));
+      for (const m of matches) {
+        if (!m.result) continue;
+        const a = rows.get(m.left);
+        const b = rows.get(m.right);
+        a.played += 1; b.played += 1;
+        a.opponents.push(m.right); b.opponents.push(m.left);
+        if (m.result === "left") { a.wins += 1; a.points += 1; b.losses += 1; }
+        else if (m.result === "right") { b.wins += 1; b.points += 1; a.losses += 1; }
+        else { a.draws += 1; b.draws += 1; a.points += 0.5; b.points += 0.5; }
+      }
+      for (const row of rows.values()) {
+        row.sos = row.opponents.reduce((sum, o) => sum + rows.get(o).points, 0);
+      }
+      const preRank = Object.fromEntries(standings(state.pre).map((r, i) => [r.slug, i + 1]));
+      const arr = [...rows.values()];
+      arr.sort((x, y) => {
+        if (y.points !== x.points) return y.points - x.points;
+        if (y.sos !== x.sos) return y.sos - x.sos;
+        const m = matches.find((mm) =>
+          (mm.left === x.slug && mm.right === y.slug) || (mm.left === y.slug && mm.right === x.slug));
+        if (m && (m.result === "left" || m.result === "right")) {
+          const winner = m.result === "left" ? m.left : m.right;
+          return winner === x.slug ? -1 : 1;
+        }
+        return preRank[x.slug] - preRank[y.slug];
+      });
+      return arr;
+    }
+    function advancers() {
+      const firsts = [];
+      const seconds = [];
+      for (let g = 0; g < GROUP_COUNT; g++) {
+        const rows = groupTable(g);
+        firsts.push(rows[0].slug);
+        seconds.push(rows[1].slug);
+      }
+      return { firsts, seconds };
+    }
+    // 决胜榜只看出线的 16 台（其余 16 台没打决胜轮，积分全 0 不能参与排序）
+    function finalBoardRanked() {
+      const { firsts, seconds } = advancers();
+      const advSet = new Set([...firsts, ...seconds]);
+      return standings(state.final).filter((r) => advSet.has(r.slug));
+    }
+    function seedPlayoff() {
+      const t = finalBoardRanked().slice(0, 8).map((r) => r.slug);
+      return {
+        qf: [
+          withField({ left: t[0], right: t[7], result: "" }),
+          withField({ left: t[3], right: t[4], result: "" }),
+          withField({ left: t[1], right: t[6], result: "" }),
+          withField({ left: t[2], right: t[5], result: "" }),
+        ],
+        sf: [
+          withField({ left: "", right: "", result: "" }),
+          withField({ left: "", right: "", result: "" }),
+        ],
+        final: [withField({ left: "", right: "", result: "" })],
+      };
+    }
+    function syncPlayoff(playoff) {
+      const p = clonePlayoff(playoff);
+      const w = p.qf.map(winnerOf);
+      // 对阵没变就保留原场次的结果和场地，变了就是新场次，重新抽场地。
+      const mk = (slot, left, right) =>
+        slot.left === left && slot.right === right
+          ? { ...slot, left, right }
+          : withField({ left, right, result: "" });
+      p.sf = [mk(p.sf[0], w[0], w[1]), mk(p.sf[1], w[2], w[3])];
+      const fw = p.sf.map(winnerOf);
+      p.final = [mk(p.final[0], fw[0], fw[1])];
+      return p;
+    }
+    function fmtPoints(n) {
+      return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    }
+    function tabsList() {
+      const t = state.pre.map((_, i) => ({ kind: "pre", i }));
+      if (state.groups) t.push({ kind: "group" });
+      state.final.forEach((_, i) => t.push({ kind: "final", i }));
+      return t;
+    }
+    function patchPre(viewIndex, nextMatches) {
+      const pre = cloneRounds(state.pre).slice(0, viewIndex + 1);
+      pre[viewIndex] = nextMatches;
+      state = { pre, tab: state.tab, groups: null, final: [], playoff: null };
+      save();
+      render();
+    }
+    function patchGroup(g, i, result) {
+      const groups = cloneGroups(state.groups);
+      groups.results[g][i] = { ...groups.results[g][i], result };
+      const next = { ...state, groups };
+      if (state.final.length || state.playoff) {
+        next.final = [];
+        next.playoff = null;
+      }
+      state = next;
+      save();
+      render();
+    }
+    function patchFinal(viewIndex, i, result) {
+      const final = cloneRounds(state.final).slice(0, viewIndex + 1);
+      final[viewIndex] = final[viewIndex].map((m, j) => (j === i ? { ...m, result } : m));
+      state = { ...state, final, playoff: null };
+      save();
+      render();
+    }
+    function patchPlayoff(stage, nextMatches) {
+      const p = clonePlayoff(state.playoff);
+      p[stage] = nextMatches;
+      state = { ...state, playoff: syncPlayoff(p) };
+      save();
+      render();
+    }
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORE);
+        if (!raw) return initialState();
+        const parsed = JSON.parse(raw);
+        const validSlug = (s) => typeof s === "string" && s !== "" && BY_SLUG[s];
+        const validResult = (v, ko) => ko ? ["", "left", "right"].includes(v) : ["", "left", "right", "draw"].includes(v);
+        const validMatch = (m, ko) => m && typeof m === "object" &&
+          (ko ? m.left === "" || validSlug(m.left) : validSlug(m.left)) &&
+          (ko ? m.right === "" || validSlug(m.right) : validSlug(m.right)) &&
+          typeof m.result === "string" && validResult(m.result, ko);
+        let ok = Array.isArray(parsed.pre) && parsed.pre.length && parsed.pre.length <= MAX_PRE &&
+          parsed.pre.every((r) => Array.isArray(r) && r.length === 16 && r.every((m) => validMatch(m, false)));
+        if (Array.isArray(parsed.final) && parsed.final.length) {
+          ok = ok && parsed.final.length <= MAX_FINAL &&
+            parsed.final.every((r) => Array.isArray(r) && r.length === 8 && r.every((m) => validMatch(m, false)));
+        }
+        if (parsed.groups) {
+          const allInGroups = Array.isArray(parsed.groups.rosters)
+            ? parsed.groups.rosters.flat() : [];
+          ok = ok && Array.isArray(parsed.groups.rosters) &&
+            parsed.groups.rosters.every((r) => Array.isArray(r) && r.length === 4 && r.every(validSlug)) &&
+            new Set(allInGroups).size === 32 &&
+            Array.isArray(parsed.groups.results) && parsed.groups.results.length === GROUP_COUNT &&
+            parsed.groups.results.every((r) => Array.isArray(r) && r.length === 6 && r.every((m) => validMatch(m, false)));
+        }
+        if (parsed.playoff) {
+          ok = ok && ["qf", "sf", "final"].every((k) => Array.isArray(parsed.playoff[k])) &&
+            parsed.playoff.qf.length === 4 && parsed.playoff.sf.length === 2 && parsed.playoff.final.length === 1 &&
+            [...parsed.playoff.qf, ...parsed.playoff.sf, ...parsed.playoff.final].every((m) => validMatch(m, true));
+        }
+        if (!ok) return initialState();
+        // 旧存档没有场地字段，这里统一补齐（坏名字也换掉）。
+        return {
+          pre: withFields(parsed.pre),
+          tab: typeof parsed.tab === "number" && parsed.tab >= 0 ? parsed.tab : 0,
+          groups: parsed.groups
+            ? { rosters: parsed.groups.rosters, results: parsed.groups.results.map(withFields) }
+            : null,
+          final: Array.isArray(parsed.final) ? withFields(parsed.final) : [],
+          playoff: parsed.playoff
+            ? {
+                qf: parsed.playoff.qf.map(withField),
+                sf: parsed.playoff.sf.map(withField),
+                final: parsed.playoff.final.map(withField),
+              }
+            : null,
+        };
+      } catch {
+        return initialState();
+      }
+    }
+    function save() {
+      localStorage.setItem(STORE, JSON.stringify(state));
+    }
+    function resultSelect(match, attrs) {
+      return RESULT_OPTS.map(([v, l]) =>
+        `<option value="${v}"${match.result === v ? " selected" : ""}>${l}</option>`
+      ).join("");
+    }
+    // 场地下拉：attrs 里带定位信息（phase / r 或 g / stage / i），交给 setField 改。
+    function fieldSelect(match, attrs) {
+      const opts = FIELDS.map((f) =>
+        `<option value="${f}"${match.field === f ? " selected" : ""}>${f}</option>`
+      ).join("");
+      return `<select class="field-select" data-act="field" ${attrs} title="本场场地">${opts}</select>`;
+    }
+    function setField(d, field) {
+      if (!FIELDS.includes(field)) return;
+      const i = Number(d.i);
+      if (d.phase === "group") {
+        const groups = cloneGroups(state.groups);
+        const g = Number(d.g);
+        groups.results[g][i] = { ...groups.results[g][i], field };
+        state = { ...state, groups };
+      } else if (d.phase === "ko") {
+        const p = clonePlayoff(state.playoff);
+        p[d.stage][i] = { ...p[d.stage][i], field };
+        state = { ...state, playoff: p };
+      } else {
+        const key = d.phase === "final" ? "final" : "pre";
+        const rounds = cloneRounds(state[key]);
+        const r = Number(d.r);
+        rounds[r][i] = { ...rounds[r][i], field };
+        state = { ...state, [key]: rounds };
+      }
+      save();
+      render();
+    }
+    function koRows(stage, matches, labels) {
+      return matches.map((match, i) => {
+        const ready = Boolean(match.left && match.right);
+        const opts = KO_OPTS.map(([v, l]) =>
+          `<option value="${v}"${match.result === v ? " selected" : ""}>${l}</option>`
+        ).join("");
+        const swap = ready
+          ? `<button type="button" class="swap" data-act="ko-swap" data-stage="${stage}" data-i="${i}" title="对调双方">对调</button>`
+          : "";
+        return `<tr class="${match.result ? "done" : ""}">
+          <td>${labels[i]}</td>
+          <td>${pickHtml(match.left)}</td>
+          <td class="vs">${swap}</td>
+          <td>${pickHtml(match.right)}</td>
+          <td>${fieldSelect(match, `data-phase="ko" data-stage="${stage}" data-i="${i}"`)}</td>
+          <td><select data-act="ko-result" data-stage="${stage}" data-i="${i}" ${ready ? "" : "disabled"}>${opts}</select></td>
+        </tr>`;
+      }).join("");
+    }
+    function groupCardHtml(g) {
+      const roster = state.groups.rosters[g];
+      const matches = state.groups.results[g];
+      const rows = groupTable(g);
+      const members = roster.map((s) => `<div class="pick">${face(s)}<span>${BY_SLUG[s].name}</span></div>`).join("");
+      const matchRows = matches.map((m, i) => `
+        <div class="grow">
+          ${pickHtml(m.left)}
+          <span class="vs-s">vs</span>
+          ${pickHtml(m.right)}
+          ${fieldSelect(m, `data-phase="group" data-g="${g}" data-i="${i}"`)}
+          <select data-act="g-result" data-g="${g}" data-i="${i}">${resultSelect(m)}</select>
+        </div>`).join("");
+      const tableRows = rows.map((row, k) => `
+        <tr class="${k < 2 ? "q" : ""}">
+          <td class="num">${k + 1}</td>
+          <td>${pickHtml(row.slug)}</td>
+          <td class="right">${row.wins}-${row.draws}-${row.losses}</td>
+          <td class="right">${fmtPoints(row.points)}</td>
+        </tr>`).join("");
+      return `<div class="gcard">
+        <h4>第 ${g + 1} 组</h4>
+        <div class="gmembers">${members}</div>
+        <div class="gmatches">${matchRows}</div>
+        <table class="gtable">
+          <thead><tr><th class="num">#</th><th>战斗机</th><th class="right">胜-平-负</th><th class="right">分</th></tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>`;
+    }
+    function boardRows() {
+      const preBoard = standings(state.pre);
+      const prePoints = Object.fromEntries(preBoard.map((r) => [r.slug, r.points]));
+      const preRankMap = Object.fromEntries(preBoard.map((r, i) => [r.slug, i + 1]));
+      const mk = (slug, phase, gi, finPts) => ({
+        slug, phase,
+        groupLabel: gi ? `G${gi.g} · ${fmtPoints(gi.pts)}分` : "—",
+        prePts: fmtPoints(prePoints[slug]),
+        finPts: finPts == null ? "—" : fmtPoints(finPts),
+      });
+
+      if (!state.groups) {
+        return preBoard.map((r) => {
+          return mk(r.slug, preDone() ? "预选已完 · 待抽签" : "预选中", null, null);
+        });
+      }
+      const infos = [];
+      const groupInfo = {};
+      for (let g = 0; g < GROUP_COUNT; g++) {
+        const rows = groupTable(g);
+        rows.forEach((row, k) => {
+          groupInfo[row.slug] = { g: g + 1, rank: k + 1, pts: row.points };
+        });
+      }
+      const gDone = groupsDone();
+      if (state.final.length === 0) {
+        const out = [];
+        for (let g = 0; g < GROUP_COUNT; g++) {
+          const rows = groupTable(g);
+          rows.forEach((row, k) => {
+            const phase = gDone
+              ? (k < 2 ? "十六强（出线）" : "小组未出线")
+              : `第${g + 1}组 · 第${k + 1}名`;
+            out.push(mk(row.slug, phase, groupInfo[row.slug], null));
+          });
+        }
+        return out;
+      }
+      // 决胜轮已存在：决胜榜只含有实际出线的 16 台
+      const finBoard = finalBoardRanked();
+      const finPoints = Object.fromEntries(finBoard.map((r) => [r.slug, r.points]));
+      const finRankMap = Object.fromEntries(finBoard.map((r, i) => [r.slug, i + 1]));
+      const elim = [];
+      for (let g = 0; g < GROUP_COUNT; g++) {
+        const rows = groupTable(g);
+        rows.forEach((row, k) => {
+          if (k >= 2) elim.push({ slug: row.slug, g: g + 1, rank: k + 1, pts: row.points });
+        });
+      }
+      elim.sort((a, b) =>
+        b.pts - a.pts || a.rank - b.rank || preRankMap[a.slug] - preRankMap[b.slug]);
+      const finalists = finBoard.map((r) => r.slug);
+
+      if (!state.playoff) {
+        const fDone = finalDone();
+        const out = finalists.map((s, i) => mk(
+          s,
+          fDone ? (i < 8 ? "八强" : "止步十六强") : "十六强 · 决胜中",
+          groupInfo[s], finPoints[s]
+        ));
+        for (const e of elim) {
+          out.push(mk(e.slug, "小组未出线", groupInfo[e.slug], null));
+        }
+        return out;
+      }
+      // 淘汰赛
+      const champ = winnerOf(state.playoff.final[0]);
+      const runner = loserOf(state.playoff.final[0]);
+      const sfLosers = state.playoff.sf.map(loserOf).filter(Boolean)
+        .sort((a, b) => finRankMap[a] - finRankMap[b]);
+      const qfLosers = state.playoff.qf.map(loserOf).filter(Boolean)
+        .sort((a, b) => finRankMap[a] - finRankMap[b]);
+      const known = new Set([champ, runner, ...sfLosers, ...qfLosers].filter(Boolean));
+      const rest = finalists.filter((s) => !known.has(s));
+      const restPhase = champ ? "止步十六强" : "十六强 · 淘汰赛中";
+      const out = [];
+      if (champ) out.push(mk(champ, "冠军", groupInfo[champ], finPoints[champ]));
+      if (runner) out.push(mk(runner, "亚军", groupInfo[runner], finPoints[runner]));
+      for (const s of sfLosers) out.push(mk(s, "半决赛并列 3-4", groupInfo[s], finPoints[s]));
+      for (const s of qfLosers) out.push(mk(s, "止步八强", groupInfo[s], finPoints[s]));
+      for (const s of rest) out.push(mk(s, restPhase, groupInfo[s], finPoints[s]));
+      for (const e of elim) out.push(mk(e.slug, "小组未出线", groupInfo[e.slug], null));
+      return out;
+    }
+    function nextStep() {
+      const lastPre = state.pre[state.pre.length - 1];
+      const preOpen = pendingCount(lastPre);
+      if (state.pre.length < MAX_PRE) {
+        return preOpen === 0
+          ? { label: "生成预选第 2 轮", enabled: true, act: "pre" }
+          : { label: `预选还剩 ${preOpen} 场`, enabled: false, act: "" };
+      }
+      if (!state.groups) {
+        return preDone()
+          ? { label: "抽签分组", enabled: true, act: "groups" }
+          : { label: `预选还剩 ${preOpen} 场`, enabled: false, act: "" };
+      }
+      const gOpen = groupsPending();
+      if (gOpen > 0) return { label: `小组赛剩 ${gOpen} 场`, enabled: false, act: "" };
+      if (state.final.length === 0) return { label: "生成决胜轮", enabled: true, act: "final1" };
+      if (state.final.length < MAX_FINAL) {
+        const fOpen = pendingCount(state.final[state.final.length - 1]);
+        return fOpen === 0
+          ? { label: "生成决胜下一轮", enabled: true, act: "final" }
+          : { label: `决胜第 ${state.final.length} 轮剩 ${fOpen} 场`, enabled: false, act: "" };
+      }
+      if (!state.playoff) {
+        return finalDone()
+          ? { label: "生成八强", enabled: true, act: "playoff" }
+          : { label: "决胜轮录入中", enabled: false, act: "" };
+      }
+      const koOpen = [...state.playoff.qf, ...state.playoff.sf, ...state.playoff.final]
+        .filter((m) => m.left && m.right && !m.result).length;
+      return koOpen === 0
+        ? { label: "比赛已结束", enabled: false, act: "" }
+        : { label: `淘汰赛剩 ${koOpen} 场`, enabled: false, act: "" };
+    }
+    function render() {
+      const tabs = tabsList();
+      state.tab = Math.max(0, Math.min(state.tab, tabs.length - 1));
+      const view = tabs[state.tab];
+      const preRecorded = state.pre.reduce((n, r) => n + r.filter((m) => m.result).length, 0);
+      const gRecorded = state.groups
+        ? state.groups.results.reduce((n, r) => n + r.filter((m) => m.result).length, 0) : 0;
+      const fRecorded = state.final.reduce((n, r) => n + r.filter((m) => m.result).length, 0);
+      const step = nextStep();
+      const champ = state.playoff ? winnerOf(state.playoff.final[0]) : "";
+
+      document.getElementById("stats").innerHTML = `
+        <div class="stat"><b>${state.pre.length} / ${MAX_PRE}</b><span>预选瑞士轮</span></div>
+        <div class="stat"><b>${preRecorded} / ${state.pre.length * 16}</b><span>预选已录入</span></div>
+        <div class="stat ${state.groups ? (groupsPending() === 0 ? "ok" : "warn") : ""}">
+          <b>${state.groups ? `${gRecorded} / 48` : "未抽签"}</b><span>小组赛已录入</span></div>
+        <div class="stat ${champ ? "ok" : (state.final.length && !state.playoff ? "ok" : "")}">
+          <b>${champ ? BY_SLUG[champ].name : (state.final.length ? `${fRecorded} / ${state.final.length * 8}` : "未开始")}</b>
+          <span>${champ ? "冠军" : "决胜轮已录入"}</span></div>`;
+
+      document.getElementById("tabs").innerHTML = tabs.map((t, i) => {
+        const label = t.kind === "pre" ? `预选第 ${t.i + 1} 轮`
+          : t.kind === "group" ? "小组赛"
+          : `决胜第 ${t.i + 1} 轮`;
+        return `<button type="button" class="tab${i === state.tab ? " active" : ""}" data-act="view" data-i="${i}">${label}</button>`;
+      }).join("");
+
+      const nextBtn = document.getElementById("btn-next");
+      nextBtn.textContent = step.label;
+      nextBtn.disabled = !step.enabled;
+      document.getElementById("btn-reset").disabled = sameInit();
+
+      const warn = document.getElementById("warn");
+      const hint = document.getElementById("hint");
+      let warnText = "";
+      if (view.kind === "pre" && view.i < state.pre.length - 1) {
+        warnText = "预选这轮之后还有赛程。改对阵或结果会删掉后面的预选轮、小组赛、决胜轮和淘汰赛。";
+      } else if (view.kind === "pre" && (state.groups || state.final.length || state.playoff)) {
+        warnText = "改预选对阵或结果会清掉小组赛、决胜轮和淘汰赛。";
+      } else if (view.kind === "group" && (state.final.length || state.playoff)) {
+        warnText = "改小组结果会清掉决胜轮和淘汰赛。";
+      } else if (view.kind === "final" && view.i < state.final.length - 1) {
+        warnText = "决胜这轮之后还有赛程。改结果会删掉后面的决胜轮和淘汰赛。";
+      } else if (view.kind === "final" && state.playoff) {
+        warnText = "改决胜结果会清掉整棵淘汰树。";
+      }
+      warn.hidden = !warnText;
+      warn.textContent = warnText;
+
+      let hintText = "";
+      if (step.act === "pre") hintText = "预选本轮已录完，可以生成下一轮（按积分配对，避开已对过的对手）。";
+      else if (step.act === "groups") hintText = "两轮预选已录完。抽签分组：前 8 名领 1~8 号组种子，后 8 名蛇形对位，中段 16 台按熔岩灯序随机填充。";
+      else if (step.act === "final1") hintText = "小组赛已录完，前 2 名共 16 机出线。决胜轮积分清零，第 1 轮由各组第一对阵相邻组第一、各组第二对阵相邻组第二。";
+      else if (step.act === "final") hintText = "决胜本轮已录完，可生成下一轮（回避仅限决胜轮内部）。";
+      else if (step.act === "playoff") hintText = "三轮决胜已录完。生成八强后按名次签位进入淘汰赛。";
+      else if (step.act === "" && step.label.includes("剩")) hintText = `还有 ${step.label.match(/\d+/)?.[0] || "?"} 场未录入。`;
+      else if (champ) hintText = `冠军是 ${BY_SLUG[champ].name}。`;
+      hint.textContent = hintText;
+
+      const roundPanel = document.getElementById("round-panel");
+      const groupsEl = document.getElementById("groups");
+      const title = document.getElementById("round-title");
+      if (view.kind === "group") {
+        roundPanel.hidden = true;
+        groupsEl.hidden = false;
+        title.hidden = true;
+        document.getElementById("ggrid").innerHTML = state.groups.rosters
+          .map((_, g) => groupCardHtml(g)).join("");
+      } else {
+        roundPanel.hidden = false;
+        groupsEl.hidden = true;
+        title.hidden = false;
+        const isFinal = view.kind === "final";
+        const round = isFinal ? state.final[view.i] : state.pre[view.i];
+        title.textContent = isFinal ? `决胜第 ${view.i + 1} 轮` : `预选第 ${view.i + 1} 轮`;
+        document.getElementById("matches").innerHTML = round.map((match, i) => {
+          const leftCell = isFinal ? pickHtml(match.left) : fighterSelect(match.left, i, "left");
+          const rightCell = isFinal ? pickHtml(match.right) : fighterSelect(match.right, i, "right");
+          const swap = isFinal ? "" :
+            `<button type="button" class="swap" data-act="swap" data-i="${i}" title="对调双方">对调</button>`;
+          return `<tr class="${match.result ? "done" : ""}">
+            <td class="num">${i + 1}</td>
+            <td>${leftCell}</td>
+            <td class="vs">${swap}</td>
+            <td>${rightCell}</td>
+            <td>${fieldSelect(match, `data-phase="${isFinal ? "final" : "pre"}" data-r="${view.i}" data-i="${i}"`)}</td>
+            <td><select data-act="${isFinal ? "f-result" : "result"}" data-i="${i}">${resultSelect(match)}</select></td>
+          </tr>`;
+        }).join("");
+      }
+
+      const playoffEl = document.getElementById("playoff");
+      if (state.playoff) {
+        playoffEl.hidden = false;
+        document.getElementById("qf").innerHTML = koRows("qf", state.playoff.qf, QF_LABELS);
+        document.getElementById("sf").innerHTML = koRows("sf", state.playoff.sf, SF_LABELS);
+        document.getElementById("final").innerHTML = koRows("final", state.playoff.final, ["决赛"]);
+      } else {
+        playoffEl.hidden = true;
+      }
+
+      const rows = boardRows();
+      document.getElementById("board").innerHTML = rows.map((row, i) => `
+        <tr class="${i === 7 && state.playoff ? "cut" : ""}">
+          <td class="right">${i + 1}</td>
+          <td>${pickHtml(row.slug)}</td>
+          <td>${row.phase}</td>
+          <td class="right">${row.prePts}</td>
+          <td class="right">${row.groupLabel}</td>
+          <td class="right">${row.finPts}</td>
+        </tr>`).join("");
+    }
+
+    document.body.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (!btn || btn.tagName !== "BUTTON") return;
+      const act = btn.dataset.act;
+      const i = Number(btn.dataset.i);
+      if (act === "view") {
+        state = { ...state, tab: i };
+        save();
+        render();
+      } else if (act === "swap") {
+        const view = tabsList()[state.tab];
+        if (view && view.kind === "pre") {
+          patchPre(view.i, swapSides(state.pre[view.i], i));
+        }
+      } else if (act === "ko-swap") {
+        const stage = btn.dataset.stage;
+        patchPlayoff(stage, swapSides(state.playoff[stage], i));
+      }
+    });
+    document.body.addEventListener("change", (e) => {
+      const el = e.target;
+      if (!(el instanceof HTMLSelectElement) || !el.dataset.act) return;
+      const i = Number(el.dataset.i);
+      const act = el.dataset.act;
+      if (act === "fighter") {
+        const view = tabsList()[state.tab];
+        if (view && view.kind === "pre") {
+          patchPre(view.i, assignFighter(state.pre[view.i], i, el.dataset.side, el.value));
+        }
+      } else if (act === "result") {
+        const view = tabsList()[state.tab];
+        if (view && view.kind === "pre") {
+          const round = state.pre[view.i];
+          patchPre(view.i, round.map((m, j) => (j === i ? { ...m, result: el.value } : m)));
+        }
+      } else if (act === "f-result") {
+        const view = tabsList()[state.tab];
+        if (view && view.kind === "final") {
+          patchFinal(view.i, i, el.value);
+        }
+      } else if (act === "g-result") {
+        patchGroup(Number(el.dataset.g), i, el.value);
+      } else if (act === "ko-result") {
+        const stage = el.dataset.stage;
+        patchPlayoff(stage, state.playoff[stage].map((m, j) => (j === i ? { ...m, result: el.value } : m)));
+      } else if (act === "field") {
+        setField(el.dataset, el.value);
+      }
+    });
+    document.getElementById("btn-next").addEventListener("click", () => {
+      const step = nextStep();
+      if (!step.enabled) return;
+      if (step.act === "pre") {
+        const last = state.pre[state.pre.length - 1];
+        if (pendingCount(last) > 0) return;
+        const order = standings(state.pre).map((r) => r.slug);
+        const next = swissPair(order, playedSet(state.pre));
+        state = { ...state, pre: [...cloneRounds(state.pre), next] };
+        state.tab = tabsList().length - 1;
+        save();
+        render();
+      } else if (step.act === "groups") {
+        if (!preDone()) return;
+        state = { ...state, groups: seedGroups() };
+        state.tab = tabsList().length - 1;
+        save();
+        render();
+        document.getElementById("groups").scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (step.act === "final1") {
+        if (!groupsDone()) return;
+        const { firsts, seconds } = advancers();
+        const order = [...firsts, ...seconds];
+        const next = swissPair(order, new Set());
+        state = { ...state, final: [next] };
+        state.tab = tabsList().length - 1;
+        save();
+        render();
+      } else if (step.act === "final") {
+        const last = state.final[state.final.length - 1];
+        if (pendingCount(last) > 0) return;
+        const order = finalBoardRanked().map((r) => r.slug);
+        const next = swissPair(order, playedSet(state.final));
+        state = { ...state, final: [...cloneRounds(state.final), next] };
+        state.tab = tabsList().length - 1;
+        save();
+        render();
+      } else if (step.act === "playoff") {
+        if (!finalDone()) return;
+        state = { ...state, playoff: seedPlayoff() };
+        save();
+        render();
+        document.getElementById("playoff").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      state = initialState();
+      save();
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

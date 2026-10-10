@@ -41,6 +41,8 @@ const (
 	flipUp     = 0.25
 	waveWait   = 0.4
 	waveGap    = 0.3
+	// 超解前那一下突刺：距离短，只为把球顶进超解的落点里。
+	chouThrustLife = 0.5
 
 	slashDmg    = 5.0
 	thrustDmg   = 3.0
@@ -51,10 +53,22 @@ const (
 	chouFanDmg  = 30.0
 	waveDmg     = 15.0
 
+	// 超解砸地：三处**互不重叠**的圆（圆心距离 ≥ 2×slamR），范围比原来的分环更远。
+	slamR = 26.0
+
 	phialEmpty = 0
 	phialWhite = 1
 	phialGold  = 2
 )
+
+// 三处砸地的落点：沿面朝方向转 ang 度、往前 dist。
+// 原来那套是「60° 扇环分 3 环」，三个圆叠在一起又都在 104 以内；
+// 现在摊成三处独立的圆，最远落到 125+26=151。
+var slamSpots = [3][2]float64{
+	{70, 0},
+	{125, 32},
+	{125, -32},
+}
 
 const (
 	formShield = iota
@@ -83,6 +97,8 @@ const (
 	stepWave1
 	stepWave2
 	stepWave3
+	// 超解前那一下突刺。追加在末尾，不改前面几个 step 的编号。
+	stepChouThrust
 )
 
 func init() {
@@ -163,13 +179,20 @@ func (a *盾斧) front(ox, oy float64) bool {
 }
 
 func (a *盾斧) onHit(ctx unit.Context, e unit.Collision) {
-	if a.step != stepThrust || !unit.EnemyTarget(e, a.slot) {
+	if !unit.EnemyTarget(e, a.slot) {
 		return
 	}
-	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
-	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: a.strikeDmg(thrustDmg)}
-	a.beginSlash(ctx, e.Time, true)
+	switch a.step {
+	case stepThrust:
+		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: a.strikeDmg(thrustDmg)}
+		a.beginSlash(ctx, e.Time, true)
+	case stepChouThrust:
+		// 超解前那一下突刺：撞上人就结 3 伤，然后接超解旋（顶到位是目的，不是打完收招）。
+		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: a.strikeDmg(thrustDmg)}
+		a.beginChouSpin(ctx, e.Time)
+	}
 }
 
 func (a *盾斧) tick(ctx unit.Context, s unit.Sense) {
@@ -256,10 +279,11 @@ func (a *盾斧) tick(ctx unit.Context, s unit.Sense) {
 		if s.Time+1e-9 >= a.until {
 			a.turnToEnemy(ctx, s)
 			a.hitFan(ctx, s, axeSeekR, seekSpan, tsuiDmg, false)
-			a.step = stepChouSpin
-			a.until = s.Time + spinT
-			a.emitAnim(ctx, s, "chou", 120, 120, spinT)
+			// 追解收完不再直接进超解旋：先补一下突刺顶进去（怪猎那套属性解放突刺）。
+			a.beginChouThrust(ctx, s)
 		}
+	case stepChouThrust:
+		a.tickChouThrust(ctx, s)
 	case stepChouSpin:
 		if s.Time+1e-9 >= a.until {
 			a.turnToEnemy(ctx, s)
@@ -342,6 +366,34 @@ func (a *盾斧) tickThrust(ctx unit.Context, s unit.Sense) {
 	if s.Time+1e-9 >= a.until {
 		a.endCombo(ctx, s.Time)
 	}
+}
+
+// beginChouThrust 超解前那一下突刺：朝锁定目标 350 速顶过去。
+// 命中（伤 3）或超时都接超解旋——这一下是为了把人顶进落点，不是独立的招。
+func (a *盾斧) beginChouThrust(ctx unit.Context, s unit.Sense) {
+	a.aimThrust(s)
+	a.step = stepChouThrust
+	a.until = s.Time + chouThrustLife
+	a.hold(ctx, false)
+	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: a.thrustDir[0] * thrustSp, VY: a.thrustDir[1] * thrustSp}
+}
+
+func (a *盾斧) tickChouThrust(ctx unit.Context, s unit.Sense) {
+	a.aimThrust(s)
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: a.thrustDir[0] * thrustSp, VY: a.thrustDir[1] * thrustSp}
+	if s.Time+1e-9 >= a.until {
+		a.beginChouSpin(ctx, s.Time)
+	}
+}
+
+// beginChouSpin 起超解旋：突刺命中或走完都从这里接着往下砸。
+func (a *盾斧) beginChouSpin(ctx unit.Context, now float64) {
+	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
+	a.hold(ctx, true) // 顶到位就站定（hold 顺带把速度清零）
+	a.step = stepChouSpin
+	a.until = now + spinT
+	a.emitAnim(ctx, unit.Sense{Time: now, Self: unit.Snapshot{X: a.x, Y: a.y, VX: a.hx, VY: a.hy}}, "chou", 120, 120, spinT)
 }
 
 func (a *盾斧) aimThrust(s unit.Sense) {
@@ -515,41 +567,35 @@ func (a *盾斧) hitFan(ctx unit.Context, s unit.Sense, r, span, dmg float64, en
 	}
 }
 
+// wave 超解砸地：一次落一处圆。三处（slamSpots）摊开摆，两两不重叠、最远推到 151。
+// 出伤判定就是这个圆本身——观众看见的圆和挨打的圈是同一个。
 func (a *盾斧) wave(ctx unit.Context, s unit.Sense, i int) {
-	seg := chouR / 3
-	near, far := float64(i)*seg, float64(i+1)*seg
-	mid := (near + far) / 2
-	width := 2 * mid * math.Tan(unit.Deg(chouSpan/2))
-	a.hitRect(ctx, s, near, far, width, waveDmg)
-	slam := math.Max(width, far-near) * 0.55
-	if slam < 22 {
-		slam = 22
-	}
-	ctx.Out <- unit.FX{
-		Name: "wave", Kind: ctx.Kind, UnitID: ctx.ID,
-		X: s.Self.X + a.hx*mid, Y: s.Self.Y + a.hy*mid,
-		VX: a.hx * slam, VY: a.hy * slam,
-		Amount: float64(i + 1), Slot: s.Self.Slot,
-	}
-}
-
-func (a *盾斧) hitRect(ctx unit.Context, s unit.Sense, near, far, width, dmg float64) {
-	px, py := -a.hy, a.hx
-	half := width / 2
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
+	dist, deg := slamSpots[i][0], slamSpots[i][1]
+	ux, uy := a.rotate(deg)
+	cx, cy := s.Self.X+ux*dist, s.Self.Y+uy*dist
+	for j := range s.Nearby {
+		o := &s.Nearby[j]
 		if !unit.Hittable(*o, s.Self.Slot) {
 			continue
 		}
-		dx, dy := o.X-s.Self.X, o.Y-s.Self.Y
-		along := dx*a.hx + dy*a.hy
-		side := dx*px + dy*py
-		rr := o.Radius
-		if along+rr < near || along-rr > far || math.Abs(side) > half+rr {
+		if math.Hypot(o.X-cx, o.Y-cy) > slamR+o.Radius {
 			continue
 		}
-		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: dmg}
+		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: waveDmg}
 	}
+	ctx.Out <- unit.FX{
+		Name: "wave", Kind: ctx.Kind, UnitID: ctx.ID,
+		X: cx, Y: cy,
+		VX: ux * slamR, VY: uy * slamR,
+		Amount: 1, Slot: s.Self.Slot,
+	}
+}
+
+// rotate 把面朝方向转 deg 度（逆时针为正），得到这一处砸地的朝向。
+func (a *盾斧) rotate(deg float64) (float64, float64) {
+	rad := unit.Deg(deg)
+	c, sn := math.Cos(rad), math.Sin(rad)
+	return a.hx*c - a.hy*sn, a.hx*sn + a.hy*c
 }
 
 func (a *盾斧) firstInFan(s unit.Sense, r, span float64) *unit.Snapshot {

@@ -486,13 +486,13 @@ func TestLivingRatsPulsePlague(t *testing.T) {
 	a.Handle(ctx, unit.Sense{Time: plagueHold + 0.1, Self: piperAt(0, 0), Nearby: far})
 	_ = drain(out)
 	a.Handle(ctx, unit.Sense{Time: plagueHold + 0.2, Self: piperAt(0, 0), Nearby: near})
-	a.Handle(ctx, unit.Sense{Time: plagueHold*2, Self: piperAt(0, 0), Nearby: near})
+	a.Handle(ctx, unit.Sense{Time: plagueHold * 2, Self: piperAt(0, 0), Nearby: near})
 	if cmds := drain(out); lastStack(cmds, 2) != nil {
 		t.Fatalf("中途离开后计时该清零，满 5 秒前不该再叠: %v", cmds)
 	}
 	enemy.Marks = []unit.Mark{{Kind: plagueKind, Stacks: 1}}
 	near[1] = enemy
-	a.Handle(ctx, unit.Sense{Time: plagueHold+0.2+plagueHold, Self: piperAt(0, 0), Nearby: near})
+	a.Handle(ctx, unit.Sense{Time: plagueHold + 0.2 + plagueHold, Self: piperAt(0, 0), Nearby: near})
 	ds = damages(drain(out))
 	if len(ds) != 1 || ds[0].Amount != plagueAmount(2) {
 		t.Fatalf("重新贴满 5 秒该再叠并跳: %+v", ds)
@@ -555,5 +555,81 @@ func TestPiperNeverCommands(t *testing.T) {
 	cmds := drain(out)
 	if hasFX(cmds, "command") || hasFX(cmds, "loot") || hasFX(cmds, "bite") {
 		t.Fatalf("不该再指挥、报赃物数或咬人: %v", cmds)
+	}
+}
+
+func countStack(cmds []unit.Cmd, id uint64) int {
+	n := 0
+	for _, c := range cmds {
+		if m, ok := c.(unit.StackMark); ok && m.UnitID == id && m.Kind == plagueKind {
+			n += m.Delta
+		}
+	}
+	return n
+}
+
+// 50 秒起瘟疫不挑人：敌我双方（含吹笛人自己、自己的老鼠）每秒各叠一层，
+// 免得吹笛人把对局拖成永远打不完。
+func TestPlagueCoversEveryoneAfter50s(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	a := &吹笛人{}
+	ctx := unit.Context{ID: 1, Kind: KindPiper, Out: out}
+	near := []unit.Snapshot{enemyAt(80, 0), ratAt(5, 30, 0, "")}
+
+	// 50 秒前：只有原来那套（老鼠贴人/倒下）会叠，自己和自己人不会被叠
+	a.Handle(ctx, unit.Sense{Time: plagueAllAt - 0.1, Self: piperAt(0, 0), Nearby: near})
+	cmds := drain(out)
+	if countStack(cmds, 1) != 0 || countStack(cmds, 5) != 0 {
+		t.Fatalf("50 秒前不该全场叠疫: %v", cmds)
+	}
+
+	// 50 秒那一拍：自己、自己的老鼠各叠一层（敌方那只有它自己的路径）
+	a.Handle(ctx, unit.Sense{Time: plagueAllAt, Self: piperAt(0, 0), Nearby: near})
+	cmds = drain(out)
+	if countStack(cmds, 1) != 1 {
+		t.Fatalf("50 秒起吹笛人自己也要叠一层: %v", cmds)
+	}
+	if countStack(cmds, 5) != 1 {
+		t.Fatalf("50 秒起自己的老鼠也要叠一层: %v", cmds)
+	}
+	if !hasFX(cmds, "plague") {
+		t.Fatalf("50 秒那一刻该报一个瘟疫圈: %v", cmds)
+	}
+
+	// 每秒一层：50.5 不叠，51.2 叠一层
+	a.Handle(ctx, unit.Sense{Time: plagueAllAt + 0.5, Self: piperAt(0, 0), Nearby: near})
+	if n := countStack(drain(out), 1); n != 0 {
+		t.Fatalf("不到一秒不该再叠: %d 层", n)
+	}
+	a.Handle(ctx, unit.Sense{Time: plagueAllAt + 1.2, Self: piperAt(0, 0), Nearby: near})
+	if n := countStack(drain(out), 1); n != 1 {
+		t.Fatalf("每天一秒该叠一层，51.2 这拍叠了 %d 层", n)
+	}
+
+	// 拖过头（比如中间卡了几秒）会补上那几秒的层，不会漏
+	a.Handle(ctx, unit.Sense{Time: plagueAllAt + 4.2, Self: piperAt(0, 0), Nearby: near})
+	if n := countStack(drain(out), 1); n != 3 {
+		t.Fatalf("51.2→54.2 该补 3 层，实际 %d 层", n)
+	}
+}
+
+// 50 秒后吹笛人自己身上的瘟疫也要跳血——不然它还是打不死自己。
+func TestPlagueTicksPiperItselfAfter50s(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	a := &吹笛人{}
+	ctx := unit.Context{ID: 1, Kind: KindPiper, Out: out}
+	self := piperAt(0, 0)
+	self.Marks = []unit.Mark{{Kind: plagueKind, Stacks: 2}}
+
+	a.Handle(ctx, unit.Sense{Time: plagueAllAt, Self: self})
+	drain(out)
+	a.Handle(ctx, unit.Sense{Time: plagueAllAt + plagueTick - 0.1, Self: self})
+	if ds := damages(drain(out)); len(ds) != 0 {
+		t.Fatalf("不到 3 秒不该跳自己的血: %+v", ds)
+	}
+	a.Handle(ctx, unit.Sense{Time: plagueAllAt + plagueTick, Self: self})
+	ds := damages(drain(out))
+	if len(ds) != 1 || ds[0].From != 1 || ds[0].To != 1 || ds[0].Amount != plagueAmount(2) {
+		t.Fatalf("50 秒后自己那 2 层该跳 %v 血: %+v", plagueAmount(2), ds)
 	}
 }

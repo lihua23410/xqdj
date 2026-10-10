@@ -33,6 +33,11 @@ const (
 	plagueHold  = 5.0   // 活老鼠要连续贴这么久才叠一层
 	plagueTick  = 3.0   // 有瘟疫的单位每隔这么久跳一次
 	plagueMul   = 1     // 每跳扣 层数 × 这个
+
+	// 50 秒之后瘟疫不再挑人：全场（含敌方、自己的老鼠、吹笛人自己）每秒叠一层。
+	// 吹笛人这个打法很容易把对局拖成永动机，这条是给全场上的倒计时。
+	plagueAllAt  = 50.0
+	plagueAllGap = 1.0
 )
 
 //go:embed fx
@@ -70,6 +75,7 @@ type 吹笛人 struct {
 	prev      map[uint64]ratView
 	plagueAt  map[uint64]float64
 	nearAt    map[uint64]float64
+	allAt     float64 // 50 秒后每秒叠一层的那根钟
 }
 
 func (a *吹笛人) Handle(ctx unit.Context, ev unit.Event) {
@@ -98,6 +104,7 @@ func (a *吹笛人) onSense(ctx unit.Context, s unit.Sense) {
 	}
 	a.noteEnemy(s)
 	a.pulseNear(ctx, s)
+	a.tickPlagueAll(ctx, s)
 	a.tickPlague(ctx, s)
 	rats := a.collect(ctx, s)
 	if s.Time+1e-9 >= a.nextPipe && rats < ratCap {
@@ -278,39 +285,100 @@ func (a *吹笛人) hitPlague(ctx unit.Context, o *unit.Snapshot, stacks int) {
 	ctx.Out <- unit.FX{Name: "plague-tick", Kind: ctx.Kind, UnitID: o.ID, X: o.X, Y: o.Y, Amount: amt, Slot: a.slot}
 }
 
-// tickPlague 有瘟疫的敌方单位每 3 秒扣 层数 的血。刚叠上那一拍已经跳过一口，从那一拍再计时。
+// tickPlague 有瘟疫的单位每 3 秒扣 层数 的血。刚叠上那一拍已经跳过一口，从那一拍再计时。
+// 50 秒前只认敌方（和原来一样）；50 秒后瘟疫全场跑，连自己人和自己一起跳。
 func (a *吹笛人) tickPlague(ctx unit.Context, s unit.Sense) {
 	if a.plagueAt == nil {
 		a.plagueAt = map[uint64]float64{}
 	}
+	all := a.plagueAllOn(s)
 	seen := map[uint64]struct{}{}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if !unit.Hittable(*o, s.Self.Slot) {
-			continue
-		}
-		n := markStacks(*o, plagueKind)
-		if n <= 0 {
-			delete(a.plagueAt, o.ID)
+		if !a.plagueTargets(*o, all) {
 			continue
 		}
 		seen[o.ID] = struct{}{}
-		next, ok := a.plagueAt[o.ID]
-		if !ok {
-			a.plagueAt[o.ID] = s.Time + plagueTick
-			continue
-		}
-		if s.Time+1e-9 < next {
-			continue
-		}
-		a.hitPlague(ctx, o, n)
-		a.plagueAt[o.ID] = s.Time + plagueTick
+		a.tickOne(ctx, s, o)
+	}
+	if all {
+		self := s.Self
+		seen[self.ID] = struct{}{}
+		a.tickOne(ctx, s, &self)
 	}
 	for id := range a.plagueAt {
 		if _, ok := seen[id]; !ok {
 			delete(a.plagueAt, id)
 		}
 	}
+}
+
+// tickOne 一个单位自己那根 3 秒钟。
+func (a *吹笛人) tickOne(ctx unit.Context, s unit.Sense, o *unit.Snapshot) {
+	n := markStacks(*o, plagueKind)
+	if n <= 0 {
+		delete(a.plagueAt, o.ID)
+		return
+	}
+	next, ok := a.plagueAt[o.ID]
+	if !ok {
+		a.plagueAt[o.ID] = s.Time + plagueTick
+		return
+	}
+	if s.Time+1e-9 < next {
+		return
+	}
+	a.hitPlague(ctx, o, n)
+	a.plagueAt[o.ID] = s.Time + plagueTick
+}
+
+// plagueAllOn 50 秒之后瘟疫不挑人。
+func (a *吹笛人) plagueAllOn(s unit.Sense) bool {
+	return s.Time+1e-9 >= plagueAllAt
+}
+
+// plagueTargets 这一跳轮到谁：能挨打的单位（战斗机或活随从）。
+// 50 秒前只算敌方，50 秒后连自己人一起算——包括吹笛人自己（自己在 tickPlague 里单独补）。
+func (a *吹笛人) plagueTargets(o unit.Snapshot, all bool) bool {
+	if o.Role != unit.RoleFighter && !o.Mortal {
+		return false
+	}
+	if all {
+		return true
+	}
+	return unit.Hittable(o, a.slot)
+}
+
+// tickPlagueAll 50 秒之后瘟疫不再挑人：全场（含吹笛人自己）每秒叠一层。
+// 这是给"吹笛人容易把对局拖成永动机"上的倒计时——叠层走的是同一套 3 秒跳血，
+// 所以两边最后都会被自己的层数咬死，不会有一局永远打不完。
+// 感知里看不到自己，所以自己也单独叠一份。
+func (a *吹笛人) tickPlagueAll(ctx unit.Context, s unit.Sense) {
+	if s.Time+1e-9 < plagueAllAt {
+		return
+	}
+	if a.allAt == 0 {
+		a.allAt = plagueAllAt
+		ctx.Out <- unit.FX{
+			Name: "plague", Kind: ctx.Kind, UnitID: ctx.ID,
+			X: s.Self.X, Y: s.Self.Y, Slot: a.slot,
+		}
+	}
+	for s.Time+1e-9 >= a.allAt {
+		a.allAt += plagueAllGap
+		a.stackPlague(ctx, s.Self.ID)
+		for i := range s.Nearby {
+			o := &s.Nearby[i]
+			if !a.plagueTargets(*o, true) {
+				continue
+			}
+			a.stackPlague(ctx, o.ID)
+		}
+	}
+}
+
+func (a *吹笛人) stackPlague(ctx unit.Context, id uint64) {
+	ctx.Out <- unit.StackMark{UnitID: id, Kind: plagueKind, Delta: 1}
 }
 
 // stuckTo 老鼠是否还贴着这个敌人。中心距 ≤ 双方半径 + 追赶余量，不拿死 40 去卡移动中的球。

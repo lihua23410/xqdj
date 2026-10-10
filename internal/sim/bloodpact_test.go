@@ -172,7 +172,10 @@ func TestBloodLineFormsAndFeedsShallow(t *testing.T) {
 	}
 }
 
-// 血线 >90 绷断：溅血、巡航 −30 蔫置三秒、期间不能重连、到点还回巡航。
+// 血线 >320 绷断：溅血、巡航 −30 蔫置三秒、期间不能重连、到点还回巡航。
+// 说明：现在距离冲过警戒线 240 时血契会无视 CD 立刻警戒收线自救
+//（收线的本职就是续线），静态超距断线只在烧不动血时发生：
+// 先把血契压进熔断（HP 5，耗血技能全熄），再摆远，看线绷断。
 func TestBloodLineSnapsAndWilts(t *testing.T) {
 	m, pact, victim := startPact(t, 43, character.KindDummy)
 	lockBoth(m, pact, victim, 34)
@@ -182,7 +185,10 @@ func TestBloodLineSnapsAndWilts(t *testing.T) {
 		t.Fatal("该先建上血线")
 	}
 
-	// 血线长 336：把两边各摆到场地两半（场心对称 ±200，距 400 跨过断线档）。
+	// 熔断：警戒收线烧不动血，无法自救，只能眼看线绷断。
+	setPactHP(m, pact, 5)
+
+	// 血线长 320：把两边各摆到场地两半（场心对称 ±200，距 400 跨过断线档）。
 	// 出生点其实挨着场心，从原地朝任何方向都放不出 >336 的距离
 	// （六边形内最远也就 264 左右），只能两边一起挪。
 	m.mu.Lock()
@@ -194,7 +200,7 @@ func TestBloodLineSnapsAndWilts(t *testing.T) {
 
 	seen := tickUntil(m, 0.4)
 	if seen["blood-snap"] == 0 {
-		t.Fatalf("超过 90 该绷断并溅血，没见过 blood-snap：%v", seen)
+		t.Fatalf("超过 320 该绷断并溅血，没见过 blood-snap：%v", seen)
 	}
 	m.mu.Lock()
 	cruise := pact.cruise
@@ -298,86 +304,76 @@ func TestBloodPounceBurnsFiveAndDashes(t *testing.T) {
 	}
 }
 
-// 收线：烧 8 血把敌人朝自己拉回来，贴到 38 提前结束。
-func TestBloodReelDragsThemBack(t *testing.T) {
-	m, pact, victim := startPact(t, 46, character.KindDummy)
-	lockBoth(m, pact, victim, 34)
-	noSeek(m, victim)
-	if seen := tickUntil(m, 0.2); seen["blood-bond"] == 0 {
-		t.Fatal("该先建上血线")
-	}
-
-	// 对面跑到 90 开外：收线该把它拽到身前。
-	putAway(m, pact, victim, 90)
-
-	seen := map[string]int{}
-	cost := 0.0
-	minD := 1e9
-	m.mu.Lock()
-	start := m.time
-	m.mu.Unlock()
-	for i := 0; i < 4000; i++ {
-		m.Tick()
-		time.Sleep(time.Millisecond)
-		m.mu.Lock()
-		if d := math.Hypot(victim.p.X-pact.p.X, victim.p.Y-pact.p.Y); d < minD {
-			minD = d
-		}
-		for _, f := range m.fx {
-			seen[f.Name]++
-			if f.Name == "blood-reel" {
-				cost = f.Amount
-			}
-		}
-		now := m.time
-		m.mu.Unlock()
-		if now-start >= 2.0 {
-			break
-		}
-	}
-	if seen["blood-reel"] == 0 {
-		t.Fatal("有血线时该起手收线")
-	}
-	if cost != 8 {
-		t.Fatalf("收线该烧 8 血，特效报的是 %v", cost)
-	}
-	if minD > 41 {
-		t.Fatalf("收线该把对面拽到身前 38 以内，最近只到 %.1f", minD)
+// 活随从也能建线：vs 无下限术士，本体不实心咬不到，但开局裂出的红半/蓝半
+// 是活随从（挨打自己真掉血再把同一笔转给本体）——血契该咬到它们并建上血线。
+// 旧版只认敌方战斗机，整局 bond=0 无凭据无回流，是结构死局。
+func TestBloodLineOnMinions(t *testing.T) {
+	m, _, _ := startPact(t, 51, character.KindTwin)
+	seen := tickUntil(m, 15)
+	if seen["blood-bond"] == 0 {
+		t.Fatalf("该咬到红半/蓝半并建上血线：%v", seen)
 	}
 }
 
-// 中间垫一堵普通墙：收线拉不动，对面顶在墙上——墙后是对手的安全区。
-func TestBloodReelBlockedByWall(t *testing.T) {
-	m, pact, victim := startPact(t, 47, character.KindDummy)
+// 多线：战斗机和敌方活随从同时各建一条线；断掉随从那条不蔫置
+//（还有线在，契约没全崩），战斗机线照常回流。
+func TestBloodMultiLinePartialSnap(t *testing.T) {
+	m, pact, victim := startPact(t, 48, character.KindDummy)
 	lockBoth(m, pact, victim, 34)
 	noSeek(m, victim)
-	if seen := tickUntil(m, 0.2); seen["blood-bond"] == 0 {
-		t.Fatal("该先建上血线")
-	}
 
-	// 建完线再立墙、再把对面挪到墙后：这样弧够不到它，只有收线会碰墙。
+	// 嘴边前侧方再放一只敌方活随从（教父暗杀者，Mortal），钉在原地。
 	m.mu.Lock()
-	p0 := pact.p
-	ux, uy := inwardUnit(p0.X, p0.Y)
-	px, py := -uy, ux // 沿这条线摆横墙
-	m.placeWallLocked(unitpkg.PlaceWall{
-		OwnerID: pact.id, Slot: 0, Kind: character.KindWaller,
-		X1: p0.X + ux*50 - px*40, Y1: p0.Y + uy*50 - py*40,
-		X2: p0.X + ux*50 + px*40, Y2: p0.Y + uy*50 + py*40,
-		Radius: 6, Life: 30, Amount: 0,
+	m.applyCmdLocked(unitpkg.Spawn{
+		Kind: character.KindAssassin, OwnerID: victim.id, Slot: 1,
+		X: pact.p.X + 24, Y: pact.p.Y + 24,
 	})
 	m.mu.Unlock()
-	putAway(m, pact, victim, 90)
-
-	seen := tickUntil(m, 2.0)
-	if seen["blood-reel"] == 0 {
-		t.Fatal("有血线时该起手收线")
+	var min *unit
+	for _, u := range m.units {
+		if u.kind == character.KindAssassin {
+			min = u
+			break
+		}
+	}
+	if min == nil {
+		t.Fatal("暗杀者没生成")
 	}
 	m.mu.Lock()
-	d := math.Hypot(victim.p.X-pact.p.X, victim.p.Y-pact.p.Y)
+	min.stand = true
+	min.setVel(vec{})
+	m.applyCmdLocked(unitpkg.SetCruise{UnitID: min.id, Speed: 0})
 	m.mu.Unlock()
-	if d < 60 {
-		t.Fatalf("墙该把收线挡住（对面顶在墙外 50+6+18=74），实际距离 %.1f", d)
+
+	if seen := tickUntil(m, 0.3); seen["blood-bond"] < 2 {
+		t.Fatalf("战斗机+活随从该同时各建一条线，bond=%d：%v", seen["blood-bond"], seen)
+	}
+
+	// 把随从打死（Despawn）：那条线「目标没了」断掉，但靶子线还在 → 不该蔫置（巡航保持 170）。
+	m.mu.Lock()
+	m.applyCmdLocked(unitpkg.Despawn{UnitID: min.id})
+	m.mu.Unlock()
+	snapSeen := tickUntil(m, 0.4)
+	if snapSeen["blood-snap"] == 0 {
+		t.Fatal("随从那条线该绷断")
+	}
+	m.mu.Lock()
+	cruise := pact.cruise
+	m.mu.Unlock()
+	// lockBoth 把血契钉在 cruise 0；若误触发蔫置会被改成 140。
+	if math.Abs(cruise) > 1e-6 {
+		t.Fatalf("断一条线不蔫置，巡航该保持钉住的 0，实际 %.1f", cruise)
+	}
+
+	// 靶子线还在：打靶子一刀，照常 25% 回流。
+	setPactHP(m, pact, 50)
+	m.mu.Lock()
+	before := pact.hp
+	m.offerDamageLocked(unitpkg.Damage{From: victim.id, To: victim.id, Amount: 20})
+	m.mu.Unlock()
+	tickN(m, 6)
+	if after := pactHP(m, pact); after-before < 4.5 {
+		t.Fatalf("靶子线该照常回流，血契 %v -> %v", before, after)
 	}
 }
 
@@ -388,7 +384,7 @@ func TestBloodReelBlockedByWall(t *testing.T) {
 // 饿扑（blood-pounce）、收线（blood-reel）都不该再出现。
 func TestBloodBlackoutStopsBurningSkills(t *testing.T) {
 	m, pact, victim := startPact(t, 48, character.KindDummy)
-	// victim 一开始就摆在 260 远（> 断线 224）：血线建不上、收线无目标，
+	// victim 一开始就摆在 260 远（咬合够不着、建不了线）：收线无目标，
 	// 蝙蝠够不着也就没有回流泵血——熔断线附近没有互相拉锯的干扰。
 	// 开局那批烧血（饿扑 5 + 召蝠 6）发生在满血时，合法，不计数。
 	putAway(m, pact, victim, 260)

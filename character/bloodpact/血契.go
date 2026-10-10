@@ -16,6 +16,7 @@ import (
 	"embed"
 	"math"
 	"math/rand/v2"
+	"sort"
 
 	"xqdj/internal/unit"
 )
@@ -49,7 +50,8 @@ const (
 	// 熔断线：HP ≤ 10 时耗血技能全熄（放招那一刻判定）。所以永远不会烧死自己。
 	blackoutHP = 10.0
 
-	// 血线：距离 > 224——场地直径 560 的 2/5——绷断；断线后蔫置 3 秒，巡航 −30，不能重连。
+	// 血线：距离 > 320——场地直径 560 的 4/7——绷断；断一条只断那条，
+	// 全断才蔫置 3 秒，巡航 −30，不能重连。
 	lineRange = 320.0
 	wiltDur   = 3.0
 	wiltDrop  = 30.0
@@ -62,19 +64,23 @@ const (
 	feedDeep    = 0.75
 	feedStep    = 0.5 // 攒够这么多才 Heal 一次（引擎口径：≥0.5 才有治疗特效）
 
-	// 收线：烧 8 血，把敌人朝自己强拉 1.4 秒。拉力压过敌人自身速度，没有抗性；
-	// 墙由物理碰撞免费涌现（顶在墙上就是卡住了）。拉到 38 就提前结束。
-	// 起手要等对方真的拉开（> mouthReach）：Attach 弧咬人会把对方从咬距上
-	// 挤开一点，若 >38 就起手，贴脸互殴会每 3 秒白烧 8 血去拉那一像素。
-	reelCost    = 8.0
-	reelCD      = 3.0
-	reelDur     = 1.4
-	reelSpeed   = 60.0
-	reelStopGap = 38.0
+	// 收线：烧 8 血，收网 1.4 秒——每条线的目标都被拽 280 朝血契（比任何巡航都快，
+	// 被拽的人看得出来是被拽走的），血契自己也顺线扑向最近目标。拉到 38 提前结束。
+	// 只在线快绷断时放：距离冲过警戒线 240（绷断 320 的 3/4）才起手，
+	// 收完照吃 3s CD——收线的本职就是续线，平稳期不烧血。
+	// 墙由物理碰撞免费涌现（隔墙互顶拉不到脸）。
+	reelCost     = 8.0
+	reelCD       = 3.0
+	reelDur      = 1.4
+	reelSpeed    = 280.0 // 拽速：明显快过一切巡航——“拽过来”的观感
+	reelStopGap  = 38.0
+	reelSaveFrom = 240.0 // 警戒线：距离冲过这里才放收线
 
-	// 血蝠：烧 6 血、CD 5s、一次两只、场上至多 3 只。活随从，追着人咬（3 伤、
-	// 0.5s CD），6 秒寿终。它咬敌方战斗机的伤走血线回流（来源不挑），
-	// 所以蝙蝠是在外勤打工、把血抽回总部；蝙蝠自己挨打的伤不回流（随从不是契约方）。
+	// 血蝠：烧 6 血、CD 5s、一次一只、场上至多 3 只。活随从，追着人咬（2 伤、
+	// 0.5s CD），6 秒寿终。它咬的伤打在血线连着的目标身上就按那条线回流
+	//（来源不挑），所以蝙蝠是在外勤打工、把血抽回总部；蝙蝠自己挨打的伤不回流
+	//（随从不是契约方）。面板按一阶段收支相抵设计：6s 寿命里理论 12 口
+	// × 2 伤 × 25% = 6 血回流，正好抵掉召它的成本——外勤抽血，不赚不亏。
 	batCost      = 6.0
 	batCD        = 5.0
 	batPerCall   = 1
@@ -82,7 +88,7 @@ const (
 	batRadius    = 8.0
 	batHP        = 10.0
 	batSpeed     = 190.0
-	batDamage    = 3.0
+	batDamage    = 2.0
 	batBiteCD    = 0.5
 	batLife      = 6.0
 	batSeekEvery = 0.4
@@ -164,17 +170,21 @@ type 血契 struct {
 
 	arc      unit.AttachState
 
-	// 血线
-	lineID    uint64
-	lineSince float64
-	lineHP    float64
-	lineMax   float64
+	// 血线：可同时连多个有生命的目标（敌方战斗机或敌方活随从），单个目标最多一条
+	lines     map[uint64]*bloodLine
 	wiltUntil float64
 
 	reelUntil float64
 	pool      float64
 	state     int
 	booted    bool
+}
+
+// bloodLine 一条血线：深度按各自的连接时长分档，回流按各自目标快照的差值结算。
+type bloodLine struct {
+	since   float64 // 建线那一拍
+	lastHP  float64 // 上一拍目标血量
+	lastMax float64 // 上一拍目标上限
 }
 
 func (b *血契) Handle(ctx unit.Context, ev unit.Event) {
@@ -194,6 +204,7 @@ func (b *血契) onSense(ctx unit.Context, s unit.Sense) {
 		b.reelAt = s.Time
 		b.batAt = s.Time
 		b.state = -1
+		b.lines = map[uint64]*bloodLine{}
 	}
 	if n := math.Hypot(s.Self.VX, s.Self.VY); n > 1e-6 {
 		b.faceX, b.faceY = s.Self.VX/n, s.Self.VY/n
@@ -225,53 +236,59 @@ func (b *血契) wilted(s unit.Sense) bool {
 	return b.wiltUntil > 0 && s.Time+1e-9 < b.wiltUntil
 }
 
-// updateLine 血线的断法都在这里：目标没了、或距离超过 90 就绷断并蔫置。
+// updateLine 血线的断法都在这里：目标没了、不再是可咬的、或距离超上限就绷断。
+// 断的是这一条——所有线全断了才蔫置（契约没全崩就还有寄生在身上）。
 func (b *血契) updateLine(ctx unit.Context, s unit.Sense) {
-	if b.lineID == 0 {
+	if len(b.lines) == 0 {
 		return
 	}
-	o := findNearby(s.Nearby, b.lineID)
-	if o == nil || o.Role != unit.RoleFighter {
-		b.breakLine(ctx, s)
-		return
-	}
-	if math.Hypot(o.X-b.x, o.Y-b.y) > lineRange {
-		b.breakLine(ctx, s)
+	for id := range b.lines {
+		o := findNearby(s.Nearby, id)
+		if o == nil || !unit.Hittable(*o, b.slot) {
+			b.breakLine(ctx, s, id)
+			continue
+		}
+		if math.Hypot(o.X-b.x, o.Y-b.y) > lineRange {
+			b.breakLine(ctx, s, id)
+		}
 	}
 }
 
-func (b *血契) breakLine(ctx unit.Context, s unit.Sense) {
-	if b.lineID == 0 {
+func (b *血契) breakLine(ctx unit.Context, s unit.Sense, id uint64) {
+	if b.lines[id] == nil {
 		return
 	}
-	b.lineID = 0
-	b.lineHP, b.lineMax, b.pool, b.reelUntil = 0, 0, 0, 0
-	b.wiltUntil = s.Time + wiltDur
-	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: pactSpeed - wiltDrop}
+	delete(b.lines, id)
 	ctx.Out <- unit.FX{
 		Name: "blood-snap", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
 		X: b.x, Y: b.y,
 	}
+	if len(b.lines) > 0 {
+		return // 还有别的线在，不蔫置
+	}
+	b.pool = 0
+	b.reelUntil = 0
+	b.wiltUntil = s.Time + wiltDur
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: pactSpeed - wiltDrop}
 }
 
-// tether 建线：已经在线上就不动，深度按连接时长自己长。建线只认敌方战斗机。
+// tether 建线：单个目标最多一条；可以同时连多个有生命的目标
+//（敌方战斗机或敌方活随从），深度各自按连接时长长。
 func (b *血契) tether(ctx unit.Context, s unit.Sense, o *unit.Snapshot) {
-	if b.lineID != 0 || b.wilted(s) {
+	if b.lines[o.ID] != nil || b.wilted(s) {
 		return
 	}
-	b.lineID = o.ID
-	b.lineSince = s.Time
-	b.lineHP, b.lineMax = o.HP, o.MaxHP
+	b.lines[o.ID] = &bloodLine{since: s.Time, lastHP: o.HP, lastMax: o.MaxHP}
 	ctx.Out <- unit.FX{
 		Name: "blood-bond", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
 		X: b.x, Y: b.y, VX: o.X, VY: o.Y,
 	}
 }
 
-// rearmBite 咬合弧的挂载：打到人就散，按 CD 再挂（寄生期快一点）。
+// rearmBite 咬合弧的挂载：打到人就散，按 CD 再挂（有任意血线在就快一点）。
 func (b *血契) rearmBite(ctx unit.Context, s unit.Sense) {
 	cd := biteCD
-	if b.lineID != 0 {
+	if len(b.lines) > 0 {
 		cd = biteCDFeed
 	}
 	if unit.RearmAttach(s, ctx.ID, KindBloodArc, cd, &b.arc) {
@@ -285,20 +302,18 @@ func (b *血契) rearmBite(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-// checkBiteTether 咬合够得着的范围里站着敌方战斗机（且没有血线、不在荒置），
-// 就算咬上了、就地建血线，不等弧真的散那一拍：Attach 弧的物理碰撞会把
+// checkBiteTether 咬合够得着的范围里站着可咬的敌方（战斗机或活随从），
+// 没连过的就地建血线，不等弧真的散那一拍：Attach 弧的物理碰撞会把
 // 对方从咬距上挤开一点，按「等弧散」会把推开的嘴边人漏掉。
 func (b *血契) checkBiteTether(ctx unit.Context, s unit.Sense) {
-	if b.lineID != 0 || b.wilted(s) {
+	if b.wilted(s) {
 		return
 	}
 	fx, fy := b.faceUnit()
 	cosHalf := math.Cos(unit.Deg(biteArcSpan / 2))
-	var fighter *unit.Snapshot
-	bestD := math.MaxFloat64
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Role != unit.RoleFighter || !unit.Hittable(*o, b.slot) {
+		if !unit.Hittable(*o, b.slot) || b.lines[o.ID] != nil {
 			continue
 		}
 		dx, dy := o.X-b.x, o.Y-b.y
@@ -309,12 +324,7 @@ func (b *血契) checkBiteTether(ctx unit.Context, s unit.Sense) {
 		if (dx/d)*fx+(dy/d)*fy < cosHalf-1e-8 {
 			continue
 		}
-		if d < bestD {
-			fighter, bestD = o, d
-		}
-	}
-	if fighter != nil {
-		b.tether(ctx, s, fighter)
+		b.tether(ctx, s, o)
 	}
 }
 
@@ -325,25 +335,28 @@ func (b *血契) faceUnit() (float64, float64) {
 	return 1, 0
 }
 
-// reflux 寄生回流：血线连着期间，敌方战斗机掉多少血就按深度回流多少。
+// reflux 寄生回流：血线连着期间，每条线各自的目标掉多少血就按那条线的
+// 深度分档回流多少——连着的活随从也是契约方；没连线的单位掉的血不回流。
 // 只认确认伤害（快照里的 HP 差值），HP 回升和上限变化不算。
 func (b *血契) reflux(ctx unit.Context, s unit.Sense) {
-	if b.lineID == 0 {
+	if len(b.lines) == 0 {
 		return
 	}
-	o := findNearby(s.Nearby, b.lineID)
-	if o == nil || o.Role != unit.RoleFighter {
-		return
+	for id, ln := range b.lines {
+		o := findNearby(s.Nearby, id)
+		if o == nil {
+			continue
+		}
+		if o.MaxHP != ln.lastMax {
+			// 上限变了（勇者升级之类）这一拍不算回流，只重新对表。
+			ln.lastMax, ln.lastHP = o.MaxHP, o.HP
+			continue
+		}
+		if ln.lastHP > 0 && o.HP < ln.lastHP-1e-9 {
+			b.pool += (ln.lastHP - o.HP) * feedRatio(s.Time - ln.since)
+		}
+		ln.lastHP = o.HP
 	}
-	if o.MaxHP != b.lineMax {
-		// 上限变了（勇者升级之类）这一拍不算回流，只重新对表。
-		b.lineMax, b.lineHP = o.MaxHP, o.HP
-		return
-	}
-	if b.lineHP > 0 && o.HP < b.lineHP-1e-9 {
-		b.pool += (b.lineHP - o.HP) * feedRatio(s.Time-b.lineSince)
-	}
-	b.lineHP = o.HP
 	if b.pool >= feedStep {
 		ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: b.pool}
 		b.pool = 0
@@ -361,9 +374,9 @@ func feedRatio(held float64) float64 {
 	}
 }
 
-// tryPounce 饿扑：无血线、不蔫置、不在熔断区时，烧 5 血朝索敌目标猛扑。
+// tryPounce 饿扑：一条线都没有、不蔫置、不在熔断区时，烧 5 血朝索敌目标猛扑。
 func (b *血契) tryPounce(ctx unit.Context, s unit.Sense) {
-	if b.lineID != 0 || b.wilted(s) {
+	if len(b.lines) > 0 || b.wilted(s) {
 		return
 	}
 	if s.Self.HP <= blackoutHP {
@@ -390,26 +403,38 @@ func (b *血契) tryPounce(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-// reel 收线：有血线、CD 好、不在熔断区就烧 8 血起手，
-// 之后每帧把敌人朝自己强拉，贴到 38 提前结束（剩余时间不拉不烧）。
+// reel 收线：有血线、距离冲过警戒线（线快绷断）、CD 好、不在熔断区才烧 8 血起手。
+// 之后每帧把每条线的目标拽向血契——血契自己不跟过去，站在原地收线。
+// 主目标（最近的）拽到 38 身边时整个动作立刻结束（剩余时间不拉不烧）。
 func (b *血契) reel(ctx unit.Context, s unit.Sense) {
 	if b.reelUntil > 0 && s.Time+1e-9 >= b.reelUntil {
 		b.reelUntil = 0
 	}
-	if b.lineID == 0 {
+	if len(b.lines) == 0 {
 		b.reelUntil = 0
 		return
 	}
-	o := findNearby(s.Nearby, b.lineID)
-	if o == nil {
+	var main *unit.Snapshot
+	mainD := math.MaxFloat64
+	for id := range b.lines {
+		o := findNearby(s.Nearby, id)
+		if o == nil {
+			continue
+		}
+		if d := math.Hypot(o.X-b.x, o.Y-b.y); d < mainD {
+			mainD = d
+			main = o
+		}
+	}
+	if main == nil {
 		b.reelUntil = 0
 		return
 	}
-	d := math.Hypot(o.X-b.x, o.Y-b.y)
 	if b.reelUntil == 0 {
-		// 对方真的拉开了才起手：贴脸时咬合会把人从咬距上挤开一点，
-		// >38 就起手会每 3 秒白烧 8 血去拉那一像素。
-		if d <= mouthReach {
+		// 只在线快绷断时放：距离冲过警戒线才起手——收线的本职就是续线，
+		// 平稳期（贴脸/中距）不烧这 8 血。收完照吃 3s CD；
+		// 熔断时烧不动，只能眼看线断。
+		if mainD < reelSaveFrom {
 			return
 		}
 		if s.Time+1e-9 < b.reelAt || s.Self.HP <= blackoutHP {
@@ -418,16 +443,25 @@ func (b *血契) reel(ctx unit.Context, s unit.Sense) {
 		b.reelAt = s.Time + reelCD
 		b.reelUntil = s.Time + reelDur
 		ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: s.Self.HP - reelCost}
+		// FX 站在被拽的那位身上：X/Y=主目标，VX/VY=血契。
 		ctx.Out <- unit.FX{
 			Name: "blood-reel", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
-			X: b.x, Y: b.y, VX: o.X, VY: o.Y, Amount: reelCost,
+			X: main.X, Y: main.Y, VX: b.x, VY: b.y, Amount: reelCost,
 		}
-	} else if d <= reelStopGap {
+	} else if mainD <= reelStopGap {
+		// 拽到身边：整个动作立刻停。
 		b.reelUntil = 0
 		return
 	}
-	ux, uy := unitDir(b.x-o.X, b.y-o.Y)
-	ctx.Out <- unit.SetVelocity{UnitID: o.ID, VX: ux * reelSpeed, VY: uy * reelSpeed}
+	// 收网：只拽对面，血契站在原地——拽人的人自己不跟着跑。
+	for id := range b.lines {
+		o := findNearby(s.Nearby, id)
+		if o == nil {
+			continue
+		}
+		ux, uy := unitDir(b.x-o.X, b.y-o.Y)
+		ctx.Out <- unit.SetVelocity{UnitID: o.ID, VX: ux * reelSpeed, VY: uy * reelSpeed}
+	}
 }
 
 // tryCallBats 血蝠：烧 6 血、CD 5s、场上至多 3 只。蝙蝠是活随从——它咬敌方
@@ -494,14 +528,24 @@ func circleBlocked(s unit.Sense, x, y, r float64) bool {
 	return false
 }
 
-// syncLook 给页面递外观：血线每帧报两端 + 当前深度；状态变了才报一次状态。
+// syncLook 给页面递外观：每条血线每帧报两端 + 当前深度（按目标 ID 排序，
+// 前端槽位稳定不闪烁）；状态变了才报一次状态。
 func (b *血契) syncLook(ctx unit.Context, s unit.Sense) {
-	if b.lineID != 0 {
-		if o := findNearby(s.Nearby, b.lineID); o != nil {
+	if len(b.lines) > 0 {
+		ids := make([]uint64, 0, len(b.lines))
+		for id := range b.lines {
+			ids = append(ids, id)
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		for _, id := range ids {
+			o := findNearby(s.Nearby, id)
+			if o == nil {
+				continue
+			}
 			ctx.Out <- unit.FX{
 				Name: "blood-line", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
 				X: b.x, Y: b.y, VX: o.X, VY: o.Y,
-				Amount: float64(b.depth(s.Time)) + 1,
+				Amount: float64(depthOf(s.Time - b.lines[id].since)) + 1,
 			}
 		}
 	}
@@ -515,9 +559,8 @@ func (b *血契) syncLook(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-// depth 血线深度：0 细（25%）、1 粗（50%）、2 深红搏动（75%）。
-func (b *血契) depth(now float64) int {
-	held := now - b.lineSince
+// depthOf 血线深度：0 细（25%）、1 粗（50%）、2 深红搏动（75%）。
+func depthOf(held float64) int {
 	switch {
 	case held >= feedDeepAt:
 		return 2
@@ -535,7 +578,7 @@ func (b *血契) stateCode(s unit.Sense) int {
 		return 3
 	case b.wilted(s):
 		return 2
-	case b.lineID != 0:
+	case len(b.lines) > 0:
 		return 1
 	default:
 		return 0
