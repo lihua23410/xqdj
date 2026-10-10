@@ -84,7 +84,7 @@ internal/unit/           Actor / Cmd / Sense / Look / Pack / Field，sim 与 cha
 internal/sim/            物理、对局状态机、CCD、墙
 internal/web/            选人页（含场地）+ 战场 + 引擎级特效（embed）；lib/ 放 gsap 等第三方脚本。不要为新球改这里
 cmd/winrate/             无头胜率矩阵
-docs/adr/                架构决策（巡航带子、活随从、场地可选、胶囊墙改名、硬墙穿透、索敌看可瞄准）
+docs/adr/                架构决策（巡航带子、活随从、场地可选、胶囊墙改名、硬墙穿透、索敌看可瞄准、挡视线）
 docs/fighters/           战斗机介绍用的外观和雷达图 svg（只覆盖部分球）
 main.go                  HTTP :8080（XQDJ_ADDR 可改）、/、/ws、/ball/<Kind>/
 CONTEXT.md               领域用词
@@ -265,6 +265,7 @@ unit.Spec{
     StartHP:    0,                // 0 = 开局满血 MaxHP。小骑士用 85
     AimPriority: 0,               // 0 = 未写：战斗机 15、活随从 60、其余 0。快照 `aimPriority`；0 不可索敌。可用 SetAimPriority 改
     Nonsolid:    false,           // true = 不实心：不碰、不进 Hittable。战斗机仍进快照
+    VisionBlock: false,           // true = 挡视线：挡 SeekLOS 的索敌视线，不进感知过滤、不挡物理。可用 VisionBlock 令牌运行时挂摘
     Cruise:      false,           // true = 吃巡航带子。战斗机默认有；活随从要写
     Shell:       false,           // true = 贴身壳：吸收打向主人的伤害，撞碎时给主人 GuardBreak；不撞墙
     Attach:     false,            // true = 每帧贴主人；不挡伤、不碎、不撞墙。只和敌方战斗机、活随从做 CCD
@@ -326,7 +327,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
   - `unit.ConfirmHit(ctx, d)` / `unit.BlockHit(ctx, d)`：自己拆 `IncomingDamage` 时用。
   - 减伤：自己 `ConfirmDamage{Token, UnitID: ctx.ID, Amount: 更小的值}`。`Amount` 只能比报价更小，不能抬高。
   - `IncomingDamage.Speed` 是挨打当时受害者的速率（近战减伤、R.缪的闪避都用这个）。
-- `Sense` 每帧都有（hit-stop / `Stun` 期间不发）：`Time`、`Self`（自己的快照）、`Nearby`（视野内；自己的随从始终在内）、`Field`（当前场地）。快照带 `AimPriority`。**索敌**用 `unit.Seek(s)`（默认只挑敌方、瞄准优先度 1–255 越小越先、相同则当下最近）；额外过滤用 `unit.SeekIf`；自己扫 Nearby 时用 `unit.Aimable`。不要写死 `RoleFighter`。有锁的技能自己决定何时重锁，引擎不另做全局锁。同槽可瞄准（如缪锁己方缪）自己写，不走 `Seek`。**出伤**仍用 `unit.Hittable` / `unit.EnemyTarget`（敌方战斗机或敌方活随从），和可瞄准分开：瞄准优先度 0 仍可能被扫到、撞到。改优先度用 `unit.SetAim(ctx, id, v)`（会填 `From: ctx.ID`），或自己发 `SetAimPriority`。雷达扫射、镰刀刮、墙刮不挑人，只看出伤。
+- `Sense` 每帧都有（hit-stop / `Stun` 期间不发）：`Time`、`Self`（自己的快照）、`Nearby`（视野内；自己的随从始终在内）、`Field`（当前场地）。快照带 `AimPriority`。**索敌**用 `unit.Seek(s)`（默认只挑敌方、瞄准优先度 1–255 越小越先、相同则当下最近）；额外过滤用 `unit.SeekIf`；要视线不被挡的索敌用 `unit.SeekLOS`（带挡视线标签的墙和单位压住球心连线段就跳过，见 CONTEXT.md「挡视线」；场地预放墙不带标签）；自己扫 Nearby 时用 `unit.Aimable`。不要写死 `RoleFighter`。有锁的技能自己决定何时重锁，引擎不另做全局锁。同槽可瞄准（如缪锁己方缪）自己写，不走 `Seek`。**出伤**仍用 `unit.Hittable` / `unit.EnemyTarget`（敌方战斗机或敌方活随从），和可瞄准分开：瞄准优先度 0 仍可能被扫到、撞到。改优先度用 `unit.SetAim(ctx, id, v)`（会填 `From: ctx.ID`），或自己发 `SetAimPriority`。雷达扫射、镰刀刮、墙刮不挑人，只看出伤。
 - `Collision` 只在相撞时来。`NX,NY` 是从 `Other` 指向自己的法线。`Other` 是对方快照。贴身出伤不要在战斗机的 `Collision` 里 `Damage`，挂 `Attach` 扇环弹，弹自己打人。可用 `unit.RearmAttach` / `unit.SpawnAttach`。
 - `WallHit` 撞场边、硬墙、胶囊墙时来，`Kind` 区分三者（`unit.WallEdge` / `WallHard` / `WallCapsule`）。`PassWalls` / `Attach` / `Shell` 的单位不会撞墙。撞墙那一帧会清掉带 `OnWall` 的瞬时 FS。
 - `GuardBreak` 只发给壳的 **主人**：`Spec.Shell` 被物理撞碎。`DespawnOwned` 摘壳不发这个。
@@ -352,7 +353,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 | `Despawn` | 删掉指定单位 |
 | `DespawnOwned` | 按主人 + kind 清掉随从（摘壳不会发 `GuardBreak`） |
 | `SwapOwned` | 本体与随机己方分身交换位置和速度（受伤时引擎也会自动做一次）。本体处于 `Stun` 时不换速度 |
-| `PlaceWall` | 造一段胶囊墙。`Kind` 填 `ctx.Kind` 以便墙色跟主人；`Hard` / `Square` 造硬墙和方端判定（场地预放用），硬墙永久存在且不可拆。`Life < 0` 一直留到被拆或相撞消失；`HitGap` 是刮伤间隔，0 表示 0.1 秒；`WithOwner` 则主人倒下时这截一起消失。瞄准虚线用 `Look.WallGuide`（和墙长同一个常量） |
+| `PlaceWall` | 造一段胶囊墙。`Kind` 填 `ctx.Kind` 以便墙色跟主人；`Hard` / `Square` 造硬墙和方端判定（场地预放用），硬墙永久存在且不可拆。`Life < 0` 一直留到被拆或相撞消失；`HitGap` 是刮伤间隔，0 表示 0.1 秒；`WithOwner` 则主人倒下时这截一起消失。`VisionBlock: true` 时这截挡 `SeekLOS` 的索敌视线（不改物理、不改感知）；场地预放墙不带这个标签。瞄准虚线用 `Look.WallGuide`（和墙长同一个常量） |
 | `SetWallMotion` | 改一截墙绕墙心的转速（弧度每秒，逆时针为正）和墙心平移速度。`Ram > 0` 时平移途中对每个敌方目标结一次这个伤害。两截同一主人、`StunRadius > 0` 的墙胶囊重叠时一起消失，圈里的敌方站死 `StunDur` 秒，主人不晕 |
 | `HoldStill` | 到 `Until` 之前不发感知，速度保持为 0。施加时记下当前速度；再施加则刷新时间并重新记。到点把记下的速度还回去 |
 | `Pass` | 令牌。`Hold: true` 时与其他单位相撞不改双方速度、也不做位置分离；墙仍弹。`Hold: false` 放下 |
@@ -360,6 +361,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 | `NoFrameFreeze` | 令牌。`Hold: true` 时该单位及其随从造成的伤害不停帧。`Hold: false` 放下 |
 | `NoHealthNumbers` | 令牌。`Hold: true` 时不画该单位自己的头顶数字，不跟到随从。`Hold: false` 放下 |
 | `Stun` | 令牌。`Hold: true` 时引擎不发 Sense（自身攻击停在冷却）；`IncomingDamage` / 撞墙 / 碰撞 / 派系变化仍到。`Until > 0` 时到点自动放下，`Until = 0` 要自己 `Hold: false` |
+| `VisionBlock` | 令牌。`Hold: true` 时该单位挡 `SeekLOS` 的索敌视线（球心连线段被带标签实体的体积压住就跳过）。敌我不分，自家带标签单位也挡自家；不进感知过滤、不挡物理，不用 `SeekLOS` 的角色无感。谁都能给任何单位挂摘。`Hold: false` 放下 |
 | `Force` | 给目标加加速度，引擎做 `v += (AX,AY)×dt`。不是改写速度，要持续加速得每帧重发；只对实心单位生效。无下限术士的拉/推 |
 | `Teleport` | 把自己挪到 `(X,Y)`，引擎会夹回可进入区域 |
 | `MarkFaction` | 给战斗机打派系。`Cycle` 时撞墙（非单位）换派系，同一目标 0.2s 一次；`AmpOut`/`AmpIn` 是角色自己给的倍率（0 = 不改）；`Collect` 凑齐四种时按 `Barrage` 的 kind 朝四周各生成一发（速度用该 kind 的 `Spec.Speed`），或按 `BlastRadius` / `BlastDamage` 炸一次 |
@@ -603,7 +605,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 
 ## 引擎会替你做的事
 
-这些是改角色或物理时不要随便推翻的约定。巡航带子的来由见 `docs/adr/0001-cruise-is-a-band.md`；活随从见 `docs/adr/0002-living-minions-take-damage.md`；场地可选见 `docs/adr/0003-field-is-selectable-data.md`；胶囊墙改名见 `docs/adr/0004-masonry-renamed-capsule-wall.md`；硬墙穿透见 `docs/adr/0005-break-walls-pass-through-hard-walls.md`；索敌看可瞄准见 `docs/adr/0006-seek-by-aim-priority.md`；无下限术士两半叠中扣两次见 `docs/adr/0007-twin-halves-stack-hits.md`。
+这些是改角色或物理时不要随便推翻的约定。巡航带子的来由见 `docs/adr/0001-cruise-is-a-band.md`；活随从见 `docs/adr/0002-living-minions-take-damage.md`；场地可选见 `docs/adr/0003-field-is-selectable-data.md`；胶囊墙改名见 `docs/adr/0004-masonry-renamed-capsule-wall.md`；硬墙穿透见 `docs/adr/0005-break-walls-pass-through-hard-walls.md`；索敌看可瞄准见 `docs/adr/0006-seek-by-aim-priority.md`；无下限术士两半叠中扣两次见 `docs/adr/0007-twin-halves-stack-hits.md`；挡视线见 `docs/adr/0009-vision-block-is-entity-tag.md`。
 
 - **场地是数据**。库在 `map/`（包名 `场地`）：一份场地一个 ASCII 子包，`init` 里 `unit.RegisterField`；`go generate ./map` 写出 `all.go`。`unit.Field` 有形状、场心到场边距离和预放墙；库里默认六边形（平顶、`Extent = HexRadius = 280`、无硬墙），另有圆（`Extent = 280`，场心一条硬墙，开局 `x ∈ [-110, 110]`、半宽 6，绕场心顺时针 8 秒一圈；转到固体身上时挤出，并按固体自己的速度弹开）。`Match.SetField` 只在选人阶段生效，开打后忽略；不认识的名字不改当前这份。`NewMatch` 按名字装六边形，没有则列表第一份，登记表空则用 `unit.HexField()` 垫底（不进选人列表）。落点、夹紧、撞边都走 `unit.Field`，角色不要自己算。
 - **时间**：`sim.TickHz = 60`，`DT = 1/60`，hit-stop `HitStopFrames = 3`。引擎每 tick 广播一次快照。
@@ -613,7 +615,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 - **撞墙**：入射角 = 反射角，速率不变，场边、硬墙、胶囊墙一样；战斗机和普通子弹一样。例外：`PassWalls` / `Attach` / `Shell` 单位根本不碰墙；`BreakWalls` 的弹撞场边照弹、撞硬墙穿过、撞胶囊墙拆穿。
 - **非弹体互撞**：沿法线各保留自己的速率，`a.v = n·|va|`，`b.v = −n·|vb|`。不要改回速度均分。任一方持有 `Pass` 时双方速度都不改、也不做位置分离（`Collision` 仍发）。墙不受 `Pass` 影响。
 - **伤害**：血量取自 `Spec.MaxHP`（引擎没有默认值，多数角色填 100）；确认伤害把血打到 ≤0 的那一拍由引擎移除（`SetHP` 置 0 不会移除单位）。`RoleFighter` 和 `Spec.Mortal` 的活随从都吃伤害，也都走 `IncomingDamage` → `ConfirmDamage`：不确认就不掉血。区别在确认之后：活随从不停帧、不换位、不叠 `MarkKind`、不计入胜负。对它造成伤害用 `unit.Hittable`（不实心的不算）。
-- **索敌**：不写死战斗机。`Spec.AimPriority` 未写时战斗机 15、活随从 60、其余 0（其余不能改成可瞄准）。快照 `AimPriority`：1–255 可被 `unit.Seek` 挑中（越小越先，相同则当下最近）；0 不可索敌，但 `Nearby` 仍按视野收录，出伤仍看 `Hittable`。1–255 时谁都能 `SetAimPriority`，后写覆盖；改成 0 后只有自己能改回来。观众不画这个数。雷达扫射一类不挑人的出伤不走 Seek。
+- **索敌**：不写死战斗机。`Spec.AimPriority` 未写时战斗机 15、活随从 60、其余 0（其余不能改成可瞄准）。快照 `AimPriority`：1–255 可被 `unit.Seek` 挑中（越小越先，相同则当下最近）；0 不可索敌，但 `Nearby` 仍按视野收录，出伤仍看 `Hittable`。1–255 时谁都能 `SetAimPriority`，后写覆盖；改成 0 后只有自己能改回来。观众不画这个数。雷达扫射一类不挑人的出伤不走 Seek。**挡视线**是实体标签（`Spec.VisionBlock` / `VisionBlock` 令牌 / `PlaceWall.VisionBlock`）：`unit.SeekLOS` 把「球心连线被带标签实体压住」的目标跳过，墙按胶囊、单位按圆、相切算挡、敌我不分；只挡这一层索敌，不进感知过滤、不挡物理；场地预放墙不带标签，永远透明。
 - **hit-stop**：战斗机受伤打 3 帧（物理 / 时间 / 感知都停，指令仍消化）。打活随从不停帧。致死当拍不再换位；胜负在帧末判定，若这拍进入 hit-stop 就顺延到计数归零那一拍。持有 `NoFrameFreeze` 的单位（及其随从）造成的伤害不停帧。
 - **壳**：`Spec.Shell` 的壳贴住主人。主人身上有壳时，`IncomingDamage` 整包被吸收：壳碎、主人收 `GuardBreak`、伤害为 0。
 - **`Stun`**：期间不发 `Sense`；碰撞、撞墙、`IncomingDamage`、`FactionChanged`、`GuardBreak` 仍到。`Until > 0` 的眩晕到点自动解除。

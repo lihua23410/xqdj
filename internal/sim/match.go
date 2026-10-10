@@ -57,6 +57,7 @@ type unit struct {
 	holdVel         vec
 	noFrameFreeze   bool
 	noHealthNumbers bool
+	visionBlock     bool
 	shell           bool
 	attach          bool
 	arcSpan         float64
@@ -94,6 +95,7 @@ type barrier struct {
 	hitAt     map[uint64]float64
 	hard      bool
 	square    bool
+	visionBlock bool
 	field     bool
 	spin      float64 // 弧度每秒，逆时针为正。0 表示不转。
 	ang       float64
@@ -293,6 +295,7 @@ func (u *unit) snap() unitpkg.Snapshot {
 		Marks:           u.markList(),
 		AimPriority:     u.aimPriority,
 		Nonsolid:        !u.solid,
+		VisionBlock:     u.visionBlock,
 		NoHealthNumbers: u.noHealthNumbers,
 	}
 }
@@ -734,6 +737,7 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 		attach:      spec.Attach,
 		arcSpan:     spec.ArcSpan,
 		arcInner:    spec.ArcInner,
+		visionBlock: spec.VisionBlock,
 	}
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
@@ -985,6 +989,12 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		} else {
 			u.stunUntil = c.Until
 		}
+	case unitpkg.VisionBlock:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		u.visionBlock = c.Hold
 	}
 }
 
@@ -1283,6 +1293,7 @@ func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
 		withOwner: c.WithOwner,
 		hard:      c.Hard,
 		square:    c.Square || c.Hard,
+		visionBlock: c.VisionBlock,
 		hitAt:     map[uint64]float64{},
 	}
 	w.bindPose()
@@ -1662,7 +1673,7 @@ func (m *Match) wallViewsLocked() []unitpkg.WallView {
 		out = append(out, unitpkg.WallView{
 			ID: w.id, OwnerID: w.owner, Slot: w.slot,
 			X1: w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
-			Radius: w.radius,
+			Radius: w.radius, VisionBlock: w.visionBlock,
 		})
 	}
 	return out
