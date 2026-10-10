@@ -5,7 +5,7 @@
 // CD 记不住（实测每拍都能咬）。照勇者握剑那套——出伤由本体算，图自己画。
 window.lookFX = window.lookFX || {};
 window.pactState = window.pactState || {}; // unitId -> {state, face}
-window.pactLine = window.pactLine || {}; // ownerId -> {x1,y1,x2,y2,depth,until}
+window.pactLine = window.pactLine || {}; // ownerId -> [{x1,y1,x2,y2,depth,until}] 多条血线
 
 (function () {
   // 蝙蝠翅膀：两片折翼绕身体扑扇（CSS 动画），球太小，就画在球皮外侧。
@@ -59,34 +59,60 @@ window.pactLine = window.pactLine || {}; // ownerId -> {x1,y1,x2,y2,depth,until}
         el.appendChild(skin);
       }
     },
-    // 血线是持久线段，走 guide 钩子，不是一次性特效。
+    // 血线是持久线段，走 guide 钩子，不是一次性特效；可同时挂多条。
     guide(u, ctx) {
       if (!ctx || !ctx.ensureGuide || !window.arena) return;
-      const ln = window.pactLine[u.id];
-      if (!ln || performance.now() > ln.until) {
+      const now = performance.now();
+      let list = (window.pactLine[u.id] || []).filter((ln) => ln.until > now);
+      if (!list.length) {
         delete window.pactLine[u.id];
-        return;
+      } else {
+        window.pactLine[u.id] = list;
       }
-      const [x1, y1] = arena.screenPos(ln.x1, ln.y1, ctx.scale, ctx.cx, ctx.cy);
-      const [x2, y2] = arena.screenPos(ln.x2, ln.y2, ctx.scale, ctx.cx, ctx.cy);
-      const depth = Math.max(1, Math.min(3, Math.round(ln.depth || 1)));
-      const g = ctx.ensureGuide(`pact-line-${u.id}`, "pact-line");
-      g.className = `guide pact-line d${depth}`;
-      ctx.placeSeg(g, x1, y1, x2, y2, u.kind);
-      if (ctx.seenGuides) ctx.seenGuides.add(g.id);
+      for (let i = 0; i < list.length; i++) {
+        const ln = list[i];
+        const [x1, y1] = arena.screenPos(ln.x1, ln.y1, ctx.scale, ctx.cx, ctx.cy);
+        const [x2, y2] = arena.screenPos(ln.x2, ln.y2, ctx.scale, ctx.cx, ctx.cy);
+        const depth = Math.max(1, Math.min(3, Math.round(ln.depth || 1)));
+        const g = ctx.ensureGuide(`pact-line-${u.id}-${i}`, "pact-line");
+        g.className = `guide pact-line d${depth}`;
+        ctx.placeSeg(g, x1, y1, x2, y2, u.kind);
+        if (ctx.seenGuides) ctx.seenGuides.add(g.id);
+      }
     },
   };
 
-  // 血线：Go 每帧报一次两端 + 深度（1 细 / 2 粗 / 3 深红搏动）。
+  // 血线：Go 每帧按目标 ID 序逐条报两端 + 深度（1 细 / 2 粗 / 3 深红搏动）。
+  // 同一条线每帧都会重报：按目标端就近合并进原记录，不累积——
+  // 否则 120ms 宽限里攒下七八帧的残影，一根线会被画成一撮。
   arena.registerShot("blood-line", (fx) => {
-    window.pactLine[fx.unitId] = {
-      x1: fx.x,
-      y1: fx.y,
-      x2: fx.vx,
-      y2: fx.vy,
-      depth: Math.round(fx.amount || 1),
-      until: performance.now() + 120,
-    };
+    const now = performance.now();
+    const arr = (window.pactLine[fx.unitId] || []).filter((ln) => ln.until > now);
+    let hit = null;
+    for (const ln of arr) {
+      if (Math.hypot(ln.x2 - fx.vx, ln.y2 - fx.vy) < 40) {
+        hit = ln;
+        break;
+      }
+    }
+    if (hit) {
+      hit.x1 = fx.x;
+      hit.y1 = fx.y;
+      hit.x2 = fx.vx;
+      hit.y2 = fx.vy;
+      hit.depth = Math.round(fx.amount || 1);
+      hit.until = now + 120;
+    } else {
+      arr.push({
+        x1: fx.x,
+        y1: fx.y,
+        x2: fx.vx,
+        y2: fx.vy,
+        depth: Math.round(fx.amount || 1),
+        until: now + 120,
+      });
+    }
+    window.pactLine[fx.unitId] = arr;
   });
 
   // 状态：0 饥饿 / 1 寄生 / 2 蔫置 / 3 熔断（变了才发一次）。
@@ -141,9 +167,11 @@ window.pactLine = window.pactLine || {}; // ownerId -> {x1,y1,x2,y2,depth,until}
     arena.burst(ctx.x, ctx.y, fx.kind, 16);
   });
 
-  // 收线：在对面身上炸一圈，表示"被拽住了"。
+  // 收线：被拽的那位身上炸开醒目的一圈——"被拽住了"看得清清楚楚。
   arena.registerShot("blood-reel", (fx, ctx) => {
-    arena.spawnFx("fx-ring", ctx.x, ctx.y, fx.kind, { "--ring-size": "42px" });
+    arena.spawnFx("fx-shock", ctx.x, ctx.y, fx.kind);
+    arena.spawnFx("fx-ring", ctx.x, ctx.y, fx.kind, { "--ring-size": "64px" });
+    arena.burst(ctx.x, ctx.y, fx.kind, 10);
   });
 
   // 饿扑：扑出去那一刻在球上闪一下。

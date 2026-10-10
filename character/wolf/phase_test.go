@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 	"xqdj/internal/unit"
+	_ "xqdj/map/hex"
 )
 
 func TestBootSpawnsMoonAtCenter(t *testing.T) {

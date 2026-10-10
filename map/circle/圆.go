@@ -1,8 +1,15 @@
 package 圆
 
-import "xqdj/internal/unit"
+import (
+	"embed"
+
+	"xqdj/internal/unit"
+)
 
 const Name = "圆"
+
+//go:embed fx
+var assets embed.FS
 
 func Field() unit.Field {
 	return unit.Field{
@@ -21,4 +28,5 @@ func Field() unit.Field {
 
 func init() {
 	unit.RegisterField(Field())
+	unit.NewPack(Name, assets)
 }

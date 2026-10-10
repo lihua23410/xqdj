@@ -11,9 +11,12 @@ const (
 	MaxExtent = 320.0
 )
 
+// Shape 名只是登记键；具体判定由 map 包 RegisterOutline。
 const (
-	ShapeHex    = "hex"
+	ShapeHex     = "hex"
 	ShapeCircle = "circle"
+	ShapeSquare = "square"
+	ShapeOctagon = "octagon"
 )
 
 type WallKind int
@@ -114,25 +117,8 @@ func (f Field) size() float64 {
 	return HexRadius
 }
 
-func (f Field) isCircle() bool { return f.Shape == ShapeCircle }
-
 func (f Field) OutlineContains(x, y, radius float64) bool {
-	if f.isCircle() {
-		return math.Hypot(x, y) <= f.size()-radius+1e-6
-	}
-	return hexOutlineContains(x, y, radius, f.size())
-}
-
-func hexOutlineContains(x, y, radius, circum float64) bool {
-	ap := circum * math.Sqrt(3) / 2
-	limit := ap - radius
-	for i := 0; i < 6; i++ {
-		a := (float64(i) + 0.5) * math.Pi / 3
-		if math.Cos(a)*x+math.Sin(a)*y > limit+1e-6 {
-			return false
-		}
-	}
-	return true
+	return f.outline().Contains(x, y, radius)
 }
 
 func HexContains(x, y, radius float64) bool {
@@ -211,46 +197,11 @@ func (f Field) SampleEdge(t, inset float64) (x, y, nx, ny float64) {
 		t = 0
 	}
 	t = t - math.Floor(t)
-	if f.isCircle() {
-		ang := t * 2 * math.Pi
-		nx, ny = math.Cos(ang), math.Sin(ang)
-		r := f.size() - inset
-		if r < 0 {
-			r = 0
-		}
-		return nx * r, ny * r, nx, ny
-	}
-	tt := t * 6
-	side := int(tt) % 6
-	frac := tt - math.Floor(tt)
-	a0 := float64(side) * math.Pi / 3
-	a1 := float64(side+1) * math.Pi / 3
-	R := f.size()
-	x0, y0 := R*math.Cos(a0), R*math.Sin(a0)
-	x1, y1 := R*math.Cos(a1), R*math.Sin(a1)
-	na := (float64(side) + 0.5) * math.Pi / 3
-	nx, ny = math.Cos(na), math.Sin(na)
-	return x0 + (x1-x0)*frac - nx*inset, y0 + (y1-y0)*frac - ny*inset, nx, ny
+	return f.outline().SampleEdge(t, inset)
 }
 
 func (f Field) NearestEdgeDir(x, y float64) (dx, dy float64) {
-	if f.isCircle() {
-		n := math.Hypot(x, y)
-		if n < 1e-9 {
-			return 1, 0
-		}
-		return x / n, y / n
-	}
-	best := math.Inf(-1)
-	for i := 0; i < 6; i++ {
-		a := (float64(i) + 0.5) * math.Pi / 3
-		nx, ny := math.Cos(a), math.Sin(a)
-		if d := nx*x + ny*y; d > best {
-			best = d
-			dx, dy = nx, ny
-		}
-	}
-	return dx, dy
+	return f.outline().NearestEdgeDir(x, y)
 }
 
 func (f Field) RandomWalkable(rng *rand.Rand, radius float64) (x, y float64, ok bool) {

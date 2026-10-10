@@ -1,0 +1,23 @@
+/* 八边形场皮：截角方形，宽高 2R·cos22.5° */
+#hex[data-field="八边形"] {
+  width: 517.58px;
+  height: 517.58px;
+  clip-path: polygon(
+    96.19% 30.87%,
+    69.13% 3.81%,
+    30.87% 3.81%,
+    3.81% 30.87%,
+    3.81% 69.13%,
+    30.87% 96.19%,
+    69.13% 96.19%,
+    96.19% 69.13%
+  );
+  background:
+    radial-gradient(circle at 50% 50%, #243044 0%, var(--hex, #1c2330) 72%);
+  box-shadow: 0 0 40px #0008, inset 0 0 80px #3dd6c622;
+}
+
+.stage:has(#hex[data-field="八边形"]) {
+  width: 517.58px;
+  height: 517.58px;
+}

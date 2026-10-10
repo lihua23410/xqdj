@@ -32,34 +32,6 @@ const (
 	skin          = 0.08
 )
 
-type hexagon struct {
-	n [6]vec
-	d [6]float64
-}
-
-func newHexagon(circum float64) hexagon {
-	// Flat-top: vertices at k * 60°. Outward normals = vertex directions at
-	// k * 60° + 30° (toward each flat).
-	apothem := circum * math.Sqrt(3) / 2
-	var h hexagon
-	for i := 0; i < 6; i++ {
-		a := (float64(i) + 0.5) * math.Pi / 3
-		h.n[i] = vec{math.Cos(a), math.Sin(a)}
-		h.d[i] = apothem
-	}
-	return h
-}
-
-func (h hexagon) containsCenter(p vec, radius float64) bool {
-	limit := h.d[0] - radius
-	for i := 0; i < 6; i++ {
-		if h.n[i].dot(p) > limit+1e-6 {
-			return false
-		}
-	}
-	return true
-}
-
 func reflectVelocity(v, outward vec) vec {
 	n := outward.norm()
 	return v.sub(n.mul(2 * v.dot(n)))
@@ -169,51 +141,6 @@ func sweptPointVsCapsule(p, vel vec, dt float64, a, b vec, R float64) (float64, 
 	return bestT, bestN, true
 }
 
-func sweptPointVsHex(p, vel vec, radius, dt float64, hex hexagon) (ccdHit, bool) {
-	limit := hex.d[0] - radius
-	bestT := dt + 1
-	var bestN vec
-	hit := false
-	for i := 0; i < 6; i++ {
-		n := hex.n[i]
-		vn := n.dot(vel)
-		if vn <= 1e-9 {
-			continue
-		}
-		dist := limit - n.dot(p)
-		t := dist / vn
-		if t < -1e-9 || t > dt {
-			continue
-		}
-		if t < 0 {
-			t = 0
-		}
-		at := p.add(vel.mul(t))
-		ok := true
-		for j := 0; j < 6; j++ {
-			if j == i {
-				continue
-			}
-			if hex.n[j].dot(at) > limit+1e-4 {
-				ok = false
-				break
-			}
-		}
-		if !ok {
-			continue
-		}
-		if t < bestT {
-			bestT = t
-			bestN = n
-			hit = true
-		}
-	}
-	if !hit {
-		return ccdHit{}, false
-	}
-	return ccdHit{kind: hitWall, t: bestT, n: bestN}, true
-}
-
 func semiExtent(face vec, radius float64, n vec) float64 {
 	if face.len2() < 1e-12 {
 		return radius
@@ -247,69 +174,6 @@ func diameterOf(p, face vec, r float64) (vec, vec) {
 	}
 	q := perp(f).mul(r)
 	return p.add(q), p.sub(q)
-}
-
-func (h hexagon) containsSemi(p, face vec, radius float64) bool {
-	for i := 0; i < 6; i++ {
-		ext := semiExtent(face, radius, h.n[i])
-		if h.n[i].dot(p) > h.d[0]-ext+1e-6 {
-			return false
-		}
-	}
-	return true
-}
-
-func sweptShapeVsHex(p, vel, face vec, radius, dt float64, hex hexagon, semi bool) (ccdHit, bool) {
-	bestT := dt + 1
-	var bestN vec
-	hit := false
-	for i := 0; i < 6; i++ {
-		n := hex.n[i]
-		ext := radius
-		if semi {
-			ext = semiExtent(face, radius, n)
-		}
-		limit := hex.d[0] - ext
-		vn := n.dot(vel)
-		if vn <= 1e-9 {
-			continue
-		}
-		dist := limit - n.dot(p)
-		t := dist / vn
-		if t < -1e-9 || t > dt {
-			continue
-		}
-		if t < 0 {
-			t = 0
-		}
-		at := p.add(vel.mul(t))
-		ok := true
-		for j := 0; j < 6; j++ {
-			if j == i {
-				continue
-			}
-			extj := radius
-			if semi {
-				extj = semiExtent(face, radius, hex.n[j])
-			}
-			if hex.n[j].dot(at) > hex.d[0]-extj+1e-4 {
-				ok = false
-				break
-			}
-		}
-		if !ok {
-			continue
-		}
-		if t < bestT {
-			bestT = t
-			bestN = n
-			hit = true
-		}
-	}
-	if !hit {
-		return ccdHit{}, false
-	}
-	return ccdHit{kind: hitWall, t: bestT, n: bestN}, true
 }
 
 type ccdShape struct {
@@ -520,44 +384,11 @@ func sweptCircles(pa, va vec, ra float64, pb, vb vec, rb, dt float64) (float64, 
 }
 
 func sweptShapeVsOutline(p, vel, face vec, radius, dt float64, spec fieldSpec, semi bool) (ccdHit, bool) {
-	if spec.shape == unitpkg.ShapeCircle {
-		return sweptShapeVsCircle(p, vel, radius, dt, spec.extent)
-	}
-	return sweptShapeVsHex(p, vel, face, radius, dt, spec.hex(), semi)
-}
-
-func sweptShapeVsCircle(p, vel vec, radius, dt, circum float64) (ccdHit, bool) {
-	limit := circum - radius
-	if limit < 8 {
-		limit = 8
-	}
-	r2 := p.len2()
-	lim2 := limit * limit
-	if r2 > lim2+1e-6 {
-		return ccdHit{kind: hitWall, t: 0, n: p.norm()}, true
-	}
-	if p.dot(vel) <= 1e-9 {
+	t, nx, ny, hit := spec.outline.Sweep(p.X, p.Y, vel.X, vel.Y, face.X, face.Y, radius, dt, semi)
+	if !hit {
 		return ccdHit{}, false
 	}
-	a := vel.len2()
-	if a < 1e-16 {
-		return ccdHit{}, false
-	}
-	b := 2 * p.dot(vel)
-	c := r2 - lim2
-	disc := b*b - 4*a*c
-	if disc < 0 {
-		return ccdHit{}, false
-	}
-	t := (-b + math.Sqrt(disc)) / (2 * a)
-	if t < -1e-9 || t > dt {
-		return ccdHit{}, false
-	}
-	if t < 0 {
-		t = 0
-	}
-	at := p.add(vel.mul(t))
-	return ccdHit{kind: hitWall, t: t, n: at.norm()}, true
+	return ccdHit{kind: hitWall, t: t, n: vec{nx, ny}}, true
 }
 
 func sweptPointVsOBB(p, vel vec, dt float64, a, b vec, halfW, R float64) (float64, vec, bool) {

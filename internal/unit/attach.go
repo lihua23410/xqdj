@@ -62,6 +62,7 @@ func Aimable(o Snapshot, slot int) bool {
 }
 
 // Seek 视野内敌方可瞄准：数字越小越先，相同则当下最近。
+// 带挡视线标签的实体压住连线段的目标跳过（墙按胶囊、单位按圆，见 los.go）。
 func Seek(s Sense) *Snapshot {
 	return SeekIf(s, nil)
 }
@@ -77,6 +78,9 @@ func SeekIf(s Sense, extra func(Snapshot) bool) *Snapshot {
 			continue
 		}
 		if extra != nil && !extra(*o) {
+			continue
+		}
+		if sightBlocked(s, *o) {
 			continue
 		}
 		dx, dy := o.X-s.Self.X, o.Y-s.Self.Y

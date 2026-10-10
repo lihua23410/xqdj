@@ -31,17 +31,17 @@ const (
 
 const (
 	meRadius = 18.0
-	meHP     = 200.0
+	meHP     = 90.0
 	meSpeed  = 120.0
 	meVision = 9999.0
-	meDamage = 6.0
+	meDamage = 2.0
 	meColor  = "#a06bf5"
 
 	zhouRadius = 18.0
 	zhouHP     = 70.0
 	zhouSpeed  = 155.0
 	zhouVision = 9999.0
-	zhouDamage = 6.0
+	zhouDamage = 3.0
 	zhouAim    = 20
 
 	bumpsPerRoll = 1
@@ -49,11 +49,11 @@ const (
 
 	psychoTick  = 0.5
 	psychoDrain = 10.0
-	knifeDamage = 7.0
-	knifeGap    = 0.12
+	knifeDamage = 3.0
+	knifeGap    = 0.2
 	knifeReach  = 74.0
 
-	voidGap      = 0.22
+	voidGap      = 0.3
 	voidDamage   = 2.0
 	voidSpeed    = 430.0
 	voidShotR    = 7.0
@@ -62,7 +62,7 @@ const (
 
 	holySpeedMul = 1.6
 	holyAuraR    = 165.0
-	holyAuraDmg  = 5.0
+	holyAuraDmg  = 4.0
 	holyAuraGap  = 0.4
 
 	suicideDelay = 5.0

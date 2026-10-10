@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 
 	"xqdj/internal/unit"
+	_ "xqdj/map/hex" // ShapeHex 判定在六边形包
 )
 
 const (

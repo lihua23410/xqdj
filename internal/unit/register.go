@@ -15,6 +15,7 @@ type Spec struct {
 	StartHP     float64 // 0 表示开局满血（MaxHP）
 	AimPriority uint8   // 0 = 未写：战斗机 15、活随从 60、其余 0
 	Nonsolid    bool    // 不实心：不碰、不进 Hittable。战斗机仍进快照
+	VisionBlock bool    // 挡视线：带标签的实体挡索敌视线（Seek 跳过被压住连线段的目标），不进感知过滤、不挡物理
 	Cruise      bool    // 吃巡航带子。战斗机默认有；活随从要写
 	Shell       bool    // 贴在主人身上的环，撞到东西会碎并通知主人
 	Attach      bool    // 每帧贴主人；不挡伤、不碎。不撞墙。只和敌方战斗机、活随从做 CCD

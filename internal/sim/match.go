@@ -57,6 +57,7 @@ type unit struct {
 	holdVel         vec
 	noFrameFreeze   bool
 	noHealthNumbers bool
+	visionBlock     bool
 	shell           bool
 	attach          bool
 	arcSpan         float64
@@ -94,6 +95,7 @@ type barrier struct {
 	hitAt     map[uint64]float64
 	hard      bool
 	square    bool
+	visionBlock bool
 	field     bool
 	spin      float64 // 弧度每秒，逆时针为正。0 表示不转。
 	ang       float64
@@ -134,7 +136,6 @@ type Match struct {
 	cmds       chan unitpkg.Cmd
 	nextID     uint64
 	time       float64
-	hex        hexagon
 	spec       fieldSpec
 	winner     string
 	winnerID   uint64
@@ -181,7 +182,6 @@ func NewMatchSeeded(seed uint64) *Match {
 		slots:      slots,
 		units:      make(map[uint64]*unit),
 		cmds:       make(chan unitpkg.Cmd, 512),
-		hex:        spec.hex(),
 		spec:       spec,
 		rng:        rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
 		pendingDmg: make(map[uint64]dmgOffer),
@@ -295,6 +295,7 @@ func (u *unit) snap() unitpkg.Snapshot {
 		Marks:           u.markList(),
 		AimPriority:     u.aimPriority,
 		Nonsolid:        !u.solid,
+		VisionBlock:     u.visionBlock,
 		NoHealthNumbers: u.noHealthNumbers,
 	}
 }
@@ -348,7 +349,6 @@ func (m *Match) SetField(name string) {
 		return
 	}
 	m.spec = spec
-	m.hex = m.spec.hex()
 	unitpkg.SetLiveField(m.spec.toUnitField())
 }
 
@@ -570,12 +570,10 @@ func (m *Match) resetLocked() {
 	m.dmgSeq = 0
 	m.pendingDmg = make(map[uint64]dmgOffer)
 	m.wardAbsorb = make(map[uint64]bool)
-	m.hex = m.spec.hex()
 	unitpkg.SetLiveField(m.spec.toUnitField())
 }
 
 func (m *Match) installFieldLocked() {
-	m.hex = m.spec.hex()
 	unitpkg.SetLiveField(m.spec.toUnitField())
 	for _, h := range m.spec.hard {
 		m.nextID++
@@ -739,6 +737,7 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 		attach:      spec.Attach,
 		arcSpan:     spec.ArcSpan,
 		arcInner:    spec.ArcInner,
+		visionBlock: spec.VisionBlock,
 	}
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
@@ -990,6 +989,12 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		} else {
 			u.stunUntil = c.Until
 		}
+	case unitpkg.VisionBlock:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		u.visionBlock = c.Hold
 	}
 }
 
@@ -1288,6 +1293,7 @@ func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
 		withOwner: c.WithOwner,
 		hard:      c.Hard,
 		square:    c.Square || c.Hard,
+		visionBlock: c.VisionBlock,
 		hitAt:     map[uint64]float64{},
 	}
 	w.bindPose()
@@ -1667,7 +1673,7 @@ func (m *Match) wallViewsLocked() []unitpkg.WallView {
 		out = append(out, unitpkg.WallView{
 			ID: w.id, OwnerID: w.owner, Slot: w.slot,
 			X1: w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
-			Radius: w.radius,
+			Radius: w.radius, VisionBlock: w.visionBlock,
 		})
 	}
 	return out
@@ -2127,44 +2133,10 @@ func (m *Match) constrainUnitLocked(u *unit) {
 }
 
 func (m *Match) constrainOutlineLocked(u *unit, n vec) {
-	if m.spec.shape == unitpkg.ShapeCircle {
-		limit := m.spec.extent - u.radius - skin
-		if limit < 8 {
-			limit = 8
-		}
-		d := u.p.len()
-		if d > limit {
-			if d < 1e-9 {
-				u.p = vec{limit, 0}
-			} else {
-				u.p = u.p.mul(limit / d)
-			}
-		}
-		return
-	}
-	if n.len2() > 1e-12 {
-		limit := m.hex.d[0] - u.radius - skin
-		if u.semi {
-			limit = m.hex.d[0] - semiExtent(u.face, u.radius, n) - skin
-		}
-		pen := u.p.dot(n) - limit
-		if pen > 0 {
-			u.p = u.p.sub(n.mul(pen))
-		}
-		return
-	}
-	for i := 0; i < 6; i++ {
-		hn := m.hex.n[i]
-		ext := u.radius
-		if u.semi {
-			ext = semiExtent(u.face, u.radius, hn)
-		}
-		limit := m.hex.d[0] - ext - skin
-		pen := u.p.dot(hn) - limit
-		if pen > 0 {
-			u.p = u.p.sub(hn.mul(pen))
-		}
-	}
+	ox, oy := m.spec.outline.Constrain(
+		u.p.X, u.p.Y, u.radius, n.X, n.Y, u.face.X, u.face.Y, skin, u.semi,
+	)
+	u.p = vec{ox, oy}
 }
 
 func (m *Match) pushOutOBB(u *unit, w *barrier, cc vec, cr float64) {

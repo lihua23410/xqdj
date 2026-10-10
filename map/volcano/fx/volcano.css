@@ -1,9 +1,18 @@
-/* 场地底板：暗岩 */
+/* 场皮：同六边形外形，暗岩底板 */
 #hex[data-field="火山"] {
+  width: 560px;
+  height: 484.97px;
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
   background:
     radial-gradient(circle at 50% 52%, #3a2418 0%, #1e1410 55%, #14100c 100%);
   box-shadow: inset 0 0 0 3px #4a2818, 0 0 40px #0008;
 }
+
+.stage:has(#hex[data-field="火山"]) {
+  width: 560px;
+  height: 484.97px;
+}
+
 
 /* 岩浆：红棕岩斑 + 亮橙熔融底，不要网纹线 */
 .ball.look-volcano-crater,

@@ -617,10 +617,7 @@ function renderWalls(scale, cx, cy) {
 }
 
 function renderArena() {
-  const isCircle = (state.fieldShape || "") === "circle";
-  hex.classList.toggle("circle", isCircle);
-  hex.closest(".stage")?.classList.toggle("circle", isCircle);
-  // 场地私产皮肤用 [data-field] 挂选择器，不要在这里按场地名分支。
+  // 场皮外形/尺寸由各 map 私产 CSS 按 [data-field] 自绘，引擎不按 fieldShape 分支。
   if (state.field) hex.dataset.field = state.field;
   else delete hex.dataset.field;
   const w = hex.clientWidth;

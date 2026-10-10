@@ -1,0 +1,14 @@
+/* 六边形场皮：平顶，宽 2R、高 √3·R */
+#hex[data-field="六边形"] {
+  width: 560px;
+  height: 484.97px;
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+  background:
+    radial-gradient(circle at 50% 50%, #243044 0%, var(--hex, #1c2330) 72%);
+  box-shadow: 0 0 40px #0008, inset 0 0 80px #3dd6c622;
+}
+
+.stage:has(#hex[data-field="六边形"]) {
+  width: 560px;
+  height: 484.97px;
+}

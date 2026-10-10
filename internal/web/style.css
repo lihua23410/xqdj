@@ -187,29 +187,18 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   justify-content: center;
   overflow: visible;
 }
+/* 舞台容器：默认正方形占位；具体场皮尺寸/裁切由 map 私产 [data-field] 覆盖。 */
 .stage {
   position: relative;
   width: 560px;
-  height: 484.97px;
+  height: 560px;
 }
 .hex {
   position: relative;
   width: 560px;
-  height: 484.97px;
+  height: 560px;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 50%, #243044 0%, var(--hex) 72%);
-  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
-  box-shadow: 0 0 40px #0008, inset 0 0 80px #3dd6c622;
-}
-.hex.circle {
-  clip-path: circle(50% at 50% 50%);
-  width: 560px;
-  height: 560px;
-}
-.stage.circle {
-  width: 560px;
-  height: 560px;
+  background: var(--hex);
 }
 #fx, #units, #walls, #guides { position: absolute; inset: 0; overflow: hidden; }
 #fx, #walls, #guides { pointer-events: none; }

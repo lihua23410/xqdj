@@ -6,8 +6,10 @@ import (
 	"testing"
 	"xqdj/character"
 	unitpkg "xqdj/internal/unit"
+	机关房 "xqdj/map/chamber"
 	圆 "xqdj/map/circle"
 	六边形 "xqdj/map/hex"
+	八边形 "xqdj/map/octagon"
 	火山 "xqdj/map/volcano"
 )
 
@@ -26,7 +28,8 @@ func TestSelectSnapshotListsFields(t *testing.T) {
 	if err := json.Unmarshal(m.SnapshotJSON(), &msg); err != nil {
 		t.Fatal(err)
 	}
-	if len(msg.Fields) < 3 || msg.Fields[0] != 圆.Name || msg.Fields[1] != 六边形.Name || msg.Fields[2] != 火山.Name {
+	// 目录名排序：chamber, circle, hex, octagon, volcano
+	if len(msg.Fields) < 5 || msg.Fields[0] != 机关房.Name || msg.Fields[1] != 圆.Name || msg.Fields[2] != 六边形.Name || msg.Fields[3] != 八边形.Name || msg.Fields[4] != 火山.Name {
 		t.Fatalf("fields=%v", msg.Fields)
 	}
 	if msg.Field != 六边形.Name || msg.Shape != unitpkg.ShapeHex {

@@ -3,7 +3,9 @@
 package 场地
 
 import (
+	_ "xqdj/map/chamber"
 	_ "xqdj/map/circle"
 	_ "xqdj/map/hex"
+	_ "xqdj/map/octagon"
 	_ "xqdj/map/volcano"
 )
