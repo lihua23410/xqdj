@@ -1,6 +1,7 @@
 package 无下限术士
 
 import (
+	"math"
 	"testing"
 	"xqdj/internal/unit"
 )
@@ -90,6 +91,154 @@ func hasConfirm(cmds []unit.Cmd, token, id uint64, amt float64) bool {
 func hasDamage(cmds []unit.Cmd, from, to uint64, amt float64) bool {
 	for _, c := range cmds {
 		if v, ok := c.(unit.Damage); ok && v.From == from && v.To == to && v.Amount == amt {
+			return true
+		}
+	}
+	return false
+}
+
+func halfSense(id uint64, red bool, x, y float64, sibX, sibY float64, t float64) (unit.Context, *半, chan unit.Cmd) {
+	out := make(chan unit.Cmd, 32)
+	kind := KindBlue
+	h := &半{owner: 1, slot: 0, red: red}
+	if red {
+		kind = KindRed
+	}
+	sibKind := KindBlue
+	if !red {
+		sibKind = KindRed
+	}
+	ctx := unit.Context{ID: id, Kind: kind, Out: out}
+	h.Handle(ctx, unit.Sense{
+		Time: t,
+		Self: unit.Snapshot{ID: id, Kind: kind, Slot: 0, X: x, Y: y, VX: twinSpeed, VY: 0, Radius: twinRadius},
+		Nearby: []unit.Snapshot{{
+			ID: id + 1, Kind: sibKind, Slot: 0, X: sibX, Y: sibY, Radius: twinRadius,
+		}},
+	})
+	return ctx, h, out
+}
+
+func TestAttractPullsWhenInBand(t *testing.T) {
+	_, h, out := halfSense(2, true, 0, 0, 50, 0, 0)
+	cmds := drain(out)
+	if !h.attracting {
+		t.Fatal("should start attracting in (36,80]")
+	}
+	v := lastVel(cmds, 2)
+	if v == nil {
+		t.Fatalf("missing SetVelocity: %v", cmds)
+	}
+	if math.Abs(v.VX-twinSpeed) > 1e-6 || math.Abs(v.VY) > 1e-6 {
+		t.Fatalf("want vel toward sibling (+x): %+v", v)
+	}
+	if !hasAttractFX(cmds, 2, 1) {
+		t.Fatalf("missing twin-attract on: %v", cmds)
+	}
+}
+
+func TestAttractSkipsWhenTooCloseOrFar(t *testing.T) {
+	_, hClose, outClose := halfSense(2, true, 0, 0, 36, 0, 0)
+	if hClose.attracting || lastVel(drain(outClose), 2) != nil {
+		t.Fatal("d=36 is not in (36,80]; must not attract")
+	}
+	_, hFar, outFar := halfSense(2, true, 0, 0, 81, 0, 0)
+	if hFar.attracting || lastVel(drain(outFar), 2) != nil {
+		t.Fatal("d=81 is outside band; must not attract")
+	}
+}
+
+func TestAttractEndsOnSiblingCollision(t *testing.T) {
+	_, h, out := halfSense(2, true, 0, 0, 50, 0, 1)
+	drain(out)
+	if !h.attracting {
+		t.Fatal("setup: should be attracting")
+	}
+	h.Handle(unit.Context{ID: 2, Kind: KindRed, Out: out}, unit.Collision{
+		Time:  1.05,
+		Other: unit.Snapshot{ID: 3, Kind: KindBlue, Slot: 0, X: 36.1, Y: 0},
+	})
+	cmds := drain(out)
+	if h.attracting {
+		t.Fatal("sibling collision must end attract (semi rest gap stays >36)")
+	}
+	if math.Abs(h.attractReadyAt-(1.05+attractCD)) > 1e-9 {
+		t.Fatalf("readyAt=%v want %v", h.attractReadyAt, 1.05+attractCD)
+	}
+	if !hasAttractFX(cmds, 2, 0) {
+		t.Fatalf("missing twin-attract off: %v", cmds)
+	}
+}
+
+func TestAttractEndsIntoCooldown(t *testing.T) {
+	_, h, out := halfSense(2, true, 0, 0, 50, 0, 1)
+	drain(out)
+	if !h.attracting {
+		t.Fatal("setup: should be attracting")
+	}
+	h.Handle(unit.Context{ID: 2, Kind: KindRed, Out: out}, unit.Sense{
+		Time: 1.2,
+		Self: unit.Snapshot{ID: 2, Kind: KindRed, Slot: 0, X: 0, Y: 0, Radius: twinRadius},
+		Nearby: []unit.Snapshot{{
+			ID: 3, Kind: KindBlue, Slot: 0, X: 30, Y: 0, Radius: twinRadius,
+		}},
+	})
+	cmds := drain(out)
+	if h.attracting {
+		t.Fatal("d<=36 should end attract")
+	}
+	if math.Abs(h.attractReadyAt-(1.2+attractCD)) > 1e-9 {
+		t.Fatalf("readyAt=%v want %v", h.attractReadyAt, 1.2+attractCD)
+	}
+	if !hasAttractFX(cmds, 2, 0) {
+		t.Fatalf("missing twin-attract off: %v", cmds)
+	}
+	if lastVel(cmds, 2) != nil {
+		t.Fatalf("must not rewrite velocity after end: %v", cmds)
+	}
+
+	h.Handle(unit.Context{ID: 2, Kind: KindRed, Out: out}, unit.Sense{
+		Time: 1.2 + attractCD - 0.01,
+		Self: unit.Snapshot{ID: 2, Kind: KindRed, Slot: 0, X: 0, Y: 0, Radius: twinRadius},
+		Nearby: []unit.Snapshot{{
+			ID: 3, Kind: KindBlue, Slot: 0, X: 50, Y: 0, Radius: twinRadius,
+		}},
+	})
+	drain(out)
+	if h.attracting {
+		t.Fatal("still on cooldown; must not attract")
+	}
+
+	h.Handle(unit.Context{ID: 2, Kind: KindRed, Out: out}, unit.Sense{
+		Time: 1.2 + attractCD,
+		Self: unit.Snapshot{ID: 2, Kind: KindRed, Slot: 0, X: 0, Y: 0, Radius: twinRadius},
+		Nearby: []unit.Snapshot{{
+			ID: 3, Kind: KindBlue, Slot: 0, X: 50, Y: 0, Radius: twinRadius,
+		}},
+	})
+	cmds = drain(out)
+	if !h.attracting {
+		t.Fatal("cooldown done; should attract again")
+	}
+	if lastVel(cmds, 2) == nil {
+		t.Fatalf("missing SetVelocity after cooldown: %v", cmds)
+	}
+}
+
+func lastVel(cmds []unit.Cmd, id uint64) *unit.SetVelocity {
+	var v *unit.SetVelocity
+	for i := range cmds {
+		if s, ok := cmds[i].(unit.SetVelocity); ok && s.UnitID == id {
+			cp := s
+			v = &cp
+		}
+	}
+	return v
+}
+
+func hasAttractFX(cmds []unit.Cmd, id uint64, amount float64) bool {
+	for _, c := range cmds {
+		if fx, ok := c.(unit.FX); ok && fx.Name == "twin-attract" && fx.UnitID == id && fx.Amount == amount {
 			return true
 		}
 	}

@@ -134,14 +134,27 @@ window.mezhouSt = window.mezhouSt || {};
     },
   };
 
-  // 周旋久跟着主人显示同一个状态文字。
+  // 周旋久：状态文字跟主人；血条照抄教父随从 .minion-hp。
   window.lookFX["mezhou-zhou"] = {
     unmount(el) {
-      el?.querySelector(":scope > .mezhou-state")?.remove();
+      if (!el) return;
+      el.querySelector(":scope > .mezhou-state")?.remove();
+      el.querySelector(":scope > .minion-hp")?.remove();
     },
     tick(el, u) {
-      if (!el) return;
+      if (!el || !u) return;
       setStateText(el, modeOf(u.ownerId));
+      let wrap = el.querySelector(":scope > .minion-hp");
+      if (!wrap) {
+        wrap = document.createElement("span");
+        wrap.className = "minion-hp";
+        wrap.appendChild(document.createElement("i"));
+        el.appendChild(wrap);
+      }
+      const bar = wrap.querySelector("i");
+      const max = u.maxHp || 1;
+      const hp = Math.max(0, u.hp || 0);
+      if (bar) bar.style.width = `${Math.max(0, Math.min(100, (hp / max) * 100))}%`;
     },
   };
 

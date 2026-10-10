@@ -1,41 +1,131 @@
+/* 圆环/曲线都挂在 .guide 上，必须盖掉 style.css 里 height:0 + border-top 横线语义。
+   高度由 JS 写 inline；这里不要用 height:auto !important，否则会盖掉 inline 高度。 */
 .guide.bond {
   opacity: 0.42;
   border-top-width: 2px;
   border-top-style: dashed;
   filter: drop-shadow(0 0 6px currentColor);
 }
-.field-ring {
+.guide.bond-curve {
   position: absolute;
-  left: 50%;
-  top: 50%;
+  pointer-events: none;
+  border: 0 !important;
+  border-top-width: 0 !important;
+  background: transparent;
+  transform: none !important;
+  filter: drop-shadow(0 0 5px #b44cff);
+  overflow: visible;
+  color: #b44cff;
+}
+.guide.bond-curve svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  display: block;
+  pointer-events: none;
+}
+.guide.bond-curve path {
+  fill: none;
+  stroke: #b44cff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.guide.twin-ring {
+  position: absolute;
+  border: 1.5px dashed currentColor !important;
+  border-top-style: dashed !important;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  border: 1px dashed currentColor;
+  box-sizing: border-box;
+  pointer-events: none;
   color: var(--kind);
   background: color-mix(in srgb, var(--kind) 10%, transparent);
-  pointer-events: none;
-  box-sizing: border-box;
-  opacity: 0.5;
+  opacity: 0.55;
+  overflow: visible;
 }
-.field-ring i {
+.guide.twin-ring i,
+.guide.twin-ring b {
   position: absolute;
-  inset: 22%;
   border-radius: 50%;
   border: 1px solid currentColor;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+.guide.twin-ring i {
+  inset: 22%;
   opacity: 0.45;
   box-shadow: 0 0 10px currentColor;
 }
-.field-ring.pull {
-  animation: field-pull 1.35s ease-in-out infinite;
+.guide.twin-ring b {
+  inset: 42%;
+  opacity: 0.35;
+  border-style: dashed;
 }
-.field-ring.push {
-  animation: field-push 1.35s ease-in-out infinite;
+.guide.twin-ring.pull {
+  animation: twin-field-pull 1.35s ease-in-out infinite;
 }
-@keyframes field-pull {
+.guide.twin-ring.push {
+  animation: twin-field-push 1.35s ease-in-out infinite;
+}
+.guide.twin-ring.attract {
+  border-style: solid !important;
+  border-width: 1.5px !important;
+  background: color-mix(in srgb, var(--kind) 8%, transparent);
+  opacity: 0.82;
+}
+.guide.twin-ring.pull.attract {
+  animation: twin-attract-in 1.05s linear infinite;
+}
+.guide.twin-ring.push.attract {
+  animation: twin-attract-out 1.05s linear infinite;
+}
+.guide.twin-ring.attract i {
+  inset: 18%;
+  opacity: 0.55;
+  box-shadow: 0 0 12px currentColor;
+  animation: twin-attract-in-ring 1.05s linear infinite;
+  animation-delay: -0.35s;
+}
+.guide.twin-ring.attract b {
+  inset: 38%;
+  opacity: 0.4;
+  border-style: solid;
+  animation: twin-attract-in-ring 1.05s linear infinite;
+  animation-delay: -0.7s;
+}
+.guide.twin-ring.push.attract i {
+  animation-name: twin-attract-out-ring;
+}
+.guide.twin-ring.push.attract b {
+  animation-name: twin-attract-out-ring;
+}
+@keyframes twin-field-pull {
   from { transform: translate(-50%, -50%) scale(1.06); opacity: 0.22; }
   to { transform: translate(-50%, -50%) scale(0.78); opacity: 0.62; }
 }
-@keyframes field-push {
+@keyframes twin-field-push {
   from { transform: translate(-50%, -50%) scale(0.78); opacity: 0.62; }
   to { transform: translate(-50%, -50%) scale(1.08); opacity: 0.18; }
+}
+@keyframes twin-attract-in {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.2; }
+  70% { opacity: 0.75; }
+  100% { transform: translate(-50%, -50%) scale(0.42); opacity: 0.05; }
+}
+@keyframes twin-attract-out {
+  0% { transform: translate(-50%, -50%) scale(0.42); opacity: 0.05; }
+  30% { opacity: 0.7; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0.15; }
+}
+@keyframes twin-attract-in-ring {
+  0% { transform: scale(1); opacity: 0.15; }
+  70% { opacity: 0.65; }
+  100% { transform: scale(0.2); opacity: 0; }
+}
+@keyframes twin-attract-out-ring {
+  0% { transform: scale(0.2); opacity: 0; }
+  30% { opacity: 0.6; }
+  100% { transform: scale(1); opacity: 0.12; }
 }
