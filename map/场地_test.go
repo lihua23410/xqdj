@@ -7,13 +7,14 @@ import (
 	"xqdj/map/chamber"
 	"xqdj/map/circle"
 	"xqdj/map/hex"
+	八边形 "xqdj/map/octagon"
 	"xqdj/map/volcano"
 )
 
 func TestNamesOrder(t *testing.T) {
 	got := unit.FieldNames()
-	// 目录名排序：chamber, circle, hex, volcano
-	if len(got) < 4 || got[0] != 机关房.Name || got[1] != 圆.Name || got[2] != 六边形.Name || got[3] != 火山.Name {
+	// 目录名排序：chamber, circle, hex, octagon, volcano
+	if len(got) < 5 || got[0] != 机关房.Name || got[1] != 圆.Name || got[2] != 六边形.Name || got[3] != 八边形.Name || got[4] != 火山.Name {
 		t.Fatalf("names=%v", got)
 	}
 }

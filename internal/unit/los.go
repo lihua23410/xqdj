@@ -67,11 +67,11 @@ func segSegDist(p1x, p1y, q1x, q1y, p2x, p2y, q2x, q2y float64) float64 {
 	return math.Hypot(c1x-c2x, c1y-c2y)
 }
 
-// SightBlocked：s.Self 球心到 o 球心的连线段是否被带挡视线标签的实体压住。
+// sightBlocked：s.Self 球心到 o 球心的连线段是否被带挡视线标签的实体压住。
 // 墙按胶囊量（轴 + Radius），单位按圆量（中心到线段的距离 ≤ Radius）；相切算挡（≤）。
 // 敌我不分：自家带标签单位也挡自家索敌。排除自身和目标本身；标签与实心无关。
 // 场地预放墙不带标签，对这里永远透明。
-func SightBlocked(s Sense, o Snapshot) bool {
+func sightBlocked(s Sense, o Snapshot) bool {
 	for i := range s.Walls {
 		w := &s.Walls[i]
 		if !w.VisionBlock {
@@ -91,13 +91,4 @@ func SightBlocked(s Sense, o Snapshot) bool {
 		}
 	}
 	return false
-}
-
-// SeekLOS 在 Seek 之上再要求视线不被带挡视线标签的实体挡住：墙后的人跳过，剩下的照
-// 瞄准优先度取。没带标签的实体与 Seek 完全一致。挡视线只影响这一层索敌，不进感知
-// 过滤、不挡物理；不用 SeekLOS 的角色隔墙照常索敌。
-func SeekLOS(s Sense) *Snapshot {
-	return SeekIf(s, func(o Snapshot) bool {
-		return !SightBlocked(s, o)
-	})
 }

@@ -75,3 +75,34 @@ func TestVisionBlockPlaceWallFlowsIntoWallView(t *testing.T) {
 		t.Fatal("wall view does not carry VisionBlock")
 	}
 }
+
+func TestOctagonFieldBootsVisionBlockWalls(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetField("八边形")
+	m.SetSlot(0, character.KindMelee)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 4; i++ {
+		m.Tick()
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.walls) != 3 {
+		t.Fatalf("walls=%d want 3", len(m.walls))
+	}
+	for _, w := range m.walls {
+		if !w.hard || !w.visionBlock {
+			t.Fatalf("octagon wall %+v must be hard vision-block", w)
+		}
+	}
+	views := m.wallViewsLocked()
+	if len(views) != 3 {
+		t.Fatalf("views=%d want 3", len(views))
+	}
+	for _, v := range views {
+		if !v.VisionBlock {
+			t.Fatal("octagon wall view missing VisionBlock")
+		}
+	}
+}

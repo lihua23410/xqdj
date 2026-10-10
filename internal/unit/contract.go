@@ -39,7 +39,7 @@ type WallView struct {
 	X1, Y1  float64
 	X2, Y2  float64
 	Radius  float64
-	// VisionBlock 挡视线：只影响 SeekLOS 的索敌检测。场地预放墙不带，永远透明。
+	// VisionBlock 挡视线：只影响 Seek/SeekIf 的索敌检测。场地预放墙不带，永远透明。
 	VisionBlock bool
 }
 
@@ -272,7 +272,7 @@ type PlaceWall struct {
 	WithOwner bool    // 主人倒下时这截一起消失
 	Hard      bool    // 硬墙：不拆、拆墙弹穿过
 	Square    bool    // 方端判定
-	// VisionBlock 挡视线：只影响 SeekLOS 的索敌检测，不进感知过滤、不挡物理。
+	// VisionBlock 挡视线：只影响索敌（Seek/SeekIf 跳过被压住连线段的目标），不进感知过滤、不挡物理。
 	VisionBlock bool
 }
 
@@ -361,9 +361,9 @@ type Stun struct {
 	Until  float64
 }
 
-// VisionBlock 令牌。Hold 时该单位挡 SeekLOS 的索敌视线。Hold=false 放下。
+// VisionBlock 令牌。Hold 时该单位挡索敌视线（Seek/SeekIf 跳过被其体积压住连线段的目标）。Hold=false 放下。
 // 谁都能给任何单位挂摘，无权限校验；敌我不分，自家带标签单位也挡自家索敌。
-// 不进感知过滤、不挡物理；不用 SeekLOS 的角色完全无感。
+// 不进感知过滤、不挡物理；不走索敌的路径（Nearby 自扫、碰撞出伤）完全无感。
 type VisionBlock struct {
 	UnitID uint64
 	Hold   bool
