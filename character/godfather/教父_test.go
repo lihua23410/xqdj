@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 	"xqdj/internal/unit"
+	_ "xqdj/map/hex"
 )
 
 func drain(out chan unit.Cmd) []unit.Cmd {

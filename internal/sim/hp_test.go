@@ -705,8 +705,16 @@ func TestTwinHalfHitHurtsFighter(t *testing.T) {
 	}
 	before := body.hp
 	m.offerDamageLocked(unitpkg.Damage{From: src.id, To: red.id, Amount: 9})
-	m.settleHitsLocked()
-	m.settleHitsLocked()
+	// 红半把伤转给本体要走两跳异步（红半 goroutine 确认并报价、本体 goroutine 再确认）。
+	// 两次 settle 在满载机器上喂不饱协程调度，轮询到两笔都落账为止，断言不变。
+	deadline := time.Now().Add(2 * time.Second)
+	for math.Abs(red.hp-(red.maxHP-9)) > 1e-6 || math.Abs(body.hp-(before-9)) > 1e-6 {
+		if !time.Now().Before(deadline) {
+			break
+		}
+		m.settleHitsLocked()
+		time.Sleep(time.Millisecond)
+	}
 	if math.Abs(red.hp-(red.maxHP-9)) > 1e-6 {
 		t.Fatalf("red hp=%v", red.hp)
 	}
