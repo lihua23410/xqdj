@@ -1,6 +1,7 @@
 // 时计：白色时钟，表针就是资源条。
-// 每 5s 把「当下的自己」刻成一个时刻（最多 8 个 = 24:00）；累计 25 点确认伤、或吃到致命伤时回拨到最近一个时刻；
-// 敌方踩进时刻判定圈就把时计拉过去撞。全套只用现有引擎指令拼，零引擎改动。
+// 每 8s 时针 +2h；仅当读数落在 2/4/6/8/10/12 且该刻度本场从未落下过时刻下时刻。
+// 无常态弧；敌方踩进时刻判定圈才瞬移冲撞并短窗挂弧。致命伤才回拨（表针 −2h）。
+// 全套只用现有引擎指令拼，零引擎改动。
 // 单位：距离 px、速度 px/s、时间 s、角度 度（unit.Deg 转弧度）、伤害 HP 点。
 package 时计
 
@@ -24,31 +25,28 @@ const (
 	// —— 本体 ——
 	tokeiRadius = 18.0      // 标准盘
 	tokeiSpeed  = 170.0     // 中庸巡航：它的位移资源在时刻网络里，腿不能抢戏
-	tokeiHP     = 100.0     // 标准血：25 伤 = 四分之一血一个档
+	tokeiHP     = 100.0     // 标准血
 	tokeiVision = 9999.0    // 陷阱要看全场踩影
 	tokeiColor  = "#f2f2f2" // 白盘，黑针画在 fx 皮肤里
 
-	// —— 常态弧（小骑士同构，伤降 1）——
-	arcSpan  = 120.0 // 度
-	arcDmg   = 8.0   // 小骑士 9 伤降 1：它有保命系统，输出让半步
-	arcCD    = 0.1
-	arcInner = tokeiRadius
-	arcOuter = tokeiRadius + 2
+	// —— 踩影临时弧（小骑士同构，伤降 1；仅冲刺窗口内挂）——
+	arcSpan   = 120.0 // 度
+	arcDmg    = 8.0
+	arcCD     = 0.1
+	arcInner  = tokeiRadius
+	arcOuter  = tokeiRadius + 2
+	arcWindow = 0.5 // 踩影触发后挂弧这么久
 
 	// —— 时刻（存档）——
-	saveGap  = 5.0 // 存档节拍；开场先等满一次
-	saveCap  = 6   // 6 档封顶 = 12:00（表针正好转满一圈，与 0:00 重合，前端另有满仓区分）
-	handStep = 2   // 每刻一档，时针 +2h —— 而且是**先推时间再留下时刻**，所以第一档记的是 2:00
-
-	// —— 回拨 ——
-	revertAt = 25.0 // 累计确认伤到 25 就回拨；一次伤害只回拨一次
+	saveGap  = 8.0 // 存档节拍；开场先等满一次
+	handStep = 2   // 每拍时针 +2h；第一档记 2:00
+	handCap  = 12  // 走到 12:00 停针
 
 	// —— 陷阱 ——
 	tripR       = 22.0  // 时刻判定圈半径（比本体 18 略大）= 时刻实体半径
 	tripSilence = 3.0   // 同一时刻被踩后静默这么久，圈边反复进出钓不到第二下
 	ramSpeed    = 350.0 // 撞击冲刺（小骑士 ramSpeed 同款）
-	ramGap      = 60.0  // 落脚留的跑道：踩圈的人就在档位旁边，贴上去的瞬间不能和它重叠（小骑士 beside 同款），
-	//                     但只留 8px 的话"撞"根本看不见——留出 60px 才有冲过去这一段。
+	ramGap      = 60.0  // 落脚留的跑道（小骑士 beside 同款）
 )
 
 func init() {
@@ -63,7 +61,7 @@ func init() {
 		Fighter: true,
 		Look:    unit.Look{Color: tokeiColor, FX: []string{"tokei"}},
 	}, func(unit.SpawnInfo) unit.Actor { return &时计{} })
-	// 常态弧：Attach 每帧贴主人，撞到敌方战斗机/活随从就出伤并自毁（同小骑士弧）。
+	// 临时弧：仅踩影窗口内 Attach；撞到敌方战斗机/活随从就出伤并自毁。
 	p.Register(unit.Spec{
 		Kind:     KindTokeiArc,
 		Role:     unit.RoleProjectile,
@@ -87,11 +85,12 @@ func init() {
 		Vision:   0,
 		Nonsolid: true,
 		Look:     unit.Look{Color: tokeiColor, FX: []string{"tokei-moment"}},
-	}, func(unit.SpawnInfo) unit.Actor { return 时刻{} })
+	}, func(info unit.SpawnInfo) unit.Actor { return 时刻{} })
 }
 
-// moment 是一个档：刻档那一刻能看见的五件套（位置/血/速度/朝向/Marks）+ 陷阱用的圈内状态。
+// moment 是一个档：刻档那一刻能看见的五件套（位置/血/速度/朝向/Marks）+ 钟点 + 陷阱用的圈内状态。
 type moment struct {
+	hour     int // 落下时的钟点：2/4/6/8/10/12
 	x, y     float64
 	vx, vy   float64
 	hp       float64
@@ -104,17 +103,19 @@ type moment struct {
 }
 
 type 时计 struct {
-	moments []moment // 档栈，末尾是最近的档（回拨弹栈顶）
-	nextAt  float64  // 下一次刻档的绝对时刻
+	moments []moment   // 档栈，末尾是最近的档（回拨弹栈顶）
+	carved  map[int]bool // 本场已成功落下的钟点；用掉/被偷也不释放
+	hand    int        // 已提交的表针读数（小时）
+	stopped bool       // 走到 12:00 后停针
+	nextAt  float64    // 下一次推针的绝对时刻
 	booted  bool
 
-	dealt   float64 // 本档周期内累计的确认伤，回拨后清零
-	pending float64 // 本拍已确认、Sense 还没带回来的伤，用来算致命
-	hp      float64 // 最近一次 Sense 的血量
-	x, y    float64
-	slot    int
-
-	arc unit.AttachState
+	pending  float64 // 本拍已确认、Sense 还没带回来的伤，用来算致命
+	hp       float64 // 最近一次 Sense 的血量
+	x, y     float64
+	slot     int
+	arcUntil float64 // 踩影临时弧窗口截止
+	arc      unit.AttachState
 }
 
 type 时计弧 struct{ slot int }
@@ -146,42 +147,63 @@ func (a *时计) tick(ctx unit.Context, s unit.Sense) {
 	a.hp, a.x, a.y = s.Self.HP, s.Self.X, s.Self.Y
 	a.pending = 0
 	a.slot = s.Self.Slot
+	if a.carved == nil {
+		a.carved = map[int]bool{}
+	}
 	if !a.booted {
 		a.booted = true
-		a.nextAt = s.Time + saveGap // 开场先等满一次 5s
+		a.nextAt = s.Time + saveGap // 开场先等满一次 8s
 		a.syncFx(ctx)
-	}
-	// 常态弧：和主人同款 CD 循环
-	if unit.RearmAttach(s, ctx.ID, KindTokeiArc, arcCD, &a.arc) {
-		unit.SpawnAttach(ctx, s, KindTokeiArc)
 	}
 	a.bindPins(ctx, s)
 	a.save(ctx, s)
 	a.trap(ctx, s)
+	a.armArc(ctx, s) // 踩影之后再挂，触发当帧就能出第一发弧
 }
 
-// save 5s 节拍到点就刻一档。满仓时不刻，但节拍照走（空出档位后要重新吃满 5s）。
+// armArc 仅在踩影临时窗口内按 CD 挂弧；窗口外拆掉残留弧。
+func (a *时计) armArc(ctx unit.Context, s unit.Sense) {
+	if s.Time+1e-9 < a.arcUntil {
+		if unit.RearmAttach(s, ctx.ID, KindTokeiArc, arcCD, &a.arc) {
+			unit.SpawnAttach(ctx, s, KindTokeiArc)
+		}
+		return
+	}
+	if unit.HasOwned(s, ctx.ID, KindTokeiArc) {
+		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindTokeiArc}
+	}
+	a.arc = unit.AttachState{}
+}
+
+// save 8s 节拍：先推时间再尝试留时刻。已用刻度空过；走到 12:00 停针。
 // 眩晕期间引擎停发 Sense，所以这条节拍自然暂停——档永远是清醒时拍的照。
 func (a *时计) save(ctx unit.Context, s unit.Sense) {
-	if s.Time+1e-9 < a.nextAt {
+	if a.stopped || s.Time+1e-9 < a.nextAt {
 		return
 	}
 	a.nextAt = s.Time + saveGap
-	if len(a.moments) >= saveCap {
-		return
+	a.hand += handStep
+	if a.hand > handCap {
+		a.hand = handCap
 	}
-	m := moment{
-		x: s.Self.X, y: s.Self.Y,
-		vx: s.Self.VX, vy: s.Self.VY,
-		hp: s.Self.HP, maxHP: s.Self.MaxHP,
-		fx: s.Self.FaceX, fy: s.Self.FaceY,
-		marks: append([]unit.Mark(nil), s.Self.Marks...),
+	if !a.carved[a.hand] {
+		a.carved[a.hand] = true
+		m := moment{
+			hour: a.hand,
+			x:    s.Self.X, y: s.Self.Y,
+			vx: s.Self.VX, vy: s.Self.VY,
+			hp: s.Self.HP, maxHP: s.Self.MaxHP,
+			fx: s.Self.FaceX, fy: s.Self.FaceY,
+			marks: append([]unit.Mark(nil), s.Self.Marks...),
+		}
+		a.moments = append(a.moments, m)
+		ctx.Out <- unit.Spawn{
+			Kind: KindTokeiMoment, X: m.x, Y: m.y,
+			OwnerID: ctx.ID, Slot: s.Self.Slot,
+		}
 	}
-	a.moments = append(a.moments, m)
-	// 实体钉在档位；VX/VY 留 0，它不该动
-	ctx.Out <- unit.Spawn{
-		Kind: KindTokeiMoment, X: m.x, Y: m.y,
-		OwnerID: ctx.ID, Slot: s.Self.Slot,
+	if a.hand >= handCap {
+		a.stopped = true
 	}
 	a.syncFx(ctx)
 }
@@ -193,7 +215,7 @@ type pinRef struct {
 }
 
 // bindPins 事后认领自己的时刻实体（Spawn 出门那一刻拿不到 ID，只好像火山绑熔岩摊那样靠位置认）。
-// 顺手处理被偷走的档：实体没了就丢档——档池少一、那个回拨锚点直接没了。
+// 顺手处理被偷走的档：实体没了就丢档——档池少一、那个回拨锚点直接没了（钟点仍算已刻，永不回补）。
 func (a *时计) bindPins(ctx unit.Context, s unit.Sense) {
 	var live []pinRef
 	for i := range s.Nearby {
@@ -255,20 +277,23 @@ func hasPin(live []pinRef, id uint64) bool {
 	return false
 }
 
-// syncFx 把表针与每个残影的针位告诉前端：Amount = 小时（档数 × 2），VX = 满仓标记。
+// syncFx 把表针与每个残影的针位告诉前端：Amount = 当前表针小时，VX = 停针/满仓标记。
 // 残影的 FX 挂在实体自己的 UnitID 上，前端按 ID 存每个残影停的时间。
 func (a *时计) syncFx(ctx unit.Context) {
 	full := 0.0
-	if len(a.moments) >= saveCap {
+	if a.stopped {
 		full = 1
+	}
+	// 停针后窗口留空（to<=from）：前端 phase=0，针停在 12:00
+	winFrom, winTo := a.nextAt-saveGap, a.nextAt
+	if a.stopped {
+		winFrom, winTo = 0, 0
 	}
 	ctx.Out <- unit.FX{
 		Name: "clock", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
-		// Amount = 档数 × 2（当前表针读数）、VX = 满仓标记；
-		// X/Y = 这一拍窗口的起止模拟时刻——前端拿它把时针从当前读数连续推到下一拍读数（正点落在刻档那一瞬，
-		// 也就是「先推时间再留时刻」），分针则一拍正好一圈。
-		Amount: float64(len(a.moments) * handStep), VX: full,
-		X: a.nextAt - saveGap, Y: a.nextAt,
+		// Amount = 已提交读数；VX = 停针；X/Y = 本拍窗口
+		Amount: float64(a.hand), VX: full,
+		X: winFrom, Y: winTo,
 	}
 	for i := range a.moments {
 		if a.moments[i].pin == 0 {
@@ -276,16 +301,13 @@ func (a *时计) syncFx(ctx unit.Context) {
 		}
 		ctx.Out <- unit.FX{
 			Name: "moment", Kind: ctx.Kind, UnitID: a.moments[i].pin, Slot: a.slot,
-			// 先推时间再留时刻：第一档记的是 2:00、第二档 4:00……最后一档 12:00
-			Amount: float64((i + 1) * handStep),
+			Amount: float64(a.moments[i].hour),
 		}
 	}
 }
 
-// hurt 两段式伤害的拦截层。两个回拨扳机都在这儿：
-//  1. 一次致命伤（当前血 − 这段伤 ≤ 0）：有档就回拨 + BlockDamage 整包取消（不进 25 伤计数）；
-//     档空了就照常吃下来——回拨保不了没档的人。
-//  2. 累计 25 点确认伤：确认完这一下就回拨。被 Block、被闪、减到 0 的报价压根到不了这里（引擎不发）。
+// hurt 两段式伤害的拦截层。回拨只吃致命伤：有档就回拨 + BlockDamage 整包取消；
+// 档空了就照常吃下来——回拨保不了没档的人。
 func (a *时计) hurt(ctx unit.Context, d unit.IncomingDamage) {
 	if a.hp-a.pending-d.Amount <= 1e-9 && len(a.moments) > 0 {
 		a.rewind(ctx, d.Time)
@@ -294,27 +316,26 @@ func (a *时计) hurt(ctx unit.Context, d unit.IncomingDamage) {
 	}
 	a.pending += d.Amount
 	unit.ConfirmHit(ctx, d)
-	a.dealt += d.Amount
-	if a.dealt+1e-9 >= revertAt {
-		// 过门槛就清零，不管这次能不能真回拨：没档时 rewind 会直接返回，
-		// 计数要是留成 ≥25，5s 后新刻的那一档会被上一轮的账当场花掉。
-		a.dealt = 0
-		a.rewind(ctx, d.Time)
-	}
 }
 
 // rewind 回拨到最近的档（栈顶弹出）。结算顺序照设计稿：
-// 位置 → 血 → 速度 → 朝向 → Marks（先清当下的、再装回档里的）→ 解控 → 用掉这个时刻 → 计数器清零。
+// 位置 → 血 → 速度 → 朝向 → Marks（先清当下的、再装回档里的）→ 解控 → 用掉这个时刻 → 表针 −2h。
 func (a *时计) rewind(ctx unit.Context, now float64) {
 	if len(a.moments) == 0 {
 		return
 	}
 	m := a.moments[len(a.moments)-1]
 	a.moments = a.moments[:len(a.moments)-1]
-	hours := float64(handStep * len(a.moments)) // 回拨后的表针：正是剩下最后一档记的时间
+	// 表针按已提交读数 −2h（回拨表意）；下一拍仍 +2h，已用刻度空过。
+	// 压测：committed=4、窗口正中显示 ~5、档顶是 2 → 针到 2，再经 4 空过 → 6。
+	a.hand -= handStep
+	if a.hand < 0 {
+		a.hand = 0
+	}
+	a.stopped = false
 	ctx.Out <- unit.FX{
 		Name: "rewind", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
-		X: a.x, Y: a.y, VX: m.x, VY: m.y, Amount: hours,
+		X: a.x, Y: a.y, VX: m.x, VY: m.y, Amount: float64(a.hand),
 	}
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: m.x, Y: m.y}
 	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: m.hp, MaxHP: m.maxHP}
@@ -335,16 +356,15 @@ func (a *时计) rewind(ctx unit.Context, now float64) {
 	if m.pin != 0 {
 		ctx.Out <- unit.Despawn{UnitID: m.pin}
 	}
-	a.dealt = 0
 	a.pending = 0
 	a.hp, a.x, a.y = m.hp, m.x, m.y
-	a.nextAt = now + saveGap // 档空出来了，重新吃满 5s 节拍
+	a.nextAt = now + saveGap // 重新吃满 8s 节拍，下一拍从 hand+2 走
 	a.syncFx(ctx)
 }
 
 // trap 踩影：敌方战斗机或敌方活随从「进入」某个时刻的判定圈（边沿触发）就把时计拉过去撞。
 // 弹体不在 Hittable 里（朝弹撞毫无意义）；同一时刻被踩后静默 3s；时计眩晕时收不到 Sense，自然不触发。
-// 一拍只拉一次，同时踩中多个就按档位顺序取最先的那个。
+// 一拍只拉一次，同时踩中多个就按档位顺序取最先的那个。触发后打开临时弧窗口。
 func (a *时计) trap(ctx unit.Context, s unit.Sense) {
 	for i := range a.moments {
 		m := &a.moments[i]
@@ -375,8 +395,10 @@ func (a *时计) trap(ctx unit.Context, s unit.Sense) {
 			X: m.x, Y: m.y, VX: ux, VY: uy,
 		}
 		ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: sx, Y: sy}
-		// 撞击本身无伤，出伤靠瞬过去之后的贴身弧；之后巡航带子自然接管
+		// 撞击本身无伤，出伤靠瞬过去之后的临时弧
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * ramSpeed, VY: uy * ramSpeed}
+		a.arc = unit.AttachState{} // 窗口一开立刻能挂第一发
+		a.arcUntil = s.Time + arcWindow
 		return
 	}
 }
