@@ -18,6 +18,7 @@ import (
 	"xqdj/character/integrated"
 	"xqdj/character/knight"
 	"xqdj/character/maggot"
+	"xqdj/character/meander"
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
 	"xqdj/character/mezhou"
@@ -32,6 +33,7 @@ import (
 	"xqdj/character/rmiu"
 	"xqdj/character/sot"
 	"xqdj/character/tachi"
+	"xqdj/character/tokei"
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
 	"xqdj/character/waller"
@@ -94,6 +96,9 @@ const (
 	KindEgg             = 蛆.KindEgg
 	KindFly             = 蛆.KindFly
 	KindMaggot          = 蛆.KindMaggot
+	KindLit             = 迷走.KindLit
+	KindMeander         = 迷走.KindMeander
+	KindRing            = 迷走.KindRing
 	KindMelee           = 原型机_近战.KindMelee
 	KindMeleeArc        = 原型机_近战.KindMeleeArc
 	KindMenreiki        = 面灵气.KindMenreiki
@@ -132,6 +137,9 @@ const (
 	KindSotStain        = 酒翁.KindSotStain
 	KindSotWine         = 酒翁.KindSotWine
 	KindTachi           = 太刀.KindTachi
+	KindTokei           = 时计.KindTokei
+	KindTokeiArc        = 时计.KindTokeiArc
+	KindTokeiMoment     = 时计.KindTokeiMoment
 	KindBlue            = 无下限术士.KindBlue
 	KindRed             = 无下限术士.KindRed
 	KindTwin            = 无下限术士.KindTwin

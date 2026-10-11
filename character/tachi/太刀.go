@@ -38,7 +38,7 @@ const (
 	normalSwingPeriod = 0.55
 	swingReach        = 92.0
 	swingHalf         = 58.0
-	swingDmg          = 2.5
+	// 平A伤害跟刃色联动：无 1 / 白 1.5 / 黄 2 / 红 3（见 swingDamage）。
 
 	// 登龙 + 解放斩（红刃居合命中派生）。
 	helmSpeed  = 620.0
@@ -52,10 +52,11 @@ const (
 	spinTime   = 0.22
 	spinReach  = 125.0
 	spinHalf   = 90.0 // 大回旋 180 度：半张角 90 度
+	// 大回旋每下伤害按刃色：无 5 / 白 6 / 黄 7 / 红 9（见 spinDamage）。
 
 	// 见切：间隔小于 0.6 秒的两次及以上攻击触发。
 	foresightGap    = 0.5
-	foresightInvuln = 1.0
+	foresightInvuln = 0.6
 	foresightSpinAt = 0.25
 	retreatDist     = 90.0
 	retreatPad      = tachiRadius + 4
@@ -220,7 +221,7 @@ func (t *太刀) trySwing(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	// 随机巡航，敌人落入前方扇形才挥砍，不主动追敌。
-	if !t.slashCone(ctx, t.x, t.y, t.hx, t.hy, swingReach, swingHalf, swingDmg) {
+	if !t.slashCone(ctx, t.x, t.y, t.hx, t.hy, swingReach, swingHalf, t.swingDamage()) {
 		return
 	}
 	t.fx(ctx, "swing", t.x, t.y, float64(t.level))
@@ -411,8 +412,12 @@ func (t *太刀) iaidoDamage() float64 {
 	return []float64{6, 9, 12, 16}[t.level]
 }
 
+func (t *太刀) swingDamage() float64 {
+	return []float64{1, 1.5, 2, 3}[t.level]
+}
+
 func (t *太刀) spinDamage() float64 {
-	return []float64{8, 11, 14, 16}[t.level]
+	return []float64{5, 6, 7, 11}[t.level]
 }
 
 func (t *太刀) emitBlade(ctx unit.Context) {
