@@ -18,6 +18,7 @@ import (
 	"xqdj/character/integrated"
 	"xqdj/character/knight"
 	"xqdj/character/maggot"
+	"xqdj/character/meander"
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
 	"xqdj/character/mezhou"
@@ -95,6 +96,9 @@ const (
 	KindEgg             = 蛆.KindEgg
 	KindFly             = 蛆.KindFly
 	KindMaggot          = 蛆.KindMaggot
+	KindLit             = 迷走.KindLit
+	KindMeander         = 迷走.KindMeander
+	KindRing            = 迷走.KindRing
 	KindMelee           = 原型机_近战.KindMelee
 	KindMeleeArc        = 原型机_近战.KindMeleeArc
 	KindMenreiki        = 面灵气.KindMenreiki

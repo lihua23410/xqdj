@@ -1,0 +1,26 @@
+/* 2D 平涂：无光晕、无立体渐变；环线在球下、跟场地一起被裁切。 */
+
+.ball.look-meander {
+  background: #5e6d78 !important;
+  box-shadow: none !important;
+  border: 2px solid #243039;
+}
+
+.ball.look-meander-ring,
+.ball.look-meander-lit {
+  background: transparent !important;
+  box-shadow: none !important;
+  box-sizing: border-box;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.ball.look-meander-ring {
+  border: 2px solid #3d5c66;
+  opacity: 0.72;
+}
+
+.ball.look-meander-lit {
+  border: 2.5px solid #1a6f82;
+  opacity: 0.95;
+}
