@@ -43,7 +43,18 @@ const (
 	attractMin = 36.0
 	attractMax = 80.0
 	attractCD  = 7.0
+
+	// 开局 grace 内不做距离互吸；两球交替念偈。grace 结束后无视距离互吸一次，撞出紫弹。
+	bootGrace = 3.0
+	chantGap  = bootGrace / 4
 )
+
+var chantPhrases = [...]string{
+	"【九纲】",
+	"【偏光】",
+	"【乌与声明】",
+	"【表里之间】",
+}
 
 func init() {
 	p := unit.NewPack(KindTwin, assets)
@@ -194,6 +205,9 @@ type 半 struct {
 	shotReadyAt    float64
 	attractReadyAt float64
 	attracting     bool
+	bootPulling    bool // grace 结束后那一次无视距离互吸
+	bootPullDone   bool
+	chantOn        bool
 	selfX          float64
 	selfY          float64
 	enemyX         float64
@@ -241,11 +255,30 @@ func (h *半) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 func (h *半) tickAttract(ctx unit.Context, s unit.Sense) {
+	if s.Time < bootGrace {
+		if h.attracting {
+			h.endAttract(ctx, s.Time, s.Self.X, s.Self.Y)
+		}
+		h.pulseChant(ctx, s)
+		return
+	}
+	h.clearChant(ctx, s)
+
 	sib, ok := findSibling(s, h.red, h.slot)
 	if !ok {
 		h.endAttract(ctx, s.Time, s.Self.X, s.Self.Y)
 		return
 	}
+
+	// grace 结束后仅一次：无视距离互吸，直到相撞（或同伴消失）。
+	if !h.bootPullDone {
+		h.attracting = true
+		h.bootPulling = true
+		pulseAttract(ctx, s, 1)
+		pullHalf(ctx, ctx.ID, s.Self.X, s.Self.Y, sib.X, sib.Y)
+		return
+	}
+
 	d := math.Hypot(s.Self.X-sib.X, s.Self.Y-sib.Y)
 	inBand := d > attractMin && d <= attractMax
 	if h.attracting {
@@ -266,6 +299,35 @@ func (h *半) tickAttract(ctx unit.Context, s unit.Sense) {
 	pullHalf(ctx, ctx.ID, s.Self.X, s.Self.Y, sib.X, sib.Y)
 }
 
+func (h *半) pulseChant(ctx unit.Context, s unit.Sense) {
+	step := int(s.Time / chantGap)
+	if step >= len(chantPhrases) {
+		step = len(chantPhrases) - 1
+	}
+	// 两球交替：偶数步红半念，奇数步蓝半念；四句依次是九纲→偏光→乌与声明→表里之间。
+	show := (step%2 == 0) == h.red
+	if !show {
+		h.clearChant(ctx, s)
+		return
+	}
+	h.chantOn = true
+	ctx.Out <- unit.FX{
+		Name: "twin-chant", UnitID: ctx.ID, Kind: s.Self.Kind,
+		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: float64(step),
+	}
+}
+
+func (h *半) clearChant(ctx unit.Context, s unit.Sense) {
+	if !h.chantOn {
+		return
+	}
+	h.chantOn = false
+	ctx.Out <- unit.FX{
+		Name: "twin-chant", UnitID: ctx.ID, Kind: s.Self.Kind,
+		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: -1,
+	}
+}
+
 func pulseAttract(ctx unit.Context, s unit.Sense, amount float64) {
 	ctx.Out <- unit.FX{
 		Name: "twin-attract", UnitID: ctx.ID, Kind: s.Self.Kind,
@@ -278,6 +340,10 @@ func (h *半) endAttract(ctx unit.Context, now, x, y float64) {
 		return
 	}
 	h.attracting = false
+	if h.bootPulling {
+		h.bootPulling = false
+		h.bootPullDone = true
+	}
 	h.attractReadyAt = now + attractCD
 	kind := KindBlue
 	if h.red {

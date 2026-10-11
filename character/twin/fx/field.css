@@ -1,3 +1,22 @@
+/* 开局偈语：挂 #guides，避开半圆 clip-path；盖掉 .guide 的 height:0 / 虚线顶边。 */
+.guide.twin-chant {
+  position: absolute;
+  transform: translate(-50%, -100%) !important;
+  padding: 2px 8px;
+  border: 1px solid #b44cffaa !important;
+  border-radius: 4px;
+  font: 700 13px/16px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif !important;
+  color: #f4e8ff !important;
+  background: #1a0a28e8 !important;
+  box-shadow: 0 0 10px #b44cff66;
+  white-space: nowrap;
+  overflow: visible !important;
+  pointer-events: none;
+  z-index: 7;
+  opacity: 1 !important;
+  line-height: 16px !important;
+}
+
 /* 圆环/曲线都挂在 .guide 上，必须盖掉 style.css 里 height:0 + border-top 横线语义。
    高度由 JS 写 inline；这里不要用 height:auto !important，否则会盖掉 inline 高度。 */
 .guide.bond {
