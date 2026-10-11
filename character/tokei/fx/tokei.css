@@ -1,0 +1,84 @@
+/* 时计皮肤：白盘 + 黑针（时针 + 分针）。
+   针角由 fx/tokei.js 按模拟时间逐帧写进 transform（不用 CSS 过渡，停帧/暂停时针跟着停）。
+   角度约定：hours × 30°（12 小时制）——2h 一档 = 60°，6 档 = 12:00 正好转满一圈；
+   分针一拍（5s）正好一圈，落到 12 时正好是刻档那一刻（先推时间再留时刻）。 */
+.look-tokei .tokei-face,
+.look-tokei-moment .tokei-face {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background: var(--tokei-face, #f4f2ec);
+  border: 2px solid #14161a;
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.look-tokei-moment .tokei-face {
+  inset: 0;
+  background: rgba(244, 242, 236, 0.28);
+  border-style: dashed;
+  border-color: rgba(20, 22, 26, 0.55);
+}
+
+/* 12 个刻度：每 30° 一个 */
+.look-tokei .tokei-face .tick,
+.look-tokei-moment .tokei-face .tick {
+  position: absolute;
+  left: 50%;
+  top: 4%;
+  width: 1px;
+  height: 8%;
+  margin-left: -0.5px;
+  background: #14161a;
+  transform-origin: 50% 575%;
+}
+
+/* 针的公共部分：底端钉在盘心，0° 朝正上、顺时针为正 */
+.look-tokei .tokei-face .hand,
+.look-tokei-moment .tokei-face .hand {
+  position: absolute;
+  left: 50%;
+  border-radius: 2px;
+  background: #14161a;
+  transform-origin: 50% 100%;
+  transform: rotate(0deg);
+}
+
+/* 时针：短而粗 */
+.look-tokei .tokei-face .hand.hour,
+.look-tokei-moment .tokei-face .hand.hour {
+  top: 16%;
+  width: 3px;
+  height: 34%;
+  margin-left: -1.5px;
+}
+
+/* 分针：细而长（比时针长一截，一眼分得开） */
+.look-tokei .tokei-face .hand.minute,
+.look-tokei-moment .tokei-face .hand.minute {
+  top: 8%;
+  width: 1.5px;
+  height: 42%;
+  margin-left: -0.75px;
+}
+
+/* 满仓（12:00 转满一圈）：表盘蒙尘变色，和 0:00 区分开 */
+.look-tokei .tokei-face.dust {
+  background: #b6ad97;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.55);
+}
+
+/* 回拨：从旧位置拉一条影子飞回档位 */
+.fx-tokei-rewind {
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  animation: tokei-rewind 0.45s ease-out forwards;
+}
+
+@keyframes tokei-rewind {
+  from { transform: translate(0, 0) scale(1); opacity: 0.9; }
+  to { transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.35); opacity: 0; }
+}

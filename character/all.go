@@ -32,6 +32,7 @@ import (
 	"xqdj/character/rmiu"
 	"xqdj/character/sot"
 	"xqdj/character/tachi"
+	"xqdj/character/tokei"
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
 	"xqdj/character/waller"
@@ -132,6 +133,9 @@ const (
 	KindSotStain        = 酒翁.KindSotStain
 	KindSotWine         = 酒翁.KindSotWine
 	KindTachi           = 太刀.KindTachi
+	KindTokei           = 时计.KindTokei
+	KindTokeiArc        = 时计.KindTokeiArc
+	KindTokeiMoment     = 时计.KindTokeiMoment
 	KindBlue            = 无下限术士.KindBlue
 	KindRed             = 无下限术士.KindRed
 	KindTwin            = 无下限术士.KindTwin
