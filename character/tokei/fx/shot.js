@@ -1,6 +1,6 @@
 // 时计的四个 FX：
-//   clock  本体表针状态：Amount = 档数 × 2（小时）、VX = 满仓、X/Y = 本拍窗口的起止模拟时刻
-//   moment 每个时刻残影自己的针位（Amount = 小时，UnitID = 残影实体）——残影的针停在它刻下时的时间
+//   clock  本体表针状态：Amount = 已提交小时读数、VX = 停针/满仓、X/Y = 本拍窗口的起止模拟时刻
+//   moment 每个时刻残影自己的针位（Amount = 落下钟点，UnitID = 残影实体）——残影的针停在它刻下时的时间
 //   rewind 回拨：旧位置 → 档位拉一条影子，落点闪一下
 //   trip   踩影拉撞：时刻位置爆一圈
 arena.registerShot("clock", (fx) => {

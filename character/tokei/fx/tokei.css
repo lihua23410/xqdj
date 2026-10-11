@@ -1,7 +1,7 @@
 /* 时计皮肤：白盘 + 黑针（时针 + 分针）。
    针角由 fx/tokei.js 按模拟时间逐帧写进 transform（不用 CSS 过渡，停帧/暂停时针跟着停）。
    角度约定：hours × 30°（12 小时制）——2h 一档 = 60°，6 档 = 12:00 正好转满一圈；
-   分针一拍（5s）正好一圈，落到 12 时正好是刻档那一刻（先推时间再留时刻）。 */
+   分针一拍（8s）正好一圈，落到 12 时正好是刻档那一刻（先推时间再留时刻）。 */
 .look-tokei .tokei-face,
 .look-tokei-moment .tokei-face {
   position: absolute;

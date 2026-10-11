@@ -37,8 +37,8 @@ func startTokei(t *testing.T, seed uint64) (*Match, *unit, *unit) {
 	return m, me, foe
 }
 
-// runTokei 跑 secs 秒模拟时间，返回期间最后一次 clock 读数（小时 = 3×档数、满仓标记）和 FX 计数。
-// prev/prevFull 是上一段的读数：这段里没有新的 clock FX（比如满仓期间什么都不变）就沿用它们。
+// runTokei 跑 secs 秒模拟时间，返回期间最后一次 clock 读数（小时、停针/满仓标记）和 FX 计数。
+// prev/prevFull 是上一段的读数：这段里没有新的 clock FX（比如停针期间什么都不变）就沿用它们。
 func runTokei(m *Match, secs, prev float64, prevFull bool) (float64, bool, map[string]int) {
 	hours, full := prev, prevFull
 	fx := map[string]int{}
@@ -177,27 +177,27 @@ func alive(m *Match, u *unit) bool {
 	return got != nil && !got.stopped
 }
 
-// 5s 节拍：开场先等满一次，到点刻一档（时针 +3h），并 Spawn 一个钉住不动的透明时刻实体。
+// 8s 节拍：开场先等满一次，到点刻一档（时针 +2h），并 Spawn 一个钉住不动的透明时刻实体。
 func TestTokeiSavesOneMomentPerBeat(t *testing.T) {
 	m, me, _ := startTokei(t, 11)
-	hours, full, _ := runTokei(m, 3.0, 0, false)
+	hours, full, _ := runTokei(m, 5.0, 0, false)
 	if n := len(momentsXY(m, me)); n != 0 {
-		t.Fatalf("3s 就刻档了：%d 个", n)
+		t.Fatalf("5s 就刻档了：%d 个", n)
 	}
 	if hours != 0 {
-		t.Fatalf("3s 表针 %v，应该还在 0:00", hours)
+		t.Fatalf("5s 表针 %v，应该还在 0:00", hours)
 	}
 
-	// 先跑到 4.9s 记住自己的位置，再跨过 5s 节拍：档该钉在刻档那一瞬的位置上
-	hours, full, _ = runTokei(m, 1.9, hours, full)
+	// 先跑到 7.9s 记住自己的位置，再跨过 8s 节拍：档该钉在刻档那一瞬的位置上
+	hours, full, _ = runTokei(m, 2.9, hours, full)
 	bx, by := posOf(m, me)
 	hours, full, _ = runTokei(m, 0.4, hours, full)
 	pins := momentsXY(m, me)
 	if len(pins) != 1 {
-		t.Fatalf("5.3s 档数=%d，想要 1", len(pins))
+		t.Fatalf("8.3s 档数=%d，想要 1", len(pins))
 	}
 	if hours != 2 {
-		t.Fatalf("5.3s 表针 %v，想要 2:00（先推时间再留时刻）", hours)
+		t.Fatalf("8.3s 表针 %v，想要 2:00（先推时间再留时刻）", hours)
 	}
 	if full {
 		t.Fatal("一档就报满仓")
@@ -230,10 +230,10 @@ func TestTokeiSavesOneMomentPerBeat(t *testing.T) {
 		t.Fatalf("时刻实体跟着跑了：(%v,%v) → %v", pinX, pinY, now[pinID])
 	}
 
-	// 第二档：3.0 + 1.9 + 0.4 + 2.0 = 7.3s，再 3.5s 就到 10.8s，落在第二档后
-	hours, _, _ = runTokei(m, 3.5, hours, full)
+	// 第二档：5.0 + 2.9 + 0.4 + 2.0 = 10.3s，再 6s 就到 16.3s，落在第二档后
+	hours, _, _ = runTokei(m, 6.0, hours, full)
 	if n := len(momentsXY(m, me)); n != 2 {
-		t.Fatalf("10.8s 档数=%d，想要 2", n)
+		t.Fatalf("16.3s 档数=%d，想要 2", n)
 	}
 	if hours != 4 {
 		t.Fatalf("第二档表针 %v，想要 4:00", hours)
@@ -265,7 +265,7 @@ func TestTokeiClockFxCarriesBeatWindow(t *testing.T) {
 		}
 		now := m.time
 		m.mu.Unlock()
-		if now-start >= 16.0 {
+		if now-start >= 26.0 {
 			break
 		}
 	}
@@ -273,8 +273,8 @@ func TestTokeiClockFxCarriesBeatWindow(t *testing.T) {
 		t.Fatalf("clock FX 太少：%d，想要 ≥4（开场 + 三拍）", len(recs))
 	}
 	for i, r := range recs {
-		if d := r.y - r.x; math.Abs(d-5) > 1e-9 {
-			t.Fatalf("第 %d 个 clock 的窗口宽 %v，想要 5", i, d)
+		if d := r.y - r.x; math.Abs(d-8) > 1e-9 {
+			t.Fatalf("第 %d 个 clock 的窗口宽 %v，想要 8", i, d)
 		}
 		if want := float64(i * 2); math.Abs(r.amt-want) > 1e-9 {
 			t.Fatalf("第 %d 个 clock 的读数 %v，想要 %v", i, r.amt, want)
@@ -292,7 +292,7 @@ func TestTokeiClockFxCarriesBeatWindow(t *testing.T) {
 // 时计被拉过去之后必须追得上、把弧送到脸上（这是踩影唯一的意义）。
 func TestTokeiTrapCatchesFleeingBait(t *testing.T) {
 	m, me, foe := startTokei(t, 31)
-	runTokei(m, 5.4, 0, false) // 刻下第一档
+	runTokei(m, 8.4, 0, false) // 刻下第一档
 	pins := momentsXY(m, me)
 	if len(pins) != 1 {
 		t.Fatalf("档数=%d，想要 1", len(pins))
@@ -332,7 +332,7 @@ func TestTokeiTrapRamActuallyHits(t *testing.T) {
 	for _, dist := range []float64{30, 39} {
 		m, me, foe := startTokei(t, 26+uint64(dist))
 		freeze(m, foe)
-		hours, full, _ := runTokei(m, 5.4, 0, false)
+		hours, full, _ := runTokei(m, 8.4, 0, false)
 		pins := momentsXY(m, me)
 		if len(pins) != 1 {
 			t.Fatalf("档数=%d，想要 1", len(pins))
@@ -359,57 +359,24 @@ func TestTokeiTrapRamActuallyHits(t *testing.T) {
 	}
 }
 
-// 回拨要把累计伤害清零：不清的话，紧接着的一记小伤会立刻再弹掉下一档。
-func TestTokeiRewindClearsDamageCounter(t *testing.T) {
+// 非致命伤不回拨：累计再多也不弹档（回拨扳机只剩致命伤）。
+func TestTokeiNonLethalNeverRewinds(t *testing.T) {
 	m, me, foe := startTokei(t, 23)
 	freeze(m, me)
 	freeze(m, foe)
-	hours, full, _ := runTokei(m, 10.4, 0, false) // 刻满两档
+	hours, full, _ := runTokei(m, 16.4, 0, false) // 刻满两档
 	if n := len(momentsXY(m, me)); n != 2 {
 		t.Fatalf("档数=%d，想要 2", n)
 	}
-	hours, full, _ = hit(m, me, foe, 15, 0.3, hours, full)
+	hours, full, _ = hit(m, me, foe, 40, 0.3, hours, full)
 	if n := len(momentsXY(m, me)); n != 2 {
-		t.Fatalf("15 伤就回拨了：%d 档", n)
+		t.Fatalf("非致命伤回拨了：%d 档", n)
 	}
-	hours, full, _ = hit(m, me, foe, 10, 0.3, hours, full) // 累计 25 → 回拨一次
-	if n := len(momentsXY(m, me)); n != 1 {
-		t.Fatalf("累计 25 没回拨：%d 档", n)
+	if hp := hpOf(m, me); hp != 60 {
+		t.Fatalf("血=%v，想要 60（40 点照常吃）", hp)
 	}
-	// 计数清零的证据：接着再吃 15 不该回拨（没清的话门槛还压着，当场又弹一档）
-	hours, full, _ = hit(m, me, foe, 15, 0.3, hours, full)
-	if n := len(momentsXY(m, me)); n != 1 {
-		t.Fatalf("回拨后计数没清零，15 伤又弹一档：%d 档", n)
-	}
-	hours, full, _ = hit(m, me, foe, 10, 0.3, hours, full) // 再累计 25 → 第二次回拨
-	if n := len(momentsXY(m, me)); n != 0 {
-		t.Fatalf("第二次累计 25 没回拨：%d 档", n)
-	}
-}
-
-// 没档的时候吃满 25：这个扳机空放，计数也要清掉，否则 5s 后新刻的那一档会被上一轮的账当场花掉。
-func TestTokeiEmptyPoolCrossingClearsCounter(t *testing.T) {
-	m, me, foe := startTokei(t, 24)
-	freeze(m, me)
-	freeze(m, foe)
-	hours, full, _ := hit(m, me, foe, 25, 0.3, 0, false)
-	if n := len(momentsXY(m, me)); n != 0 {
-		t.Fatalf("还没刻档就有档：%d", n)
-	}
-	if hp := hpOf(m, me); hp != 75 {
-		t.Fatalf("血=%v，想要 75（25 点照常吃）", hp)
-	}
-	// 等出第一档
-	hours, full, _ = runTokei(m, 4.9, hours, full)
-	hours, full, _ = runTokei(m, 0.5, hours, full)
-	if n := len(momentsXY(m, me)); n != 1 {
-		t.Fatalf("档数=%d，想要 1", n)
-	}
-	// 一记小伤不该把刚刻的档花掉
-	hours, full, _ = hit(m, me, foe, 1, 0.3, hours, full)
-	if n := len(momentsXY(m, me)); n != 1 {
-		t.Fatalf("空放的那 25 伤把新档花掉了：%d 档", n)
-	}
+	_ = hours
+	_ = full
 }
 
 // 先推时间再留下时刻：第一档记的是 2:00（不是 0:00），第二档 4:00——残影针位就是它刻下时的时间。
@@ -431,7 +398,7 @@ func TestTokeiMomentStampsAdvanceFirst(t *testing.T) {
 		}
 		now := m.time
 		m.mu.Unlock()
-		if now-start >= 11.0 { // 跑到第二档之后
+		if now-start >= 17.0 { // 跑到第二档之后
 			break
 		}
 	}
@@ -449,12 +416,12 @@ func TestTokeiMomentStampsAdvanceFirst(t *testing.T) {
 	}
 }
 
-// 6 档封顶 = 12:00（表针转满一圈）；满仓后不再刻，但节拍照走（空出档位要重新吃满 5s）。
+// 走到 12:00 停针；六个刻度都落下后不再刻。
 func TestTokeiCapsAtSixMoments(t *testing.T) {
 	m, me, _ := startTokei(t, 12)
-	hours, full, _ := runTokei(m, 34.0, 0, false)
+	hours, full, _ := runTokei(m, 50.0, 0, false)
 	if n := len(momentsXY(m, me)); n != 6 {
-		t.Fatalf("34s 档数=%d，想要 6（封顶）", n)
+		t.Fatalf("50s 档数=%d，想要 6（封顶）", n)
 	}
 	if hours != 12 {
 		t.Fatalf("满仓表针 %v，想要 12:00", hours)
@@ -471,17 +438,17 @@ func TestTokeiCapsAtSixMoments(t *testing.T) {
 	}
 }
 
-// 累计 25 点确认伤就回拨：血/位置回档、档用掉一个、时针 −3h、计数清零。
-func TestTokeiRewindsOnTwentyFiveDamage(t *testing.T) {
+// 致命回拨：血/位置回档、档用掉、表针按已提交读数 −2h。
+func TestTokeiRewindsOnLethalTurnsHandBack(t *testing.T) {
 	m, me, foe := startTokei(t, 13)
-	freeze(m, me) // 按住两只：这个用例看位置，别让巡航把位置搅成噪声
+	freeze(m, me)
 	freeze(m, foe)
-	// 先挨 10 点，再等 5s 刻档：档里记的是 90 血
+	// 先挨 10 点，再等 8s 刻档：档里记的是 90 血、钟点 2:00
 	hours, full, _ := hit(m, me, foe, 10, 0.3, 0, false)
 	if hp := hpOf(m, me); hp != 90 {
 		t.Fatalf("先挨 10 点后血=%v，想要 90", hp)
 	}
-	hours, full, _ = runTokei(m, 4.6, hours, full)
+	hours, full, _ = runTokei(m, 7.6, hours, full)
 	hours, full, _ = runTokei(m, 0.5, hours, full)
 	pins := momentsXY(m, me)
 	if len(pins) != 1 || hours != 2 {
@@ -489,16 +456,15 @@ func TestTokeiRewindsOnTwentyFiveDamage(t *testing.T) {
 	}
 	saveX, saveY := posOf(m, me)
 
-	// 挪开一段路，再补 15 点：累计 25 → 回拨
 	m.mu.Lock()
 	me.p = vec{saveX + 120, saveY}
 	m.mu.Unlock()
-	hours, full, fx := hit(m, me, foe, 15, 0.06, hours, full)
+	hours, full, fx := hit(m, me, foe, 150, 0.06, hours, full)
 	if n := len(momentsXY(m, me)); n != 0 {
 		t.Fatalf("回拨后档数=%d，想要 0", n)
 	}
 	if hours != 0 {
-		t.Fatalf("回拨后表针 %v，想要回到 0:00", hours)
+		t.Fatalf("回拨后表针 %v，想要 −2h 到 0:00", hours)
 	}
 	if fx["rewind"] == 0 {
 		t.Fatal("回拨没发演出 FX")
@@ -510,14 +476,15 @@ func TestTokeiRewindsOnTwentyFiveDamage(t *testing.T) {
 	if d := math.Hypot(x-saveX, y-saveY); d > 20 {
 		t.Fatalf("回拨没回到档位：偏移 %v", d)
 	}
+	_ = full
 }
 
-// 致命伤：有档就回拨 + BlockDamage 整包拦下（不进 25 伤计数），人活着。
+// 致命伤：有档就回拨 + BlockDamage 整包拦下，人活着。
 func TestTokeiBlocksLethalDamageWithMoment(t *testing.T) {
 	m, me, foe := startTokei(t, 14)
 	freeze(m, me)
 	freeze(m, foe)
-	hours, full, _ := runTokei(m, 5.4, 0, false)
+	hours, full, _ := runTokei(m, 8.4, 0, false)
 	if n := len(momentsXY(m, me)); n != 1 {
 		t.Fatalf("档数=%d，想要 1", n)
 	}
@@ -541,7 +508,7 @@ func TestTokeiDiesFromLethalWithoutMoment(t *testing.T) {
 	m, me, foe := startTokei(t, 15)
 	freeze(m, me)
 	freeze(m, foe)
-	// 还没到第一个 5s 节拍，手上没档
+	// 还没到第一个 8s 节拍，手上没档
 	if n := len(momentsXY(m, me)); n != 0 {
 		t.Fatalf("开局就有档：%d", n)
 	}
@@ -561,7 +528,7 @@ func TestTokeiRollbackRestoresMarksAndClearsStun(t *testing.T) {
 	m.mu.Lock()
 	m.applyCmdLocked(unitpkg.StackMark{UnitID: me.id, Kind: "甲", Delta: 2, Icon: "a"})
 	m.mu.Unlock()
-	hours, full, _ := runTokei(m, 5.4, 0, false)
+	hours, full, _ := runTokei(m, 8.4, 0, false)
 	if n := len(momentsXY(m, me)); n != 1 {
 		t.Fatalf("档数=%d，想要 1", n)
 	}
@@ -578,8 +545,8 @@ func TestTokeiRollbackRestoresMarksAndClearsStun(t *testing.T) {
 	if got := marksOf(m, me); got["乙"] != 1 || got["甲"] != 0 {
 		t.Fatalf("前置没生效：%v", got)
 	}
-	// 眩晕里照样吃 IncomingDamage：25 伤触发回拨 → 标记装回档里的、眩晕解除
-	hours, full, _ = hit(m, me, foe, 25, 0.3, hours, full)
+	// 眩晕里照样吃 IncomingDamage：致命伤触发回拨 → 标记装回档里的、眩晕解除
+	hours, full, _ = hit(m, me, foe, 150, 0.3, hours, full)
 	got := marksOf(m, me)
 	if got["甲"] != 2 {
 		t.Fatalf("回拨没装回档里的标记：%v", got)
@@ -596,42 +563,40 @@ func TestTokeiRollbackRestoresMarksAndClearsStun(t *testing.T) {
 }
 
 // 时刻会被吹笛人的老鼠叼走（stealable 口径：Helper、非战斗机、无弧 → 天然在可偷清单里）。
-// 被偷就是档池少一、那个回拨锚点直接没了；空出来的档位等下一拍刻回来。
+// 被偷就是档池少一、回拨锚点没了；该钟点仍算已刻，永不再落 2:00，下一拍走到 4:00 才落新档。
 func TestTokeiDropsSlotWhenMomentStolen(t *testing.T) {
 	m, me, foe := startTokei(t, 20)
 	freeze(m, me)
 	freeze(m, foe)
-	hours, full, _ := runTokei(m, 5.4, 0, false)
+	hours, full, _ := runTokei(m, 8.4, 0, false)
 	pins := momentsXY(m, me)
-	if len(pins) != 1 {
-		t.Fatalf("档数=%d，想要 1", len(pins))
+	if len(pins) != 1 || hours != 2 {
+		t.Fatalf("档数=%d 表针=%v，想要 1 / 2:00", len(pins), hours)
 	}
 	var pinID uint64
 	for id := range pins {
 		pinID = id
 	}
-	// 模拟老鼠叼走：把实体从场上拿掉（stealable 判定的就是这种实体）
 	m.mu.Lock()
 	if u := m.units[pinID]; u != nil {
 		m.removeLocked(u)
 	}
 	m.mu.Unlock()
-	hours, _, _ = runTokei(m, 0.3, hours, full)
+	hours, full, _ = runTokei(m, 0.3, hours, full)
 	if n := len(momentsXY(m, me)); n != 0 {
 		t.Fatalf("被偷了还留着 %d 档", n)
 	}
-	if hours != 0 {
-		t.Fatalf("时针没跟着掉：%v", hours)
+	if hours != 2 {
+		t.Fatalf("被偷不该拨表针：%v", hours)
 	}
-	// 短期内（3s）不会立刻补回来
-	hours, _, _ = runTokei(m, 3.0, hours, full)
-	if n := len(momentsXY(m, me)); n != 0 {
-		t.Fatalf("3s 就把档补回来了：%d", n)
+	// 走到下一拍：4:00 落下（不是补回 2:00）
+	hours, _, _ = runTokei(m, 8.0, hours, full)
+	pins = momentsXY(m, me)
+	if len(pins) != 1 {
+		t.Fatalf("过了节拍档数=%d，想要 1（4:00）", len(pins))
 	}
-	// 下一拍刻回来
-	hours, _, _ = runTokei(m, 2.5, hours, full)
-	if n := len(momentsXY(m, me)); n != 1 {
-		t.Fatalf("过了节拍没补回档：%d", n)
+	if hours != 4 {
+		t.Fatalf("表针 %v，想要 4:00（2:00 已用永不回补）", hours)
 	}
 }
 
@@ -640,7 +605,7 @@ func TestTokeiMomentsDieWithOwner(t *testing.T) {
 	m, me, foe := startTokei(t, 21)
 	freeze(m, me)
 	freeze(m, foe)
-	runTokei(m, 5.4, 0, false)
+	runTokei(m, 8.4, 0, false)
 	if n := len(momentsXY(m, me)); n != 1 {
 		t.Fatalf("档数=%d，想要 1", n)
 	}
@@ -657,7 +622,7 @@ func TestTokeiMomentsDieWithOwner(t *testing.T) {
 func TestTokeiTrapTeleportsAndRams(t *testing.T) {
 	m, me, foe := startTokei(t, 17)
 	freeze(m, foe)
-	hours, full, _ := runTokei(m, 5.4, 0, false)
+	hours, full, _ := runTokei(m, 8.4, 0, false)
 	pins := momentsXY(m, me)
 	if len(pins) != 1 {
 		t.Fatalf("档数=%d，想要 1", len(pins))
@@ -712,7 +677,7 @@ func TestTokeiTrapTeleportsAndRams(t *testing.T) {
 func TestTokeiTrapSilenceAndEdgeTrigger(t *testing.T) {
 	m, me, foe := startTokei(t, 18)
 	freeze(m, foe)
-	hours, full, _ := runTokei(m, 5.4, 0, false)
+	hours, full, _ := runTokei(m, 8.4, 0, false)
 	pins := momentsXY(m, me)
 	if len(pins) != 1 {
 		t.Fatalf("档数=%d，想要 1", len(pins))
@@ -760,11 +725,74 @@ func TestTokeiTrapSilenceAndEdgeTrigger(t *testing.T) {
 	}
 }
 
+// 压测：2、4 已刻（针在 4）→ 致命用掉 4（针 −2h → 2）→ 再致命用掉 2（针 → 0）→
+// 之后空过已用的 2、4，在 6 落下。也钉死「弹掉 4 时针必须回头，不能停在 4」。
+func TestTokeiSkipsSpentHourAfterRewind(t *testing.T) {
+	m, me, foe := startTokei(t, 27)
+	freeze(m, me)
+	freeze(m, foe)
+	hours, full, _ := runTokei(m, 16.4, 0, false)
+	if n := len(momentsXY(m, me)); n != 2 || hours != 4 {
+		t.Fatalf("前置：档数=%d 表针=%v，想要 2 / 4:00", n, hours)
+	}
+	// 第一次致命：弹掉 4:00，针 −2h → 2（若误对齐档点会停在 4，回拨看起来没动）
+	hours, full, _ = hit(m, me, foe, 150, 0.3, hours, full)
+	if n := len(momentsXY(m, me)); n != 1 || hours != 2 {
+		t.Fatalf("弹 4 后：档数=%d 表针=%v，想要 1 / 2:00", n, hours)
+	}
+	// 第二次致命：弹掉 2:00，针再 −2h → 0
+	hours, full, _ = hit(m, me, foe, 150, 0.3, hours, full)
+	if n := len(momentsXY(m, me)); n != 0 || hours != 0 {
+		t.Fatalf("弹 2 后：档数=%d 表针=%v，想要 0 / 0:00", n, hours)
+	}
+	// 空过 2
+	hours, full, _ = runTokei(m, 8.2, hours, full)
+	if n := len(momentsXY(m, me)); n != 0 || hours != 2 {
+		t.Fatalf("空过 2：档数=%d 表针=%v，想要 0 / 2:00", n, hours)
+	}
+	// 空过 4
+	hours, full, _ = runTokei(m, 8.2, hours, full)
+	if n := len(momentsXY(m, me)); n != 0 || hours != 4 {
+		t.Fatalf("空过 4：档数=%d 表针=%v，想要 0 / 4:00", n, hours)
+	}
+	// 落 6
+	hours, _, _ = runTokei(m, 8.2, hours, full)
+	if n := len(momentsXY(m, me)); n != 1 || hours != 6 {
+		t.Fatalf("落 6：档数=%d 表针=%v，想要 1 / 6:00", n, hours)
+	}
+}
+
+// 无常态弧：贴着敌人站也不出伤；只有踩影后的临时弧才能打到人。
+func TestTokeiNoArcWithoutTrip(t *testing.T) {
+	m, me, foe := startTokei(t, 28)
+	freeze(m, me)
+	freeze(m, foe)
+	hours, full, _ := runTokei(m, 8.4, 0, false)
+	pins := momentsXY(m, me)
+	if len(pins) != 1 {
+		t.Fatalf("档数=%d，想要 1", len(pins))
+	}
+	var px, py float64
+	for _, p := range pins {
+		px, py = p[0], p[1]
+	}
+	// 两人贴身站在远离时刻的地方：旧设计会刮伤，新设计不该有弧
+	m.mu.Lock()
+	me.p = vec{px + 200, py}
+	foe.p = vec{px + 220, py}
+	m.mu.Unlock()
+	before := hpOf(m, foe)
+	runTokei(m, 1.0, hours, full)
+	if after := hpOf(m, foe); after < before {
+		t.Fatalf("没踩影就出伤了：hp %v → %v", before, after)
+	}
+}
+
 // 弹体进圈不算（朝弹撞毫无意义）；时计眩晕时收不到 Sense，踩影也不触发。
 func TestTokeiTrapIgnoresProjectilesAndStun(t *testing.T) {
 	m, me, foe := startTokei(t, 19)
 	freeze(m, foe)
-	hours, full, _ := runTokei(m, 5.4, 0, false)
+	hours, full, _ := runTokei(m, 8.4, 0, false)
 	pins := momentsXY(m, me)
 	if len(pins) != 1 {
 		t.Fatalf("档数=%d，想要 1", len(pins))
