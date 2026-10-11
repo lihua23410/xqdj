@@ -6,7 +6,7 @@ import (
 	"xqdj/internal/unit"
 )
 
-// 点亮：钉在当前环线圆心，按半径画亮环，并对蹭到可进入亮弧的敌人刮伤。
+// 点亮：钉在当前环线圆心；亮盘（环上+环内）刮伤可进入区域内的敌人。
 type 点亮 struct {
 	slot  int
 	cx    float64
@@ -28,7 +28,6 @@ func (a *点亮) Handle(ctx unit.Context, ev unit.Event) {
 	if a.hitAt == nil {
 		a.hitAt = map[uint64]float64{}
 	}
-	half := litWidth * 0.5
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if !unit.Hittable(*o, a.slot) {
@@ -39,16 +38,12 @@ func (a *点亮) Handle(ctx unit.Context, ev unit.Event) {
 		}
 		dx, dy := o.X-a.cx, o.Y-a.cy
 		d := math.Hypot(dx, dy)
-		if d < 1e-6 {
+		// 亮盘：圆心为心、半径为环线半径的圆盘（环内+环上；外侧靠敌方半径蹭到圆周也算）
+		if d > a.r+o.Radius+1e-9 {
 			continue
 		}
-		circ := math.Abs(d - a.r)
-		if circ > o.Radius+half+1e-9 {
-			continue
-		}
-		px := a.cx + dx/d*a.r
-		py := a.cy + dy/d*a.r
-		if !arcActive(s, px, py) {
+		px, py := zoneSample(a.cx, a.cy, a.r, o.X, o.Y, dx, dy, d)
+		if !zoneActive(s, px, py) {
 			continue
 		}
 		a.hitAt[o.ID] = s.Time + litHitCD
@@ -61,7 +56,18 @@ func (a *点亮) Handle(ctx unit.Context, ev unit.Event) {
 	}
 }
 
-func arcActive(s unit.Sense, x, y float64) bool {
+// zoneSample：环内取敌方圆心；环外蹭边取圆周上最近点；叠心取亮盘心。
+func zoneSample(cx, cy, r, ox, oy, dx, dy, d float64) (px, py float64) {
+	if d < 1e-6 {
+		return cx, cy
+	}
+	if d <= r {
+		return ox, oy
+	}
+	return cx + dx/d*r, cy + dy/d*r
+}
+
+func zoneActive(s unit.Sense, x, y float64) bool {
 	if !s.Field.Walkable(x, y, 0) {
 		return false
 	}

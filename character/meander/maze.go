@@ -9,13 +9,16 @@ import (
 
 const (
 	ringCount   = 6
+	trackCount  = 5
 	ringRMin    = 70.0
 	ringRMax    = 130.0
 	crossMargin = 8.0
 	mazeTries   = 80
 	centerPad   = 8.0
-	minCenterFrac = 0.30
-	minCenterAbs  = 80.0
+
+	guideFrac    = 0.45
+	guideFracMin = 0.28
+	guideShrink  = 4.0
 )
 
 type ring struct {
@@ -23,13 +26,14 @@ type ring struct {
 }
 
 type junction struct {
-	x, y   float64
-	a, b   int
+	x, y float64
+	a, b int
 }
 
 type maze struct {
-	rings []ring
-	junc  []junction
+	rings  []ring
+	junc   []junction
+	guideR float64 // 引导圆半径；0 表示无轨环引导（不应出现）
 }
 
 func buildMaze(f unit.Field, rng *rand.Rand) (maze, bool) {
@@ -37,140 +41,93 @@ func buildMaze(f unit.Field, rng *rand.Rand) (maze, bool) {
 		return maze{}, false
 	}
 	for try := 0; try < mazeTries; try++ {
-		centers, ok := spreadCenters(f, rng, ringCount)
+		hub, ok := pickHub(f, rng)
 		if !ok {
 			continue
 		}
+		guideR, tracks, ok := placeTrackAnchors(f, rng)
+		if !ok {
+			continue
+		}
+		centers := make([]pt, 0, ringCount)
+		centers = append(centers, hub)
+		centers = append(centers, tracks...)
 		rings := radiiForSpread(centers, rng)
 		junc := fieldJunctions(f, rings)
 		if connected(ringCount, junc) {
-			return maze{rings: rings, junc: junc}, true
+			return maze{rings: rings, junc: junc, guideR: guideR}, true
 		}
 		for k := 0; k < 12; k++ {
 			rings = radiiForSpread(centers, rng)
 			junc = fieldJunctions(f, rings)
 			if connected(ringCount, junc) {
-				return maze{rings: rings, junc: junc}, true
+				return maze{rings: rings, junc: junc, guideR: guideR}, true
 			}
 		}
 	}
 	return fallbackMaze(f, rng), true
 }
 
-func spreadCenters(f unit.Field, rng *rand.Rand, n int) ([]pt, bool) {
-	cands := centerCandidates(f, rng)
-	if len(cands) < n {
-		return nil, false
+func pickHub(f unit.Field, rng *rand.Rand) (pt, bool) {
+	if f.Walkable(0, 0, centerPad) {
+		return pt{0, 0}, true
 	}
-	minD := minCenterDist(f)
-	picked := make([]pt, 0, n)
-	picked = append(picked, cands[nearestCandidate(cands, 0, 0)])
-
-	for len(picked) < n {
-		bestI, bestScore := -1, -1.0
-		for i, c := range cands {
-			if tooClose(c, picked, minD*0.55) {
-				continue
-			}
-			dmin := minDistTo(c, picked)
-			// 略偏外铺满，但不要贴边过狠（圆/八边形交点易出界）。
-			edge := math.Hypot(c.x, c.y) / math.Max(f.Extent, 1)
-			score := dmin + edge*minD*0.06
-			if score > bestScore {
-				bestI, bestScore = i, score
-			}
-		}
-		if bestI < 0 {
-			bestI, bestScore = -1, -1.0
-			for i, c := range cands {
-				if containsPt(picked, c) {
-					continue
-				}
-				dmin := minDistTo(c, picked)
-				if dmin > bestScore {
-					bestI, bestScore = i, dmin
-				}
-			}
-			if bestI < 0 {
-				return nil, false
-			}
-		}
-		picked = append(picked, cands[bestI])
-	}
-	return picked, true
-}
-
-func centerCandidates(f unit.Field, rng *rand.Rand) []pt {
+	// 近场心：小范围内找可进入点
 	ext := f.Extent
 	if ext < unit.MinExtent {
 		ext = unit.MinExtent
 	}
-	span := ext * 0.72
-	step := span * 0.24
-	if step < 32 {
-		step = 32
-	}
-	out := make([]pt, 0, 96)
-	for x := -span; x <= span+1e-9; x += step {
-		for y := -span; y <= span+1e-9; y += step {
-			jx := x + (rng.Float64()-0.5)*step*0.7
-			jy := y + (rng.Float64()-0.5)*step*0.7
-			jx, jy = f.Clamp(jx, jy, centerPad)
-			if f.Walkable(jx, jy, centerPad) {
-				out = append(out, pt{jx, jy})
-			}
+	span := ext * 0.18
+	best, bestD := pt{}, math.Inf(1)
+	found := false
+	for i := 0; i < 40; i++ {
+		x := (rng.Float64()*2 - 1) * span
+		y := (rng.Float64()*2 - 1) * span
+		x, y = f.Clamp(x, y, centerPad)
+		if !f.Walkable(x, y, centerPad) {
+			continue
 		}
-	}
-	for i := 0; i < 28; i++ {
-		x, y, ok := f.RandomWalkable(rng, centerPad)
-		if ok {
-			out = append(out, pt{x, y})
-		}
-	}
-	return out
-}
-
-func minCenterDist(f unit.Field) float64 {
-	d := f.Extent * minCenterFrac
-	if d < minCenterAbs {
-		d = minCenterAbs
-	}
-	return d
-}
-
-func nearestCandidate(cands []pt, x, y float64) int {
-	best, bestD := 0, math.Inf(1)
-	for i, c := range cands {
-		d := math.Hypot(c.x-x, c.y-y)
+		d := math.Hypot(x, y)
 		if d < bestD {
-			best, bestD = i, d
+			best, bestD, found = pt{x, y}, d, true
 		}
 	}
-	return best
-}
-
-func minDistTo(p pt, set []pt) float64 {
-	best := math.Inf(1)
-	for _, q := range set {
-		d := math.Hypot(p.x-q.x, p.y-q.y)
-		if d < best {
-			best = d
-		}
+	if found {
+		return best, true
 	}
-	return best
-}
-
-func tooClose(p pt, set []pt, minD float64) bool {
-	return minDistTo(p, set) < minD
-}
-
-func containsPt(set []pt, p pt) bool {
-	for _, q := range set {
-		if math.Hypot(p.x-q.x, p.y-q.y) < 1e-6 {
-			return true
-		}
+	if x, y, ok := f.RandomWalkable(rng, centerPad); ok {
+		return pt{x, y}, true
 	}
-	return false
+	return pt{}, false
+}
+
+func placeTrackAnchors(f unit.Field, rng *rand.Rand) (guideR float64, tracks []pt, ok bool) {
+	ext := f.Extent
+	if ext < unit.MinExtent {
+		ext = unit.MinExtent
+	}
+	base := rng.Float64() * 2 * math.Pi
+	r := ext * guideFrac
+	minR := ext * guideFracMin
+	for r+1e-9 >= minR {
+		pts := make([]pt, trackCount)
+		good := true
+		for i := 0; i < trackCount; i++ {
+			ang := base + float64(i)*2*math.Pi/float64(trackCount)
+			x := r * math.Cos(ang)
+			y := r * math.Sin(ang)
+			if !f.Walkable(x, y, centerPad) {
+				good = false
+				break
+			}
+			pts[i] = pt{x, y}
+		}
+		if good {
+			return r, pts, true
+		}
+		r -= guideShrink
+	}
+	return 0, nil, false
 }
 
 func radiiForSpread(centers []pt, rng *rand.Rand) []ring {
@@ -217,42 +174,38 @@ func fieldJunctions(f unit.Field, rings []ring) []junction {
 }
 
 func fallbackMaze(f unit.Field, rng *rand.Rand) maze {
-	ext := f.Extent
-	if ext < unit.MinExtent {
-		ext = unit.MinExtent
+	hub, ok := pickHub(f, rng)
+	if !ok {
+		hub = pt{0, 0}
 	}
-	reach := ext * 0.38
-	baseAng := 0.0
-	if rng != nil {
-		baseAng = rng.Float64() * 2 * math.Pi
-	}
-	cx, cy := 0.0, 0.0
-	if !f.Walkable(cx, cy, centerPad) {
-		if x, y, ok := f.RandomWalkable(rng, centerPad); ok {
-			cx, cy = x, y
-		} else {
-			cx, cy = f.Clamp(50, 0, centerPad)
+	guideR, tracks, ok := placeTrackAnchors(f, rng)
+	if !ok {
+		ext := f.Extent
+		if ext < unit.MinExtent {
+			ext = unit.MinExtent
+		}
+		guideR = ext * guideFracMin
+		base := 0.0
+		if rng != nil {
+			base = rng.Float64() * 2 * math.Pi
+		}
+		tracks = make([]pt, trackCount)
+		for i := 0; i < trackCount; i++ {
+			ang := base + float64(i)*2*math.Pi/float64(trackCount)
+			x, y := guideR*math.Cos(ang), guideR*math.Sin(ang)
+			x, y = f.Clamp(x, y, centerPad)
+			tracks[i] = pt{x, y}
 		}
 	}
-	centers := []pt{{cx, cy}}
-	for i := 0; i < ringCount-1; i++ {
-		ang := baseAng + float64(i)*2*math.Pi/float64(ringCount-1)
-		x := cx + math.Cos(ang)*reach
-		y := cy + math.Sin(ang)*reach
-		x, y = f.Clamp(x, y, centerPad)
-		if !f.Walkable(x, y, centerPad) {
-			if rx, ry, ok := f.RandomWalkable(rng, centerPad); ok {
-				x, y = rx, ry
-			}
-		}
-		centers = append(centers, pt{x, y})
-	}
+	centers := make([]pt, 0, ringCount)
+	centers = append(centers, hub)
+	centers = append(centers, tracks...)
 	if rng != nil {
 		for k := 0; k < 40; k++ {
 			rings := radiiForSpread(centers, rng)
 			junc := fieldJunctions(f, rings)
 			if connected(len(rings), junc) {
-				return maze{rings: rings, junc: junc}
+				return maze{rings: rings, junc: junc, guideR: guideR}
 			}
 		}
 	}
@@ -261,7 +214,7 @@ func fallbackMaze(f unit.Field, rng *rand.Rand) maze {
 		rings[i] = ring{x: c.x, y: c.y, r: 100}
 	}
 	rings[0].r = 110
-	return maze{rings: rings, junc: fieldJunctions(f, rings)}
+	return maze{rings: rings, junc: fieldJunctions(f, rings), guideR: guideR}
 }
 
 func intersections(rings []ring) []junction {

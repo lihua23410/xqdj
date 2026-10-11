@@ -1,4 +1,4 @@
-// 迷走：开局铺迷径，永在环线上切向移动；交点非回头随机改道；当前环线点亮刮伤。
+// 迷走：开局铺心环+轨环；轨环锚点沿引导圆转、圆心栓绳抖；永在环线上切向移动；交点非回头随机改道；当前环线点亮刮伤。
 package 迷走
 
 import (
@@ -22,9 +22,8 @@ const (
 	ringColor = "#3d5c66"
 	litColor  = "#1a6f82"
 
-	litDamage = 2.0
-	litHitCD  = 0.2
-	litWidth  = 8.0
+	litDamage = 3.0
+	litHitCD  = 0.4
 
 	arriveR     = 12.0
 	junctionCD  = 0.18
@@ -87,11 +86,15 @@ type 迷走 struct {
 	slot   int
 	x, y   float64
 
-	lastJ    int
-	ignoreJ  float64
-	litID    uint64
-	ringIDs  []uint64
-	rng      *rand.Rand
+	hasLastJ  bool
+	lastJX    float64
+	lastJY    float64
+	ignoreJ   float64
+	litID     uint64
+	ringIDs   []uint64
+	drifts    []ringDrift
+	lastT     float64
+	rng       *rand.Rand
 	flipUntil float64
 }
 
@@ -108,6 +111,7 @@ func (a *迷走) Handle(ctx unit.Context, ev unit.Event) {
 			a.boot(ctx, e)
 			return
 		}
+		a.stepDrift(e)
 		a.syncHelpers(ctx, e)
 		a.rail(ctx, e)
 	case unit.WallHit:
@@ -175,8 +179,10 @@ func (a *迷走) boot(ctx unit.Context, s unit.Sense) {
 	}
 	a.maze = m
 	a.booted = true
-	a.lastJ = -1
+	a.hasLastJ = false
 	a.ringIDs = make([]uint64, len(m.rings))
+	a.drifts = initDrifts(m, a.rng, s.Time)
+	a.lastT = s.Time
 
 	for _, r := range m.rings {
 		ctx.Out <- unit.Spawn{
@@ -201,6 +207,19 @@ func (a *迷走) boot(ctx unit.Context, s unit.Sense) {
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: px, Y: py}
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: cruise}
+}
+
+func (a *迷走) stepDrift(s unit.Sense) {
+	dt := 0.0
+	if a.lastT > 0 {
+		dt = s.Time - a.lastT
+	}
+	a.lastT = s.Time
+	if dt <= 0 || dt > 0.5 {
+		return
+	}
+	driftCenters(a.maze.rings, a.drifts, s.Field, a.rng, s.Time, dt)
+	a.maze.junc = fieldJunctions(s.Field, a.maze.rings)
 }
 
 func (a *迷走) syncHelpers(ctx unit.Context, s unit.Sense) {
@@ -228,14 +247,23 @@ func (a *迷走) syncHelpers(ctx unit.Context, s unit.Sense) {
 	}
 	used := make([]bool, len(a.maze.rings))
 	for _, c := range rings {
-		best, bestD := -1, math.Inf(1)
-		for i, r := range a.maze.rings {
-			if used[i] {
-				continue
+		best := -1
+		for i, id := range a.ringIDs {
+			if id == c.id && !used[i] {
+				best = i
+				break
 			}
-			d := math.Hypot(c.x-r.x, c.y-r.y)
-			if d < bestD {
-				best, bestD = i, d
+		}
+		if best < 0 {
+			bestD := math.Inf(1)
+			for i, r := range a.maze.rings {
+				if used[i] {
+					continue
+				}
+				d := math.Hypot(c.x-r.x, c.y-r.y)
+				if d < bestD {
+					best, bestD = i, d
+				}
 			}
 		}
 		if best < 0 {
@@ -243,9 +271,12 @@ func (a *迷走) syncHelpers(ctx unit.Context, s unit.Sense) {
 		}
 		used[best] = true
 		a.ringIDs[best] = c.id
-		want := a.maze.rings[best].r
-		if math.Abs(c.r-want) > 0.5 {
-			ctx.Out <- unit.SetRadius{UnitID: c.id, Radius: want}
+		want := a.maze.rings[best]
+		if math.Hypot(c.x-want.x, c.y-want.y) > 0.5 {
+			ctx.Out <- unit.Teleport{UnitID: c.id, X: want.x, Y: want.y}
+		}
+		if math.Abs(c.r-want.r) > 0.5 {
+			ctx.Out <- unit.SetRadius{UnitID: c.id, Radius: want.r}
 		}
 	}
 	if lit == nil || a.ring < 0 || a.ring >= len(a.maze.rings) {
@@ -312,13 +343,14 @@ func (a *迷走) tryJunction(s unit.Sense, x, y float64) (jx, jy float64, ok boo
 		}
 	}
 	if best < 0 {
-		a.lastJ = -1
-		return 0, 0, false
-	}
-	if best == a.lastJ {
+		a.hasLastJ = false
 		return 0, 0, false
 	}
 	j := a.maze.junc[best]
+	// 交点表每拍重算，下标不稳；用位置认「刚走过的岔口」。
+	if a.hasLastJ && math.Hypot(j.x-a.lastJX, j.y-a.lastJY) < arriveR {
+		return 0, 0, false
+	}
 	exits := a.legalExits(j)
 	if len(exits) == 0 {
 		exits = []exit{{ring: a.ring, spin: -a.spin}}
@@ -326,7 +358,8 @@ func (a *迷走) tryJunction(s unit.Sense, x, y float64) (jx, jy float64, ok boo
 	pick := exits[a.rng.IntN(len(exits))]
 	a.ring = pick.ring
 	a.spin = pick.spin
-	a.lastJ = best
+	a.hasLastJ = true
+	a.lastJX, a.lastJY = j.x, j.y
 	a.ignoreJ = s.Time + junctionCD
 	return j.x, j.y, true
 }
