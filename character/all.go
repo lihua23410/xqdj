@@ -33,6 +33,7 @@ import (
 	"xqdj/character/rmiu"
 	"xqdj/character/sot"
 	"xqdj/character/tachi"
+	"xqdj/character/tanyongchen"
 	"xqdj/character/tokei"
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
@@ -137,6 +138,10 @@ const (
 	KindSotStain        = 酒翁.KindSotStain
 	KindSotWine         = 酒翁.KindSotWine
 	KindTachi           = 太刀.KindTachi
+	KindBell            = 谭泳辰.KindBell
+	KindDomain          = 谭泳辰.KindDomain
+	KindKunai           = 谭泳辰.KindKunai
+	KindTan             = 谭泳辰.KindTan
 	KindTokei           = 时计.KindTokei
 	KindTokeiArc        = 时计.KindTokeiArc
 	KindTokeiMoment     = 时计.KindTokeiMoment

@@ -1,0 +1,140 @@
+/* 谭泳辰老先生：青色小球 + 狐狸头饰，场上的铃铛/苦无，灵狐场域与净化特效。 */
+
+.ball.look-tanyongchen {
+  overflow: visible;
+  background: radial-gradient(circle at 40% 35%, #d6fbff 0%, #4fd8e8 48%, #1f8fa6 100%);
+  box-shadow: 0 0 12px #4fd8e8aa, inset 0 0 0 1.5px #ffffff66;
+}
+
+.tan-fox {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 54px;
+  height: 40px;
+  margin-left: -27px;
+  margin-top: -25px;
+  rotate: var(--fox-tilt, 0deg); /* 想微调头饰角度改这里 */
+  object-fit: contain;
+  pointer-events: none;
+  z-index: 6;
+  filter: drop-shadow(0 0 5px #00c8ff88);
+}
+
+/* 场上的铃铛 / 苦无（不实心，只等主人来捡）。 */
+.ball.look-tan-bell,
+.ball.look-tan-kunai {
+  background: transparent;
+  box-shadow: none;
+}
+.ball.look-tan-milk {
+  background: transparent;
+  box-shadow: none;
+}
+.tan-milk-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 160%;
+  height: 160%;
+  rotate: -9deg; /* 奶符图也有点斜，摆正 */
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px #cfe6ffaa);
+  animation: tan-float 1.6s ease-in-out infinite;
+}
+.tan-item {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 130%;
+  height: 130%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px #ffffff88);
+  animation: tan-float 1.6s ease-in-out infinite;
+}
+@keyframes tan-float {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+  50% { transform: translate(-50%, -50%) translateY(-5px); }
+}
+
+/* 灵狐场域：铺满单位半径的大圆。 */
+.ball.look-tan-domain {
+  background: transparent;
+  box-shadow: none;
+}
+.tan-domain-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 100%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+  pointer-events: none;
+  animation: tan-domain-pulse 2.2s ease-in-out infinite;
+}
+@keyframes tan-domain-pulse {
+  0%, 100% { opacity: 0.68; }
+  50% { opacity: 0.96; }
+}
+
+/* 苦无飞行。 */
+.tan-shot {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: rotate(var(--ang, 0rad));
+  pointer-events: none;
+  z-index: 31;
+}
+.tan-shot-img {
+  position: absolute;
+  left: -13px;
+  top: -34px;
+  width: 26px;
+  height: 68px;
+  object-fit: contain;
+  /* 苦无图自带约 74° 倾角：多转 180°（=106°）既摆正又让刀尖朝前。 */
+  transform: rotate(var(--kunai-fix, 106deg));
+  filter: drop-shadow(0 0 5px #cff6ff);
+  animation: tan-kunai-fly 0.6s linear forwards;
+}
+@keyframes tan-kunai-fly {
+  0% { translate: 0 0; opacity: 0; }
+  12% { opacity: 1; }
+  100% { translate: var(--dist, 400px) 0; opacity: 0; }
+}
+
+/* 一次性图片特效（净化 / 场域爆发 / 拾取）。 */
+.tan-fx {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 33;
+}
+.tan-fx-img {
+  position: absolute;
+  left: calc(var(--size, 160px) / -2);
+  top: calc(var(--size, 160px) / -2);
+  width: var(--size, 160px);
+  height: var(--size, 160px);
+  object-fit: contain;
+  animation: tan-fx 0.62s ease-out forwards;
+}
+.tan-fx-img.spin {
+  animation: tan-fx-spin 0.7s ease-out forwards;
+}
+@keyframes tan-fx {
+  0% { opacity: 0; scale: 0.4; }
+  25% { opacity: 1; }
+  100% { opacity: 0; scale: 1.35; }
+}
+@keyframes tan-fx-spin {
+  0% { opacity: 0; transform: rotate(0deg) scale(0.4); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(300deg) scale(1.25); }
+}
