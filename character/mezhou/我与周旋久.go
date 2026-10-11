@@ -59,6 +59,7 @@ const (
 	voidShotR    = 7.0
 	voidShotHP   = 1.0
 	voidShotLife = 6.0
+	voidHeal     = 20.0 // 进入虚空时回复的血量
 
 	holySpeedMul = 1.6
 	holyAuraR    = 165.0
@@ -69,10 +70,11 @@ const (
 	suicideR     = 170.0
 	suicideDmg   = 9999.0
 
-	howlPeriod = 2.0
-	howlDamage = 10.0
-	howlStun   = 1.2
-	howlR      = 250.0
+	monsterSpeed = 40.0
+	howlPeriod   = 2.0
+	howlDamage   = 10.0
+	howlStun     = 1.2
+	howlR        = 250.0
 )
 
 func init() {
@@ -131,8 +133,8 @@ type 我 struct {
 	zhouSeen   bool
 	spawnGrace float64
 
-	bumps      int
-	lastBumpAt float64
+	bumps     int
+	lastHitAt float64
 
 	nextDrainAt float64
 	nextKnifeAt float64
@@ -176,9 +178,12 @@ func (t *我) onCollision(ctx unit.Context, e unit.Collision) {
 		return
 	}
 	if e.Other.Kind == KindZhou {
+		if e.Time-t.lastHitAt < bumpCD {
+			return
+		}
+		t.lastHitAt = e.Time
 		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: meDamage}
-		if t.mode == modeNone && e.Time-t.lastBumpAt >= bumpCD {
-			t.lastBumpAt = e.Time
+		if t.mode == modeNone {
 			t.bumps++
 			ctx.Out <- unit.FX{Name: "bump", Kind: ctx.Kind, X: e.Other.X, Y: e.Other.Y, Slot: t.slot, Amount: float64(t.bumps)}
 			if t.bumps >= bumpsPerRoll {
@@ -189,6 +194,10 @@ func (t *我) onCollision(ctx unit.Context, e unit.Collision) {
 		return
 	}
 	if unit.Hittable(e.Other, t.slot) {
+		if e.Time-t.lastHitAt < bumpCD {
+			return
+		}
+		t.lastHitAt = e.Time
 		amt := meDamage
 		if t.mode == modeHoly {
 			amt *= 2
@@ -208,7 +217,7 @@ func (t *我) onSense(ctx unit.Context, s unit.Sense) {
 		t.boot = true
 		t.spawnGrace = s.Time + 0.6
 		if t.rng == nil {
-			t.rng = rand.New(rand.NewPCG(ctx.ID*2654435761+1, 0x9e3779b97f4a7c15))
+			t.rng = rand.New(rand.NewPCG(rand.Uint64()^ctx.ID, rand.Uint64()))
 		}
 		ctx.Out <- unit.Spawn{
 			Kind: KindZhou, X: s.Self.X + 55, Y: s.Self.Y,
@@ -300,6 +309,7 @@ func (t *我) enterPsycho(ctx unit.Context, now float64) {
 func (t *我) enterVoid(ctx unit.Context) {
 	t.mode = modeVoid
 	t.nextVoidAt = 0
+	ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: voidHeal}
 	t.emitMode(ctx)
 }
 
@@ -322,6 +332,7 @@ func (t *我) enterMonster(ctx unit.Context) {
 	t.mode = modeMonster
 	t.nextHowlAt = 0
 	t.inheritZhouHP(ctx)
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: monsterSpeed}
 	ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindZhou}
 	t.emitMode(ctx)
 }
@@ -443,7 +454,7 @@ func (t *我) tickMonster(ctx unit.Context, s unit.Sense) {
 	if target, ok := t.pickTarget(s); ok {
 		dx, dy := target.X-t.x, target.Y-t.y
 		if n := math.Hypot(dx, dy); n > 1e-6 {
-			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * meSpeed, VY: dy / n * meSpeed}
+			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * monsterSpeed, VY: dy / n * monsterSpeed}
 		}
 	}
 	if t.nextHowlAt == 0 {
@@ -472,8 +483,9 @@ func (t *我) emitMode(ctx unit.Context) {
 }
 
 type 周旋久 struct {
-	owner uint64
-	slot  int
+	owner     uint64
+	slot      int
+	lastHitAt float64
 }
 
 func (z *周旋久) Handle(ctx unit.Context, ev unit.Event) {
@@ -484,13 +496,14 @@ func (z *周旋久) Handle(ctx unit.Context, ev unit.Event) {
 	if !ok {
 		return
 	}
-	if e.Other.Kind == KindMe {
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: zhouDamage}
+	if e.Other.Kind != KindMe && !unit.Hittable(e.Other, z.slot) {
 		return
 	}
-	if unit.Hittable(e.Other, z.slot) {
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: zhouDamage}
+	if e.Time-z.lastHitAt < bumpCD {
+		return
 	}
+	z.lastHitAt = e.Time
+	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: zhouDamage}
 }
 
 type 虚空弹 struct {

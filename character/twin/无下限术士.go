@@ -38,6 +38,11 @@ const (
 	purpleDamage    = 12.0
 	purpleCD        = 0.5
 	purpleOffscreen = 640.0
+
+	// 互相吸引：圆心距在 (attractMin, attractMax] 且不在互吸冷却内时，双向改速度。
+	attractMin = 36.0
+	attractMax = 80.0
+	attractCD  = 7.0
 )
 
 func init() {
@@ -182,16 +187,18 @@ func split(ctx unit.Context, s unit.Sense) {
 }
 
 type 半 struct {
-	owner       uint64
-	slot        int
-	red         bool
-	arc         unit.AttachState
-	shotReadyAt float64
-	selfX       float64
-	selfY       float64
-	enemyX      float64
-	enemyY      float64
-	hasEnemy    bool
+	owner          uint64
+	slot           int
+	red            bool
+	arc            unit.AttachState
+	shotReadyAt    float64
+	attractReadyAt float64
+	attracting     bool
+	selfX          float64
+	selfY          float64
+	enemyX         float64
+	enemyY         float64
+	hasEnemy       bool
 }
 
 func (h *半) Handle(ctx unit.Context, ev unit.Event) {
@@ -208,15 +215,104 @@ func (h *半) Handle(ctx unit.Context, ev unit.Event) {
 			unit.SpawnAttach(ctx, e, kind)
 		}
 		h.remember(e)
+		h.tickAttract(ctx, e)
 		str := twinPush
 		if h.red {
 			str = twinPull
 		}
 		twinField(ctx, e, str)
 	case unit.Collision:
-		if h.red && e.Other.Kind == KindBlue && e.Other.Slot == h.slot {
+		if e.Other.Slot != h.slot {
+			return
+		}
+		sib := KindBlue
+		if !h.red {
+			sib = KindRed
+		}
+		if e.Other.Kind != sib {
+			return
+		}
+		// 半圆贴上后圆心距常略大于 36，仍落在互吸带里；不在碰撞时收束会一直改速度、冷却起不来。
+		h.endAttract(ctx, e.Time, h.selfX, h.selfY)
+		if h.red {
 			h.tryShot(ctx, e)
 		}
+	}
+}
+
+func (h *半) tickAttract(ctx unit.Context, s unit.Sense) {
+	sib, ok := findSibling(s, h.red, h.slot)
+	if !ok {
+		h.endAttract(ctx, s.Time, s.Self.X, s.Self.Y)
+		return
+	}
+	d := math.Hypot(s.Self.X-sib.X, s.Self.Y-sib.Y)
+	inBand := d > attractMin && d <= attractMax
+	if h.attracting {
+		if !inBand {
+			h.endAttract(ctx, s.Time, s.Self.X, s.Self.Y)
+			return
+		}
+		// 每拍重发，避免包脚本晚于首帧 FX 时观众侧永远进不了互吸态。
+		pulseAttract(ctx, s, 1)
+		pullHalf(ctx, ctx.ID, s.Self.X, s.Self.Y, sib.X, sib.Y)
+		return
+	}
+	if !inBand || s.Time < h.attractReadyAt {
+		return
+	}
+	h.attracting = true
+	pulseAttract(ctx, s, 1)
+	pullHalf(ctx, ctx.ID, s.Self.X, s.Self.Y, sib.X, sib.Y)
+}
+
+func pulseAttract(ctx unit.Context, s unit.Sense, amount float64) {
+	ctx.Out <- unit.FX{
+		Name: "twin-attract", UnitID: ctx.ID, Kind: s.Self.Kind,
+		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: amount,
+	}
+}
+
+func (h *半) endAttract(ctx unit.Context, now, x, y float64) {
+	if !h.attracting {
+		return
+	}
+	h.attracting = false
+	h.attractReadyAt = now + attractCD
+	kind := KindBlue
+	if h.red {
+		kind = KindRed
+	}
+	ctx.Out <- unit.FX{
+		Name: "twin-attract", UnitID: ctx.ID, Kind: kind,
+		X: x, Y: y, Slot: h.slot, Amount: 0,
+	}
+}
+
+func findSibling(s unit.Sense, red bool, slot int) (unit.Snapshot, bool) {
+	want := KindBlue
+	if !red {
+		want = KindRed
+	}
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Slot == slot && o.Kind == want {
+			return *o, true
+		}
+	}
+	return unit.Snapshot{}, false
+}
+
+func pullHalf(ctx unit.Context, id uint64, x, y, tx, ty float64) {
+	dx, dy := tx-x, ty-y
+	n := math.Hypot(dx, dy)
+	if n < 1e-6 {
+		return
+	}
+	ctx.Out <- unit.SetVelocity{
+		UnitID: id,
+		VX:     dx / n * twinSpeed,
+		VY:     dy / n * twinSpeed,
 	}
 }
 
