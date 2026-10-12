@@ -377,12 +377,12 @@ func TestChouSlamCirclesSpread(t *testing.T) {
 			far = d
 		}
 	}
-	// 两两圆心距离 ≥ 两半径之和 → 圆不重叠
+	// 三处圆两两相切：圆心距 = 两半径之和（52），连成一片无缝隙。
 	for i := 0; i < 3; i++ {
 		for j := i + 1; j < 3; j++ {
 			d := math.Hypot(cx[i]-cx[j], cy[i]-cy[j])
-			if d < rr[i]+rr[j]-1e-9 {
-				t.Fatalf("第 %d、%d 处砸地圆重叠了：圆心距 %.1f < %.1f", i+1, j+1, d, rr[i]+rr[j])
+			if math.Abs(d-(rr[i]+rr[j])) > 0.1 {
+				t.Fatalf("第 %d、%d 处砸地圆该圆边相切：圆心距 %.2f，期望 %.1f", i+1, j+1, d, rr[i]+rr[j])
 			}
 		}
 	}

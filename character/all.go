@@ -3,6 +3,7 @@
 package character
 
 import (
+	"xqdj/character/archer"
 	"xqdj/character/axe"
 	"xqdj/character/bloodpact"
 	"xqdj/character/charcoal"
@@ -45,6 +46,9 @@ import (
 )
 
 const (
+	KindArcher          = 弓箭.KindArcher
+	KindArrow           = 弓箭.KindArrow
+	KindVolleyArrow     = 弓箭.KindVolleyArrow
 	KindAxe             = 盾斧.KindAxe
 	KindBloodArc        = 血契.KindBloodArc
 	KindBloodBat        = 血契.KindBloodBat

@@ -1,0 +1,97 @@
+/* 弓箭皮肤：球身上一张朝着面朝方向拉开的弓。
+   朝向由 fx/archer.js 每帧写到 --face 上（角度制，0 = 正右、顺时针为正）。 */
+.look-archer .archer-bow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: rotate(var(--face, 0deg));
+}
+
+/* 弓臂：球右缘一段圆弧 */
+.look-archer .archer-bow .limb {
+  position: absolute;
+  left: 62%;
+  top: 8%;
+  width: 34%;
+  height: 84%;
+  border: 3px solid #38332f;
+  border-left: 0;
+  border-radius: 0 100% 100% 0;
+  box-sizing: border-box;
+}
+
+/* 弓弦：拉满时往回缩（蓄力可视化） */
+.look-archer .archer-bow .string {
+  position: absolute;
+  left: 62%;
+  top: 8%;
+  width: 3px;
+  height: 84%;
+  background: #efe6d0;
+  border-radius: 2px;
+  transition: left 0.15s linear;
+}
+.look-archer .archer-bow.drawn .string { left: 48%; }
+
+/* 蓄力中：球外一圈淡金描边，满弦时更亮 */
+.look-archer .archer-bow.drawn { filter: drop-shadow(0 0 4px rgba(240, 200, 120, 0.85)); }
+
+/* 箭：fx/arrow.svg 当 mask 铺在色块上，颜色跟着小球的 --kind 走（箭的 Look.Color 是白的），
+   朝向由 arrow.js 按速度写 transform。拖尾是自己画的一条渐变长条——引擎的 Look.Trail
+   是"每 16ms 复制一个只有尺寸没有子元素的 ghost"，渲染出来是一串圆点，不是拖尾（已关掉）。
+   弹半径只有 4，客户端给的盒子只有 2×4×scale（≈4px），所以尺寸都按大倍数给。 */
+.ball.look-arrow {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.look-arrow .archer-arrow-tail {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1200%;
+  height: 90%;
+  background: linear-gradient(to left, currentColor, rgba(255, 255, 255, 0) 75%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.look-arrow .archer-arrow-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 750%;
+  height: 540%;
+  background-color: var(--kind, #f5f2e8);
+  -webkit-mask: url(arrow.svg) center / contain no-repeat;
+  mask: url(arrow.svg) center / contain no-repeat;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.55));
+  pointer-events: none;
+}
+
+/* 翻滚/后撤的落地尘（fx-roll / fx-dash 用） */
+.fx-archer-roll, .fx-archer-dash {
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  animation: archer-fade 0.35s ease-out forwards;
+}
+
+/* 齐射：一排四道的直线轨迹 */
+.fx-archer-volley {
+  width: 60px;
+  height: 10px;
+  margin: -5px 0 0 -30px;
+  background: repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 16px);
+  animation: archer-volley 0.28s ease-out forwards;
+}
+
+@keyframes archer-fade {
+  from { transform: scale(0.4); opacity: 0.9; }
+  to { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes archer-volley {
+  from { transform: translateX(-24px) scaleX(0.4); opacity: 0.95; }
+  to { transform: translateX(24px) scaleX(1.2); opacity: 0; }
+}

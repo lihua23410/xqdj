@@ -418,3 +418,76 @@ func TestBloodBiteStillWorksInBlackout(t *testing.T) {
 		t.Fatalf("熔断只熄耗血技能，基础弧该照常咬：%v", seen)
 	}
 }
+
+// 收线站定：警戒起手那拍烧 8 血、挂 Stand、清零残余速度——收线期间血契
+// 钉在原地不被巡航带子推走，被拽的人拽向的是固定点。收网结束（主目标
+// 拽到身前提前终止）时血契自己的 Stand 放开，同时把被拽目标的拽速
+// （460）清零——目标随即按自己的巡航恢复行动，不带惯性甩出距离、
+// 冲过 320 把血线绷断。
+func TestBloodReelStandsWhileReeling(t *testing.T) {
+	m, pact, victim := startPact(t, 52, character.KindDummy)
+	lockBoth(m, pact, victim, 34)
+	noSeek(m, victim)
+	if seen := tickUntil(m, 0.3); seen["blood-bond"] == 0 {
+		t.Fatal("该先建上血线")
+	}
+
+	// 解钉血契：恢复巡航、给一拍残余速度，把靶子摆过警戒线 240。
+	m.mu.Lock()
+	m.applyCmdLocked(unitpkg.SetCruise{UnitID: pact.id, Speed: 170})
+	pact.stand = false
+	pact.setVel(vec{60, 0})
+	m.mu.Unlock()
+	putAway(m, pact, victim, 245)
+	if seen := tickUntil(m, 0.1); seen["blood-reel"] == 0 {
+		t.Fatal("距离过警戒线 240 该起手收线")
+	}
+
+	// 起手后：血契自己挂 Stand、残余速度被清掉。
+	m.mu.Lock()
+	stand, sp := pact.stand, math.Hypot(pact.v.X, pact.v.Y)
+	m.mu.Unlock()
+	if !stand {
+		t.Fatal("收线期间该挂 Stand")
+	}
+	if sp > 1e-6 {
+		t.Fatalf("起手该清掉残余速度，实际 %.1f", sp)
+	}
+
+	// 再推二十拍（0.47 秒）：仍在 0.6 秒收线窗口里，靶子还没拽到身前
+	// （460 拽速 20 拍拉近 153，距离 245→92），血契速度该保持 0——
+	// 没挂 Stand 的话，零速血契会被巡航带子立刻推回 170。
+	// 同时靶子正在被拽：速度量级该是 460。
+	tickN(m, 20)
+	m.mu.Lock()
+	stand, sp = pact.stand, math.Hypot(pact.v.X, pact.v.Y)
+	vx, vy := victim.v.X, victim.v.Y
+	m.mu.Unlock()
+	if !stand || sp > 1e-6 {
+		t.Fatalf("收线期间该钉在原地（stand=%v 速度=%.1f）", stand, sp)
+	}
+	if vsp := math.Hypot(vx, vy); vsp < 450 {
+		t.Fatalf("拖拽中靶子该以 460 速被拽，实际 %.1f", vsp)
+	}
+
+	// 主目标拽到身前（92→38 再 0.12 秒）：提前终止。血契自己的 Stand 放开，
+	// 刚拽到脸前的靶子被清零拽速（460 惯性没了，不会甩出断线）。
+	tickUntil(m, 0.35)
+	m.mu.Lock()
+	stand = pact.stand
+	vx, vy = victim.v.X, victim.v.Y
+	m.mu.Unlock()
+	if stand {
+		t.Fatal("提前终止该放开血契自己的 Stand")
+	}
+	if vsp := math.Hypot(vx, vy); vsp > 1e-6 {
+		t.Fatalf("收网结束该清零目标的拽速，实际 %.1f", vsp)
+	}
+
+	// 收网后继续推 1 秒：血契恢复巡航拉开距离，但血线不该断——
+	// 没清拽速的话，靶子带着 460 惯性一秒甩出两百多，当场绷线。
+	seen := tickUntil(m, 1.0)
+	if seen["blood-snap"] != 0 {
+		t.Fatalf("收网后目标不该甩断血线，却出现了 blood-snap：%v", seen)
+	}
+}
