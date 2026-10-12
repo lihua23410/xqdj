@@ -3,6 +3,7 @@
 package character
 
 import (
+	"xqdj/character/archer"
 	"xqdj/character/axe"
 	"xqdj/character/bloodpact"
 	"xqdj/character/charcoal"
@@ -44,6 +45,9 @@ import (
 )
 
 const (
+	KindArcher          = 弓箭.KindArcher
+	KindArrow           = 弓箭.KindArrow
+	KindVolleyArrow     = 弓箭.KindVolleyArrow
 	KindAxe             = 盾斧.KindAxe
 	KindBloodArc        = 血契.KindBloodArc
 	KindBloodBat        = 血契.KindBloodBat
@@ -141,6 +145,7 @@ const (
 	KindBell            = 谭泳辰.KindBell
 	KindDomain          = 谭泳辰.KindDomain
 	KindKunai           = 谭泳辰.KindKunai
+	KindMilk            = 谭泳辰.KindMilk
 	KindTan             = 谭泳辰.KindTan
 	KindTokei           = 时计.KindTokei
 	KindTokeiArc        = 时计.KindTokeiArc
