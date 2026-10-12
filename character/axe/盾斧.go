@@ -62,7 +62,7 @@ const (
 	chouFanDmg  = 30.0 // 超解扇（104 半径、正面 ±30° 那一发）
 	waveDmg     = 15.0 // 超解砸地每一波
 
-	// 超解砸地：三处**互不重叠**的圆（圆心距离 ≥ 2×slamR），范围比原来的分环更远。
+	// 超解砸地：三处圆**两两相切**（圆心距 = 2×slamR = 52），连成一片无缝隙。
 	slamR = 26.0 // 每一处砸地圆的半径，同时就是出伤判定半径（前端照着画同一个圆）
 
 	// 瓶与能量：energy 上限 2（每打中一段 +1），黄瓶才够换红。
@@ -71,14 +71,14 @@ const (
 	phialGold  = 2
 )
 
-// 三处砸地的落点，每项是 {沿面朝方向的距离, 偏转角}：正中 70 一处，左右各偏 32° 的 125 两处。
-// 原来那套是「60° 扇环分 3 环」，三个圆叠在一起、又都落在 104 以内；
-// 现在摊成三处独立的圆：圆心两两距离 75.4 / 132.5 / 75.4，都 ≥ 2×slamR = 52 → 三个圆互不重叠；
-// 最远够到 125+26 = 151（原来 ≤104）。三波按数组顺序一波一处。
+// 三处砸地的落点，每项是 {沿面朝方向的距离, 偏转角}：正中 70 一处，
+// 左右各偏 12.7° 的 117.9 两处。三圆心构成边长 52 的等边三角形——
+// 圆边两两相切（圆心距 = 2×slamR），砸地连成一片没有缝隙，也不重叠。
+// 最远够到 117.9+26 ≈ 144（原来那套分环 ≤104）。三波按数组顺序一波一处。
 var slamSpots = [3][2]float64{
 	{70, 0},
-	{125, 32},
-	{125, -32},
+	{117.9, 12.73},
+	{117.9, -12.73},
 }
 
 // 形态编码：0/1/2 直接发给前端，前端 axeSrc 按它挑 sheild/sword/axe 素材。
@@ -154,6 +154,7 @@ type 盾斧 struct {
 	hx, hy    float64               // 面朝方向（单位向量），hitFan/rotate 都按它算
 	x, y      float64               // 自己的位置，front() 判定正面要用
 	seen      map[uint64][2]float64 // 见过的单位位置：盾只挡见过的来源，目标脱离视野后还能记住最后位置
+	lastNear  []unit.Snapshot      // 最近一帧感知：突刺碰撞事件不带感知，群扫靠它
 	slot      int
 	booted    bool
 }
@@ -212,11 +213,32 @@ func (a *盾斧) onHit(ctx unit.Context, e unit.Collision) {
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: a.strikeDmg(thrustDmg)}
+		a.thrustSweep(ctx, e.Other.ID) // 撞上的那位之外，身周一圈也一并结算（对群）
 		a.beginSlash(ctx, e.Time, true)
 	case stepChouThrust:
 		// 超解前那一下突刺：撞上人就结 3 伤，然后接超解旋（顶到位是目的，不是打完收招）。
 		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: a.strikeDmg(thrustDmg)}
+		a.thrustSweep(ctx, e.Other.ID)
 		a.beginChouSpin(ctx, e.Time)
+	}
+}
+
+// thrustSweep 突刺命中那一下的群结算：盾斧攻击都是对群——以自己当前位置为圆心、
+// 摸到就起手的 seekR 内，敌方战斗机+敌方活随从都吃一记突刺伤（撞上的那位已单打，跳过）。
+// 碰撞事件不带感知快照，群扫靠每帧缓存的 lastNear（差一拍的位置，误差一拍推进，可接受）。
+func (a *盾斧) thrustSweep(ctx unit.Context, skip uint64) {
+	if a.lastNear == nil {
+		return
+	}
+	for i := range a.lastNear {
+		o := &a.lastNear[i]
+		if o.ID == skip || !unit.Hittable(*o, a.slot) {
+			continue
+		}
+		if math.Hypot(o.X-a.x, o.Y-a.y) > seekR+o.Radius {
+			continue
+		}
+		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: a.strikeDmg(thrustDmg)}
 	}
 }
 
@@ -672,6 +694,7 @@ func (a *盾斧) note(s unit.Sense) {
 		o := s.Nearby[i]
 		a.seen[o.ID] = [2]float64{o.X, o.Y}
 	}
+	a.lastNear = s.Nearby
 }
 
 // emitLook 三个字段各有约定，前端原样收：Amount=形态(0 盾/1 剑/2 斧)、VX=红盾(0/1)、VY=红剑(0/1)。
