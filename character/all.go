@@ -7,6 +7,7 @@ import (
 	"xqdj/character/bloodpact"
 	"xqdj/character/charcoal"
 	"xqdj/character/doppel"
+	"xqdj/character/doppel_veteran"
 	"xqdj/character/dummy"
 	"xqdj/character/engine"
 	"xqdj/character/fisher"
@@ -53,6 +54,8 @@ const (
 	KindClone           = 分身者.KindClone
 	KindCloneArc        = 分身者.KindCloneArc
 	KindDoppel          = 分身者.KindDoppel
+	KindDoppelVeteran   = 分身者_百战.KindDoppelVeteran
+	KindShadow          = 分身者_百战.KindShadow
 	KindDummy           = 靶子.KindDummy
 	KindEngine          = 内燃机.KindEngine
 	KindFish            = 钓鱼佬.KindFish
@@ -141,6 +144,7 @@ const (
 	KindBell            = 谭泳辰.KindBell
 	KindDomain          = 谭泳辰.KindDomain
 	KindKunai           = 谭泳辰.KindKunai
+	KindMilk            = 谭泳辰.KindMilk
 	KindTan             = 谭泳辰.KindTan
 	KindTokei           = 时计.KindTokei
 	KindTokeiArc        = 时计.KindTokeiArc
