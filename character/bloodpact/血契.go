@@ -64,15 +64,15 @@ const (
 	feedDeep    = 0.75
 	feedStep    = 0.5 // 攒够这么多才 Heal 一次（引擎口径：≥0.5 才有治疗特效）
 
-	// 收线：烧 8 血，收网 1.4 秒——每条线的目标都被拽 280 朝血契（比任何巡航都快，
-	// 被拽的人看得出来是被拽走的），血契自己也顺线扑向最近目标。拉到 38 提前结束。
+	// 收线：烧 8 血，收网 0.6 秒——每条线的目标都被拽 460 朝血契（快过任何巡航，
+	// 被拽的人看得出来是被拽走的），血契自己站定收网、不跟过去。拉到 38 提前结束。
 	// 只在线快绷断时放：距离冲过警戒线 240（绷断 320 的 3/4）才起手，
 	// 收完照吃 3s CD——收线的本职就是续线，平稳期不烧血。
 	// 墙由物理碰撞免费涌现（隔墙互顶拉不到脸）。
 	reelCost     = 8.0
 	reelCD       = 3.0
-	reelDur      = 1.4
-	reelSpeed    = 280.0 // 拽速：明显快过一切巡航——“拽过来”的观感
+	reelDur      = 0.6
+	reelSpeed    = 460.0 // 拽速：明显快过一切巡航——“拽过来”的观感
 	reelStopGap  = 38.0
 	reelSaveFrom = 240.0 // 警戒线：距离冲过这里才放收线
 
@@ -267,7 +267,9 @@ func (b *血契) breakLine(ctx unit.Context, s unit.Sense, id uint64) {
 		return // 还有别的线在，不蔫置
 	}
 	b.pool = 0
-	b.reelUntil = 0
+	if b.reelUntil != 0 {
+		b.stopReel(ctx, s)
+	}
 	b.wiltUntil = s.Time + wiltDur
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: pactSpeed - wiltDrop}
 }
@@ -404,14 +406,17 @@ func (b *血契) tryPounce(ctx unit.Context, s unit.Sense) {
 }
 
 // reel 收线：有血线、距离冲过警戒线（线快绷断）、CD 好、不在熔断区才烧 8 血起手。
+// 起手挂 Stand、清掉残余速度——站定收网，被拽的人拽向的是固定点，不是移动靶；
+// 到期、拽到身前提前终止、线全断都放开 Stand。
 // 之后每帧把每条线的目标拽向血契——血契自己不跟过去，站在原地收线。
-// 主目标（最近的）拽到 38 身边时整个动作立刻结束（剩余时间不拉不烧）。
 func (b *血契) reel(ctx unit.Context, s unit.Sense) {
 	if b.reelUntil > 0 && s.Time+1e-9 >= b.reelUntil {
-		b.reelUntil = 0
+		b.stopReel(ctx, s)
 	}
 	if len(b.lines) == 0 {
-		b.reelUntil = 0
+		if b.reelUntil != 0 {
+			b.stopReel(ctx, s)
+		}
 		return
 	}
 	var main *unit.Snapshot
@@ -427,7 +432,9 @@ func (b *血契) reel(ctx unit.Context, s unit.Sense) {
 		}
 	}
 	if main == nil {
-		b.reelUntil = 0
+		if b.reelUntil != 0 {
+			b.stopReel(ctx, s)
+		}
 		return
 	}
 	if b.reelUntil == 0 {
@@ -443,6 +450,10 @@ func (b *血契) reel(ctx unit.Context, s unit.Sense) {
 		b.reelAt = s.Time + reelCD
 		b.reelUntil = s.Time + reelDur
 		ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: s.Self.HP - reelCost}
+		// 站定收网：挂 Stand 挡巡航带子，并把起手时的残余速度清掉——
+		// 不然血契带着巡航满场飞，被拽的人拽向的是移动靶。
+		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 		// FX 站在被拽的那位身上：X/Y=主目标，VX/VY=血契。
 		ctx.Out <- unit.FX{
 			Name: "blood-reel", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
@@ -450,7 +461,7 @@ func (b *血契) reel(ctx unit.Context, s unit.Sense) {
 		}
 	} else if mainD <= reelStopGap {
 		// 拽到身边：整个动作立刻停。
-		b.reelUntil = 0
+		b.stopReel(ctx, s)
 		return
 	}
 	// 收网：只拽对面，血契站在原地——拽人的人自己不跟着跑。
@@ -572,6 +583,23 @@ func depthOf(held float64) int {
 }
 
 // stateCode 0 饥饿、1 寄生、2 蔫置、3 熔断。
+// stopReel 收线结束：到期、拽到身前提前终止、或线全断时放开自己的站定，
+// 并把被拽目标身上的拽速（460）清零——目标随即按自己的巡航恢复行动，
+// 不再带着惯性甩出去、距离瞬间冲过 320 把血线绷断。
+// 血契眩晕期间感知停发走不到这里，Stand 会多挂到眩晕结束的那一拍——
+// 眩晕的人本来也不该被巡航推走，放得到晚不碍事。
+func (b *血契) stopReel(ctx unit.Context, s unit.Sense) {
+	b.reelUntil = 0
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
+	for id := range b.lines {
+		o := findNearby(s.Nearby, id)
+		if o == nil {
+			continue
+		}
+		ctx.Out <- unit.SetVelocity{UnitID: id, VX: 0, VY: 0}
+	}
+}
+
 func (b *血契) stateCode(s unit.Sense) int {
 	switch {
 	case s.Self.HP <= blackoutHP:
