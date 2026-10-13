@@ -27,7 +27,6 @@ function kindColor(kind) {
 }
 
 function paintKind(el, kind) {
-  applyLookFX(el, kind);
   el.style.setProperty("--kind", kindColor(kind));
 }
 
@@ -479,13 +478,26 @@ function lineup(slot) {
   return sideList(slot);
 }
 
+let pendingFrame = null;
+let frameScheduled = false;
 ws.onmessage = (ev) => {
-  state = JSON.parse(ev.data);
-  hexR = state.hexRadius || 280;
-  render();
+  pendingFrame = ev.data;
+  if (frameScheduled) return;
+  frameScheduled = true;
+  requestAnimationFrame(() => {
+    frameScheduled = false;
+    const raw = pendingFrame;
+    pendingFrame = null;
+    if (raw == null) return;
+    state = JSON.parse(raw);
+    hexR = state.hexRadius || 280;
+    render();
+  });
 };
 
-document.getElementById("btn-start").onclick = () => send({ type: "start" });
+document.getElementById("btn-start").onclick = () => {
+  send({ type: "start" });
+};
 document.getElementById("btn-pause").onclick = () => {
   if (state.phase === "paused") send({ type: "start" });
   else send({ type: "pause" });
@@ -944,6 +956,15 @@ function renderArena() {
   }
 }
 
+let wasLobby = true;
+
+function releaseLobby() {
+  for (const id of ["seats-0", "seats-1", "kinds-0", "kinds-1"]) {
+    const el = document.getElementById(id);
+    if (el) el.replaceChildren();
+  }
+}
+
 function render() {
   ensurePacks();
   const inLobby = state.phase === "select";
@@ -952,15 +973,22 @@ function render() {
   if (state.phase === "ended" || inLobby) window.youthBuff = {};
   if (inLobby) window.youthDoses = {};
   if (inLobby) {
-    prevHP.clear();
-    hudKey = "";
-    if (fxRoot) fxRoot.innerHTML = "";
-    if (wallsEl) wallsEl.innerHTML = "";
-    if (guidesEl) guidesEl.innerHTML = "";
-    if (overEl) overEl.innerHTML = "";
+    if (!wasLobby) {
+      prevHP.clear();
+      hudKey = "";
+      if (fxRoot) fxRoot.innerHTML = "";
+      if (wallsEl) wallsEl.innerHTML = "";
+      if (guidesEl) guidesEl.innerHTML = "";
+      if (overEl) overEl.innerHTML = "";
+    }
+    wasLobby = true;
     renderLobby();
   } else {
-    lobbyKey = "";
+    wasLobby = false;
+    if (lobbyKey !== "") {
+      lobbyKey = "";
+      releaseLobby();
+    }
     renderArena();
   }
 }

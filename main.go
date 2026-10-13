@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 	"xqdj/internal/sim"
 	"xqdj/internal/unit"
 	"xqdj/internal/web"
@@ -20,19 +21,39 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// spectator 单独写连接。广播只保留最新一帧，慢的页面不会堵住比赛和其他观众。
+type spectator struct {
+	conn *websocket.Conn
+	send chan []byte
+}
+
 type hub struct {
 	mu      sync.Mutex
-	clients map[*websocket.Conn]struct{}
+	clients map[*websocket.Conn]*spectator
 }
 
 func newHub() *hub {
-	return &hub{clients: make(map[*websocket.Conn]struct{})}
+	return &hub{clients: make(map[*websocket.Conn]*spectator)}
 }
 
-func (h *hub) add(c *websocket.Conn) {
+func (h *hub) add(c *websocket.Conn) *spectator {
+	s := &spectator{conn: c, send: make(chan []byte, 1)}
 	h.mu.Lock()
-	h.clients[c] = struct{}{}
+	h.clients[c] = s
 	h.mu.Unlock()
+	go s.write(h)
+	return s
+}
+
+func (s *spectator) write(h *hub) {
+	for msg := range s.send {
+		_ = s.conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		if err := s.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			_ = s.conn.Close()
+			h.remove(s.conn)
+			return
+		}
+	}
 }
 
 func (h *hub) remove(c *websocket.Conn) {
@@ -41,20 +62,30 @@ func (h *hub) remove(c *websocket.Conn) {
 	h.mu.Unlock()
 }
 
-func (h *hub) send(c *websocket.Conn, msg []byte) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return c.WriteMessage(websocket.TextMessage, msg)
+func offer(ch chan []byte, msg []byte) {
+	select {
+	case ch <- msg:
+	default:
+		select {
+		case <-ch:
+		default:
+		}
+		select {
+		case ch <- msg:
+		default:
+		}
+	}
+}
+
+func (h *hub) send(s *spectator, msg []byte) {
+	offer(s.send, msg)
 }
 
 func (h *hub) broadcast(msg []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for c := range h.clients {
-		if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
-			_ = c.Close()
-			delete(h.clients, c)
-		}
+	for _, s := range h.clients {
+		offer(s.send, msg)
 	}
 }
 
@@ -95,12 +126,12 @@ func main() {
 		if err != nil {
 			return
 		}
-		h.add(conn)
+		s := h.add(conn)
 		defer func() {
 			h.remove(conn)
 			_ = conn.Close()
 		}()
-		_ = h.send(conn, match.SnapshotJSON())
+		h.send(s, match.SnapshotJSON())
 		for {
 			_, data, err := conn.ReadMessage()
 			if err != nil {
