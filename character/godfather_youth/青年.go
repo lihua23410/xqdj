@@ -169,7 +169,9 @@ func (a *教父青年) boot(ctx unit.Context, s unit.Sense) {
 	a.doses = doseCap
 	a.nextDose = doseEvery
 	a.prevHP = s.Self.HP
-	a.rng = rand.New(rand.NewPCG(s.Self.ID, uint64(s.Time*1e6)+1))
+	if a.rng == nil {
+		a.rng = unit.NewRNG(s.Self.ID)
+	}
 	a.tellDoses(ctx, s)
 	ctx.Out <- unit.FX{Name: "buff", Kind: KindYouth, UnitID: ctx.ID, Amount: 0, Slot: s.Self.Slot}
 }

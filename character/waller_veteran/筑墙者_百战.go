@@ -50,11 +50,10 @@ func init() {
 		Vision:  vetVision,
 		Fighter: true,
 		Look:    unit.Look{Color: vetColor, FX: []string{"veteran"}},
-	}, func(info unit.SpawnInfo) unit.Actor {
+	}, func(unit.SpawnInfo) unit.Actor {
 		return &百战{
 			nextBuild: wallEvery,
 			savedLeft: wallEvery,
-			rng:       rand.New(rand.NewPCG(uint64(info.Slot+1)*0x9E3779B97F4A7C15, 0xB7A11)),
 		}
 	})
 }
@@ -122,7 +121,7 @@ func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
 
 func (a *百战) place(ctx unit.Context, s unit.Sense, walls []unit.WallView) bool {
 	if a.rng == nil {
-		a.rng = rand.New(rand.NewPCG(ctx.ID|1, 0xB7A11))
+		a.rng = unit.NewRNG(ctx.ID)
 	}
 	var x, y, ang float64
 	var ok bool

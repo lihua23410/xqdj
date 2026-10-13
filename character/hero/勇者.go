@@ -82,8 +82,8 @@ const (
 	followTrailMax = 48
 
 	// 升级
-	levelHPGain   = 10.0
-	levelAtkGain  = 1.0
+	levelHPGain    = 10.0
+	levelAtkGain   = 1.0
 	levelHealRatio = 0.2 // 升级恢复当时最大生命值的比例
 )
 
@@ -239,7 +239,7 @@ func (h *勇者) Handle(ctx unit.Context, ev unit.Event) {
 
 func (h *勇者) onSense(ctx unit.Context, s unit.Sense) {
 	if h.rng == nil {
-		h.rng = rand.New(rand.NewPCG(ctx.ID*2654435761, 0x9e3779b97f4a7c15))
+		h.rng = unit.NewRNG(ctx.ID)
 	}
 	h.x, h.y = s.Self.X, s.Self.Y
 	h.r = s.Self.Radius

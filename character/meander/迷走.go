@@ -168,8 +168,7 @@ func (a *迷走) ensureRNG(id uint64) {
 	if a.rng != nil {
 		return
 	}
-	// 与狼人月亮同一套：用全局熵拌 ID，单靠 Self.ID/时间当种子会退化失败。
-	a.rng = rand.New(rand.NewPCG(rand.Uint64()^id, rand.Uint64()))
+	a.rng = unit.NewRNG(id)
 }
 
 func (a *迷走) boot(ctx unit.Context, s unit.Sense) {

@@ -149,7 +149,7 @@ func (a *钓鱼佬) ensureRNG(id uint64) {
 	if a.rng != nil {
 		return
 	}
-	a.rng = rand.New(rand.NewPCG(rand.Uint64()^id, rand.Uint64()))
+	a.rng = unit.NewRNG(id)
 }
 
 func (a *钓鱼佬) onHit(ctx unit.Context, d unit.IncomingDamage) {

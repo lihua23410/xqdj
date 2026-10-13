@@ -37,7 +37,7 @@ const (
 	kunaiDamage         = 3.0
 	kunaiCritDamage     = 10.0
 	kunaiCritChance     = 0.10
-	kunaiFlight         = 0.6 // 苦无飞行时间（秒），伤害在飞到落点时结算
+	kunaiFlight         = 0.6   // 苦无飞行时间（秒），伤害在飞到落点时结算
 	kunaiOvershoot      = 320.0 // 苦无飞过目标后继续飞的世界距离
 
 	bellHitsForPurify = 3
@@ -171,7 +171,7 @@ func (t *谭泳辰老先生) onSense(ctx unit.Context, s unit.Sense) {
 	if !t.boot {
 		t.boot = true
 		if t.rng == nil {
-			t.rng = rand.New(rand.NewPCG(ctx.ID*2654435761+7, 0x9e3779b97f4a7c15))
+			t.rng = unit.NewRNG(ctx.ID)
 		}
 		t.spawnItems(ctx, s)
 		t.nextAttackAt = s.Time

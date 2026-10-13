@@ -151,6 +151,7 @@ type 面灵气 struct {
 	lastFac    string
 	steerReady float64
 	steerWait  bool
+	rng        *rand.Rand
 }
 
 func (m *面灵气) Handle(ctx unit.Context, ev unit.Event) {
@@ -229,9 +230,16 @@ func (m *面灵气) tickHook(ctx unit.Context, s unit.Sense) {
 	}
 }
 
+func (m *面灵气) ensureRNG(id uint64) *rand.Rand {
+	if m.rng == nil {
+		m.rng = unit.NewRNG(id)
+	}
+	return m.rng
+}
+
 func (m *面灵气) grant(ctx unit.Context, s unit.Sense) {
 	if !m.marked {
-		selfF := unit.PickFaction(rand.IntN(4))
+		selfF := unit.PickFaction(m.ensureRNG(ctx.ID).IntN(4))
 		ctx.Out <- unit.MarkFaction{
 			UnitID:  ctx.ID,
 			Faction: selfF,
@@ -253,7 +261,7 @@ func (m *面灵气) restamp(ctx unit.Context, s unit.Sense, cycle bool) {
 	out, in := amps(m.hook)
 	selfF := s.Self.Faction
 	if selfF == "" {
-		selfF = unit.PickFaction(rand.IntN(4))
+		selfF = unit.PickFaction(m.ensureRNG(ctx.ID).IntN(4))
 	}
 	ctx.Out <- unit.MarkFaction{
 		UnitID:  ctx.ID,
@@ -270,7 +278,7 @@ func (m *面灵气) restamp(ctx unit.Context, s unit.Sense, cycle bool) {
 func (m *面灵气) stampEnemy(ctx unit.Context, e *unit.Snapshot, cycle bool) {
 	ef := e.Faction
 	if ef == "" {
-		ef = unit.PickFaction(rand.IntN(4))
+		ef = unit.PickFaction(m.ensureRNG(ctx.ID).IntN(4))
 	}
 	ctx.Out <- unit.MarkFaction{
 		UnitID:  e.ID,

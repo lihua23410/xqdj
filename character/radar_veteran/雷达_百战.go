@@ -64,10 +64,9 @@ func init() {
 			Color: vetColor,
 			FX:    []string{"radar-vet"},
 		},
-	}, func(info unit.SpawnInfo) unit.Actor {
+	}, func(unit.SpawnInfo) unit.Actor {
 		return &百战{
 			hitAt: map[uint64]float64{},
-			rng:   rand.New(rand.NewPCG(uint64(info.Slot+1)*0x9E3779B97F4A7C15, 0xB7A11)),
 		}
 	})
 	p.Register(unit.Spec{
@@ -142,7 +141,7 @@ func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	if a.rng == nil {
-		a.rng = rand.New(rand.NewPCG(ctx.ID, ctx.ID^0xB7A11))
+		a.rng = unit.NewRNG(ctx.ID)
 	}
 	dx, dy := sweepDir(s.Time)
 	reach := clipReach(s.Self.X, s.Self.Y, dx, dy, visionOf(s), sweepWidth/2, s.Field, s.Walls)

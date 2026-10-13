@@ -6,12 +6,8 @@ import (
 )
 
 func TestStarMiuBootsOnCD(t *testing.T) {
-	old := miuStarRoll
-	miuStarRoll = func() float64 { return 0 }
-	defer func() { miuStarRoll = old }()
-
 	out := make(chan unit.Cmd, 32)
-	r := &R缪{}
+	r := &R缪{rng: lowRNG()}
 	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.Sense{Time: 0, Self: bodySelf(0, 0, 100, 0, 0)})
 	if !r.starMiu {
