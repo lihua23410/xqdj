@@ -1,5 +1,5 @@
 // 大六边形：平顶六边形外形，场心到场边原三倍默认连缩两次四分之一。
-// 开局两只中心对称的旋涡绕场心逆时针转；碰上就送到对面往场心偏一截，方向倒转。
+// 开局两只中心对称的旋涡绕场心逆时针转；战斗机、活随从、子弹碰上就送到对面往场心偏一截，方向倒转。Helper 不送。
 // 场心一条挡视线硬墙，几何和转速同圆那份，由场地演员砌，不是预放墙。
 package 大六边形
 
@@ -209,11 +209,7 @@ func warpable(o unit.Snapshot) bool {
 	if o.Radius <= 0 {
 		return false
 	}
-	switch o.Kind {
-	case KindWidehex, KindVortex:
-		return false
-	}
-	return true
+	return o.Role == unit.RoleFighter || o.Role == unit.RoleProjectile || o.Mortal
 }
 
 func overlapping(a, b unit.Snapshot) bool {

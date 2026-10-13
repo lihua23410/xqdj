@@ -170,6 +170,24 @@ func TestWarpSendsInwardAndFlips(t *testing.T) {
 	}
 }
 
+func TestWarpSkipsHelper(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	a := &大六边形{booted: true, a: 2, b: 3, inside: map[uint64]uint64{}, cool: map[uint64]float64{}}
+	ctx := unit.Context{ID: 1, Kind: KindWidehex, Out: out}
+	va := unit.Snapshot{ID: 2, Kind: KindVortex, OwnerID: 1, X: orbitR, Y: 0, Radius: vortexR}
+	vb := unit.Snapshot{ID: 3, Kind: KindVortex, OwnerID: 1, X: -orbitR, Y: 0, Radius: vortexR}
+	moon := unit.Snapshot{ID: 11, Kind: "狼人月亮", Role: unit.RoleHelper, X: orbitR, Y: 0, Radius: 34}
+	a.Handle(ctx, unit.Sense{
+		Time: 1, Self: unit.Snapshot{ID: 1, Kind: KindWidehex},
+		Nearby: []unit.Snapshot{va, vb, moon},
+	})
+	for _, c := range drain(out) {
+		if tp, ok := c.(unit.Teleport); ok && tp.UnitID == moon.ID {
+			t.Fatalf("helper should not warp: %+v", tp)
+		}
+	}
+}
+
 func TestWarpSkipsVortexAndStayingInside(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	a := &大六边形{booted: true, a: 2, b: 3, inside: map[uint64]uint64{10: 2}, cool: map[uint64]float64{}}
