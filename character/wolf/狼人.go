@@ -108,17 +108,16 @@ const (
 )
 
 type 狼人 struct {
-	arc         unit.AttachState
-	phase       int
-	bite        int
-	dashesLeft  int
-	lockUntil   float64
-	aimX, aimY  float64
-	slot        int
-	x, y        float64
-	selfInMoon  bool
-	enemyInMoon bool
-	booted      bool
+	arc        unit.AttachState
+	phase      int
+	bite       int
+	dashesLeft int
+	lockUntil  float64
+	aimX, aimY float64
+	slot       int
+	x, y       float64
+	insideMoon map[uint64]bool
+	booted     bool
 }
 
 type 月亮 struct{}
@@ -180,18 +179,30 @@ func (w *狼人) bootMoon(ctx unit.Context, s unit.Sense) {
 
 func (w *狼人) checkTouches(ctx unit.Context, s unit.Sense) {
 	moon := findMoon(s, ctx.ID)
-	selfHit := moon != nil && touching(s.Self, *moon)
-	if selfHit && !w.selfInMoon {
-		w.onTouch(ctx, s)
+	cur := map[uint64]bool{}
+	if moon != nil {
+		if touching(s.Self, *moon) {
+			cur[s.Self.ID] = true
+		}
+		for i := range s.Nearby {
+			o := &s.Nearby[i]
+			if !unit.Hittable(*o, s.Self.Slot) {
+				continue
+			}
+			if touching(*o, *moon) {
+				cur[o.ID] = true
+			}
+		}
 	}
-	w.selfInMoon = selfHit
-
-	en := enemyOf(s)
-	enHit := moon != nil && en != nil && touching(*en, *moon)
-	if enHit && !w.enemyInMoon {
-		w.onTouch(ctx, s)
+	if w.insideMoon == nil {
+		w.insideMoon = map[uint64]bool{}
 	}
-	w.enemyInMoon = enHit
+	for id := range cur {
+		if !w.insideMoon[id] {
+			w.onTouch(ctx, s)
+		}
+	}
+	w.insideMoon = cur
 }
 
 func (w *狼人) onTouch(ctx unit.Context, s unit.Sense) {
