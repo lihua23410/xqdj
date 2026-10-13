@@ -395,7 +395,30 @@ func (m *Match) SetSlot(slot int, kind string) {
 	if m.phase != PhaseSelect {
 		return
 	}
+	if m.team {
+		if len(m.slots[slot]) >= maxSideN {
+			return
+		}
+		m.slots[slot] = append(m.slots[slot], kind)
+		return
+	}
 	m.slots[slot] = []string{kind}
+}
+
+func (m *Match) RemoveSeat(side, index int) {
+	if side < 0 || side > 1 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect || !m.team {
+		return
+	}
+	cur := m.slots[side]
+	if index < 0 || index >= len(cur) {
+		return
+	}
+	m.slots[side] = append(cur[:index:index], cur[index+1:]...)
 }
 
 func (m *Match) SetSeat(side, index int, kind string) {
@@ -449,9 +472,8 @@ func (m *Match) UseTeam() {
 			unitpkg.SetLiveField(m.spec.toUnitField())
 		}
 	}
-	kinds := unitpkg.FighterKinds()
-	m.slots[0] = takeKinds(kinds, 0, maxSideN)
-	m.slots[1] = takeKinds(kinds, maxSideN, maxSideN)
+	m.slots[0] = []string{}
+	m.slots[1] = []string{}
 }
 
 func (m *Match) UseDuel() {
@@ -534,6 +556,9 @@ func (m *Match) Start() {
 		return
 	}
 	if m.phase != PhaseSelect && m.phase != PhaseEnded {
+		return
+	}
+	if m.team && (len(m.slots[0]) == 0 || len(m.slots[1]) == 0) {
 		return
 	}
 	m.resetLocked()

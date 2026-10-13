@@ -544,78 +544,77 @@ function renderLobby() {
   }
   lobbyKey = key;
   paintFields(fields);
-  if (teamPage) {
-    renderTeamLobby(kinds);
-    return;
-  }
+  paintKindGrids(kinds);
+  if (teamPage) paintRosters();
+  updateStartEnabled();
+}
+
+function paintKindGrids(kinds) {
   for (const [el, slot] of [
     [kinds0, 0],
     [kinds1, 1],
   ]) {
     if (!el) continue;
     el.innerHTML = "";
-    const current = sideList(slot)[0] || "";
+    const names = sideList(slot);
+    const current = names[0] || "";
+    const full = teamPage && names.length >= 3;
     for (const kind of kinds) {
       const b = document.createElement("button");
       b.textContent = kind;
       b.type = "button";
       b.dataset.slot = String(slot);
       paintKind(b, kind);
-      if (current === kind) b.classList.add("active");
-      b.onclick = () => send({ type: "select", slot, kind });
+      if (!teamPage && current === kind) b.classList.add("active");
+      if (full) b.disabled = true;
+      b.onclick = () => {
+        if (teamPage && sideList(slot).length >= 3) return;
+        send({ type: "select", slot, kind });
+      };
       el.appendChild(b);
     }
     const slotRoot = el.closest(".slot");
     if (slotRoot) {
-      paintKind(slotRoot, current);
+      const accent = teamPage ? names[names.length - 1] || "" : current;
+      paintKind(slotRoot, accent);
     }
   }
 }
 
-function renderTeamLobby(kinds) {
+function paintRosters() {
   for (const slot of [0, 1]) {
-    const host = document.getElementById(`seats-${slot}`);
+    const host = document.getElementById(`roster-list-${slot}`);
     if (!host) continue;
     host.innerHTML = "";
     const names = sideList(slot);
-    names.forEach((current, index) => {
-      const seat = document.createElement("div");
-      seat.className = "seat";
-      const h = document.createElement("h3");
-      h.textContent = String(index + 1);
-      seat.appendChild(h);
-      const list = document.createElement("div");
-      list.className = "kinds";
-      for (const kind of kinds) {
-        const b = document.createElement("button");
-        b.textContent = kind;
-        b.type = "button";
-        paintKind(b, kind);
-        if (kind === current) b.classList.add("active");
-        b.onclick = () => send({ type: "select", slot, index, kind });
-        list.appendChild(b);
-      }
-      seat.appendChild(list);
-      host.appendChild(seat);
-      paintKind(seat, current);
+    const head = host.previousElementSibling;
+    if (head && head.tagName === "H2") {
+      head.textContent = slot === 0 ? `左边 ${names.length}/3` : `右边 ${names.length}/3`;
+    }
+    if (!names.length) {
+      const empty = document.createElement("p");
+      empty.className = "roster-empty";
+      empty.textContent = "点击角色加入";
+      host.appendChild(empty);
+      continue;
+    }
+    names.forEach((kind, index) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = kind;
+      paintKind(b, kind);
+      b.onclick = () => send({ type: "select", slot, index, kind: "" });
+      host.appendChild(b);
     });
   }
 }
 
-function bindSideCounts() {
-  if (!teamPage) return;
-  for (const slot of [0, 1]) {
-    const dec = document.getElementById(`side-dec-${slot}`);
-    const inc = document.getElementById(`side-inc-${slot}`);
-    if (dec) {
-      dec.onclick = () => send({ type: "side", slot, count: Math.max(1, sideList(slot).length - 1) });
-    }
-    if (inc) {
-      inc.onclick = () => send({ type: "side", slot, count: Math.min(3, sideList(slot).length + 1) });
-    }
-  }
+function updateStartEnabled() {
+  const btn = document.getElementById("btn-start");
+  if (!btn) return;
+  const ready = !teamPage || (sideList(0).length > 0 && sideList(1).length > 0);
+  btn.disabled = !ready;
 }
-bindSideCounts();
 
 function placeSeg(el, x1, y1, x2, y2, kind) {
   const dx = x2 - x1;
@@ -1174,7 +1173,7 @@ function renderArena() {
 let wasLobby = true;
 
 function releaseLobby() {
-  for (const id of ["seats-0", "seats-1", "kinds-0", "kinds-1"]) {
+  for (const id of ["roster-list-0", "roster-list-1", "kinds-0", "kinds-1"]) {
     const el = document.getElementById(id);
     if (el) el.replaceChildren();
   }

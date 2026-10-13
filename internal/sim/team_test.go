@@ -237,3 +237,27 @@ func TestSlimeKillCreditsSummoner(t *testing.T) {
 	}
 	t.Fatalf("slime kill exp %v", exp)
 }
+
+func TestTeamPickAppendsAndDrops(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.UseTeam()
+	m.SetSlot(0, character.KindDummy)
+	m.SetSlot(0, character.KindMelee)
+	m.SetSlot(0, character.KindRanged)
+	m.SetSlot(0, character.KindWaller)
+	m.RemoveSeat(0, 1)
+	m.mu.Lock()
+	got := append([]string{}, m.slots[0]...)
+	m.mu.Unlock()
+	want := []string{character.KindDummy, character.KindRanged}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("slots %v want %v", got, want)
+	}
+	m.Start()
+	m.mu.Lock()
+	phase := m.phase
+	m.mu.Unlock()
+	if phase != PhaseSelect {
+		t.Fatalf("empty right side must not start, phase %s", phase)
+	}
+}

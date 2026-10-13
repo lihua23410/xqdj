@@ -144,7 +144,11 @@ func main() {
 			switch msg.Type {
 			case "select":
 				if msg.Index != nil {
-					match.SetSeat(msg.Slot, *msg.Index, msg.Kind)
+					if msg.Kind == "" {
+						match.RemoveSeat(msg.Slot, *msg.Index)
+					} else {
+						match.SetSeat(msg.Slot, *msg.Index, msg.Kind)
+					}
 				} else {
 					match.SetSlot(msg.Slot, msg.Kind)
 				}
