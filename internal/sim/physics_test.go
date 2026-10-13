@@ -28,6 +28,24 @@ func TestDefaultOutlineContainsCenter(t *testing.T) {
 	}
 }
 
+func TestCapsulesSweptCatchesTunnel(t *testing.T) {
+	a0, a1 := vec{-40, 0}, vec{40, 0}
+	an0, an1 := vec{-40, 50}, vec{40, 50}
+	b0, b1 := vec{-40, 20}, vec{40, 20}
+	bn0, bn1 := vec{-40, -30}, vec{40, -30}
+	if segDist(an0, an1, bn0, bn1) <= 12 {
+		t.Fatal("end poses overlap; test would not prove sweep")
+	}
+	if !capsulesSwept(a0, a1, an0, an1, 6, b0, b1, bn0, bn1, 6) {
+		t.Fatal("expected swept overlap")
+	}
+	miss0, miss1 := vec{-40, 100}, vec{40, 100}
+	missn0, missn1 := vec{-40, 101}, vec{40, 101}
+	if capsulesSwept(a0, a1, a0, a1, 6, miss0, miss1, missn0, missn1, 6) {
+		t.Fatal("far walls should not slam")
+	}
+}
+
 func TestSweptPointVsCapsuleHeadOn(t *testing.T) {
 	t0, n, ok := sweptPointVsCapsule(vec{-20, 0}, vec{10, 0}, 2, vec{0, -100}, vec{0, 100}, 6)
 	if !ok {

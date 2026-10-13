@@ -184,6 +184,37 @@ func TestOverlappingWallsSlam(t *testing.T) {
 	}
 }
 
+func TestSlamSweptCatchesTunnel(t *testing.T) {
+	m := newWallMatch(t)
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	owner := fighterByKind(m, character.KindWaller)
+	m.placeWallLocked(unitpkg.PlaceWall{
+		OwnerID: owner.id, Slot: owner.slot, Kind: owner.kind,
+		X1: -40, Y1: 0, X2: 40, Y2: 0, Radius: 6, Life: -1,
+	})
+	m.placeWallLocked(unitpkg.PlaceWall{
+		OwnerID: owner.id, Slot: owner.slot, Kind: owner.kind,
+		X1: -40, Y1: 20, X2: 40, Y2: 20, Radius: 6, Life: -1,
+	})
+	if d := segDist(m.walls[0].a, m.walls[0].b, m.walls[1].a, m.walls[1].b); d <= 12 {
+		t.Fatalf("start dist=%v already overlapping", d)
+	}
+	step := 50 / DT
+	m.setWallMotionLocked(unitpkg.SetWallMotion{
+		WallID: m.walls[0].id, VY: step, StunRadius: 24, StunDur: 1,
+	})
+	m.setWallMotionLocked(unitpkg.SetWallMotion{
+		WallID: m.walls[1].id, VY: -step, StunRadius: 24, StunDur: 1,
+	})
+	m.spinWallsLocked(DT)
+	if len(m.walls) != 0 {
+		d := segDist(m.walls[0].a, m.walls[0].b, m.walls[1].a, m.walls[1].b)
+		t.Fatalf("tunneled walls=%d endDist=%v", len(m.walls), d)
+	}
+}
+
 func newWallMatch(t *testing.T) *Match {
 	t.Helper()
 	m := NewMatchSeeded(1)

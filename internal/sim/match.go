@@ -96,32 +96,33 @@ const (
 )
 
 type barrier struct {
-	id          uint64
-	owner       uint64
-	slot        int
-	kind        string
-	a, b        vec
-	radius      float64
-	until       float64
-	amount      float64
-	hitAt       map[uint64]float64
-	hard        bool
-	square      bool
-	visionBlock bool
-	field       bool
-	spin        float64 // 弧度每秒，逆时针为正。0 表示不转。
-	ang         float64
-	base        float64
-	pivot       vec
-	halfLen     float64
-	vx, vy      float64
-	hitGap      float64
-	withOwner   bool
-	ram         float64
-	rammed      map[uint64]struct{}
-	stunR       float64
-	stunDur     float64
-	riding      map[uint64]struct{}
+	id           uint64
+	owner        uint64
+	slot         int
+	kind         string
+	a, b         vec
+	prevA, prevB vec
+	radius       float64
+	until        float64
+	amount       float64
+	hitAt        map[uint64]float64
+	hard         bool
+	square       bool
+	visionBlock  bool
+	field        bool
+	spin         float64 // 弧度每秒，逆时针为正。0 表示不转。
+	ang          float64
+	base         float64
+	pivot        vec
+	halfLen      float64
+	vx, vy       float64
+	hitGap       float64
+	withOwner    bool
+	ram          float64
+	rammed       map[uint64]struct{}
+	stunR        float64
+	stunDur      float64
+	riding       map[uint64]struct{}
 }
 
 type wallSnap struct {
@@ -1542,6 +1543,7 @@ func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
 		hitAt:       map[uint64]float64{},
 	}
 	w.bindPose()
+	w.prevA, w.prevB = w.a, w.b
 	m.walls = append(m.walls, w)
 }
 
@@ -1698,6 +1700,7 @@ func (m *Match) nailToWallLocked(u *unit, c unitpkg.Spawn) {
 
 func (m *Match) spinWallsLocked(dt float64) {
 	for _, w := range m.walls {
+		w.prevA, w.prevB = w.a, w.b
 		moved := false
 		if w.spin != 0 {
 			w.ang += w.spin * dt
@@ -1855,6 +1858,7 @@ func (m *Match) ramWallLocked(w *barrier) {
 	}
 }
 
+// slamWallsLocked 用扫描重叠，避免冲撞墙单帧跨过 2*radius 判定窗口。
 func (m *Match) slamWallsLocked() {
 	for i := 0; i < len(m.walls); i++ {
 		a := m.walls[i]
@@ -1866,7 +1870,7 @@ func (m *Match) slamWallsLocked() {
 			if b.owner != a.owner || b.stunR <= 0 {
 				continue
 			}
-			if segDist(a.a, a.b, b.a, b.b) > a.radius+b.radius {
+			if !capsulesSwept(a.prevA, a.prevB, a.a, a.b, a.radius, b.prevA, b.prevB, b.a, b.b, b.radius) {
 				continue
 			}
 			m.resolveSlamLocked(a, b)
