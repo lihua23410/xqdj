@@ -1,0 +1,58 @@
+/* 大六边形：平顶，宽 2R=1680、高 √3·R；一世界单位一像素，球与默认六边形同大。 */
+#hex[data-field="大六边形"] {
+  width: 1680px;
+  height: 1454.91px;
+  overflow: visible;
+  cursor: grab;
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+  background:
+    radial-gradient(circle at 50% 50%, #2a384c 0 22%, #1c2836 58%, #141c28 100%);
+  box-shadow: 0 0 40px #0008, inset 0 0 120px #3dd6c618;
+}
+
+/* 正中一圈淡六边形，尺度等于默认六边形，用来读这份有多大。flood 占用 ::after。 */
+#hex[data-field="大六边形"]::before {
+  content: "";
+  position: absolute;
+  inset: 33.333%;
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 1px solid #3dd6c628;
+}
+
+#arena.panel:has(#hex[data-field="大六边形"]) {
+  overflow: visible;
+  max-width: none;
+  width: max-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.stage-wrap:has(#hex[data-field="大六边形"]) {
+  overflow: visible;
+  max-height: none;
+  width: max-content;
+  justify-content: center;
+  align-items: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.stage-wrap:has(#hex[data-field="大六边形"]).dragging {
+  cursor: grabbing;
+}
+
+.stage:has(#hex[data-field="大六边形"]) {
+  width: 1680px;
+  height: 1454.91px;
+  overflow: visible;
+}
+
+#hex[data-field="大六边形"].flooded::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(61, 143, 212, 0.28);
+  pointer-events: none;
+}

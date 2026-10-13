@@ -174,10 +174,13 @@ func (a *弓箭) tick(ctx unit.Context, s unit.Sense) {
 	}
 	switch a.step {
 	case stepCharge:
+		if a.abortIfUnlocked(ctx, target) {
+			return
+		}
 		// 站定期间每帧把瞄准方向发出去：弓要跟着目标转，不然出膛方向（开火那拍重新瞄）和弓的朝向不一致
 		a.emitFace(ctx, s, target)
 		// 蓄力中贴脸：主动取消止损（这箭哑火），去等翻滚 CD
-		if target != nil && dist < closeRange {
+		if dist < closeRange {
 			a.cancel(ctx)
 			return
 		}
@@ -190,8 +193,11 @@ func (a *弓箭) tick(ctx unit.Context, s unit.Sense) {
 			a.step = stepIdle
 		}
 	case stepVolley:
+		if a.abortIfUnlocked(ctx, target) {
+			return
+		}
 		a.emitFace(ctx, s, target) // 齐射蓄力同理：每帧跟目标
-		if target != nil && dist < closeRange {
+		if dist < closeRange {
 			a.cancel(ctx)
 			return
 		}
@@ -246,7 +252,7 @@ func (a *弓箭) emitFace(ctx unit.Context, s unit.Sense, target *unit.Snapshot)
 	ctx.Out <- unit.FX{Name: "face", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot, X: s.Self.X, Y: s.Self.Y, VX: ux, VY: uy}
 }
 
-// cancel 收弓：蓄力被自己（贴脸止损）或翻滚打断，这一箭哑火。
+// cancel 收弓：蓄力被自己（贴脸止损 / 丢锁）或翻滚打断，这一箭哑火。
 // X/Y 必须带：前端拿 ctx.x/ctx.y 画特效，不带就按 (0,0) 画到场心去。
 func (a *弓箭) cancel(ctx unit.Context) {
 	a.step = stepIdle
@@ -254,8 +260,21 @@ func (a *弓箭) cancel(ctx unit.Context) {
 	ctx.Out <- unit.FX{Name: "cancel", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot, X: a.x, Y: a.y}
 }
 
-// shoot 朝锁定目标出一支箭；没有目标就朝当下的速度方向（至少不哑在原地）。
+// abortIfUnlocked 蓄力中途 Seek 不到人就收弓，不把箭射出去。
+func (a *弓箭) abortIfUnlocked(ctx unit.Context, target *unit.Snapshot) bool {
+	if target != nil {
+		return false
+	}
+	a.cancel(ctx)
+	return true
+}
+
+// shoot 朝锁定目标出一支箭。没有锁就不放。
 func (a *弓箭) shoot(ctx unit.Context, s unit.Sense, target *unit.Snapshot, kind string, dmg float64) {
+	if target == nil {
+		a.cancel(ctx)
+		return
+	}
 	ux, uy := a.aimDir(s, target)
 	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
 	a.spawnArrow(ctx, s, ux, uy, 0, kind)
@@ -279,6 +298,10 @@ func (a *弓箭) spawnArrow(ctx unit.Context, s unit.Sense, ux, uy, off float64,
 // fireVolley 四支贴排同射：垂直射击方向展开，箭心间隔 8（-12/-4/+4/+12）。
 // 不是扇面——四支平行飞，所以横移躲不开、只能躲远。
 func (a *弓箭) fireVolley(ctx unit.Context, s unit.Sense, target *unit.Snapshot) {
+	if target == nil {
+		a.cancel(ctx)
+		return
+	}
 	ux, uy := a.aimDir(s, target)
 	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
 	for i := 0; i < volleyN; i++ {

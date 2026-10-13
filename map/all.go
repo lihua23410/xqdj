@@ -9,4 +9,5 @@ import (
 	_ "xqdj/map/hex"
 	_ "xqdj/map/octagon"
 	_ "xqdj/map/volcano"
+	_ "xqdj/map/widehex"
 )

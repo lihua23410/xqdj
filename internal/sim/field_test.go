@@ -11,6 +11,7 @@ import (
 	六边形 "xqdj/map/hex"
 	八边形 "xqdj/map/octagon"
 	火山 "xqdj/map/volcano"
+	大六边形 "xqdj/map/widehex"
 )
 
 func TestSelectSnapshotListsFields(t *testing.T) {
@@ -93,6 +94,58 @@ func TestCircleFieldInstallsHardWallAndWalkableSpawn(t *testing.T) {
 	}
 	if len(m.walls) != 1 || !m.walls[0].hard || !m.walls[0].square || !m.walls[0].field {
 		t.Fatalf("walls=%+v", m.walls)
+	}
+	f := m.liveFieldLocked()
+	n := 0
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.role != unitpkg.RoleFighter {
+			continue
+		}
+		n++
+		if !f.Walkable(u.p.X, u.p.Y, u.radius) {
+			t.Fatalf("spawn (%v,%v) not walkable", u.p.X, u.p.Y)
+		}
+	}
+	if n != 2 {
+		t.Fatalf("fighters=%d", n)
+	}
+}
+
+func TestWideHexIsListedAndSpawnsInside(t *testing.T) {
+	m := NewMatchSeeded(1)
+	var msg struct {
+		Fields []string `json:"fields"`
+		Field  string   `json:"field"`
+	}
+	if err := json.Unmarshal(m.SnapshotJSON(), &msg); err != nil {
+		t.Fatal(err)
+	}
+	seen := false
+	for _, n := range msg.Fields {
+		if n == 大六边形.Name {
+			seen = true
+			break
+		}
+	}
+	if !seen {
+		t.Fatal("duel list missing 大六边形")
+	}
+	m.SetField(大六边形.Name)
+	if err := json.Unmarshal(m.SnapshotJSON(), &msg); err != nil {
+		t.Fatal(err)
+	}
+	if msg.Field != 大六边形.Name {
+		t.Fatalf("field=%s", msg.Field)
+	}
+	m.SetSlot(0, character.KindMelee)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.spec.name != 大六边形.Name || m.spec.extent != 大六边形.Extent {
+		t.Fatalf("field=%s extent=%v", m.spec.name, m.spec.extent)
 	}
 	f := m.liveFieldLocked()
 	n := 0

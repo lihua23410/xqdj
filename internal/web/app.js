@@ -833,14 +833,18 @@ function syncFollow() {
 
 let mapDrag = null;
 
-function chimeraWrap() {
+function isLargeField() {
+  return (hexR || 0) > 320;
+}
+
+function mapWrap() {
   return hex.parentElement && hex.parentElement.parentElement;
 }
 
-function layoutChimeraMap() {
-  const chimera = state.field === "奇美拉";
+function layoutLargeMap() {
+  const large = isLargeField();
   const size = Math.max(2 * hexR, 1);
-  if (!chimera) {
+  if (!large) {
     hex.style.width = "";
     hex.style.height = "";
     hex.style.transform = "";
@@ -851,31 +855,40 @@ function layoutChimeraMap() {
     }
     return false;
   }
-  hex.style.width = `${size}px`;
-  hex.style.height = `${size}px`;
-  hex.style.transform = "";
-  if (overEl) {
-    overEl.style.width = `${size}px`;
-    overEl.style.height = `${size}px`;
-    overEl.style.transform = "";
+  // 奇美拉凹外形：JS 写成 2×最远点的正方形。凸的大场皮由 CSS 定宽高。
+  if (state.field === "奇美拉") {
+    hex.style.width = `${size}px`;
+    hex.style.height = `${size}px`;
+    if (overEl) {
+      overEl.style.width = `${size}px`;
+      overEl.style.height = `${size}px`;
+    }
+  } else {
+    hex.style.width = "";
+    hex.style.height = "";
+    if (overEl) {
+      overEl.style.width = "";
+      overEl.style.height = "";
+    }
   }
+  hex.style.transform = "";
+  if (overEl) overEl.style.transform = "";
   const stage = hex.parentElement;
   if (stage) stage.style.overflow = "visible";
   return true;
 }
 
-function panChimeraTo(worldX, worldY) {
+function panLargeMapTo(worldX, worldY) {
   if (mapDrag) return;
-  const size = Math.max(2 * hexR, 1);
   const rect = hex.getBoundingClientRect();
-  const docX = rect.left + window.scrollX + size / 2 + worldX;
-  const docY = rect.top + window.scrollY + size / 2 - worldY;
+  const docX = rect.left + window.scrollX + rect.width / 2 + worldX;
+  const docY = rect.top + window.scrollY + rect.height / 2 - worldY;
   window.scrollTo(docX - window.innerWidth / 2, docY - window.innerHeight / 2);
 }
 
 function onMapPointerDown(e) {
-  if (state.field !== "奇美拉" || e.button !== 0) return;
-  const wrap = chimeraWrap();
+  if (!isLargeField() || e.button !== 0) return;
+  const wrap = mapWrap();
   if (!wrap) return;
   e.preventDefault();
   mapDrag = {
@@ -902,14 +915,14 @@ function onMapPointerMove(e) {
 function onMapPointerUp(e) {
   if (!mapDrag || e.pointerId !== mapDrag.id) return;
   mapDrag = null;
-  const wrap = chimeraWrap();
+  const wrap = mapWrap();
   if (wrap) wrap.classList.remove("dragging");
 }
 
 function applyCamera(cam) {
-  if (layoutChimeraMap()) {
-    if (cam && !mapDrag) panChimeraTo(cam.x, cam.y);
-    else if (!followHeld && !mapDrag) panChimeraTo(0, 0);
+  if (layoutLargeMap()) {
+    if (cam && !mapDrag) panLargeMapTo(cam.x, cam.y);
+    else if (!followHeld && !mapDrag) panLargeMapTo(0, 0);
     return 1;
   }
   const w = hex.clientWidth || 1;
@@ -944,7 +957,7 @@ function onFighterBar(ev) {
   if (follow && follow.slot === slot && follow.seat === seat) {
     follow = null;
     followHeld = false;
-    panChimeraTo(0, 0);
+    panLargeMapTo(0, 0);
     return;
   }
   follow = { slot, seat };

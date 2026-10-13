@@ -133,3 +133,60 @@ func TestSafeDirKeepsInsideField(t *testing.T) {
 		t.Fatalf("撤进了死角（被夹回 %v）：(%v,%v)", loss, ux, uy)
 	}
 }
+
+func hasSpawn(cmds []unit.Cmd) bool {
+	for _, c := range cmds {
+		if _, ok := c.(unit.Spawn); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func hasFX(cmds []unit.Cmd, name string) bool {
+	for _, c := range cmds {
+		if fx, ok := c.(unit.FX); ok && fx.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// 没锁到人：不起手、不出箭。
+func TestIdleWithoutLockDoesNotShoot(t *testing.T) {
+	unit.SetLiveField(unit.HexField())
+	f := &弓箭{}
+	cmds := feed(f, 1, unit.Sense{Time: 1.0, Self: archerSelf()})
+	if hasSpawn(cmds) || hasFX(cmds, "shoot") || hasFX(cmds, "volley") || hasFX(cmds, "draw") {
+		t.Fatalf("没锁还放了：%v", cmds)
+	}
+}
+
+// 蓄力到点时锁丢了：收弓，这一箭哑火。
+func TestChargeLostLockDoesNotShoot(t *testing.T) {
+	unit.SetLiveField(unit.HexField())
+	f := &弓箭{step: stepCharge, until: 1.0, booted: true, slot: 0}
+	cmds := feed(f, 1, unit.Sense{Time: 1.0, Self: archerSelf()})
+	if hasSpawn(cmds) || hasFX(cmds, "shoot") || hasFX(cmds, "volley") {
+		t.Fatalf("丢锁还出箭：%v", cmds)
+	}
+	if !hasFX(cmds, "cancel") {
+		t.Fatalf("丢锁没收弓：%v", cmds)
+	}
+	if f.step != stepIdle {
+		t.Fatalf("step=%d want idle", f.step)
+	}
+}
+
+// 齐射站定到点时锁丢了：同样不出箭。
+func TestVolleyLostLockDoesNotShoot(t *testing.T) {
+	unit.SetLiveField(unit.HexField())
+	f := &弓箭{step: stepVolley, until: 1.0, booted: true, slot: 0}
+	cmds := feed(f, 1, unit.Sense{Time: 1.0, Self: archerSelf()})
+	if hasSpawn(cmds) || hasFX(cmds, "shoot") || hasFX(cmds, "volley") {
+		t.Fatalf("丢锁还齐射：%v", cmds)
+	}
+	if !hasFX(cmds, "cancel") {
+		t.Fatalf("丢锁没收弓：%v", cmds)
+	}
+}
