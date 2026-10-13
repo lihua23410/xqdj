@@ -15,7 +15,7 @@ func TestWideHexField(t *testing.T) {
 	if f.Shape != unit.ShapeHex || f.Extent != Extent || len(f.Walls) != 0 || f.BootKind != "" {
 		t.Fatalf("field=%+v", f)
 	}
-	if Extent != 3*unit.HexRadius {
+	if Extent != 9*unit.HexRadius/4 {
 		t.Fatalf("extent=%v", Extent)
 	}
 }

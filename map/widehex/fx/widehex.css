@@ -1,7 +1,7 @@
-/* 大六边形：平顶，宽 2R=1680、高 √3·R；一世界单位一像素，球与默认六边形同大。 */
+/* 大六边形：平顶，宽 2R=1260、高 √3·R；一世界单位一像素，球与默认六边形同大。R 与 Go 的 Extent 对齐。 */
 #hex[data-field="大六边形"] {
-  width: 1680px;
-  height: 1454.91px;
+  width: 1260px;
+  height: 1091.19px;
   overflow: visible;
   cursor: grab;
   clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
@@ -14,7 +14,7 @@
 #hex[data-field="大六边形"]::before {
   content: "";
   position: absolute;
-  inset: 33.333%;
+  inset: 27.778%;
   clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
   pointer-events: none;
   box-sizing: border-box;
@@ -44,8 +44,8 @@
 }
 
 .stage:has(#hex[data-field="大六边形"]) {
-  width: 1680px;
-  height: 1454.91px;
+  width: 1260px;
+  height: 1091.19px;
   overflow: visible;
 }
 

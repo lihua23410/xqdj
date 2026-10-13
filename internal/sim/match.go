@@ -126,17 +126,18 @@ type barrier struct {
 }
 
 type wallSnap struct {
-	ID     uint64  `json:"id"`
-	X1     float64 `json:"x1"`
-	Y1     float64 `json:"y1"`
-	X2     float64 `json:"x2"`
-	Y2     float64 `json:"y2"`
-	Radius float64 `json:"radius"`
-	Kind   string  `json:"kind"`
-	Slot   int     `json:"slot"`
-	Hard   bool    `json:"hard,omitempty"`
-	Square bool    `json:"square,omitempty"`
-	Field  bool    `json:"field,omitempty"`
+	ID          uint64  `json:"id"`
+	X1          float64 `json:"x1"`
+	Y1          float64 `json:"y1"`
+	X2          float64 `json:"x2"`
+	Y2          float64 `json:"y2"`
+	Radius      float64 `json:"radius"`
+	Kind        string  `json:"kind"`
+	Slot        int     `json:"slot"`
+	Hard        bool    `json:"hard,omitempty"`
+	Square      bool    `json:"square,omitempty"`
+	Field       bool    `json:"field,omitempty"`
+	VisionBlock bool    `json:"visionBlock,omitempty"`
 }
 
 type Match struct {
@@ -265,6 +266,7 @@ func (m *Match) SnapshotJSON() []byte {
 			ID: w.id, X1: w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
 			Radius: w.radius, Kind: w.kind, Slot: w.slot,
 			Hard: w.hard, Square: w.square, Field: w.field,
+			VisionBlock: w.visionBlock,
 		})
 	}
 	if m.phase == PhaseSelect {
