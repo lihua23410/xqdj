@@ -169,25 +169,47 @@ func (a *酒翁) spawnWine(ctx unit.Context, s unit.Sense, x float64) {
 // dropPoint 敌人当下 x 的场顶，只认外轮廓，不躲墙、不抄 280。
 func dropPoint(f unit.Field, x, radius float64) (float64, float64) {
 	x = clampXOnOutline(f, x, radius)
-	lo, hi := 0.0, f.Extent
+	hi := f.Extent
 	if hi < unit.MinExtent {
 		hi = unit.HexRadius
 	}
-	if !f.OutlineContains(x, lo, radius) {
+	if !f.OutlineContains(x, 0, radius) {
 		x = 0
 	}
-	if f.OutlineContains(x, hi, radius) {
-		return x, hi
+	if y, ok := ceiling(f, x, radius, hi); ok {
+		return x, y
 	}
-	for i := 0; i < 28; i++ {
-		mid := 0.5 * (lo + hi)
-		if f.OutlineContains(x, mid, radius) {
-			lo = mid
-		} else {
-			hi = mid
+	return x, 0
+}
+
+// ceiling 这条竖线上、轮廓里最高的一点。凹场地中间可以有空隙。
+func ceiling(f unit.Field, x, radius, hi float64) (float64, bool) {
+	const steps = 96
+	span := 2 * hi
+	prevOut := true
+	for i := 0; i <= steps; i++ {
+		y := hi - span*float64(i)/float64(steps)
+		in := f.OutlineContains(x, y, radius)
+		if in && prevOut {
+			if i == 0 {
+				return y, true
+			}
+			above := hi - span*float64(i-1)/float64(steps)
+			lo := y
+			top := above
+			for k := 0; k < 24; k++ {
+				mid := 0.5 * (lo + top)
+				if f.OutlineContains(x, mid, radius) {
+					lo = mid
+				} else {
+					top = mid
+				}
+			}
+			return lo, true
 		}
+		prevOut = !in
 	}
-	return x, lo
+	return 0, false
 }
 
 func clampXOnOutline(f unit.Field, x, radius float64) float64 {

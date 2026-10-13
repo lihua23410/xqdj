@@ -32,12 +32,11 @@ const (
 	twinRedColor  = "#e24b4b"
 	twinBlueColor = "#4b7be2"
 
-	purpleKind      = "紫弹"
-	purpleRadius    = 32.0
-	purpleSpeed     = 300.0
-	purpleDamage    = 12.0
-	purpleCD        = 0.5
-	purpleOffscreen = 640.0
+	purpleKind   = "紫弹"
+	purpleRadius = 32.0
+	purpleSpeed  = 300.0
+	purpleDamage = 12.0
+	purpleCD     = 0.5
 
 	// 互相吸引：圆心距在 (attractMin, attractMax] 且不在互吸冷却内时，双向改速度。
 	attractMin = 36.0
@@ -450,7 +449,7 @@ type 紫弹 struct {
 func (b *紫弹) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.Sense:
-		if math.Abs(e.Self.X) > purpleOffscreen || math.Abs(e.Self.Y) > purpleOffscreen {
+		if !e.Field.OutlineContains(e.Self.X, e.Self.Y, 0) {
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		}
 	case unit.Collision:

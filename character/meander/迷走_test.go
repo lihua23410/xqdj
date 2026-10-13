@@ -177,7 +177,7 @@ func TestDriftStaysInLeashAndWalkable(t *testing.T) {
 				t.Fatalf("ring %d center not walkable at %v,%v", i, r.x, r.y)
 			}
 			if drifts[i].track {
-				ad := math.Hypot(drifts[i].ax, drifts[i].ay)
+				ad := math.Hypot(drifts[i].ax-m.rings[0].x, drifts[i].ay-m.rings[0].y)
 				if math.Abs(ad-m.guideR) > 1e-3 {
 					t.Fatalf("track %d anchor left guide: %v vs %v", i, ad, m.guideR)
 				}

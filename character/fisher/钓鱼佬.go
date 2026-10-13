@@ -486,10 +486,16 @@ func (a *钓鱼佬) emitHUD(ctx unit.Context, s unit.Sense) {
 func overlappingPond(s unit.Sense) *unit.Snapshot {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind != KindPond && o.Kind != KindFlood {
+		if o.OwnerID != s.Self.ID {
 			continue
 		}
-		if o.OwnerID != s.Self.ID {
+		if o.Kind == KindFlood {
+			if s.Field.OutlineContains(s.Self.X, s.Self.Y, 0) {
+				return o
+			}
+			continue
+		}
+		if o.Kind != KindPond {
 			continue
 		}
 		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) <= o.Radius+s.Self.Radius {

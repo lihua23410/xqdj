@@ -453,6 +453,9 @@ const teamPage = document.body.dataset.page === "team";
 
 let state = { phase: "select", slots: [[], []], kinds: [], units: [] };
 let hexR = 280;
+let follow = null;
+let followHeld = false;
+const hiddenBody = new Set(["无下限术士", "分身者(百战)", "蛆"]);
 let hudKey = "";
 
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
@@ -503,6 +506,19 @@ document.getElementById("btn-pause").onclick = () => {
   else send({ type: "pause" });
 };
 document.getElementById("btn-end").onclick = () => send({ type: "end" });
+for (const id of ["side-0", "side-1"]) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("click", onFighterBar);
+}
+{
+  const wrap = document.querySelector(".stage-wrap");
+  if (wrap) {
+    wrap.addEventListener("pointerdown", onMapPointerDown);
+    wrap.addEventListener("pointermove", onMapPointerMove);
+    wrap.addEventListener("pointerup", onMapPointerUp);
+    wrap.addEventListener("pointercancel", onMapPointerUp);
+  }
+}
 
 let lobbyKey = "";
 
@@ -754,15 +770,201 @@ function renderHud(fighters) {
   }
 }
 
+function livingFighter(slot, seat) {
+  return (state.units || []).find(
+    (u) => u.role === "fighter" && u.slot === slot && u.seat === seat && u.hp > 0,
+  );
+}
+
+function firstLiving(slot) {
+  const seats = (state.units || [])
+    .filter((u) => u.role === "fighter" && u.slot === slot && u.hp > 0)
+    .map((u) => u.seat)
+    .sort((a, b) => a - b);
+  return seats.length ? { slot, seat: seats[0] } : null;
+}
+
+function nextLiving(slot, seat) {
+  const same = (state.units || [])
+    .filter((u) => u.role === "fighter" && u.slot === slot && u.hp > 0 && u.seat !== seat)
+    .map((u) => u.seat)
+    .sort((a, b) => a - b);
+  const after = same.find((s) => s > seat);
+  if (after != null) return { slot, seat: after };
+  if (same.length) return { slot, seat: same[0] };
+  return firstLiving(slot === 0 ? 1 : 0);
+}
+
+function cameraPoint(f) {
+  if (!f) return null;
+  if (!hiddenBody.has(f.kind)) return { x: f.x, y: f.y };
+  const mins = (state.units || []).filter(
+    (u) => u.role === "minion" && u.ownerId === f.id && u.hp > 0,
+  );
+  if (!mins.length) return { x: f.x, y: f.y };
+  let best = -Infinity;
+  for (const m of mins) if (m.hp > best) best = m.hp;
+  const tied = mins.filter((m) => m.hp >= best - 1e-6);
+  let x = 0;
+  let y = 0;
+  for (const m of tied) {
+    x += m.x;
+    y += m.y;
+  }
+  return { x: x / tied.length, y: y / tied.length };
+}
+
+function syncFollow() {
+  const phase = state.phase;
+  if (phase === "select") {
+    follow = null;
+    followHeld = false;
+    return null;
+  }
+  if (follow) {
+    const cur = livingFighter(follow.slot, follow.seat);
+    if (!cur) {
+      follow = nextLiving(follow.slot, follow.seat);
+    }
+  }
+  if (!follow) return null;
+  return cameraPoint(livingFighter(follow.slot, follow.seat));
+}
+
+let mapDrag = null;
+
+function chimeraWrap() {
+  return hex.parentElement && hex.parentElement.parentElement;
+}
+
+function layoutChimeraMap() {
+  const chimera = state.field === "奇美拉";
+  const size = Math.max(2 * hexR, 1);
+  if (!chimera) {
+    hex.style.width = "";
+    hex.style.height = "";
+    hex.style.transform = "";
+    if (overEl) {
+      overEl.style.width = "";
+      overEl.style.height = "";
+      overEl.style.transform = "";
+    }
+    return false;
+  }
+  hex.style.width = `${size}px`;
+  hex.style.height = `${size}px`;
+  hex.style.transform = "";
+  if (overEl) {
+    overEl.style.width = `${size}px`;
+    overEl.style.height = `${size}px`;
+    overEl.style.transform = "";
+  }
+  const stage = hex.parentElement;
+  if (stage) stage.style.overflow = "visible";
+  return true;
+}
+
+function panChimeraTo(worldX, worldY) {
+  if (mapDrag) return;
+  const size = Math.max(2 * hexR, 1);
+  const rect = hex.getBoundingClientRect();
+  const docX = rect.left + window.scrollX + size / 2 + worldX;
+  const docY = rect.top + window.scrollY + size / 2 - worldY;
+  window.scrollTo(docX - window.innerWidth / 2, docY - window.innerHeight / 2);
+}
+
+function onMapPointerDown(e) {
+  if (state.field !== "奇美拉" || e.button !== 0) return;
+  const wrap = chimeraWrap();
+  if (!wrap) return;
+  e.preventDefault();
+  mapDrag = {
+    id: e.pointerId,
+    x: e.clientX,
+    y: e.clientY,
+    left: window.scrollX,
+    top: window.scrollY,
+  };
+  follow = null;
+  followHeld = true;
+  wrap.classList.add("dragging");
+  wrap.setPointerCapture(e.pointerId);
+}
+
+function onMapPointerMove(e) {
+  if (!mapDrag || e.pointerId !== mapDrag.id) return;
+  window.scrollTo(
+    mapDrag.left - (e.clientX - mapDrag.x),
+    mapDrag.top - (e.clientY - mapDrag.y),
+  );
+}
+
+function onMapPointerUp(e) {
+  if (!mapDrag || e.pointerId !== mapDrag.id) return;
+  mapDrag = null;
+  const wrap = chimeraWrap();
+  if (wrap) wrap.classList.remove("dragging");
+}
+
+function applyCamera(cam) {
+  if (layoutChimeraMap()) {
+    if (cam && !mapDrag) panChimeraTo(cam.x, cam.y);
+    else if (!followHeld && !mapDrag) panChimeraTo(0, 0);
+    return 1;
+  }
+  const w = hex.clientWidth || 1;
+  const h = hex.clientHeight || 1;
+  const scale = w / (2 * hexR);
+  let tx = 0;
+  let ty = 0;
+  if (cam) {
+    tx = -cam.x * scale;
+    ty = cam.y * scale;
+  }
+  const tf = cam ? `translate(${tx}px, ${ty}px)` : "";
+  hex.style.transformOrigin = "50% 50%";
+  hex.style.transform = tf;
+  if (overEl) {
+    overEl.style.transformOrigin = "50% 50%";
+    overEl.style.transform = tf;
+  }
+  const stage = hex.parentElement;
+  if (stage) stage.style.overflow = cam ? "hidden" : "";
+  return scale;
+}
+
+function onFighterBar(ev) {
+  const bar = ev.target.closest(".hp");
+  const card = ev.target.closest(".fighter");
+  if (!bar || !card) return;
+  const m = /^fighter-(\d+)-(\d+)$/.exec(card.id);
+  if (!m) return;
+  const slot = Number(m[1]);
+  const seat = Number(m[2]);
+  if (follow && follow.slot === slot && follow.seat === seat) {
+    follow = null;
+    followHeld = false;
+    panChimeraTo(0, 0);
+    return;
+  }
+  follow = { slot, seat };
+  followHeld = false;
+}
+
 function renderArena() {
   // 场皮外形/尺寸由各 map 私产 CSS 按 [data-field] 自绘，引擎不按 fieldShape 分支。
   if (state.field) hex.dataset.field = state.field;
   else delete hex.dataset.field;
-  const w = hex.clientWidth;
-  const h = hex.clientHeight;
-  const scale = w / (2 * hexR);
+  const cam = syncFollow();
+  const scale = applyCamera(cam);
+  const w = hex.clientWidth || 1;
+  const h = hex.clientHeight || 1;
   const cx = w / 2;
   const cy = h / 2;
+  hex.classList.toggle(
+    "flooded",
+    (state.units || []).some((u) => u.kind === "钓鱼佬场鱼塘"),
+  );
   hex.classList.toggle("hitstop", (state.hitStop || 0) > 0);
 
   const fighters = (state.units || []).filter((u) => u.role === "fighter");

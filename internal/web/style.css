@@ -166,6 +166,7 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .side[data-slot="1"] .name { text-align: right; }
 .hp {
   height: 10px;
+  cursor: pointer;
   background: #21262d;
   border-radius: 99px;
   overflow: hidden;

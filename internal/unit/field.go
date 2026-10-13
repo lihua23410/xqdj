@@ -14,9 +14,10 @@ const (
 // Shape 名只是登记键；具体判定由 map 包 RegisterOutline。
 const (
 	ShapeHex     = "hex"
-	ShapeCircle = "circle"
-	ShapeSquare = "square"
+	ShapeCircle  = "circle"
+	ShapeSquare  = "square"
 	ShapeOctagon = "octagon"
+	ShapeChimera = "chimera"
 )
 
 type WallKind int

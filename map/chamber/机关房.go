@@ -101,7 +101,7 @@ func (a *机关房) ensureRNG(id uint64, t float64) {
 
 func (a *机关房) tickCycle(ctx unit.Context, s unit.Sense) {
 	if a.locking {
-		a.emitLockFX(ctx)
+		a.emitLockFX(ctx, s.Self.X, s.Self.Y)
 		if s.Time+1e-9 >= a.lockUntil {
 			a.locking = false
 			a.nextLock = s.Time + waitSec
@@ -119,7 +119,7 @@ func (a *机关房) tickCycle(ctx unit.Context, s unit.Sense) {
 	if !a.winding {
 		return
 	}
-	a.emitWarnFX(ctx)
+	a.emitWarnFX(ctx, s.Self.X, s.Self.Y)
 	if s.Time+1e-9 < a.windUntil {
 		return
 	}
@@ -133,28 +133,33 @@ func (a *机关房) beginLock(ctx unit.Context, s unit.Sense) {
 	half := squareHalf()
 	a.placeGridWalls(ctx, s, half)
 	for i := 0; i < 2; i++ {
-		a.gas[i] = cellInner(half, a.toxic[i])
+		a.gas[i] = shiftRect(cellInner(half, a.toxic[i]), s.Self.X, s.Self.Y)
 	}
-	a.emitLockFX(ctx)
+	a.emitLockFX(ctx, s.Self.X, s.Self.Y)
 }
 
 func (a *机关房) placeGridWalls(ctx unit.Context, s unit.Sense, half float64) {
 	// 有寿胶囊墙：不改引擎硬墙到期逻辑；刮伤 0、方端。
+	ox, oy := s.Self.X, s.Self.Y
 	divs := []float64{-half / 3, half / 3}
 	for _, x := range divs {
 		ctx.Out <- unit.PlaceWall{
 			OwnerID: ctx.ID, Slot: s.Self.Slot, Kind: KindChamber,
-			X1: x, Y1: -half, X2: x, Y2: half,
+			X1: ox + x, Y1: oy - half, X2: ox + x, Y2: oy + half,
 			Radius: wallHalf, Life: lockSec, Amount: 0, Square: true,
 		}
 	}
 	for _, y := range divs {
 		ctx.Out <- unit.PlaceWall{
 			OwnerID: ctx.ID, Slot: s.Self.Slot, Kind: KindChamber,
-			X1: -half, Y1: y, X2: half, Y2: y,
+			X1: ox - half, Y1: oy + y, X2: ox + half, Y2: oy + y,
 			Radius: wallHalf, Life: lockSec, Amount: 0, Square: true,
 		}
 	}
+}
+
+func shiftRect(r cellRect, ox, oy float64) cellRect {
+	return cellRect{r.x0 + ox, r.y0 + oy, r.x1 + ox, r.y1 + oy}
 }
 
 func (a *机关房) pickToxic() {
@@ -190,13 +195,14 @@ func cellInner(half float64, idx int) cellRect {
 	return cellRect{x0, y0, x1, y1}
 }
 
-func (a *机关房) emitWarnFX(ctx unit.Context) {
+func (a *机关房) emitWarnFX(ctx unit.Context, ox, oy float64) {
 	half := squareHalf()
 	ctx.Out <- unit.FX{
 		Name: "grid", Kind: KindChamber, UnitID: ctx.ID, Amount: half,
+		X: ox, Y: oy,
 	}
 	for i := 0; i < 2; i++ {
-		r := cellInner(half, a.toxic[i])
+		r := shiftRect(cellInner(half, a.toxic[i]), ox, oy)
 		ctx.Out <- unit.FX{
 			Name: "warn", Kind: KindChamber, UnitID: ctx.ID,
 			X: r.x0, Y: r.y0, VX: r.x1, VY: r.y1,
@@ -204,10 +210,11 @@ func (a *机关房) emitWarnFX(ctx unit.Context) {
 	}
 }
 
-func (a *机关房) emitLockFX(ctx unit.Context) {
+func (a *机关房) emitLockFX(ctx unit.Context, ox, oy float64) {
 	half := squareHalf()
 	ctx.Out <- unit.FX{
 		Name: "grid", Kind: KindChamber, UnitID: ctx.ID, Amount: half,
+		X: ox, Y: oy,
 	}
 	for i := 0; i < 2; i++ {
 		r := a.gas[i]

@@ -52,9 +52,11 @@
       }
     }
     const lines = el.querySelectorAll("i");
+    const ox = fx.x || 0;
+    const oy = fx.y || 0;
     [-half / 3, half / 3].forEach((d, i) => {
-      const [sx] = arena.screenPos(d, 0, ctx.scale, ctx.cx, ctx.cy);
-      const [, sy] = arena.screenPos(0, d, ctx.scale, ctx.cx, ctx.cy);
+      const [sx] = arena.screenPos(ox + d, oy, ctx.scale, ctx.cx, ctx.cy);
+      const [, sy] = arena.screenPos(ox, oy + d, ctx.scale, ctx.cx, ctx.cy);
       if (lines[i * 2]) lines[i * 2].style.left = `${sx}px`;
       if (lines[i * 2 + 1]) lines[i * 2 + 1].style.top = `${sy}px`;
     });

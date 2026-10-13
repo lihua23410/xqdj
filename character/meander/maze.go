@@ -45,7 +45,7 @@ func buildMaze(f unit.Field, rng *rand.Rand) (maze, bool) {
 		if !ok {
 			continue
 		}
-		guideR, tracks, ok := placeTrackAnchors(f, rng)
+		guideR, tracks, ok := placeTrackAnchors(f, hub, rng)
 		if !ok {
 			continue
 		}
@@ -101,21 +101,17 @@ func pickHub(f unit.Field, rng *rand.Rand) (pt, bool) {
 	return pt{}, false
 }
 
-func placeTrackAnchors(f unit.Field, rng *rand.Rand) (guideR float64, tracks []pt, ok bool) {
-	ext := f.Extent
-	if ext < unit.MinExtent {
-		ext = unit.MinExtent
-	}
+func placeTrackAnchors(f unit.Field, hub pt, rng *rand.Rand) (guideR float64, tracks []pt, ok bool) {
 	base := rng.Float64() * 2 * math.Pi
-	r := ext * guideFrac
-	minR := ext * guideFracMin
+	r := unit.HexRadius * guideFrac
+	minR := unit.HexRadius * guideFracMin
 	for r+1e-9 >= minR {
 		pts := make([]pt, trackCount)
 		good := true
 		for i := 0; i < trackCount; i++ {
 			ang := base + float64(i)*2*math.Pi/float64(trackCount)
-			x := r * math.Cos(ang)
-			y := r * math.Sin(ang)
+			x := hub.x + r*math.Cos(ang)
+			y := hub.y + r*math.Sin(ang)
 			if !f.Walkable(x, y, centerPad) {
 				good = false
 				break
@@ -178,13 +174,9 @@ func fallbackMaze(f unit.Field, rng *rand.Rand) maze {
 	if !ok {
 		hub = pt{0, 0}
 	}
-	guideR, tracks, ok := placeTrackAnchors(f, rng)
+	guideR, tracks, ok := placeTrackAnchors(f, hub, rng)
 	if !ok {
-		ext := f.Extent
-		if ext < unit.MinExtent {
-			ext = unit.MinExtent
-		}
-		guideR = ext * guideFracMin
+		guideR = unit.HexRadius * guideFracMin
 		base := 0.0
 		if rng != nil {
 			base = rng.Float64() * 2 * math.Pi
@@ -192,7 +184,7 @@ func fallbackMaze(f unit.Field, rng *rand.Rand) maze {
 		tracks = make([]pt, trackCount)
 		for i := 0; i < trackCount; i++ {
 			ang := base + float64(i)*2*math.Pi/float64(trackCount)
-			x, y := guideR*math.Cos(ang), guideR*math.Sin(ang)
+			x, y := hub.x+guideR*math.Cos(ang), hub.y+guideR*math.Sin(ang)
 			x, y = f.Clamp(x, y, centerPad)
 			tracks[i] = pt{x, y}
 		}

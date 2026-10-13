@@ -30,6 +30,10 @@ type ringDrift struct {
 
 func initDrifts(m maze, rng *rand.Rand, now float64) []ringDrift {
 	out := make([]ringDrift, len(m.rings))
+	hx, hy := 0.0, 0.0
+	if len(m.rings) > 0 {
+		hx, hy = m.rings[0].x, m.rings[0].y
+	}
 	for i, r := range m.rings {
 		dir := rng.Float64() * 2 * math.Pi
 		d := ringDrift{
@@ -42,7 +46,7 @@ func initDrifts(m maze, rng *rand.Rand, now float64) []ringDrift {
 		if i > 0 && m.guideR > 0 {
 			d.track = true
 			d.guideR = m.guideR
-			d.ang = math.Atan2(r.y, r.x)
+			d.ang = math.Atan2(r.y-hy, r.x-hx)
 			span := omegaMax - omegaMin
 			mag := omegaMin + rng.Float64()*span
 			if rng.Float64() < 0.5 {
@@ -60,13 +64,13 @@ func driftCenters(rings []ring, drifts []ringDrift, f unit.Field, rng *rand.Rand
 	if dt <= 0 || len(rings) == 0 || len(drifts) != len(rings) || rng == nil {
 		return
 	}
-	for i := range rings {
+	step := func(i int, gx, gy float64) {
 		d := &drifts[i]
 		if d.track {
 			oldAx, oldAy := d.ax, d.ay
 			d.ang += d.omega * dt
-			d.ax = d.guideR * math.Cos(d.ang)
-			d.ay = d.guideR * math.Sin(d.ang)
+			d.ax = gx + d.guideR*math.Cos(d.ang)
+			d.ay = gy + d.guideR*math.Sin(d.ang)
 			// 锚点带走相对位移，再叠栓绳抖
 			rings[i].x += d.ax - oldAx
 			rings[i].y += d.ay - oldAy
@@ -82,6 +86,11 @@ func driftCenters(rings []ring, drifts []ringDrift, f unit.Field, rng *rand.Rand
 		ny := rings[i].y + d.vy*dt
 		nx, ny = constrainCenter(nx, ny, d, f)
 		rings[i].x, rings[i].y = nx, ny
+	}
+	step(0, 0, 0)
+	gx, gy := rings[0].x, rings[0].y
+	for i := 1; i < len(rings); i++ {
+		step(i, gx, gy)
 	}
 }
 

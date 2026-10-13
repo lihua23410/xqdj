@@ -5,6 +5,7 @@ import (
 
 	"xqdj/internal/unit"
 	"xqdj/map/chamber"
+	奇美拉 "xqdj/map/chimera"
 	"xqdj/map/circle"
 	"xqdj/map/hex"
 	八边形 "xqdj/map/octagon"
@@ -13,8 +14,8 @@ import (
 
 func TestNamesOrder(t *testing.T) {
 	got := unit.FieldNames()
-	// 目录名排序：chamber, circle, hex, octagon, volcano
-	if len(got) < 5 || got[0] != 机关房.Name || got[1] != 圆.Name || got[2] != 六边形.Name || got[3] != 八边形.Name || got[4] != 火山.Name {
+	// 依赖先初始化，奇美拉挂在火山等包之后，所以排在最后。
+	if len(got) != 6 || got[0] != 机关房.Name || got[1] != 圆.Name || got[2] != 六边形.Name || got[3] != 八边形.Name || got[4] != 火山.Name || got[5] != 奇美拉.Name {
 		t.Fatalf("names=%v", got)
 	}
 }

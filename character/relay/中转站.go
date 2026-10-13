@@ -31,7 +31,6 @@ const (
 	shotSpeed  = 520.0
 	shotDamage = 2.0
 	shotHitCD  = 0.1
-	shotOff    = 640.0
 	shotCap    = 10
 	shotColor  = "#ffc14a"
 )
@@ -428,7 +427,7 @@ func (b *中转弹) Handle(ctx unit.Context, ev unit.Event) {
 	case unit.Sense:
 		b.x, b.y = e.Self.X, e.Self.Y
 		pokePass(e.Self)
-		if math.Abs(e.Self.X) > shotOff || math.Abs(e.Self.Y) > shotOff {
+		if !e.Field.OutlineContains(e.Self.X, e.Self.Y, 0) {
 			dropPending(e.Self)
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	unitpkg "xqdj/internal/unit"
+	奇美拉 "xqdj/map/chimera"
 )
 
 type Phase string
@@ -243,7 +244,7 @@ func (m *Match) SnapshotJSON() []byte {
 		Time:     m.time,
 		Seq:      m.seq,
 		HexR:     m.spec.extent,
-		Fields:   fieldNames(),
+		Fields:   m.listFieldsLocked(),
 		Field:    m.spec.name,
 		Shape:    m.spec.shape,
 		HitStop:  m.hitStop,
@@ -362,6 +363,9 @@ func (m *Match) SetField(name string) {
 	if m.phase != PhaseSelect {
 		return
 	}
+	if !m.team && name == 奇美拉.Name {
+		return
+	}
 	spec, ok := lookupField(name)
 	if !ok {
 		return
@@ -438,6 +442,12 @@ func (m *Match) UseTeam() {
 		return
 	}
 	m.team = true
+	if m.spec.name == "" || m.spec.name == "六边形" {
+		if spec, ok := lookupField(奇美拉.Name); ok {
+			m.spec = spec
+			unitpkg.SetLiveField(m.spec.toUnitField())
+		}
+	}
 	kinds := unitpkg.FighterKinds()
 	m.slots[0] = takeKinds(kinds, 0, maxSideN)
 	m.slots[1] = takeKinds(kinds, maxSideN, maxSideN)
@@ -450,6 +460,12 @@ func (m *Match) UseDuel() {
 		return
 	}
 	m.team = false
+	if m.spec.name == 奇美拉.Name {
+		if spec, ok := lookupField("六边形"); ok {
+			m.spec = spec
+			unitpkg.SetLiveField(m.spec.toUnitField())
+		}
+	}
 	kinds := unitpkg.FighterKinds()
 	for side := 0; side < 2; side++ {
 		k := ""
@@ -547,6 +563,25 @@ func (m *Match) Start() {
 	m.phase = PhaseRunning
 }
 
+func (m *Match) listFieldsLocked() []string {
+	names := fieldNames()
+	if m.team {
+		return names
+	}
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		if n == 奇美拉.Name {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+func (m *Match) chimeraSides() bool {
+	return m.team && m.spec.name == 奇美拉.Name
+}
+
 func (m *Match) placeLocked(radius float64, side int, others []spawnSpot, minSep float64) vec {
 	gap := minSep
 	for {
@@ -561,16 +596,48 @@ func (m *Match) placeLocked(radius float64, side int, others []spawnSpot, minSep
 			gap = 0
 		}
 	}
+	if m.chimeraSides() {
+		cx, cy := 奇美拉.East()
+		if side == 0 {
+			cx, cy = 奇美拉.West()
+		}
+		x, y := m.liveFieldLocked().Clamp(cx, cy, radius+4)
+		return vec{x, y}
+	}
 	x, y := m.liveFieldLocked().Clamp(120, 0, radius+4)
 	return vec{x, y}
 }
 
 func (m *Match) tryPlaceLocked(radius float64, side int, others []spawnSpot, gap float64) (vec, bool) {
 	f := m.liveFieldLocked()
-	for try := 0; try < 128; try++ {
-		x, y, ok := f.RandomWalkable(m.rng, radius+4)
-		if !ok {
-			break
+	half := unitpkg.HexRadius
+	cx, cy := 0.0, 0.0
+	regional := m.chimeraSides()
+	if regional {
+		if side == 0 {
+			cx, cy = 奇美拉.West()
+		} else {
+			cx, cy = 奇美拉.East()
+		}
+	}
+	tries := 128
+	if regional {
+		tries = 256
+	}
+	for try := 0; try < tries; try++ {
+		var x, y float64
+		if regional {
+			x = cx + (m.rng.Float64()*2-1)*half
+			y = cy + (m.rng.Float64()*2-1)*half
+			if !奇美拉.RegionContains(side, x, y, radius+4) || !f.Walkable(x, y, radius+4) {
+				continue
+			}
+		} else {
+			var ok bool
+			x, y, ok = f.RandomWalkable(m.rng, radius+4)
+			if !ok {
+				break
+			}
 		}
 		p := vec{x, y}
 		good := true
