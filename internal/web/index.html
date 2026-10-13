@@ -9,7 +9,7 @@
 <body>
   <section id="lobby" class="panel">
     <h1>小球对战</h1>
-    <p class="sub">选场地 · 1v1 · 选两只小球</p>
+    <p class="sub">选场地 · 1v1 · 选两只小球 · <a href="/team">团队赛</a></p>
     <div class="fields" id="fields"></div>
     <div class="slots">
       <div class="slot" data-slot="0">
@@ -26,28 +26,12 @@
 
   <section id="arena" class="panel hidden">
     <header class="hud">
-      <div class="fighter" id="fighter-0">
-        <div class="name-row">
-          <span class="name"></span>
-          <span class="faction-hud"></span>
-          <span class="status-hud"></span>
-        </div>
-        <span class="hp-num"></span>
-        <div class="hp"><i></i></div>
-      </div>
+      <div class="side" id="side-0" data-slot="0"></div>
       <div class="controls">
         <button id="btn-pause" type="button">暂停</button>
         <button id="btn-end" type="button">结束</button>
       </div>
-      <div class="fighter" id="fighter-1">
-        <div class="name-row">
-          <span class="name"></span>
-          <span class="faction-hud"></span>
-          <span class="status-hud"></span>
-        </div>
-        <span class="hp-num"></span>
-        <div class="hp"><i></i></div>
-      </div>
+      <div class="side" id="side-1" data-slot="1"></div>
     </header>
     <div class="stage-wrap">
       <div class="stage">

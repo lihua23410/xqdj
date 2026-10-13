@@ -31,9 +31,9 @@ const (
 	shotSpeed  = 520.0
 	shotDamage = 2.0
 	shotHitCD  = 0.1
-	shotOff   = 640.0
-	shotCap   = 10
-	shotColor = "#ffc14a"
+	shotOff    = 640.0
+	shotCap    = 10
+	shotColor  = "#ffc14a"
 )
 
 //go:embed fx
@@ -420,11 +420,13 @@ type 中转弹 struct {
 	slot       int
 	target     uint64
 	hitReadyAt float64
+	x, y       float64
 }
 
 func (b *中转弹) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.Sense:
+		b.x, b.y = e.Self.X, e.Self.Y
 		pokePass(e.Self)
 		if math.Abs(e.Self.X) > shotOff || math.Abs(e.Self.Y) > shotOff {
 			dropPending(e.Self)
@@ -433,6 +435,11 @@ func (b *中转弹) Handle(ctx unit.Context, ev unit.Event) {
 		}
 		b.home(ctx, e)
 	case unit.Collision:
+		if e.Other.Role == unit.RoleFighter && e.Other.Slot == b.slot && e.Other.ID != b.target {
+			dropPending(unit.Snapshot{OwnerID: b.target, X: b.x, Y: b.y})
+			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+			return
+		}
 		if !unit.Hittable(e.Other, b.slot) || e.Time < b.hitReadyAt {
 			return
 		}

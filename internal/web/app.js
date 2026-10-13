@@ -450,17 +450,33 @@ const banner = document.getElementById("banner");
 const kinds0 = document.getElementById("kinds-0");
 const kinds1 = document.getElementById("kinds-1");
 const fieldsEl = document.getElementById("fields");
+const teamPage = document.body.dataset.page === "team";
 
-let state = { phase: "select", slots: ["", ""], kinds: [], units: [] };
+let state = { phase: "select", slots: [[], []], kinds: [], units: [] };
 let hexR = 280;
+let hudKey = "";
 
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
 const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
+ws.onopen = () => send({ type: "mode", team: teamPage });
 
 function send(obj) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(obj));
   }
+}
+
+function sideList(slot) {
+  const s = state.slots && state.slots[slot];
+  if (Array.isArray(s)) return s;
+  if (typeof s === "string" && s) return [s];
+  return [];
+}
+
+function lineup(slot) {
+  const r = state.roster && state.roster[slot];
+  if (r && r.length) return r;
+  return sideList(slot);
 }
 
 ws.onmessage = (ev) => {
@@ -478,46 +494,100 @@ document.getElementById("btn-end").onclick = () => send({ type: "end" });
 
 let lobbyKey = "";
 
+function paintFields(fields) {
+  if (!fieldsEl) return;
+  fieldsEl.innerHTML = "";
+  for (const name of fields) {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.type = "button";
+    if ((state.field || "") === name) b.classList.add("active");
+    b.onclick = () => send({ type: "field", field: name });
+    fieldsEl.appendChild(b);
+  }
+}
+
 function renderLobby() {
   const kinds = state.kinds || [];
   const fields = state.fields || [];
-  const key = `${(state.slots || []).join("\0")}\n${kinds.join("\0")}\n${state.field || ""}\n${fields.join("\0")}`;
+  const key = `${JSON.stringify(state.slots || [])}\n${kinds.join("\0")}\n${state.field || ""}\n${fields.join("\0")}`;
   if (key === lobbyKey) {
     return;
   }
   lobbyKey = key;
-  if (fieldsEl) {
-    fieldsEl.innerHTML = "";
-    for (const name of fields) {
-      const b = document.createElement("button");
-      b.textContent = name;
-      b.type = "button";
-      if ((state.field || "") === name) b.classList.add("active");
-      b.onclick = () => send({ type: "field", field: name });
-      fieldsEl.appendChild(b);
-    }
+  paintFields(fields);
+  if (teamPage) {
+    renderTeamLobby(kinds);
+    return;
   }
   for (const [el, slot] of [
     [kinds0, 0],
     [kinds1, 1],
   ]) {
+    if (!el) continue;
     el.innerHTML = "";
+    const current = sideList(slot)[0] || "";
     for (const kind of kinds) {
       const b = document.createElement("button");
       b.textContent = kind;
       b.type = "button";
       b.dataset.slot = String(slot);
       paintKind(b, kind);
-      if (state.slots && state.slots[slot] === kind) b.classList.add("active");
+      if (current === kind) b.classList.add("active");
       b.onclick = () => send({ type: "select", slot, kind });
       el.appendChild(b);
     }
     const slotRoot = el.closest(".slot");
     if (slotRoot) {
-      paintKind(slotRoot, state.slots[slot]);
+      paintKind(slotRoot, current);
     }
   }
 }
+
+function renderTeamLobby(kinds) {
+  for (const slot of [0, 1]) {
+    const host = document.getElementById(`seats-${slot}`);
+    if (!host) continue;
+    host.innerHTML = "";
+    const names = sideList(slot);
+    names.forEach((current, index) => {
+      const seat = document.createElement("div");
+      seat.className = "seat";
+      const h = document.createElement("h3");
+      h.textContent = String(index + 1);
+      seat.appendChild(h);
+      const list = document.createElement("div");
+      list.className = "kinds";
+      for (const kind of kinds) {
+        const b = document.createElement("button");
+        b.textContent = kind;
+        b.type = "button";
+        paintKind(b, kind);
+        if (kind === current) b.classList.add("active");
+        b.onclick = () => send({ type: "select", slot, index, kind });
+        list.appendChild(b);
+      }
+      seat.appendChild(list);
+      host.appendChild(seat);
+      paintKind(seat, current);
+    });
+  }
+}
+
+function bindSideCounts() {
+  if (!teamPage) return;
+  for (const slot of [0, 1]) {
+    const dec = document.getElementById(`side-dec-${slot}`);
+    const inc = document.getElementById(`side-inc-${slot}`);
+    if (dec) {
+      dec.onclick = () => send({ type: "side", slot, count: Math.max(1, sideList(slot).length - 1) });
+    }
+    if (inc) {
+      inc.onclick = () => send({ type: "side", slot, count: Math.min(3, sideList(slot).length + 1) });
+    }
+  }
+}
+bindSideCounts();
 
 function placeSeg(el, x1, y1, x2, y2, kind) {
   const dx = x2 - x1;
@@ -616,6 +686,62 @@ function renderWalls(scale, cx, cy) {
   }
 }
 
+function fighterCard(slot, index) {
+  const root = document.createElement("div");
+  root.className = "fighter";
+  root.id = `fighter-${slot}-${index}`;
+  root.innerHTML =
+    '<div class="name-row"><span class="name"></span><span class="faction-hud"></span><span class="status-hud"></span></div>' +
+    '<span class="hp-num"></span><div class="hp"><i></i></div>';
+  return root;
+}
+
+function renderHud(fighters) {
+  const names = [lineup(0), lineup(1)];
+  const key = JSON.stringify(names);
+  if (key !== hudKey) {
+    hudKey = key;
+    for (const slot of [0, 1]) {
+      const host = document.getElementById(`side-${slot}`);
+      if (!host) continue;
+      host.innerHTML = "";
+      names[slot].forEach((kind, index) => {
+        const card = fighterCard(slot, index);
+        host.appendChild(card);
+        paintKind(card, kind);
+      });
+    }
+  }
+  for (const slot of [0, 1]) {
+    names[slot].forEach((kind, index) => {
+      const root = document.getElementById(`fighter-${slot}-${index}`);
+      if (!root) return;
+      const f = fighters.find((u) => u.slot === slot && u.seat === index);
+      const name = root.querySelector(".name");
+      const num = root.querySelector(".hp-num");
+      const bar = root.querySelector("i");
+      const hudFac = root.querySelector(".faction-hud");
+      const hudMarks = root.querySelector(".status-hud");
+      if (!f) {
+        name.textContent = kind;
+        num.textContent = "0 / 100";
+        bar.style.width = "0%";
+        paintKind(root, kind);
+        fillFactionHud(hudFac, null);
+        fillMarksHud(hudMarks, null);
+        return;
+      }
+      name.textContent = f.kind;
+      const max = f.maxHp > 0 ? f.maxHp : 100;
+      num.textContent = `${Math.round(f.hp)} / ${Math.round(max)}`;
+      bar.style.width = `${Math.max(0, (f.hp / max) * 100)}%`;
+      paintKind(root, f.kind);
+      fillFactionHud(hudFac, f);
+      fillMarksHud(hudMarks, f);
+    });
+  }
+}
+
 function renderArena() {
   // 场皮外形/尺寸由各 map 私产 CSS 按 [data-field] 自绘，引擎不按 fieldShape 分支。
   if (state.field) hex.dataset.field = state.field;
@@ -628,30 +754,7 @@ function renderArena() {
   hex.classList.toggle("hitstop", (state.hitStop || 0) > 0);
 
   const fighters = (state.units || []).filter((u) => u.role === "fighter");
-  for (const slot of [0, 1]) {
-    const f = fighters.find((u) => u.slot === slot);
-    const root = document.getElementById(`fighter-${slot}`);
-    const name = root.querySelector(".name");
-    const num = root.querySelector(".hp-num");
-    const bar = root.querySelector("i");
-    const hudFac = root.querySelector(".faction-hud");
-    const hudMarks = root.querySelector(".status-hud");
-    if (!f) {
-      name.textContent = state.slots[slot] || "";
-      num.textContent = "0 / 100";
-      bar.style.width = "0%";
-      paintKind(root, state.slots[slot]);
-      fillFactionHud(hudFac, null);
-      fillMarksHud(hudMarks, null);
-      continue;
-    }
-    name.textContent = f.kind;
-    num.textContent = `${Math.round(f.hp)} / ${Math.round(f.maxHp)}`;
-    bar.style.width = `${Math.max(0, (f.hp / f.maxHp) * 100)}%`;
-    paintKind(root, f.kind);
-    fillFactionHud(hudFac, f);
-    fillMarksHud(hudMarks, f);
-  }
+  renderHud(fighters);
 
   const pauseBtn = document.getElementById("btn-pause");
   pauseBtn.textContent = state.phase === "paused" ? "继续" : "暂停";
@@ -850,6 +953,7 @@ function render() {
   if (inLobby) window.youthDoses = {};
   if (inLobby) {
     prevHP.clear();
+    hudKey = "";
     if (fxRoot) fxRoot.innerHTML = "";
     if (wallsEl) wallsEl.innerHTML = "";
     if (guidesEl) guidesEl.innerHTML = "";

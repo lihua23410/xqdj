@@ -159,8 +159,8 @@ func TestTriangleCanPassBackToEarlierHand(t *testing.T) {
 	resetPass()
 	out := make(chan unit.Cmd, 8)
 	n := bootedNode(out)
-	self := nodeSnap(4, 0, 0) // C
-	sender := nodeSnap(8, 30, 0) // B, just passed
+	self := nodeSnap(4, 0, 0)       // C
+	sender := nodeSnap(8, 30, 0)    // B, just passed
 	earlier := nodeSnap(3, -10, 40) // A
 	shot := aimed(20, 0, 0, 8, self.ID, nil)
 	n.Handle(ctx(out), unit.Sense{
@@ -286,8 +286,14 @@ func TestShotIgnoresFriendAndWall(t *testing.T) {
 	friend := unit.Snapshot{ID: 8, Role: unit.RoleFighter, Slot: 0, Radius: 18}
 	b.Handle(c, unit.Collision{Time: 1, Other: friend})
 	b.Handle(c, unit.WallHit{Time: 1})
-	if len(drain(out)) != 0 {
-		t.Fatal("friend and wall should not end the shot")
+	cmds := drain(out)
+	if !lastDespawn(cmds) {
+		t.Fatal("同边战斗机该打掉这发弹")
+	}
+	for _, cmd := range cmds {
+		if _, ok := cmd.(unit.Damage); ok {
+			t.Fatal("同边不该出伤")
+		}
 	}
 }
 

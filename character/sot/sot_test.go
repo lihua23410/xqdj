@@ -332,6 +332,28 @@ func TestWineHitsMinion(t *testing.T) {
 	}
 }
 
+func TestWineStopsOnTeammate(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := &酒{owner: 1, slot: 0, booted: true, x: 0, y: 0}
+	ctx := unit.Context{ID: 9, Kind: KindSotWine, Out: out}
+	mate := sotAt(0, 0)
+	mate.ID = 8
+	w.Handle(ctx, unit.Collision{Other: mate})
+	cmds := drain(out)
+	if lastSpawn(cmds, KindSotStain) != nil || len(damages(cmds)) != 0 {
+		t.Fatalf("同边战斗机不该留酒场、不该出伤: %v", cmds)
+	}
+	gone := false
+	for _, c := range cmds {
+		if _, ok := c.(unit.Despawn); ok {
+			gone = true
+		}
+	}
+	if !gone {
+		t.Fatalf("同边战斗机该打掉酒坛: %v", cmds)
+	}
+}
+
 func TestWinePassesAlly(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	w := &酒{owner: 1, slot: 0, booted: true, x: 0, y: 0}

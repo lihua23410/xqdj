@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +26,7 @@ type unit struct {
 	kind            string
 	role            string
 	slot            int
+	seat            int
 	owner           uint64
 	p, v            vec
 	radius          float64
@@ -79,37 +81,46 @@ type unit struct {
 }
 
 type spawnSpot struct {
-	p vec
-	r float64
+	p    vec
+	r    float64
+	side int
 }
 
+const (
+	minSideN = 1
+	maxSideN = 3
+	teamSep  = 220.0
+	sepStep  = 40.0
+	spawnPad = 8.0
+)
+
 type barrier struct {
-	id        uint64
-	owner     uint64
-	slot      int
-	kind      string
-	a, b      vec
-	radius    float64
-	until     float64
-	amount    float64
-	hitAt     map[uint64]float64
-	hard      bool
-	square    bool
+	id          uint64
+	owner       uint64
+	slot        int
+	kind        string
+	a, b        vec
+	radius      float64
+	until       float64
+	amount      float64
+	hitAt       map[uint64]float64
+	hard        bool
+	square      bool
 	visionBlock bool
-	field     bool
-	spin      float64 // 弧度每秒，逆时针为正。0 表示不转。
-	ang       float64
-	base      float64
-	pivot     vec
-	halfLen   float64
-	vx, vy    float64
-	hitGap    float64
-	withOwner bool
-	ram       float64
-	rammed    map[uint64]struct{}
-	stunR     float64
-	stunDur   float64
-	riding    map[uint64]struct{}
+	field       bool
+	spin        float64 // 弧度每秒，逆时针为正。0 表示不转。
+	ang         float64
+	base        float64
+	pivot       vec
+	halfLen     float64
+	vx, vy      float64
+	hitGap      float64
+	withOwner   bool
+	ram         float64
+	rammed      map[uint64]struct{}
+	stunR       float64
+	stunDur     float64
+	riding      map[uint64]struct{}
 }
 
 type wallSnap struct {
@@ -129,7 +140,9 @@ type wallSnap struct {
 type Match struct {
 	mu         sync.Mutex
 	phase      Phase
-	slots      [2]string
+	slots      [2][]string
+	lineup     [2][]string // 开局名单，胜负文案和血条用
+	team       bool
 	units      map[uint64]*unit
 	order      []uint64
 	actors     []*unit // 本场开过的所有角色（离场的也留着，停场要等它们的协程真退出）
@@ -171,9 +184,9 @@ func NewMatch() *Match {
 
 func NewMatchSeeded(seed uint64) *Match {
 	kinds := unitpkg.FighterKinds()
-	var slots [2]string
+	var slots [2][]string
 	if len(kinds) >= 2 {
-		slots = [2]string{kinds[0], kinds[1]}
+		slots = [2][]string{{kinds[0]}, {kinds[1]}}
 	}
 	spec := defaultField()
 	unitpkg.SetLiveField(spec.toUnitField())
@@ -198,7 +211,9 @@ func (m *Match) SnapshotJSON() []byte {
 	msg := struct {
 		Type     string                      `json:"type"`
 		Phase    Phase                       `json:"phase"`
-		Slots    [2]string                   `json:"slots"`
+		Slots    [2][]string                 `json:"slots"`
+		Roster   [2][]string                 `json:"roster"`
+		Team     bool                        `json:"team"`
 		Kinds    []string                    `json:"kinds"`
 		Looks    map[string]unitpkg.Look     `json:"looks"`
 		Packs    map[string]unitpkg.PackInfo `json:"packs"`
@@ -217,7 +232,9 @@ func (m *Match) SnapshotJSON() []byte {
 	}{
 		Type:     "state",
 		Phase:    m.phase,
-		Slots:    m.slots,
+		Slots:    sidesOrEmpty(m.slots),
+		Roster:   sidesOrEmpty(m.lineup),
+		Team:     m.team,
 		Kinds:    unitpkg.FighterKinds(),
 		Looks:    unitpkg.Looks(),
 		Packs:    unitpkg.Packs(),
@@ -282,6 +299,7 @@ func (u *unit) snap() unitpkg.Snapshot {
 		Vision:          u.vision,
 		OwnerID:         u.owner,
 		Slot:            u.slot,
+		Seat:            u.seat,
 		Semi:            u.semi,
 		FaceX:           u.face.X,
 		FaceY:           u.face.Y,
@@ -352,11 +370,19 @@ func (m *Match) SetField(name string) {
 	unitpkg.SetLiveField(m.spec.toUnitField())
 }
 
-func (m *Match) SetSlot(slot int, kind string) {
-	if slot < 0 || slot > 1 {
-		return
+func sidesOrEmpty(in [2][]string) [2][]string {
+	var out [2][]string
+	for i := 0; i < 2; i++ {
+		out[i] = append([]string{}, in[i]...)
+		if out[i] == nil {
+			out[i] = []string{}
+		}
 	}
-	if !unitpkg.IsFighterKind(kind) {
+	return out
+}
+
+func (m *Match) SetSlot(slot int, kind string) {
+	if slot < 0 || slot > 1 || !unitpkg.IsFighterKind(kind) {
 		return
 	}
 	m.mu.Lock()
@@ -364,7 +390,123 @@ func (m *Match) SetSlot(slot int, kind string) {
 	if m.phase != PhaseSelect {
 		return
 	}
-	m.slots[slot] = kind
+	m.slots[slot] = []string{kind}
+}
+
+func (m *Match) SetSeat(side, index int, kind string) {
+	if side < 0 || side > 1 || !unitpkg.IsFighterKind(kind) {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect {
+		return
+	}
+	if index < 0 || index >= len(m.slots[side]) {
+		return
+	}
+	m.slots[side][index] = kind
+}
+
+func (m *Match) SetSideLen(side, n int) {
+	if side < 0 || side > 1 {
+		return
+	}
+	if n < minSideN {
+		n = minSideN
+	}
+	if n > maxSideN {
+		n = maxSideN
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect || !m.team {
+		return
+	}
+	cur := append([]string{}, m.slots[side]...)
+	kinds := unitpkg.FighterKinds()
+	for len(cur) < n {
+		cur = append(cur, nextSideKind(kinds, cur))
+	}
+	m.slots[side] = cur[:n]
+}
+
+func (m *Match) UseTeam() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect {
+		return
+	}
+	m.team = true
+	kinds := unitpkg.FighterKinds()
+	m.slots[0] = takeKinds(kinds, 0, maxSideN)
+	m.slots[1] = takeKinds(kinds, maxSideN, maxSideN)
+}
+
+func (m *Match) UseDuel() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect {
+		return
+	}
+	m.team = false
+	kinds := unitpkg.FighterKinds()
+	for side := 0; side < 2; side++ {
+		k := ""
+		if len(m.slots[side]) > 0 && unitpkg.IsFighterKind(m.slots[side][0]) {
+			k = m.slots[side][0]
+		} else if side < len(kinds) {
+			k = kinds[side]
+		} else if len(kinds) > 0 {
+			k = kinds[0]
+		}
+		if k == "" {
+			m.slots[side] = []string{}
+			continue
+		}
+		m.slots[side] = []string{k}
+	}
+}
+
+func takeKinds(kinds []string, start, n int) []string {
+	out := make([]string, 0, n)
+	if len(kinds) == 0 || n <= 0 {
+		return out
+	}
+	for i := 0; i < n; i++ {
+		out = append(out, kinds[(start+i)%len(kinds)])
+	}
+	return out
+}
+
+func nextSideKind(kinds, cur []string) string {
+	if len(kinds) == 0 {
+		return ""
+	}
+	start := 0
+	if len(cur) > 0 {
+		last := cur[len(cur)-1]
+		for i, k := range kinds {
+			if k == last {
+				start = i + 1
+				break
+			}
+		}
+	}
+	for step := 0; step < len(kinds); step++ {
+		k := kinds[(start+step)%len(kinds)]
+		seen := false
+		for _, c := range cur {
+			if c == k {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			return k
+		}
+	}
+	return kinds[start%len(kinds)]
 }
 
 func (m *Match) Start() {
@@ -379,18 +521,25 @@ func (m *Match) Start() {
 	}
 	m.resetLocked()
 	m.installFieldLocked()
+	m.lineup[0] = append([]string{}, m.slots[0]...)
+	m.lineup[1] = append([]string{}, m.slots[1]...)
+	sep := 0.0
+	if m.team {
+		sep = teamSep
+	}
 	var spots []spawnSpot
-	for slot := 0; slot < 2; slot++ {
-		kind := m.slots[slot]
-		spec, ok := unitpkg.Lookup(kind)
-		if !ok {
-			continue
+	for side := 0; side < 2; side++ {
+		for seat, kind := range m.slots[side] {
+			spec, ok := unitpkg.Lookup(kind)
+			if !ok {
+				continue
+			}
+			p := m.placeLocked(spec.Radius, side, spots, sep)
+			ang := m.rng.Float64() * 2 * math.Pi
+			v := vec{math.Cos(ang) * spec.Speed, math.Sin(ang) * spec.Speed}
+			m.spawnFighterLocked(kind, side, seat, p, v)
+			spots = append(spots, spawnSpot{p: p, r: spec.Radius, side: side})
 		}
-		p := m.randomSpawnLocked(spec.Radius, spots)
-		ang := m.rng.Float64() * 2 * math.Pi
-		v := vec{math.Cos(ang) * spec.Speed, math.Sin(ang) * spec.Speed}
-		m.spawnFighterLocked(kind, slot, p, v)
-		spots = append(spots, spawnSpot{p: p, r: spec.Radius})
 	}
 	if m.spec.bootKind != "" {
 		m.addUnitLocked(m.spec.bootKind, vec{}, vec{}, 0, 0)
@@ -398,7 +547,25 @@ func (m *Match) Start() {
 	m.phase = PhaseRunning
 }
 
-func (m *Match) randomSpawnLocked(radius float64, others []spawnSpot) vec {
+func (m *Match) placeLocked(radius float64, side int, others []spawnSpot, minSep float64) vec {
+	gap := minSep
+	for {
+		if p, ok := m.tryPlaceLocked(radius, side, others, gap); ok {
+			return p
+		}
+		if gap <= 0 {
+			break
+		}
+		gap -= sepStep
+		if gap < 0 {
+			gap = 0
+		}
+	}
+	x, y := m.liveFieldLocked().Clamp(120, 0, radius+4)
+	return vec{x, y}
+}
+
+func (m *Match) tryPlaceLocked(radius float64, side int, others []spawnSpot, gap float64) (vec, bool) {
 	f := m.liveFieldLocked()
 	for try := 0; try < 128; try++ {
 		x, y, ok := f.RandomWalkable(m.rng, radius+4)
@@ -406,19 +573,22 @@ func (m *Match) randomSpawnLocked(radius float64, others []spawnSpot) vec {
 			break
 		}
 		p := vec{x, y}
-		ok = true
+		good := true
 		for _, o := range others {
-			if p.sub(o.p).len() < radius+o.r+8 {
-				ok = false
+			need := radius + o.r + spawnPad
+			if o.side != side && gap > need {
+				need = gap
+			}
+			if p.sub(o.p).len() < need {
+				good = false
 				break
 			}
 		}
-		if ok {
-			return p
+		if good {
+			return p, true
 		}
 	}
-	x, y := f.Clamp(120, 0, radius+4)
-	return vec{x, y}
+	return vec{}, false
 }
 
 func (m *Match) Pause() {
@@ -437,6 +607,7 @@ func (m *Match) End() {
 	m.winner = ""
 	m.winnerID = 0
 	m.time = 0
+	m.lineup = [2][]string{}
 }
 
 func (m *Match) Tick() {
@@ -693,8 +864,11 @@ func (m *Match) killLocked(u *unit) {
 	close(u.stop)
 }
 
-func (m *Match) spawnFighterLocked(kind string, slot int, p, v vec) {
-	m.addUnitLocked(kind, p, v, 0, slot)
+func (m *Match) spawnFighterLocked(kind string, slot, seat int, p, v vec) {
+	u := m.addUnitLocked(kind, p, v, 0, slot)
+	if u != nil {
+		u.seat = seat
+	}
 }
 
 func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *unit {
@@ -1138,7 +1312,11 @@ func (m *Match) creditKillLocked(from, victim *unit) {
 		return
 	}
 	killer := from
-	if from.owner != 0 {
+	if victim.kind == "史莱姆" && victim.owner != 0 {
+		if o := m.units[victim.owner]; o != nil && !o.stopped {
+			killer = o
+		}
+	} else if from.owner != 0 {
 		if o := m.units[from.owner]; o != nil && !o.stopped {
 			killer = o
 		}
@@ -1280,21 +1458,21 @@ func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
 		X: a.X, Y: a.Y, VX: b.X, VY: b.Y,
 	})
 	w := &barrier{
-		id:        m.nextID,
-		owner:     c.OwnerID,
-		slot:      c.Slot,
-		kind:      c.Kind,
-		a:         a,
-		b:         b,
-		radius:    c.Radius,
-		until:     until,
-		amount:    c.Amount,
-		hitGap:    c.HitGap,
-		withOwner: c.WithOwner,
-		hard:      c.Hard,
-		square:    c.Square || c.Hard,
+		id:          m.nextID,
+		owner:       c.OwnerID,
+		slot:        c.Slot,
+		kind:        c.Kind,
+		a:           a,
+		b:           b,
+		radius:      c.Radius,
+		until:       until,
+		amount:      c.Amount,
+		hitGap:      c.HitGap,
+		withOwner:   c.WithOwner,
+		hard:        c.Hard,
+		square:      c.Square || c.Hard,
 		visionBlock: c.VisionBlock,
-		hitAt:     map[uint64]float64{},
+		hitAt:       map[uint64]float64{},
 	}
 	w.bindPose()
 	m.walls = append(m.walls, w)
@@ -2203,23 +2381,46 @@ func (m *Match) send(u *unit, ev unitpkg.Event) {
 }
 
 func (m *Match) checkWinLocked() {
-	var fighters []*unit
+	alive := [2]int{}
 	for _, id := range m.order {
 		u := m.units[id]
-		if u != nil && !u.stopped && u.role == unitpkg.RoleFighter {
-			fighters = append(fighters, u)
+		if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
+			continue
 		}
+		if u.slot != 0 && u.slot != 1 {
+			continue
+		}
+		alive[u.slot]++
 	}
-	if len(fighters) >= 2 {
+	if alive[0] > 0 && alive[1] > 0 {
 		return
 	}
 	m.phase = PhaseEnded
-	if len(fighters) == 1 {
-		m.winner = fighters[0].kind
-		m.winnerID = fighters[0].id
-	} else {
+	m.winnerID = 0
+	switch {
+	case alive[0] > 0:
+		m.winner = strings.Join(m.lineup[0], "、")
+		if u := m.livingFighterLocked(0); u != nil {
+			m.winnerID = u.id
+		}
+	case alive[1] > 0:
+		m.winner = strings.Join(m.lineup[1], "、")
+		if u := m.livingFighterLocked(1); u != nil {
+			m.winnerID = u.id
+		}
+	default:
 		m.winner = "平局"
 	}
+}
+
+func (m *Match) livingFighterLocked(slot int) *unit {
+	for _, id := range m.order {
+		u := m.units[id]
+		if u != nil && !u.stopped && u.role == unitpkg.RoleFighter && u.slot == slot {
+			return u
+		}
+	}
+	return nil
 }
 
 func (m *Match) Loop(broadcast func([]byte), halt <-chan struct{}) {

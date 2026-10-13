@@ -41,6 +41,7 @@ html, body {
 
 h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .sub { color: var(--muted); margin: 0 0 28px; }
+.sub a { color: var(--text); }
 
 .slots {
   display: grid;
@@ -118,7 +119,9 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   margin-bottom: 2px;
 }
 .fighter .name { font-size: 14px; color: var(--kind, var(--text)); }
-#fighter-1 .name-row { flex-direction: row-reverse; }
+.side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.side .fighter { min-width: 0; }
+.side[data-slot="1"] .name-row { flex-direction: row-reverse; }
 .faction-hud {
   display: flex;
   align-items: center;
@@ -159,8 +162,8 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   text-shadow: 0 1px 2px #000, 0 0 6px #000;
 }
 .hp-num { display: block; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-#fighter-1 .hp-num { text-align: right; }
-#fighter-1 .name { text-align: right; }
+.side[data-slot="1"] .hp-num { text-align: right; }
+.side[data-slot="1"] .name { text-align: right; }
 .hp {
   height: 10px;
   background: #21262d;
@@ -175,9 +178,21 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   background: var(--kind, #3dd6c6);
   transform-origin: left center;
 }
-#fighter-1 .hp i {
+.side[data-slot="1"] .hp i {
   margin-left: auto;
 }
+.seat-tools { display: flex; gap: 8px; margin-bottom: 12px; }
+.seat-tools button {
+  background: #21262d;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.seat { margin-bottom: 14px; }
+.seat h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+body[data-page="team"] .kinds { max-height: 220px; overflow: auto; }
 
 #arena.panel {
   overflow: hidden;

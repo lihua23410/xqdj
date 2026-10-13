@@ -454,7 +454,13 @@ func (b *紫弹) Handle(ctx unit.Context, ev unit.Event) {
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		}
 	case unit.Collision:
-		if e.Other.Slot == b.slot || !unit.Hittable(e.Other, b.slot) {
+		if e.Other.Slot == b.slot {
+			if e.Other.Role == unit.RoleFighter {
+				ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+			}
+			return
+		}
+		if !unit.Hittable(e.Other, b.slot) {
 			return
 		}
 		if e.Time < b.hitReadyAt {

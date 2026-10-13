@@ -62,6 +62,11 @@ func (w *酒) onSense(ctx unit.Context, s unit.Sense) {
 
 func (w *酒) onHit(ctx unit.Context, other unit.Snapshot) {
 	if other.Slot == w.slot {
+		// 同边另一只战斗机把坛子打掉，不留酒场、不出伤。自己和自己的活随从仍穿过。
+		if other.Role == unit.RoleFighter && other.ID != w.owner {
+			w.dead = true
+			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+		}
 		return
 	}
 	if unit.Hittable(other, w.slot) {

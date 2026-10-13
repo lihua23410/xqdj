@@ -718,8 +718,8 @@ func (m *缪) findTargets(s unit.Sense) []unit.Snapshot {
 			out = append(out, *o)
 			continue
 		}
-		// 本体（同 slot 的 R.缪）也是克隆人之一，互殴
-		if o.Kind == KindRMiu && o.Slot == m.slot {
+		// 只互殴自己的本体。同边另一只 R.缪不是这只缪的身体。
+		if o.Kind == KindRMiu && o.ID == m.ownerID {
 			out = append(out, *o)
 			continue
 		}
@@ -979,16 +979,16 @@ func claimMiuKill(ctx unit.Context, s unit.Sense, prev *map[uint64]bool, bonus *
 				victimBonus := miuBonus[id]
 				miuMu.Unlock()
 
-			*bonus += killBonusPer + victimBonus
-			speed := miuMoveSpeed(*bonus, hp, maxHP)
-			snapMoveSpeed(ctx, speed, vx, vy)
+				*bonus += killBonusPer + victimBonus
+				speed := miuMoveSpeed(*bonus, hp, maxHP)
+				snapMoveSpeed(ctx, speed, vx, vy)
 
-			// 击杀回血：恢复自身已损血量的一半（引擎自动夹上限并弹 +n 特效）
-			if maxHP > hp {
-				ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: (maxHP - hp) * miuHealRatio}
-			}
+				// 击杀回血：恢复自身已损血量的一半（引擎自动夹上限并弹 +n 特效）
+				if maxHP > hp {
+					ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: (maxHP - hp) * miuHealRatio}
+				}
 
-			ctx.Out <- unit.FX{
+				ctx.Out <- unit.FX{
 					Name: "miu-powerup", Kind: ctx.Kind,
 					X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot,
 					Amount: *bonus,
@@ -1005,6 +1005,7 @@ func claimMiuKill(ctx unit.Context, s unit.Sense, prev *map[uint64]bool, bonus *
 
 type 缪弹 struct {
 	owner     uint64 // 发射此弹的缪 ID
+	body      uint64 // 这只缪的本体。同边别的 R.缪不算。
 	slot      int
 	spawnTime float64
 	booted    bool
@@ -1014,10 +1015,7 @@ type 缪弹 struct {
 func (b *缪弹) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.Collision:
-		if e.Other.Kind == KindMiu && e.Other.ID == b.owner {
-			return
-		}
-		if e.Other.Kind != KindMiu && e.Other.Kind != KindRMiu && !unit.Hittable(e.Other, b.slot) {
+		if !b.wantHit(e.Other) {
 			return
 		}
 		b.hit(ctx, e.Other)
@@ -1033,9 +1031,10 @@ func (b *缪弹) onSense(ctx unit.Context, s unit.Sense) {
 		b.spawnTime = s.Time
 		b.px, b.py = x, y
 	}
+	b.noteBody(s)
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if (o.Kind != KindMiu && o.Kind != KindRMiu) || o.Slot != b.slot || o.ID == b.owner {
+		if o.Slot != b.slot || o.ID == b.owner || !b.wantHit(*o) {
 			continue
 		}
 		if shotHits(b.px, b.py, x, y, s.Self.Radius, o.X, o.Y, o.Radius) {
@@ -1047,6 +1046,32 @@ func (b *缪弹) onSense(ctx unit.Context, s unit.Sense) {
 	if s.Time > b.spawnTime+miuShotLifetime {
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
+}
+
+func (b *缪弹) noteBody(s unit.Sense) {
+	if b.body != 0 {
+		return
+	}
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.ID == b.owner && o.Kind == KindMiu {
+			b.body = o.OwnerID
+			return
+		}
+	}
+}
+
+func (b *缪弹) wantHit(o unit.Snapshot) bool {
+	if o.Kind == KindMiu && o.ID == b.owner {
+		return false
+	}
+	if o.Kind == KindRMiu && o.Slot == b.slot {
+		return b.body != 0 && o.ID == b.body
+	}
+	if o.Kind == KindMiu && o.Slot == b.slot {
+		return true
+	}
+	return unit.Hittable(o, b.slot)
 }
 
 func shotHits(x0, y0, x1, y1, sr, tx, ty, tr float64) bool {

@@ -61,8 +61,11 @@ func (h *hub) broadcast(msg []byte) {
 type clientMsg struct {
 	Type  string `json:"type"`
 	Slot  int    `json:"slot"`
+	Index *int   `json:"index"`
 	Kind  string `json:"kind"`
 	Field string `json:"field"`
+	Team  *bool  `json:"team"`
+	Count int    `json:"count"`
 }
 
 func main() {
@@ -76,6 +79,15 @@ func main() {
 		log.Fatal(err)
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/team", func(w http.ResponseWriter, r *http.Request) {
+		b, err := web.FS.ReadFile("team.html")
+		if err != nil {
+			http.Error(w, "team page missing", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(b)
+	})
 	mux.Handle("/", http.FileServer(http.FS(static)))
 	mux.Handle("/ball/", http.StripPrefix("/ball/", http.FileServer(http.FS(unit.BallFS()))))
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +112,19 @@ func main() {
 			}
 			switch msg.Type {
 			case "select":
-				match.SetSlot(msg.Slot, msg.Kind)
+				if msg.Index != nil {
+					match.SetSeat(msg.Slot, *msg.Index, msg.Kind)
+				} else {
+					match.SetSlot(msg.Slot, msg.Kind)
+				}
+			case "side":
+				match.SetSideLen(msg.Slot, msg.Count)
+			case "mode":
+				if msg.Team != nil && *msg.Team {
+					match.UseTeam()
+				} else {
+					match.UseDuel()
+				}
 			case "field":
 				match.SetField(msg.Field)
 			case "start":

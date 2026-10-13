@@ -291,6 +291,21 @@ func TestAttractEndsIntoCooldown(t *testing.T) {
 	}
 }
 
+func TestPurpleStopsOnAllyFighter(t *testing.T) {
+	out := make(chan unit.Cmd, 4)
+	b := &紫弹{slot: 0}
+	ctx := unit.Context{ID: 9, Kind: purpleKind, Out: out}
+	mate := unit.Snapshot{ID: 4, Role: unit.RoleFighter, Slot: 0, Radius: 18}
+	b.Handle(ctx, unit.Collision{Time: 1, Other: mate})
+	cmds := drain(out)
+	if len(cmds) != 1 {
+		t.Fatalf("cmds %v", cmds)
+	}
+	if _, ok := cmds[0].(unit.Despawn); !ok {
+		t.Fatalf("同边战斗机该停下紫弹: %v", cmds[0])
+	}
+}
+
 func lastVel(cmds []unit.Cmd, id uint64) *unit.SetVelocity {
 	var v *unit.SetVelocity
 	for i := range cmds {

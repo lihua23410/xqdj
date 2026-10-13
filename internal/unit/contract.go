@@ -14,6 +14,7 @@ type Snapshot struct {
 	Vision          float64  `json:"vision"`
 	OwnerID         uint64   `json:"ownerId"`
 	Slot            int      `json:"slot"`
+	Seat            int      `json:"seat"`
 	Semi            bool     `json:"semi"`
 	FaceX           float64  `json:"faceX"`
 	FaceY           float64  `json:"faceY"`
