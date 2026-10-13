@@ -1,4 +1,4 @@
-// 雷达不转向。激光是从球心伸出的射线，开局朝正北，顺时针转，穿墙，只打敌方战斗机。
+// 雷达不转向。激光是从球心伸出的射线，开局朝正北，顺时针转，被墙裁断，只打敌方战斗机。
 package 雷达
 
 import (
@@ -56,19 +56,16 @@ func (r *雷达) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	dx, dy := laserDir(s.Time)
-	r.sweep(ctx, s, dx, dy)
-	r.emitBeam(ctx, s, dx, dy)
+	reach := clipReach(s.Self.X, s.Self.Y, dx, dy, visionOf(s), radarWidth/2, s.Field, s.Walls)
+	r.sweep(ctx, s, dx, dy, reach)
+	r.emitBeam(ctx, s, dx, dy, reach)
 }
 
-func (r *雷达) sweep(ctx unit.Context, s unit.Sense, dx, dy float64) {
+func (r *雷达) sweep(ctx unit.Context, s unit.Sense, dx, dy, reach float64) {
 	if r.hitAt == nil {
 		r.hitAt = map[uint64]float64{}
 	}
 	half := radarWidth / 2
-	reach := s.Self.Vision
-	if reach <= 0 {
-		reach = radarVision
-	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if !unit.Hittable(*o, s.Self.Slot) {
@@ -85,7 +82,7 @@ func (r *雷达) sweep(ctx unit.Context, s unit.Sense, dx, dy float64) {
 	}
 }
 
-func (r *雷达) emitBeam(ctx unit.Context, s unit.Sense, dx, dy float64) {
+func (r *雷达) emitBeam(ctx unit.Context, s unit.Sense, dx, dy, reach float64) {
 	ctx.Out <- unit.FX{
 		Name:   "beam",
 		Kind:   ctx.Kind,
@@ -95,8 +92,79 @@ func (r *雷达) emitBeam(ctx unit.Context, s unit.Sense, dx, dy float64) {
 		Y:      s.Self.Y,
 		VX:     dx, // 世界坐标方向；前端 Y 轴向上
 		VY:     dy,
-		Amount: 9999,
+		Amount: reach,
 	}
+}
+
+func visionOf(s unit.Sense) float64 {
+	if s.Self.Vision > 0 {
+		return s.Self.Vision
+	}
+	return radarVision
+}
+
+// clipReach：沿射线找第一处被场边 / 硬墙 / 胶囊墙挡住的距离。
+// Field.Walkable 含场边与场地预放墙；演员砌的硬墙只在 Sense.Walls 里，须另查。
+func clipReach(px, py, ux, uy, maxLen, halfW float64, field unit.Field, walls []unit.WallView) float64 {
+	if maxLen <= 0 {
+		return 0
+	}
+	step := 4.0
+	if halfW > step {
+		step = halfW
+	}
+	prev := 0.0
+	for t := step; t <= maxLen+1e-9; t += step {
+		if t > maxLen {
+			t = maxLen
+		}
+		if !blockedAt(px+ux*t, py+uy*t, halfW, field, walls) {
+			prev = t
+			if t >= maxLen {
+				return maxLen
+			}
+			continue
+		}
+		lo, hi := prev, t
+		for j := 0; j < 18; j++ {
+			mid := 0.5 * (lo + hi)
+			if !blockedAt(px+ux*mid, py+uy*mid, halfW, field, walls) {
+				lo = mid
+			} else {
+				hi = mid
+			}
+		}
+		return hi
+	}
+	return maxLen
+}
+
+func blockedAt(x, y, halfW float64, field unit.Field, walls []unit.WallView) bool {
+	if !field.Walkable(x, y, halfW) {
+		return true
+	}
+	for i := range walls {
+		w := &walls[i]
+		if segDist(x, y, w.X1, w.Y1, w.X2, w.Y2) < w.Radius+halfW {
+			return true
+		}
+	}
+	return false
+}
+
+func segDist(px, py, x1, y1, x2, y2 float64) float64 {
+	dx, dy := x2-x1, y2-y1
+	l2 := dx*dx + dy*dy
+	if l2 < 1e-12 {
+		return math.Hypot(px-x1, py-y1)
+	}
+	t := ((px-x1)*dx + (py-y1)*dy) / l2
+	if t < 0 {
+		t = 0
+	} else if t > 1 {
+		t = 1
+	}
+	return math.Hypot(px-(x1+dx*t), py-(y1+dy*t))
 }
 
 // laserDir 开局正北 (0,1)，之后顺时针。世界 +Y 是观众看见的上方。
