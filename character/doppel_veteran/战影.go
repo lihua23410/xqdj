@@ -33,5 +33,6 @@ func (sh *战影) onDamage(ctx unit.Context, d unit.IncomingDamage) {
 	}
 	// 折损改由本体 syncShadowDeaths 在消失时结算，避免 Sense/Confirm 血量不同步漏折
 	unit.ConfirmHit(ctx, d)
-	clearDash(ctx.ID)
+	// 不挡伤冲刺（轴突/叠撞）挨打后继续冲：勿 finish/clearDash。
+	// finish 会早收招；clearDash 会留下冲刺速。
 }

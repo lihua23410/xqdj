@@ -294,6 +294,7 @@ func (a *百战) tickZhouDash(ctx unit.Context, s unit.Sense, shadows []unit.Sna
 	}
 	ax, ok := a.axisPos(shadows)
 	if !ok {
+		a.beginReform(ctx, s.Time, shadows)
 		return
 	}
 	omega := 2 * math.Pi / zhouPeriod

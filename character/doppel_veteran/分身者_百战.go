@@ -96,7 +96,9 @@ func init() {
 		Look: unit.Look{
 			Color: shadowColor,
 			FX:    []string{"shadow"},
-			Ghost: 400, // 冲刺残影（引擎 dashing）
+			// 须高于走位 dieGatherSp(420)、低于最慢冲刺 zhouDashSp(640)，
+			// 否则聚拢走位会「继承」冲刺残影。
+			Ghost: 500,
 		},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &战影{owner: info.OwnerID, slot: info.Slot}

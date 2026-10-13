@@ -53,9 +53,10 @@ window.lookFX.shadow = {
     const vx = u.vx || 0;
     const vy = u.vy || 0;
     const sp = Math.hypot(vx, vy);
-    // 冲刺（围刺/叠撞）与环转切向速度分段
-    const dashing = sp > 480;
-    const orbiting = !dashing && sp > 140;
+    // 分段须避开巡航 170 与走位 420：巡航不当环转，走位不当冲刺。
+    // 环转切向约 251–367；冲刺 ≥640（与 Look.Ghost=500 对齐）。
+    const dashing = sp > 500;
+    const orbiting = !dashing && sp > 200;
     el.classList.toggle("is-dash", dashing);
     el.classList.toggle("is-orbit", orbiting);
     const ang = Math.atan2(-(vy || 0), vx || 1);

@@ -65,6 +65,20 @@ func TestShadowDeathLeviesBody(t *testing.T) {
 	}
 }
 
+func TestShadowGhostAboveGatherBelowDash(t *testing.T) {
+	spec, ok := unit.Lookup(KindShadow)
+	if !ok {
+		t.Fatal("missing 战影 spec")
+	}
+	if spec.Look.Ghost <= dieGatherSp {
+		t.Fatalf("Ghost %.0f must be > gather %.0f so walk does not inherit dash trails",
+			spec.Look.Ghost, dieGatherSp)
+	}
+	if spec.Look.Ghost >= zhouDashSp {
+		t.Fatalf("Ghost %.0f must be < slowest dash %.0f", spec.Look.Ghost, zhouDashSp)
+	}
+}
+
 func TestReformSnapsOrbitSpeedToCruise(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	a := &百战{}
@@ -434,4 +448,69 @@ func hasDamageNoFreeze(cmds []unit.Cmd, from, to uint64, amount float64) bool {
 		}
 	}
 	return false
+}
+
+func TestZhouDashSurvivesHit(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	const id uint64 = 42
+	startDash(id, 1, 0, zhouDashSp, zhouDashLen, zhouDamage, false, false, 0)
+	defer clearDash(id)
+
+	sh := &战影{owner: 1, slot: 0}
+	sh.Handle(unit.Context{ID: id, Kind: KindShadow, Out: out}, unit.IncomingDamage{
+		Token: 1, From: 99, Amount: 1, Time: 0.1,
+	})
+	if j := getDash(id); j == nil || j.isDone() {
+		t.Fatal("轴突不挡伤冲刺挨打后不得 finish")
+	}
+}
+
+func TestDieDashHitKeepsJob(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	const id uint64 = 42
+	startDash(id, 1, 0, dieDashSp, 5000, dieDamage, false, false, 0)
+	defer clearDash(id)
+
+	j := getDash(id)
+	j.tick(unit.Context{ID: id, Kind: KindShadow, Out: out}, id, unit.Sense{Time: 0.05})
+	_ = drain(out)
+
+	sh := &战影{owner: 1, slot: 0}
+	sh.Handle(unit.Context{ID: id, Kind: KindShadow, Out: out}, unit.IncomingDamage{
+		Token: 7, From: 99, Amount: 5, Time: 0.05,
+	})
+	_ = drain(out)
+	if getDash(id) == nil || getDash(id).isDone() {
+		t.Fatal("hit must not finish/clear non-blocking dash")
+	}
+	getDash(id).tick(unit.Context{ID: id, Kind: KindShadow, Out: out}, id, unit.Sense{Time: 0.1})
+	cmds := drain(out)
+	if !hasSetVel(cmds, id) {
+		t.Fatalf("dash tick should still write dash speed: %v", cmds)
+	}
+}
+
+func TestDashTickThenWallFinishKeepsCruiseLast(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	const id uint64 = 77
+	startDash(id, 1, 0, dieDashSp, 5000, dieDamage, false, false, 0)
+	defer clearDash(id)
+
+	getDash(id).tick(unit.Context{ID: id, Kind: KindShadow, Out: out}, id, unit.Sense{Time: 0.05})
+	sh := &战影{owner: 1, slot: 0}
+	sh.Handle(unit.Context{ID: id, Kind: KindShadow, Out: out}, unit.WallHit{
+		Time: 0.05, NX: -1, NY: 0,
+	})
+	cmds := drain(out)
+	last := -1.0
+	for _, c := range cmds {
+		v, ok := c.(unit.SetVelocity)
+		if !ok || v.UnitID != id {
+			continue
+		}
+		last = math.Hypot(v.VX, v.VY)
+	}
+	if last < 0 || math.Abs(last-shadowCruise) > 1e-6 {
+		t.Fatalf("after wall, last vel must be cruise %v, got %v", shadowCruise, last)
+	}
 }

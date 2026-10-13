@@ -114,20 +114,24 @@ func (j *dashJob) isDone() bool {
 
 func (j *dashJob) finish(ctx unit.Context, id uint64, now float64, wall bool, nx, ny float64) {
 	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.finishLocked(ctx, id, now, wall, nx, ny)
+}
+
+// finishLocked：持锁收招。须在持锁期间写出巡航速度，避免与 tick 的冲刺速乱序。
+func (j *dashJob) finishLocked(ctx unit.Context, id uint64, now float64, wall bool, nx, ny float64) {
 	if j.done {
-		j.mu.Unlock()
 		return
 	}
 	j.done = true
 	ux, uy := j.ux, j.uy
 	pass := j.pass
 	cruise := j.cruise
-	j.mu.Unlock()
-	if pass {
-		ctx.Out <- unit.Pass{UnitID: id, Hold: false}
-	}
 	if wall {
 		ux, uy = reflectDir(ux, uy, nx, ny)
+	}
+	if pass {
+		ctx.Out <- unit.Pass{UnitID: id, Hold: false}
 	}
 	ctx.Out <- unit.SetVelocity{UnitID: id, VX: ux * cruise, VY: uy * cruise}
 	_ = now
@@ -135,8 +139,8 @@ func (j *dashJob) finish(ctx unit.Context, id uint64, now float64, wall bool, nx
 
 func (j *dashJob) tick(ctx unit.Context, id uint64, s unit.Sense) {
 	j.mu.Lock()
+	defer j.mu.Unlock()
 	if j.done {
-		j.mu.Unlock()
 		return
 	}
 	if !j.booted {
@@ -152,14 +156,12 @@ func (j *dashJob) tick(ctx unit.Context, id uint64, s unit.Sense) {
 	}
 	j.lastT = s.Time
 	j.left -= j.speed * dt
-	ux, uy, sp := j.ux, j.uy, j.speed
-	left := j.left
-	j.mu.Unlock()
-
-	ctx.Out <- unit.SetVelocity{UnitID: id, VX: ux * sp, VY: uy * sp}
-	if left <= 0 {
-		j.finish(ctx, id, s.Time, false, 0, 0)
+	if j.left <= 0 {
+		j.finishLocked(ctx, id, s.Time, false, 0, 0)
+		return
 	}
+	// 持锁写冲刺速：WallHit/finish 必须等这帧写完再 snap，巡航才能盖在最后
+	ctx.Out <- unit.SetVelocity{UnitID: id, VX: j.ux * j.speed, VY: j.uy * j.speed}
 }
 
 func (j *dashJob) onCollision(ctx unit.Context, id uint64, e unit.Collision) {
