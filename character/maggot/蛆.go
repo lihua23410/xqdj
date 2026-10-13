@@ -580,11 +580,6 @@ func (a *蛆) tickFlies(ctx unit.Context, s unit.Sense) {
 			a.overlapFrom[pair] = s.Time
 			from = s.Time
 		}
-		ctx.Out <- unit.FX{
-			Name: "fly-overlap", Kind: KindFly,
-			X: fa.x, Y: fa.y, VX: fb.x, VY: fb.y, Slot: a.slot,
-			Amount: s.Time - from,
-		}
 		if s.Time+timeEps < from+overlapNeed {
 			continue
 		}

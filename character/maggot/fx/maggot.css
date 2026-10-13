@@ -425,14 +425,6 @@
   box-shadow: inset 0 0 0 1px rgba(50, 70, 40, 0.5);
 }
 
-.fx-fly-overlap {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(240, 200, 120, 0.7);
-  box-shadow: 0 0 10px rgba(240, 200, 120, 0.8);
-}
-
 .fx-fly-egg {
   width: 28px;
   height: 28px;
