@@ -164,6 +164,16 @@ func main() {
 				match.Pause()
 			case "end":
 				match.End()
+			case "log":
+				recap, trace := match.LogText()
+				b, err := json.Marshal(struct {
+					Type  string `json:"type"`
+					Recap string `json:"recap"`
+					Trace string `json:"trace"`
+				}{Type: "log", Recap: recap, Trace: trace})
+				if err == nil {
+					h.send(s, b)
+				}
 			}
 			h.broadcast(match.SnapshotJSON())
 		}

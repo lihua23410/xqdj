@@ -33,6 +33,7 @@ func (m *Match) markFactionLocked(c unitpkg.MarkFaction) {
 	u.noteFaction(f)
 	m.maybeFactionCollectLocked(u)
 	if prev != f {
+		m.noteFactionNameLocked(u, f)
 		m.fx = append(m.fx, unitpkg.FX{
 			Name: "faction", UnitID: u.id, Kind: f,
 			X: u.p.X, Y: u.p.Y, Slot: u.slot,
@@ -52,6 +53,7 @@ func (m *Match) cycleFactionLocked(u *unit) {
 	u.faction = next
 	u.factionNext = m.time + 0.2
 	u.noteFaction(next)
+	m.noteFactionNameLocked(u, next)
 	m.maybeFactionCollectLocked(u)
 	m.fx = append(m.fx, unitpkg.FX{
 		Name: "faction", UnitID: u.id, Kind: next,

@@ -105,6 +105,43 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 #btn-pause { background: #9e6a03; }
 #btn-end { background: #da3633; }
 
+.log-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  pointer-events: auto;
+}
+.log-actions button {
+  flex: 1;
+  background: #21262d;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.banner .log-actions { justify-content: center; }
+.banner .log-actions button { flex: 0 1 auto; }
+.log-box {
+  position: fixed;
+  z-index: 5;
+  left: 16px;
+  right: 16px;
+  top: 16px;
+  max-height: 28vh;
+  overflow: auto;
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  font: 13px/1.45 ui-monospace, monospace;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
 .hud {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -644,4 +681,16 @@ body[data-page="team"] .kinds { max-height: 220px; overflow: auto; }
   border-radius: 12px;
   font-size: 22px;
   pointer-events: none;
+  text-align: center;
+  min-width: 280px;
 }
+.banner-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  margin-bottom: 12px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.banner-sides div:first-child { text-align: left; }
+.banner-sides div:last-child { text-align: right; }

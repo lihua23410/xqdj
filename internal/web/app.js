@@ -483,8 +483,15 @@ function lineup(slot) {
 
 let pendingFrame = null;
 let frameScheduled = false;
+let pendingCopy = null;
 ws.onmessage = (ev) => {
-  pendingFrame = ev.data;
+  let msg;
+  try { msg = JSON.parse(ev.data); } catch { return; }
+  if (msg && msg.type === "log") {
+    takeLog(msg);
+    return;
+  }
+  pendingFrame = msg;
   if (frameScheduled) return;
   frameScheduled = true;
   requestAnimationFrame(() => {
@@ -492,11 +499,73 @@ ws.onmessage = (ev) => {
     const raw = pendingFrame;
     pendingFrame = null;
     if (raw == null) return;
-    state = JSON.parse(raw);
+    state = raw;
     hexR = state.hexRadius || 280;
     render();
   });
 };
+
+function rosterStatus(slot) {
+  const edge = slot === 0 ? "左" : "右";
+  return lineup(slot).map((kind, index) => {
+    const f = (state.units || []).find(
+      (u) => u.role === "fighter" && u.slot === slot && u.seat === index,
+    );
+    const name = `${edge}${index + 1} ${kind}`;
+    if (!f || !(f.hp > 0)) return `${name} 倒下`;
+    return `${name} ${Math.round(f.hp)}`;
+  }).join("\n");
+}
+
+function copyLog(which) {
+  pendingCopy = which;
+  send({ type: "log" });
+}
+function takeLog(msg) {
+  const which = pendingCopy;
+  pendingCopy = null;
+  if (!which) return;
+  const text = which === "trace" ? (msg.trace || "") : (msg.recap || "");
+  const box = document.getElementById("log-box");
+  const done = () => {
+    if (box) box.classList.add("hidden");
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => showLogBox(text));
+    return;
+  }
+  showLogBox(text);
+}
+function showLogBox(text) {
+  const box = document.getElementById("log-box");
+  if (!box) return;
+  box.textContent = text;
+  box.classList.remove("hidden");
+  const range = document.createRange();
+  range.selectNodeContents(box);
+  const sel = window.getSelection();
+  if (!sel) return;
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+function renderLogChrome() {
+  const ready = !!state.logReady;
+  const showBanner = ready && state.phase === "ended";
+  const showLobby = ready && state.phase === "select";
+  for (const el of document.querySelectorAll("[data-log='banner']")) {
+    el.classList.toggle("hidden", !showBanner);
+  }
+  for (const el of document.querySelectorAll("[data-log='lobby']")) {
+    el.classList.toggle("hidden", !showLobby);
+  }
+  if (!ready) {
+    const box = document.getElementById("log-box");
+    if (box) box.classList.add("hidden");
+  }
+}
+for (const btn of document.querySelectorAll("[data-copy]")) {
+  btn.addEventListener("click", () => copyLog(btn.dataset.copy));
+}
 
 document.getElementById("btn-start").onclick = () => {
   send({ type: "start" });
@@ -1165,7 +1234,13 @@ function renderArena() {
 
   if (state.phase === "ended") {
     banner.classList.remove("hidden");
-    banner.textContent = state.winner === "平局" ? "平局" : `胜者：${state.winner}`;
+    const bannerText = document.getElementById("banner-text");
+    const line = state.winner === "平局" ? "平局" : `胜者：${state.winner}`;
+    if (bannerText) bannerText.textContent = line;
+    const left = document.getElementById("banner-left");
+    const right = document.getElementById("banner-right");
+    if (left) left.textContent = rosterStatus(0);
+    if (right) right.textContent = rosterStatus(1);
   } else {
     banner.classList.add("hidden");
   }
@@ -1206,4 +1281,5 @@ function render() {
     }
     renderArena();
   }
+  renderLogChrome();
 }

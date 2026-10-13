@@ -156,6 +156,14 @@ type Match struct {
 	winnerID   uint64
 	seq        uint64
 	rng        *rand.Rand
+	seed       uint64
+	recap      strings.Builder
+	trace      strings.Builder
+	logReady   bool
+	logMute    bool
+	logNames   map[uint64]string
+	logLeapAt  map[uint64]float64 // 上一拍瞬移的时刻。连续每拍瞬移不当成一下子挪走
+	logLeaps   []logLeap
 	fx         []unitpkg.FX
 	hitStop    int
 	walls      []*barrier
@@ -178,6 +186,10 @@ type dmgOffer struct {
 	// 不能等确认时才去找发起者：剑弧、子弹这类发起者往往发完伤害就自己消失了，
 	// 到确认那一拍 m.units[from] 已经是 nil，击杀就记丢了。
 	credit uint64
+	// 提出那一刻双方的速率，和还挂在身上的瞬时推动。确认时再抄就晚了。
+	atkSpeed, defSpeed float64
+	atkImpulse         []float64
+	defImpulse         []float64
 }
 
 func NewMatch() *Match {
@@ -199,6 +211,8 @@ func NewMatchSeeded(seed uint64) *Match {
 		cmds:       make(chan unitpkg.Cmd, 512),
 		spec:       spec,
 		rng:        rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
+		seed:       seed,
+		logNames:   map[uint64]string{},
 		pendingDmg: make(map[uint64]dmgOffer),
 		wardAbsorb: make(map[uint64]bool),
 	}
@@ -228,6 +242,7 @@ func (m *Match) SnapshotJSON() []byte {
 		Field    string                      `json:"field"`
 		Shape    string                      `json:"fieldShape"`
 		HitStop  int                         `json:"hitStop"`
+		LogReady bool                        `json:"logReady"`
 		Units    []unitpkg.Snapshot          `json:"units"`
 		Walls    []wallSnap                  `json:"walls"`
 		Effects  []unitpkg.FX                `json:"effects"`
@@ -249,6 +264,7 @@ func (m *Match) SnapshotJSON() []byte {
 		Field:    m.spec.name,
 		Shape:    m.spec.shape,
 		HitStop:  m.hitStop,
+		LogReady: m.logReady,
 		Units:    make([]unitpkg.Snapshot, 0, len(m.order)),
 		Walls:    make([]wallSnap, 0, len(m.walls)),
 		Effects:  append([]unitpkg.FX(nil), m.fx...),
@@ -536,10 +552,14 @@ func (m *Match) Start() {
 	if m.phase != PhaseSelect && m.phase != PhaseEnded {
 		return
 	}
+	m.logMute = true
 	m.resetLocked()
 	m.installFieldLocked()
 	m.lineup[0] = append([]string{}, m.slots[0]...)
 	m.lineup[1] = append([]string{}, m.slots[1]...)
+	m.writeLogHeaderLocked()
+	m.logMute = false
+	m.noteWallsBuiltLocked()
 	sep := 0.0
 	if m.team {
 		sep = teamSep
@@ -670,7 +690,12 @@ func (m *Match) Pause() {
 func (m *Match) End() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.phase == PhaseRunning || m.phase == PhasePaused {
+		m.closeLogLocked("中止")
+	}
+	m.logMute = true
 	m.stopAllLocked()
+	m.logMute = false
 	m.phase = PhaseSelect
 	m.winner = ""
 	m.winnerID = 0
@@ -936,6 +961,7 @@ func (m *Match) spawnFighterLocked(kind string, slot, seat int, p, v vec) {
 	u := m.addUnitLocked(kind, p, v, 0, slot)
 	if u != nil {
 		u.seat = seat
+		m.noteBirthLocked(u)
 	}
 }
 
@@ -992,6 +1018,9 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 	m.units[id] = u
 	m.order = append(m.order, id)
 	m.actors = append(m.actors, u)
+	if spec.Role != unitpkg.RoleFighter {
+		m.noteBirthLocked(u)
+	}
 	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds}
 	go runActor(u, ctx)
 	return u
@@ -1030,6 +1059,7 @@ func runActor(u *unit, ctx unitpkg.Context) {
 }
 
 func (m *Match) drainCmdsLocked() {
+	defer m.flushLeapsLocked()
 	for i := 0; i < 512; i++ {
 		select {
 		case cmd := <-m.cmds:
@@ -1067,11 +1097,13 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if u == nil || u.stopped {
 			return
 		}
-		if c.Vision < 0 {
-			u.vision = 0
-		} else {
-			u.vision = c.Vision
+		next := c.Vision
+		if next < 0 {
+			next = 0
 		}
+		prev := u.vision
+		u.vision = next
+		m.noteSpanLocked(u, "视野", prev, next)
 	case unitpkg.SetArcSpan:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped || !u.attach {
@@ -1081,18 +1113,23 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if span < 0 {
 			span = 0
 		}
+		prev := u.arcSpan
 		u.arcSpan = span
+		m.noteSpanLocked(u, "扇环", prev, span)
 	case unitpkg.SetRadius:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped || c.Radius <= 0 {
 			return
 		}
+		prev := u.radius
 		u.radius = c.Radius
+		m.noteSpanLocked(u, "半径", prev, u.radius)
 	case unitpkg.SetHP:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
 			return
 		}
+		prevHP, prevMax := u.hp, u.maxHP
 		if c.MaxHP > 0 {
 			u.maxHP = c.MaxHP
 		}
@@ -1101,6 +1138,9 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			if u.hp > u.maxHP {
 				u.hp = u.maxHP
 			}
+		}
+		if !logSame(prevHP, u.hp) || !logSame(prevMax, u.maxHP) {
+			m.noteSetHPLocked(u)
 		}
 	case unitpkg.SetAimPriority:
 		u := m.units[c.UnitID]
@@ -1113,7 +1153,11 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if u.aimPriority == 0 && c.From != u.id {
 			return
 		}
+		if u.aimPriority == c.Value {
+			return
+		}
 		u.aimPriority = c.Value
+		m.noteAimLocked(c.From, u, c.Value)
 	case unitpkg.Damage:
 		m.offerDamageLocked(c)
 	case unitpkg.ConfirmDamage:
@@ -1123,6 +1167,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if !ok || c.UnitID != off.to {
 			return
 		}
+		m.noteBlockLocked(off)
 		delete(m.pendingDmg, c.Token)
 		delete(m.wardAbsorb, off.to)
 	case unitpkg.StackMark:
@@ -1140,6 +1185,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			u.hp = u.maxHP
 		}
 		got := u.hp - before
+		m.noteHealLocked(u, got)
 		if got >= 0.5 {
 			m.fx = append(m.fx, unitpkg.FX{
 				Name: "heal", UnitID: u.id, Kind: u.kind,
@@ -1194,26 +1240,32 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if !u.solid && u.role != unitpkg.RoleHelper {
 			return
 		}
-		u.p = vec{c.X, c.Y}
+		from := u.p
+		dest := vec{c.X, c.Y}
+		u.p = dest
 		m.constrainUnitLocked(u)
+		m.recordLeapLocked(u, from, dest, u.p)
 	case unitpkg.Pass:
 		u := m.units[c.UnitID]
-		if u == nil || u.stopped {
+		if u == nil || u.stopped || u.pass == c.Hold {
 			return
 		}
 		u.pass = c.Hold
+		m.noteHoldLocked(u, "穿过", c.Hold)
 	case unitpkg.Stand:
 		u := m.units[c.UnitID]
-		if u == nil || u.stopped {
+		if u == nil || u.stopped || u.stand == c.Hold {
 			return
 		}
 		u.stand = c.Hold
+		m.noteHoldLocked(u, "站住", c.Hold)
 	case unitpkg.NoFrameFreeze:
 		u := m.units[c.UnitID]
-		if u == nil || u.stopped {
+		if u == nil || u.stopped || u.noFrameFreeze == c.Hold {
 			return
 		}
 		u.noFrameFreeze = c.Hold
+		m.noteHoldLocked(u, "不停帧", c.Hold)
 	case unitpkg.NoHealthNumbers:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -1228,15 +1280,21 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		u.stun = c.Hold
 		if !c.Hold {
 			u.stunUntil = 0
+			m.noteStunLocked(u, 0, true)
 		} else {
 			u.stunUntil = c.Until
+			m.noteStunLocked(u, c.Until, false)
 		}
 	case unitpkg.VisionBlock:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
 			return
 		}
+		if u.visionBlock == c.Hold {
+			return
+		}
 		u.visionBlock = c.Hold
+		m.noteHoldLocked(u, "挡视线", c.Hold)
 	}
 }
 
@@ -1271,6 +1329,19 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 		markIcon:  c.MarkIcon,
 		credit:    m.creditOfLocked(c.From),
 	}
+	m.noteOfferLocked(c)
+	if from := m.units[c.From]; from != nil {
+		off := m.pendingDmg[token]
+		off.atkSpeed = from.v.len()
+		off.atkImpulse = impulseSpeeds(from)
+		m.pendingDmg[token] = off
+	}
+	{
+		off := m.pendingDmg[token]
+		off.defSpeed = u.v.len()
+		off.defImpulse = impulseSpeeds(u)
+		m.pendingDmg[token] = off
+	}
 	m.send(u, unitpkg.IncomingDamage{
 		Token:  token,
 		From:   c.From,
@@ -1295,29 +1366,21 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	if from == nil {
 		from = m.units[off.from]
 	}
-	if u.role != unitpkg.RoleFighter {
-		amt := off.amount
-		if c.Amount > 0 && c.Amount < amt {
-			amt = c.Amount
-		}
-		amt = m.scaleDamage(m.factionBearer(from), u, amt)
-		m.applyHurtLocked(from, u, amt, false, false)
-		return
-	}
-	if off.absorb || m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id] {
+	if u.role == unitpkg.RoleFighter && (off.absorb || m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id]) {
 		delete(m.wardAbsorb, u.id)
+		m.noteAbsorbLocked(off)
 		if sh := m.shellOfLocked(u.id); sh != nil {
 			m.popShellLocked(sh, off.from)
 			delete(m.wardAbsorb, u.id)
 		}
 		return
 	}
-	amt := off.amount
-	if c.Amount > 0 && c.Amount < amt {
-		amt = c.Amount
+	pre := off.amount
+	if c.Amount > 0 && c.Amount < pre {
+		pre = c.Amount
 	}
-	amt = m.scaleDamage(m.factionBearer(from), u, amt)
-	if off.markKind != "" && amt > 0 {
+	amt := m.scaleDamage(m.factionBearer(from), u, pre)
+	if u.role == unitpkg.RoleFighter && off.markKind != "" && amt > 0 {
 		delta := off.markDelta
 		if delta == 0 {
 			delta = 1
@@ -1328,6 +1391,18 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 			Delta:  delta,
 			Icon:   off.markIcon,
 		})
+	}
+	remain := u.hp
+	if amt > 0 {
+		remain = u.hp - amt
+		if remain < 0 {
+			remain = 0
+		}
+	}
+	m.noteConfirmLocked(off, amt, remain)
+	if u.role != unitpkg.RoleFighter {
+		m.applyHurtLocked(from, u, amt, false, false)
+		return
 	}
 	m.applyHurtLocked(from, u, amt, !off.noFreeze, true)
 }
@@ -1346,11 +1421,15 @@ func (m *Match) applyHurtLocked(from, u *unit, amt float64, freeze, swap bool) {
 		Amount: amt,
 	})
 	u.hp -= amt
+	if u.hp < 0 {
+		u.hp = 0
+	}
+	m.noteHurtLocked(from, u, amt)
 	if freeze {
 		m.hitStopIfNeeded(from)
 	}
 	if u.hp <= 0 {
-		u.hp = 0
+		m.noteDownLocked(u, true)
 		m.creditKillLocked(from, u)
 		m.removeLocked(u)
 	} else if swap {
@@ -1392,6 +1471,7 @@ func (m *Match) creditKillLocked(from, victim *unit) {
 	if killer == nil || killer.stopped || killer.id == victim.id {
 		return
 	}
+	m.noteCreditLocked(killer, victim)
 	m.send(killer, unitpkg.Kill{
 		VictimID:   victim.id,
 		VictimKind: victim.kind,
@@ -1545,6 +1625,7 @@ func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
 	w.bindPose()
 	w.prevA, w.prevB = w.a, w.b
 	m.walls = append(m.walls, w)
+	m.noteWallLocked("砌墙", w)
 }
 
 func (m *Match) expireWallsLocked() {
@@ -1555,6 +1636,7 @@ func (m *Match) expireWallsLocked() {
 			n++
 			continue
 		}
+		m.noteWallLocked("拆墙", w)
 		m.fx = append(m.fx, unitpkg.FX{
 			Name: "wall-fade", Kind: w.kind, Slot: w.slot,
 			X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
@@ -1567,6 +1649,7 @@ func (m *Match) breakWallLocked(id uint64) {
 	n := 0
 	for _, w := range m.walls {
 		if w.id == id {
+			m.noteWallLocked("拆墙", w)
 			m.fx = append(m.fx, unitpkg.FX{
 				Name: "wall-fade", Kind: w.kind, Slot: w.slot,
 				X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
@@ -1609,16 +1692,19 @@ func (m *Match) swapOwnedLocked(bodyID uint64) {
 		unitpkg.FX{Name: "swap", UnitID: body.id, Kind: body.kind, X: body.p.X, Y: body.p.Y, Slot: body.slot},
 		unitpkg.FX{Name: "swap", UnitID: other.id, Kind: body.kind, X: other.p.X, Y: other.p.Y, Slot: other.slot},
 	)
+	keepVel := body.stun
 	body.p, other.p = other.p, body.p
-	if !body.stun {
+	if !keepVel {
 		body.v, other.v = other.v, body.v
 	}
+	m.noteSwapLocked(body, other, keepVel)
 }
 
 func (m *Match) removeLocked(u *unit) {
 	if u == nil || u.stopped {
 		return
 	}
+	m.noteGoneLocked(u)
 	id := u.id
 	m.killLocked(u)
 	delete(m.units, u.id)
@@ -1752,6 +1838,7 @@ func (m *Match) releaseHoldLocked() {
 		if u.stun && u.stunUntil > 0 && u.stunUntil <= u.holdUntil+1e-6 {
 			u.stun = false
 			u.stunUntil = 0
+			m.noteStunLocked(u, 0, true)
 		}
 	}
 }
@@ -1767,12 +1854,14 @@ func (m *Match) holdStillLocked(id uint64, until float64) {
 	u.setVel(vec{})
 	u.stun = true
 	u.stunUntil = until
+	m.noteStunLocked(u, until, false)
 }
 
 func (m *Match) dropOwnerWallsLocked(id uint64) {
 	n := 0
 	for _, w := range m.walls {
 		if w.withOwner && w.owner == id {
+			m.noteWallLocked("拆墙", w)
 			m.fx = append(m.fx, unitpkg.FX{
 				Name: "wall-fade", Kind: w.kind, Slot: w.slot,
 				X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
@@ -1791,12 +1880,17 @@ func (m *Match) setWallMotionLocked(c unitpkg.SetWallMotion) {
 		return
 	}
 	w.bindPose()
+	same := logSame(w.spin, c.Spin) && logSame(w.vx, c.VX) && logSame(w.vy, c.VY) &&
+		logSame(w.ram, c.Ram) && logSame(w.stunR, c.StunRadius) && logSame(w.stunDur, c.StunDur)
 	wasRam := w.ram > 0
 	w.spin = c.Spin
 	w.vx, w.vy = c.VX, c.VY
 	w.ram = c.Ram
 	w.stunR = c.StunRadius
 	w.stunDur = c.StunDur
+	if !same {
+		m.noteWallMotionLocked(w)
+	}
 	if c.Ram > 0 && !wasRam {
 		w.rammed = map[uint64]struct{}{}
 	}
@@ -2474,13 +2568,16 @@ func (m *Match) checkWinLocked() {
 		if u := m.livingFighterLocked(0); u != nil {
 			m.winnerID = u.id
 		}
+		m.closeLogLocked("胜：" + m.rosterLine(0))
 	case alive[1] > 0:
 		m.winner = strings.Join(m.lineup[1], "、")
 		if u := m.livingFighterLocked(1); u != nil {
 			m.winnerID = u.id
 		}
+		m.closeLogLocked("胜：" + m.rosterLine(1))
 	default:
 		m.winner = "平局"
+		m.closeLogLocked("平局")
 	}
 }
 
