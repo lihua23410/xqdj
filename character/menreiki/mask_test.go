@@ -6,6 +6,136 @@ import (
 	"xqdj/internal/unit"
 )
 
+func TestGrantMarksAllEnemyFighters(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	m := &面灵气{hook: 1}
+	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius,
+	}
+	near := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 40, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
+	mid := unit.Snapshot{ID: 3, Role: unit.RoleFighter, Slot: 1, X: 120, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
+	far := unit.Snapshot{ID: 4, Role: unit.RoleFighter, Slot: 1, X: 200, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
+	m.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{near, mid, far}})
+	got := markFactionIDs(drain(out))
+	for _, id := range []uint64{1, 2, 3, 4} {
+		if !got[id] {
+			t.Fatalf("missing mark on %d: %v", id, got)
+		}
+	}
+}
+
+func TestCollectPaysEachEnemy(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	m := &面灵气{hook: 2, marked: true}
+	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius,
+	}
+	seek := unit.Snapshot{
+		ID: 2, Role: unit.RoleFighter, Slot: 1, X: 40, Y: 0, Radius: 18,
+		Faction: unit.FactionRed, Seen: unit.AllFactions(), AimPriority: unit.DefaultFighterAim,
+	}
+	other := unit.Snapshot{
+		ID: 3, Role: unit.RoleFighter, Slot: 1, X: 200, Y: 0, Radius: 18,
+		Faction: unit.FactionPale, Seen: unit.AllFactions(), AimPriority: unit.DefaultFighterAim,
+	}
+	m.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{seek, other}})
+	cmds := drain(out)
+	if !hasDamageTo(cmds, 2) {
+		t.Fatalf("seek target red collect should strike: %v", cmds)
+	}
+	if lastStackMark(cmds, 3) == nil {
+		t.Fatalf("other pale collect should break: %v", cmds)
+	}
+}
+
+func TestCollectPaysCompletingColorNotCurrent(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	m := &面灵气{hook: 2, marked: true}
+	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius,
+	}
+	three := []string{unit.FactionCyan, unit.FactionRed, unit.FactionPurple}
+	enemy := unit.Snapshot{
+		ID: 2, Role: unit.RoleFighter, Slot: 1, X: 80, Y: 0, Radius: 18,
+		Faction: unit.FactionPurple, Seen: three, AimPriority: unit.DefaultFighterAim,
+	}
+	m.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{enemy}})
+	if cmds := drain(out); hasDamageTo(cmds, 2) || lastStackMark(cmds, 2) != nil || lastStun(cmds) != nil {
+		t.Fatalf("three colors should wait: %v", cmds)
+	}
+	enemy.Seen = unit.AllFactions()
+	enemy.Faction = unit.FactionRed
+	m.Handle(ctx, unit.Sense{Time: 10.2, Self: self, Nearby: []unit.Snapshot{enemy}})
+	cmds := drain(out)
+	if lastStackMark(cmds, 2) == nil {
+		t.Fatalf("completing 苍 should break, not follow current 红: %v", cmds)
+	}
+	if hasDamageTo(cmds, 2) {
+		t.Fatalf("current 红 should not strike: %v", cmds)
+	}
+}
+
+func TestCollectDoesNotRepayWhileComplete(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	m := &面灵气{hook: 2, marked: true}
+	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius,
+	}
+	enemy := unit.Snapshot{
+		ID: 2, Role: unit.RoleFighter, Slot: 1, X: 80, Y: 0, Radius: 18,
+		Faction: unit.FactionCyan, Seen: unit.AllFactions(), AimPriority: unit.DefaultFighterAim,
+	}
+	m.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{enemy}})
+	if lastStun(drain(out)) == nil {
+		t.Fatal("first complete should stun")
+	}
+	enemy.Faction = unit.FactionRed
+	m.Handle(ctx, unit.Sense{Time: 10.2, Self: self, Nearby: []unit.Snapshot{enemy}})
+	cmds := drain(out)
+	if lastStun(cmds) != nil && lastStun(cmds).Hold && lastStun(cmds).Until > 10.2 {
+		t.Fatalf("still-complete should not settle again: %v", cmds)
+	}
+	if hasDamageTo(cmds, 2) {
+		t.Fatalf("later 红 should not strike: %v", cmds)
+	}
+}
+
+func TestShareStaysOnCollectorNotSeek(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	m := &面灵气{hook: 2, marked: true}
+	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius,
+	}
+	seek := unit.Snapshot{
+		ID: 2, Role: unit.RoleFighter, Slot: 1, X: 40, Y: 0, Radius: 18,
+		Faction: unit.FactionCyan, AimPriority: unit.DefaultFighterAim,
+	}
+	collector := unit.Snapshot{
+		ID: 3, Role: unit.RoleFighter, Slot: 1, X: 200, Y: 0, Radius: 18,
+		Faction: unit.FactionPurple, Seen: unit.AllFactions(), AimPriority: unit.DefaultFighterAim,
+	}
+	m.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{seek, collector}})
+	_ = drain(out)
+	m.Handle(ctx, unit.IncomingDamage{Token: 9, Amount: 10, Time: 10.1, From: 2})
+	cmds := drain(out)
+	if hasDamageTo(cmds, 2) {
+		t.Fatalf("share must not follow Seek: %v", cmds)
+	}
+	if !hasDamageTo(cmds, 3) {
+		t.Fatalf("share should hit collector: %v", cmds)
+	}
+}
+
 func TestMaskOrbitHitsMortalMinion(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	m := &面灵气{hook: 1}
@@ -195,6 +325,27 @@ func lastRemoveFSComponent(cmds []unit.Cmd, id uint64) *unit.RemoveFSComponent {
 		}
 	}
 	return v
+}
+
+func markFactionIDs(cmds []unit.Cmd) map[uint64]bool {
+	got := map[uint64]bool{}
+	for _, c := range cmds {
+		if v, ok := c.(unit.MarkFaction); ok {
+			got[v.UnitID] = true
+		}
+	}
+	return got
+}
+
+func lastStackMark(cmds []unit.Cmd, id uint64) *unit.StackMark {
+	var mk *unit.StackMark
+	for _, c := range cmds {
+		if v, ok := c.(unit.StackMark); ok && v.UnitID == id {
+			cp := v
+			mk = &cp
+		}
+	}
+	return mk
 }
 
 func lastNamed(cmds []unit.Cmd, name string) *unit.FX {

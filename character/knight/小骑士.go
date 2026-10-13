@@ -65,6 +65,7 @@ func init() {
 type 小骑士 struct {
 	readyAt float64
 	arc     unit.AttachState
+	rng     *rand.Rand
 }
 
 func (k *小骑士) Handle(ctx unit.Context, ev unit.Event) {
@@ -120,7 +121,10 @@ func (k *小骑士) tryRam(ctx unit.Context, sense unit.Sense) {
 		Name: "dash", Kind: ctx.Kind,
 		X: tx, Y: ty, VX: vx, VY: vy, Slot: sense.Self.Slot,
 	}
-	if rand.Float64() < 0.5 {
+	if k.rng == nil {
+		k.rng = unit.NewRNG(ctx.ID)
+	}
+	if k.rng.Float64() < 0.5 {
 		k.readyAt = sense.Time + knightChainGap
 	} else {
 		k.readyAt = sense.Time + knightCD

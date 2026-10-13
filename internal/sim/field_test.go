@@ -341,3 +341,50 @@ func TestVolcanoFieldBootsControllerAndCrater(t *testing.T) {
 		t.Fatalf("crater=%d", crater)
 	}
 }
+
+func TestWideHexBootsOppositeVortices(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetField(大六边形.Name)
+	m.SetSlot(0, character.KindMelee)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	for i := 0; i < 8; i++ {
+		m.Tick()
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var vs []*unit
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.stopped || u.kind != 大六边形.KindVortex {
+			continue
+		}
+		vs = append(vs, u)
+	}
+	if len(vs) != 2 {
+		t.Fatalf("vortices=%d", len(vs))
+	}
+	for _, u := range vs {
+		if math.Abs(math.Hypot(u.p.X, u.p.Y)-unitpkg.HexRadius) > 1.5 {
+			t.Fatalf("orbit r=%v at %+v", math.Hypot(u.p.X, u.p.Y), u.p)
+		}
+	}
+	if math.Abs(vs[0].p.X+vs[1].p.X) > 1.5 || math.Abs(vs[0].p.Y+vs[1].p.Y) > 1.5 {
+		t.Fatalf("not opposite %+v %+v", vs[0].p, vs[1].p)
+	}
+	var bar *barrier
+	for _, w := range m.walls {
+		if w.hard && w.visionBlock {
+			bar = w
+			break
+		}
+	}
+	if bar == nil {
+		t.Fatal("missing vision-block bar")
+	}
+	wantSpin := -2 * math.Pi / 8
+	if math.Abs(bar.spin-wantSpin) > 1e-9 {
+		t.Fatalf("spin=%v want %v", bar.spin, wantSpin)
+	}
+}

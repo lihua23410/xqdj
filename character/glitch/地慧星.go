@@ -131,6 +131,7 @@ type 地慧星 struct {
 	enemyX, enemyY float64
 	slot           int
 	booted         bool
+	rng            *rand.Rand
 }
 
 type 地慧星残影 struct {
@@ -254,8 +255,10 @@ func (g *地慧星) onIncoming(ctx unit.Context, d unit.IncomingDamage) {
 		if g.slashHolding {
 			return
 		}
-		rng := rand.New(rand.NewPCG(uint64(d.Time*1e6)^ctx.ID, ctx.ID^0x9e3779b97f4a7c15))
-		nx, ny, ok := unit.LiveField().RandomWalkable(rng, glitchCagePad)
+		if g.rng == nil {
+			g.rng = unit.NewRNG(ctx.ID)
+		}
+		nx, ny, ok := unit.LiveField().RandomWalkable(g.rng, glitchCagePad)
 		if !ok {
 			nx, ny = unit.LiveField().Clamp(g.x, g.y, glitchCagePad)
 		}
@@ -274,6 +277,7 @@ type 地慧星弧 struct {
 	slot   int
 	x, y   float64
 	booted bool
+	rng    *rand.Rand
 }
 
 func (a *地慧星弧) Handle(ctx unit.Context, ev unit.Event) {
@@ -293,7 +297,10 @@ func (a *地慧星弧) Handle(ctx unit.Context, ev unit.Event) {
 			MarkDelta: 1,
 			MarkIcon:  glitchMarkIcon,
 		}
-		if a.booted && rand.Float64() < glitchGhostOdds {
+		if a.rng == nil {
+			a.rng = unit.NewRNG(ctx.ID)
+		}
+		if a.booted && a.rng.Float64() < glitchGhostOdds {
 			ctx.Out <- unit.Spawn{
 				Kind:    KindGlitchGhost,
 				X:       a.x,

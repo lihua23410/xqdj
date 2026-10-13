@@ -18,8 +18,12 @@ func (m *Match) markFactionLocked(c unitpkg.MarkFaction) {
 	prev := u.faction
 	u.faction = f
 	u.factionCycle = c.Cycle
-	u.factionAmpOut = c.AmpOut
-	u.factionAmpIn = c.AmpIn
+	if c.AmpOut != 0 {
+		u.factionAmpOut = c.AmpOut
+	}
+	if c.AmpIn != 0 {
+		u.factionAmpIn = c.AmpIn
+	}
 	u.factionCollect = c.Collect
 	if len(c.Barrage) > 0 {
 		u.factionBarrage = append([]string(nil), c.Barrage...)

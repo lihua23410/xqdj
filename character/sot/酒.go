@@ -46,7 +46,9 @@ func (w *酒) onSense(ctx unit.Context, s unit.Sense) {
 	w.x, w.y = s.Self.X, s.Self.Y
 	if !w.booted {
 		w.booted = true
-		w.rng = rand.New(rand.NewPCG(ctx.ID, ctx.ID))
+		if w.rng == nil {
+			w.rng = unit.NewRNG(ctx.ID)
+		}
 	}
 	ax := (w.rng.Float64()*2 - 1) * wineWind
 	ctx.Out <- unit.Force{UnitID: ctx.ID, AX: ax, AY: -wineG}

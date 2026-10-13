@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"encoding/json"
 	"testing"
 
 	"xqdj/character"
@@ -57,7 +58,6 @@ func TestVisionBlockPlaceWallFlowsIntoWallView(t *testing.T) {
 	m := newWallMatch(t)
 	defer m.End()
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	owner := fighterByKind(m, character.KindWaller)
 	m.placeWallLocked(unitpkg.PlaceWall{
 		OwnerID: owner.id, Slot: owner.slot, Kind: owner.kind,
@@ -65,14 +65,30 @@ func TestVisionBlockPlaceWallFlowsIntoWallView(t *testing.T) {
 		VisionBlock: true,
 	})
 	if len(m.walls) != 1 {
+		m.mu.Unlock()
 		t.Fatalf("walls=%d", len(m.walls))
 	}
 	if !m.walls[0].visionBlock {
+		m.mu.Unlock()
 		t.Fatal("barrier.visionBlock not set")
 	}
 	views := m.wallViewsLocked()
 	if len(views) != 1 || !views[0].VisionBlock {
+		m.mu.Unlock()
 		t.Fatal("wall view does not carry VisionBlock")
+	}
+	m.mu.Unlock()
+	raw := m.SnapshotJSON()
+	var msg struct {
+		Walls []struct {
+			VisionBlock bool `json:"visionBlock"`
+		} `json:"walls"`
+	}
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		t.Fatal(err)
+	}
+	if len(msg.Walls) != 1 || !msg.Walls[0].VisionBlock {
+		t.Fatalf("snapshot walls=%+v", msg.Walls)
 	}
 }
 

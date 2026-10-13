@@ -613,78 +613,77 @@ function renderLobby() {
   }
   lobbyKey = key;
   paintFields(fields);
-  if (teamPage) {
-    renderTeamLobby(kinds);
-    return;
-  }
+  paintKindGrids(kinds);
+  if (teamPage) paintRosters();
+  updateStartEnabled();
+}
+
+function paintKindGrids(kinds) {
   for (const [el, slot] of [
     [kinds0, 0],
     [kinds1, 1],
   ]) {
     if (!el) continue;
     el.innerHTML = "";
-    const current = sideList(slot)[0] || "";
+    const names = sideList(slot);
+    const current = names[0] || "";
+    const full = teamPage && names.length >= 3;
     for (const kind of kinds) {
       const b = document.createElement("button");
       b.textContent = kind;
       b.type = "button";
       b.dataset.slot = String(slot);
       paintKind(b, kind);
-      if (current === kind) b.classList.add("active");
-      b.onclick = () => send({ type: "select", slot, kind });
+      if (!teamPage && current === kind) b.classList.add("active");
+      if (full) b.disabled = true;
+      b.onclick = () => {
+        if (teamPage && sideList(slot).length >= 3) return;
+        send({ type: "select", slot, kind });
+      };
       el.appendChild(b);
     }
     const slotRoot = el.closest(".slot");
     if (slotRoot) {
-      paintKind(slotRoot, current);
+      const accent = teamPage ? names[names.length - 1] || "" : current;
+      paintKind(slotRoot, accent);
     }
   }
 }
 
-function renderTeamLobby(kinds) {
+function paintRosters() {
   for (const slot of [0, 1]) {
-    const host = document.getElementById(`seats-${slot}`);
+    const host = document.getElementById(`roster-list-${slot}`);
     if (!host) continue;
     host.innerHTML = "";
     const names = sideList(slot);
-    names.forEach((current, index) => {
-      const seat = document.createElement("div");
-      seat.className = "seat";
-      const h = document.createElement("h3");
-      h.textContent = String(index + 1);
-      seat.appendChild(h);
-      const list = document.createElement("div");
-      list.className = "kinds";
-      for (const kind of kinds) {
-        const b = document.createElement("button");
-        b.textContent = kind;
-        b.type = "button";
-        paintKind(b, kind);
-        if (kind === current) b.classList.add("active");
-        b.onclick = () => send({ type: "select", slot, index, kind });
-        list.appendChild(b);
-      }
-      seat.appendChild(list);
-      host.appendChild(seat);
-      paintKind(seat, current);
+    const head = host.previousElementSibling;
+    if (head && head.tagName === "H2") {
+      head.textContent = slot === 0 ? `左边 ${names.length}/3` : `右边 ${names.length}/3`;
+    }
+    if (!names.length) {
+      const empty = document.createElement("p");
+      empty.className = "roster-empty";
+      empty.textContent = "点击角色加入";
+      host.appendChild(empty);
+      continue;
+    }
+    names.forEach((kind, index) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = kind;
+      paintKind(b, kind);
+      b.onclick = () => send({ type: "select", slot, index, kind: "" });
+      host.appendChild(b);
     });
   }
 }
 
-function bindSideCounts() {
-  if (!teamPage) return;
-  for (const slot of [0, 1]) {
-    const dec = document.getElementById(`side-dec-${slot}`);
-    const inc = document.getElementById(`side-inc-${slot}`);
-    if (dec) {
-      dec.onclick = () => send({ type: "side", slot, count: Math.max(1, sideList(slot).length - 1) });
-    }
-    if (inc) {
-      inc.onclick = () => send({ type: "side", slot, count: Math.min(3, sideList(slot).length + 1) });
-    }
-  }
+function updateStartEnabled() {
+  const btn = document.getElementById("btn-start");
+  if (!btn) return;
+  const ready = !teamPage || (sideList(0).length > 0 && sideList(1).length > 0);
+  btn.disabled = !ready;
 }
-bindSideCounts();
 
 function placeSeg(el, x1, y1, x2, y2, kind) {
   const dx = x2 - x1;
@@ -694,6 +693,111 @@ function placeSeg(el, x1, y1, x2, y2, kind) {
   el.style.top = `${(y1 + y2) / 2}px`;
   el.style.setProperty("--ang", `${Math.atan2(dy, dx)}rad`);
   el.style.setProperty("--kind", kindColor(kind));
+}
+
+function distToSeg(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const l2 = dx * dx + dy * dy;
+  if (l2 < 1e-12) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / l2;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t));
+}
+
+function segSegDist(p1x, p1y, q1x, q1y, p2x, p2y, q2x, q2y) {
+  const ux = q1x - p1x;
+  const uy = q1y - p1y;
+  const vx = q2x - p2x;
+  const vy = q2y - p2y;
+  const wx = p1x - p2x;
+  const wy = p1y - p2y;
+  const a = ux * ux + uy * uy;
+  const b = ux * vx + uy * vy;
+  const c = vx * vx + vy * vy;
+  const d = ux * wx + uy * wy;
+  const e = vx * wx + vy * wy;
+  const D = a * c - b * b;
+  let sN = D;
+  let sD = D;
+  let tN = D;
+  let tD = D;
+  if (D < 1e-12) {
+    sN = 0;
+    sD = 1;
+    tN = e;
+    tD = c;
+  } else {
+    sN = b * e - c * d;
+    tN = a * e - b * d;
+    if (sN < 0) {
+      sN = 0;
+      tN = e;
+      tD = c;
+    } else if (sN > sD) {
+      sN = sD;
+      tN = e + b;
+      tD = c;
+    }
+  }
+  if (tN < 0) {
+    tN = 0;
+    if (-d < 0) sN = 0;
+    else if (-d > a) sN = sD;
+    else {
+      sN = -d;
+      sD = a;
+    }
+  } else if (tN > tD) {
+    tN = tD;
+    if (-d + b < 0) sN = 0;
+    else if (-d + b > a) sN = sD;
+    else {
+      sN = -d + b;
+      sD = a;
+    }
+  }
+  const sc = Math.abs(sN) > 1e-12 ? sN / sD : 0;
+  const tc = Math.abs(tN) > 1e-12 ? tN / tD : 0;
+  return Math.hypot(p1x + ux * sc - (p2x + vx * tc), p1y + uy * sc - (p2y + vy * tc));
+}
+
+function sightBlocked(self, o, units, walls) {
+  for (const w of walls || []) {
+    if (!w.visionBlock) continue;
+    if (segSegDist(self.x, self.y, o.x, o.y, w.x1, w.y1, w.x2, w.y2) <= (w.radius || 0)) {
+      return true;
+    }
+  }
+  for (const b of units || []) {
+    if (!b.visionBlock || b.id === self.id || b.id === o.id) continue;
+    if (distToSeg(b.x, b.y, self.x, self.y, o.x, o.y) <= (b.radius || 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// 和 unit.Seek 同一口径：异边、瞄准优先度 > 0，数字越小越先，相同则最近；挡视线跳过。
+function seekTarget(self, units, walls) {
+  let best = null;
+  let bestPri = 255;
+  let bestD2 = Infinity;
+  for (const o of units || []) {
+    if (!o || o.id === self.id) continue;
+    const pri = o.aimPriority || 0;
+    if (o.slot === self.slot || pri <= 0) continue;
+    if (sightBlocked(self, o, units, walls)) continue;
+    const dx = o.x - self.x;
+    const dy = o.y - self.y;
+    const d2 = dx * dx + dy * dy;
+    if (best && (pri > bestPri || (pri === bestPri && d2 >= bestD2))) continue;
+    best = o;
+    bestPri = pri;
+    bestD2 = d2;
+  }
+  return best;
 }
 
 function ensureGuide(id, cls) {
@@ -710,17 +814,15 @@ function ensureGuide(id, cls) {
 function renderGuides(fighters, scale, cx, cy) {
   if (!guidesEl) return;
   const seen = new Set();
+  const units = state.units || [];
+  const walls = state.walls || [];
   const wallers = (fighters || []).filter((u) => (lookOf(u.kind).wallGuide || 0) > 0);
-  const drawn = new Set();
   for (const w of wallers) {
-    const enemy = (fighters || []).find((u) => u.id !== w.id);
+    const enemy = seekTarget(w, units, walls);
     if (!enemy) continue;
-    const pair = w.id < enemy.id ? `${w.id}-${enemy.id}` : `${enemy.id}-${w.id}`;
-    if (drawn.has(pair)) continue;
-    drawn.add(pair);
     const [ax, ay] = screenPos(w.x, w.y, scale, cx, cy);
     const [bx, by] = screenPos(enemy.x, enemy.y, scale, cx, cy);
-    const link = ensureGuide(`guide-link-${pair}`, "link");
+    const link = ensureGuide(`guide-link-${w.id}`, "link");
     placeSeg(link, ax, ay, bx, by, w.kind);
     seen.add(link.id);
 
@@ -735,7 +837,7 @@ function renderGuides(fighters, scale, cx, cy) {
     const my = (w.y + enemy.y) / 2;
     const [g1x, g1y] = screenPos(mx + px * half, my + py * half, scale, cx, cy);
     const [g2x, g2y] = screenPos(mx - px * half, my - py * half, scale, cx, cy);
-    const hint = ensureGuide(`guide-wall-${pair}`, "hint");
+    const hint = ensureGuide(`guide-wall-${w.id}`, "hint");
     placeSeg(hint, g1x, g1y, g2x, g2y, w.kind);
     seen.add(hint.id);
   }
@@ -1249,7 +1351,7 @@ function renderArena() {
 let wasLobby = true;
 
 function releaseLobby() {
-  for (const id of ["seats-0", "seats-1", "kinds-0", "kinds-1"]) {
+  for (const id of ["roster-list-0", "roster-list-1", "kinds-0", "kinds-1"]) {
     const el = document.getElementById(id);
     if (el) el.replaceChildren();
   }

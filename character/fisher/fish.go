@@ -62,6 +62,7 @@ type 鱼 struct {
 	ux, uy  float64
 	ex, ey  float64
 	hasE    bool
+	rng     *rand.Rand
 }
 
 func newFish(info unit.SpawnInfo) *鱼 {
@@ -149,13 +150,21 @@ func (f *鱼) onWall(ctx unit.Context, _ unit.WallHit) {
 	}
 }
 
+func (f *鱼) ensureRNG(id uint64) {
+	if f.rng != nil {
+		return
+	}
+	f.rng = unit.NewRNG(id)
+}
+
 func (f *鱼) goInert() {
 	if f.spent {
 		return
 	}
 	f.spent = true
 	if f.drag < 1 {
-		f.drag = 50 + rand.Float64()*260
+		f.ensureRNG(f.owner)
+		f.drag = 50 + f.rng.Float64()*260
 	}
 }
 
@@ -186,11 +195,13 @@ func (f *鱼) coast(ctx unit.Context, s unit.Sense, dt float64) {
 		f.ux, f.uy = s.Self.VX/n, s.Self.VY/n
 	}
 	if f.drag < 1 {
-		f.drag = 50 + rand.Float64()*260
+		f.ensureRNG(ctx.ID)
+		f.drag = 50 + f.rng.Float64()*260
 	}
 	j := 1.0
 	if !f.steady {
-		j = 0.55 + rand.Float64()*0.9
+		f.ensureRNG(ctx.ID)
+		j = 0.55 + f.rng.Float64()*0.9
 	}
 	f.speed -= f.drag * j * dt
 	if f.speed <= 8 {

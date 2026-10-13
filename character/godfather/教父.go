@@ -165,7 +165,9 @@ func (a *教父) Handle(ctx unit.Context, ev unit.Event) {
 	a.slot = s.Self.Slot
 	if !a.booted {
 		a.booted = true
-		a.rng = rand.New(rand.NewPCG(s.Self.ID, uint64(s.Time*1e6)+1))
+		if a.rng == nil {
+			a.rng = unit.NewRNG(s.Self.ID)
+		}
 	}
 	a.tickSpawn(ctx, s)
 	a.tryPickup(ctx, s)

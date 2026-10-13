@@ -100,6 +100,9 @@ func damages(cmds []unit.Cmd) []unit.Damage {
 }
 
 func boot(a *酒翁, out chan unit.Cmd, near []unit.Snapshot) {
+	if a.rng == nil {
+		a.rng = rand.New(rand.NewPCG(1, 2))
+	}
 	ctx := unit.Context{ID: 1, Kind: KindSot, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: sotAt(0, 0), Nearby: near, Field: unit.HexField()})
 	_ = drain(out)
@@ -118,9 +121,8 @@ func TestFirstSmashDropsOnEnemyHead(t *testing.T) {
 	a.Handle(ctx, unit.Sense{Time: smashFirst, Self: sotAt(0, 0), Nearby: near, Field: unit.HexField()})
 	cmds := drain(out)
 	wines := spawns(cmds, KindSotWine)
-	want := rand.New(rand.NewPCG(1, 1)).IntN(3) + 1
 	if len(wines) != 1 {
-		t.Fatalf("到点先砸第 1 坛, got %d want 1 (本轮共 %d)", len(wines), want)
+		t.Fatalf("到点先砸第 1 坛, got %d", len(wines))
 	}
 	topX, topY := dropPoint(unit.HexField(), 80, wineRadius)
 	wantX, wantY := insetFromOutline(unit.HexField(), topX, topY, wineRadius, wineSpawnPad)

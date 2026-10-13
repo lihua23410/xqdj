@@ -268,10 +268,10 @@ func (a *囚徒) tickDrop(ctx unit.Context, s unit.Sense) {
 
 func (a *囚徒) planDrop(s unit.Sense) {
 	kinds := []string{KindCage, KindGallows, KindChair}
-	rng := a.rng
-	if rng == nil {
-		rng = rand.New(rand.NewPCG(uint64(s.Time*1e6)+s.Self.ID, 1))
+	if a.rng == nil {
+		a.rng = unit.NewRNG(s.Self.ID)
 	}
+	rng := a.rng
 	rng.Shuffle(3, func(i, j int) { kinds[i], kinds[j] = kinds[j], kinds[i] })
 	copy(a.kinds[:], kinds)
 	ex, ey := 0.0, 0.0

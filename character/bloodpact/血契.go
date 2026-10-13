@@ -38,7 +38,7 @@ const (
 	biteArcSpan  = 110.0
 	biteArcInner = pactRadius
 	biteArcOuter = pactRadius + 2
-	biteSlack    = 8.0 // 咬合余量：外径 + 对方半径 + 这个，咬距上被挤开一点也算「在嘴边」
+	biteSlack    = 8.0                           // 咬合余量：外径 + 对方半径 + 这个，咬距上被挤开一点也算「在嘴边」
 	mouthReach   = biteArcOuter + 18 + biteSlack // 嘴边：46。建线量这个，收线起手也量这个
 
 	// 饿扑：烧 5 血，朝索敌目标 400 速扑 0.5 秒。扑空 = 白烧。
@@ -168,7 +168,7 @@ type 血契 struct {
 	batAt    float64
 	rng      *rand.Rand
 
-	arc      unit.AttachState
+	arc unit.AttachState
 
 	// 血线：可同时连多个有生命的目标（敌方战斗机或敌方活随从），单个目标最多一条
 	lines     map[uint64]*bloodLine
@@ -275,7 +275,7 @@ func (b *血契) breakLine(ctx unit.Context, s unit.Sense, id uint64) {
 }
 
 // tether 建线：单个目标最多一条；可以同时连多个有生命的目标
-//（敌方战斗机或敌方活随从），深度各自按连接时长长。
+// （敌方战斗机或敌方活随从），深度各自按连接时长长。
 func (b *血契) tether(ctx unit.Context, s unit.Sense, o *unit.Snapshot) {
 	if b.lines[o.ID] != nil || b.wilted(s) {
 		return
@@ -355,7 +355,7 @@ func (b *血契) reflux(ctx unit.Context, s unit.Sense) {
 			continue
 		}
 		if ln.lastHP > 0 && o.HP < ln.lastHP-1e-9 {
-			b.pool += (ln.lastHP - o.HP) * feedRatio(s.Time - ln.since)
+			b.pool += (ln.lastHP - o.HP) * feedRatio(s.Time-ln.since)
 		}
 		ln.lastHP = o.HP
 	}
@@ -496,7 +496,7 @@ func (b *血契) tryCallBats(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	if b.rng == nil {
-		b.rng = rand.New(rand.NewPCG(ctx.ID*8817264546332525217, 0x9e3779b97f4a7c15))
+		b.rng = unit.NewRNG(ctx.ID)
 	}
 	b.batAt = s.Time + batCD
 	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: s.Self.HP - batCost}
@@ -556,7 +556,7 @@ func (b *血契) syncLook(ctx unit.Context, s unit.Sense) {
 			ctx.Out <- unit.FX{
 				Name: "blood-line", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
 				X: b.x, Y: b.y, VX: o.X, VY: o.Y,
-				Amount: float64(depthOf(s.Time - b.lines[id].since)) + 1,
+				Amount: float64(depthOf(s.Time-b.lines[id].since)) + 1,
 			}
 		}
 	}

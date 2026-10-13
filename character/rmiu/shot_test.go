@@ -124,7 +124,7 @@ func TestFireSkipsEmptyTargets(t *testing.T) {
 	queue := 2
 	next := 0.0
 	ready := 0.0
-	tryMiuFire(ctx, unit.Sense{Time: 1, Self: miuSelf()}, nil, &ready, &next, &queue)
+	tryMiuFire(ctx, unit.Sense{Time: 1, Self: miuSelf()}, nil, &ready, &next, &queue, nil)
 	for _, c := range drain(out) {
 		if _, ok := c.(unit.Spawn); ok {
 			t.Fatalf("must not spawn without targets: %v", c)

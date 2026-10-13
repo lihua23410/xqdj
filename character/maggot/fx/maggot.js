@@ -157,10 +157,6 @@ window.lookFX["maggot-egg"] = {
   unmount: maggotUnmount,
 };
 
-arena.registerShot("fly-overlap", (fx, ctx) => {
-  arena.spawnFx("fx-fly-overlap", ctx.x, ctx.y, ctx.kind);
-});
-
 arena.registerShot("fly-egg", (fx, ctx) => {
   arena.spawnFx("fx-fly-egg", ctx.x, ctx.y, ctx.kind);
 });

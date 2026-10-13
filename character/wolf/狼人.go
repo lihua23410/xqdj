@@ -3,7 +3,6 @@ package 狼人
 import (
 	"embed"
 	"math"
-	"math/rand/v2"
 	"xqdj/internal/unit"
 )
 
@@ -162,7 +161,7 @@ func (w *狼人) bootMoon(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	w.booted = true
-	rng := rand.New(rand.NewPCG(rand.Uint64()^ctx.ID, rand.Uint64()))
+	rng := unit.NewRNG(ctx.ID)
 	x, y, ok := s.Field.RandomWalkable(rng, moonRadius)
 	if !ok {
 		x, y = unit.LiveField().Clamp(0, 80, moonRadius)

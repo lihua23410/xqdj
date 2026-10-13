@@ -1,9 +1,17 @@
 package r缪
 
 import (
+	"math/rand/v2"
 	"testing"
+
 	"xqdj/internal/unit"
 )
+
+type constSrc uint64
+
+func (s constSrc) Uint64() uint64 { return uint64(s) }
+
+func lowRNG() *rand.Rand { return rand.New(constSrc(0)) }
 
 func TestDodgeChance(t *testing.T) {
 	if dodgeChance(170, 170) != 0 {
@@ -20,12 +28,9 @@ func TestDodgeChance(t *testing.T) {
 }
 
 func TestDodgeBlocksHit(t *testing.T) {
-	old := miuDodgeRoll
-	miuDodgeRoll = func() float64 { return 0 }
-	defer func() { miuDodgeRoll = old }()
-
 	out := make(chan unit.Cmd, 8)
 	m := meleeMiu()
+	m.rng = lowRNG()
 	m.seenSp = map[uint64]float64{99: 170}
 	m.x, m.y = 1, 2
 	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
@@ -46,12 +51,9 @@ func TestDodgeBlocksHit(t *testing.T) {
 }
 
 func TestNoDodgeWhenSlower(t *testing.T) {
-	old := miuDodgeRoll
-	miuDodgeRoll = func() float64 { return 0 }
-	defer func() { miuDodgeRoll = old }()
-
 	out := make(chan unit.Cmd, 8)
 	m := meleeMiu()
+	m.rng = lowRNG()
 	m.seenSp = map[uint64]float64{99: 400}
 	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.IncomingDamage{Token: 5, From: 99, Amount: 9, Speed: 170})

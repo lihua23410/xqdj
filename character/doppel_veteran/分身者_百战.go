@@ -133,23 +133,23 @@ type 百战 struct {
 	liveX, liveY float64
 	hasAim       bool
 
-	orbitAng     map[uint64]float64
-	orbitHitAt   map[uint64]map[uint64]float64 // 战影 → 目标 → 下次可刮
-	axisID       uint64
-	stackID      uint64
-	stackX       float64
-	stackY       float64
-	stackFixed   bool // 招3停住后钉死叠点，不再跟活坐标追
-	centerFixed  bool // 招1停转后钉死圆心
-	centerX      float64
-	centerY      float64
-	lockID       uint64 // 围刺锁定的敌方单位；非 0 时不换锁
-	order        []uint64
-	shotIdx      int
-	nextShot     float64
-	dashIDs      []uint64
-	gatherFrom   float64
-	knownShadow  map[uint64]struct{}
+	orbitAng    map[uint64]float64
+	orbitHitAt  map[uint64]map[uint64]float64 // 战影 → 目标 → 下次可刮
+	axisID      uint64
+	stackID     uint64
+	stackX      float64
+	stackY      float64
+	stackFixed  bool // 招3停住后钉死叠点，不再跟活坐标追
+	centerFixed bool // 招1停转后钉死圆心
+	centerX     float64
+	centerY     float64
+	lockID      uint64 // 围刺锁定的敌方单位；非 0 时不换锁
+	order       []uint64
+	shotIdx     int
+	nextShot    float64
+	dashIDs     []uint64
+	gatherFrom  float64
+	knownShadow map[uint64]struct{}
 
 	passing  map[uint64]bool
 	standing map[uint64]bool
@@ -186,15 +186,16 @@ func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
 	if !a.booted {
 		a.booted = true
 		a.phase = phaseBoot
-		// 与狼人月亮同一套：运行时 Uint64 搅种，避免槽位固定种子抽偏
-		a.rng = rand.New(rand.NewPCG(rand.Uint64()^ctx.ID, rand.Uint64()))
+		if a.rng == nil {
+			a.rng = unit.NewRNG(ctx.ID)
+		}
 		ctx.Out <- unit.NoHealthNumbers{UnitID: ctx.ID, Hold: true}
 		unit.SetAim(ctx, ctx.ID, 0)
 		spawnShadows(ctx, s)
 		return
 	}
 	if a.rng == nil {
-		a.rng = rand.New(rand.NewPCG(rand.Uint64()^ctx.ID, rand.Uint64()))
+		a.rng = unit.NewRNG(ctx.ID)
 	}
 
 	a.refreshAim(s)
@@ -280,7 +281,7 @@ func (a *百战) pickMove(ctx unit.Context, s unit.Sense, shadows []unit.Snapsho
 // drawMove 三招洗牌袋：抽空再洗，避免某一招长期抽不到。
 func (a *百战) drawMove() int {
 	if a.rng == nil {
-		a.rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
+		a.rng = unit.NewRNG(0)
 	}
 	if len(a.moveBag) == 0 {
 		a.moveBag = []int{0, 1, 2}

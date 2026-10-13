@@ -87,16 +87,16 @@ func (a *机关房) Handle(ctx unit.Context, ev unit.Event) {
 
 func (a *机关房) boot(ctx unit.Context, s unit.Sense) {
 	a.booted = true
-	a.ensureRNG(ctx.ID, s.Time)
+	a.ensureRNG(ctx.ID)
 	a.hitAt = map[uint64]float64{}
 	a.slowTok = map[uint64]uint64{}
 }
 
-func (a *机关房) ensureRNG(id uint64, t float64) {
+func (a *机关房) ensureRNG(id uint64) {
 	if a.rng != nil {
 		return
 	}
-	a.rng = rand.New(rand.NewPCG(id, uint64(t*1e6)+1))
+	a.rng = unit.NewRNG(id)
 }
 
 func (a *机关房) tickCycle(ctx unit.Context, s unit.Sense) {
@@ -163,7 +163,7 @@ func shiftRect(r cellRect, ox, oy float64) cellRect {
 }
 
 func (a *机关房) pickToxic() {
-	a.ensureRNG(1, 0)
+	a.ensureRNG(1)
 	i0 := a.rng.IntN(gridN * gridN)
 	i1 := a.rng.IntN(gridN*gridN - 1)
 	if i1 >= i0 {

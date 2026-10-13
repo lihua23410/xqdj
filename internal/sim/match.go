@@ -126,17 +126,18 @@ type barrier struct {
 }
 
 type wallSnap struct {
-	ID     uint64  `json:"id"`
-	X1     float64 `json:"x1"`
-	Y1     float64 `json:"y1"`
-	X2     float64 `json:"x2"`
-	Y2     float64 `json:"y2"`
-	Radius float64 `json:"radius"`
-	Kind   string  `json:"kind"`
-	Slot   int     `json:"slot"`
-	Hard   bool    `json:"hard,omitempty"`
-	Square bool    `json:"square,omitempty"`
-	Field  bool    `json:"field,omitempty"`
+	ID          uint64  `json:"id"`
+	X1          float64 `json:"x1"`
+	Y1          float64 `json:"y1"`
+	X2          float64 `json:"x2"`
+	Y2          float64 `json:"y2"`
+	Radius      float64 `json:"radius"`
+	Kind        string  `json:"kind"`
+	Slot        int     `json:"slot"`
+	Hard        bool    `json:"hard,omitempty"`
+	Square      bool    `json:"square,omitempty"`
+	Field       bool    `json:"field,omitempty"`
+	VisionBlock bool    `json:"visionBlock,omitempty"`
 }
 
 type Match struct {
@@ -281,6 +282,7 @@ func (m *Match) SnapshotJSON() []byte {
 			ID: w.id, X1: w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
 			Radius: w.radius, Kind: w.kind, Slot: w.slot,
 			Hard: w.hard, Square: w.square, Field: w.field,
+			VisionBlock: w.visionBlock,
 		})
 	}
 	if m.phase == PhaseSelect {
@@ -411,7 +413,30 @@ func (m *Match) SetSlot(slot int, kind string) {
 	if m.phase != PhaseSelect {
 		return
 	}
+	if m.team {
+		if len(m.slots[slot]) >= maxSideN {
+			return
+		}
+		m.slots[slot] = append(m.slots[slot], kind)
+		return
+	}
 	m.slots[slot] = []string{kind}
+}
+
+func (m *Match) RemoveSeat(side, index int) {
+	if side < 0 || side > 1 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect || !m.team {
+		return
+	}
+	cur := m.slots[side]
+	if index < 0 || index >= len(cur) {
+		return
+	}
+	m.slots[side] = append(cur[:index:index], cur[index+1:]...)
 }
 
 func (m *Match) SetSeat(side, index int, kind string) {
@@ -465,9 +490,8 @@ func (m *Match) UseTeam() {
 			unitpkg.SetLiveField(m.spec.toUnitField())
 		}
 	}
-	kinds := unitpkg.FighterKinds()
-	m.slots[0] = takeKinds(kinds, 0, maxSideN)
-	m.slots[1] = takeKinds(kinds, maxSideN, maxSideN)
+	m.slots[0] = []string{}
+	m.slots[1] = []string{}
 }
 
 func (m *Match) UseDuel() {
@@ -550,6 +574,9 @@ func (m *Match) Start() {
 		return
 	}
 	if m.phase != PhaseSelect && m.phase != PhaseEnded {
+		return
+	}
+	if m.team && (len(m.slots[0]) == 0 || len(m.slots[1]) == 0) {
 		return
 	}
 	m.logMute = true

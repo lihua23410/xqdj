@@ -54,6 +54,71 @@ func TestFactionAmpOutAndAmpIn(t *testing.T) {
 	m.mu.Unlock()
 }
 
+func TestMarkFactionZeroAmpKeepsExisting(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindMenreiki)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	src := fighterByKind(m, character.KindMenreiki)
+	if src == nil {
+		t.Fatal("missing menreiki")
+	}
+	m.markFactionLocked(unitpkg.MarkFaction{
+		UnitID: src.id, Faction: unitpkg.FactionRed,
+		AmpOut: 1.25, AmpIn: 0.75,
+	})
+	m.markFactionLocked(unitpkg.MarkFaction{
+		UnitID: src.id, Faction: unitpkg.FactionCyan, Cycle: true, Collect: true,
+	})
+	if src.faction != unitpkg.FactionCyan {
+		t.Fatalf("faction=%q", src.faction)
+	}
+	if math.Abs(src.factionAmpOut-1.25) > 1e-9 || math.Abs(src.factionAmpIn-0.75) > 1e-9 {
+		t.Fatalf("amp wiped out=%v in=%v", src.factionAmpOut, src.factionAmpIn)
+	}
+	if !src.factionCycle || !src.factionCollect {
+		t.Fatalf("cycle=%v collect=%v", src.factionCycle, src.factionCollect)
+	}
+}
+
+func TestMenreikiMarksAllTeamEnemies(t *testing.T) {
+	m := NewMatchSeeded(5)
+	m.UseTeam()
+	m.mu.Lock()
+	m.slots[0] = []string{character.KindMenreiki}
+	m.slots[1] = []string{character.KindRanged, character.KindMelee, character.KindDummy}
+	m.mu.Unlock()
+	m.Start()
+	defer m.End()
+	for i := 0; i < 12; i++ {
+		m.Tick()
+		time.Sleep(2 * time.Millisecond)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	src := fighterByKind(m, character.KindMenreiki)
+	if src == nil || !unitpkg.ValidFaction(src.faction) {
+		t.Fatalf("self faction=%v", src)
+	}
+	n := 0
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || u.role != unitpkg.RoleFighter || u.slot != 1 {
+			continue
+		}
+		if !unitpkg.ValidFaction(u.faction) {
+			t.Fatalf("%s unmarked", u.kind)
+		}
+		n++
+	}
+	if n != 3 {
+		t.Fatalf("enemies=%d", n)
+	}
+}
+
 func TestFactionCyclesOnWallNotOnPair(t *testing.T) {
 	m := NewMatchSeeded(2)
 	m.SetSlot(0, character.KindMenreiki)

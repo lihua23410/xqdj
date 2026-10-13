@@ -66,3 +66,10 @@ func TestChamberSquareBoot(t *testing.T) {
 		t.Fatalf("chamber=%+v ok=%v", f, ok)
 	}
 }
+
+func TestWideHexHasBootKind(t *testing.T) {
+	f, ok := unit.LookupField(大六边形.Name)
+	if !ok || f.BootKind != 大六边形.KindWidehex {
+		t.Fatalf("widehex=%+v ok=%v", f, ok)
+	}
+}

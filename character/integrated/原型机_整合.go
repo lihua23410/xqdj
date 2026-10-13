@@ -87,7 +87,7 @@ func (a *原型机_整合) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	if a.rng == nil {
-		a.rng = rand.New(rand.NewPCG(rand.Uint64()^ctx.ID, rand.Uint64()))
+		a.rng = unit.NewRNG(ctx.ID)
 	}
 	if a.inside == nil {
 		a.inside = map[uint64]bool{}

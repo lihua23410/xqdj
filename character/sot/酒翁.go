@@ -92,7 +92,9 @@ func (a *酒翁) onSense(ctx unit.Context, s unit.Sense) {
 	if !a.booted {
 		a.booted = true
 		a.first = true
-		a.rng = rand.New(rand.NewPCG(ctx.ID, ctx.ID))
+		if a.rng == nil {
+			a.rng = unit.NewRNG(ctx.ID)
+		}
 		a.nextSmash = s.Time + smashFirst
 		a.nextFill = s.Time + fillGap
 		a.slowTok = map[uint64]uint64{}

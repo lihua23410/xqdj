@@ -129,8 +129,8 @@ type 蛆 struct {
 	booted      bool
 	awaitSpawn  bool // 开局已 Spawn 宝宝、尚未来到 Nearby
 	slot        int
-	orphanFrom  float64 // <0：当前有保活
-	auraReady   float64 // 0：层数为 0，下次数起需再等 auraGap
+	orphanFrom  float64            // <0：当前有保活
+	auraReady   float64            // 0：层数为 0，下次数起需再等 auraGap
 	babyReady   map[uint64]float64 // 成长到期时刻
 	eggReady    map[uint64]float64 // 孵化到期时刻
 	knownFly    map[uint64]struct{}
@@ -167,7 +167,9 @@ func (a *蛆) onSense(ctx unit.Context, s unit.Sense) {
 		a.overlapFrom = map[flyPair]float64{}
 		a.flyPassing = map[uint64]bool{}
 		a.flyWasCD = map[uint64]bool{}
-		a.rng = rand.New(rand.NewPCG(ctx.ID*2654435761, 0x9e3779b97f4a7c15))
+		if a.rng == nil {
+			a.rng = unit.NewRNG(ctx.ID)
+		}
 		ctx.Out <- unit.NoHealthNumbers{UnitID: ctx.ID, Hold: true}
 		ctx.Out <- unit.NoFrameFreeze{UnitID: ctx.ID, Hold: true}
 		unit.SetAim(ctx, ctx.ID, 0)
@@ -206,7 +208,7 @@ func (a *蛆) ensureMaps() {
 		a.flyWasCD = map[uint64]bool{}
 	}
 	if a.rng == nil {
-		a.rng = rand.New(rand.NewPCG(1, 1))
+		a.rng = unit.NewRNG(0)
 	}
 }
 
@@ -579,11 +581,6 @@ func (a *蛆) tickFlies(ctx unit.Context, s unit.Sense) {
 		if !ok {
 			a.overlapFrom[pair] = s.Time
 			from = s.Time
-		}
-		ctx.Out <- unit.FX{
-			Name: "fly-overlap", Kind: KindFly,
-			X: fa.x, Y: fa.y, VX: fb.x, VY: fb.y, Slot: a.slot,
-			Amount: s.Time - from,
 		}
 		if s.Time+timeEps < from+overlapNeed {
 			continue

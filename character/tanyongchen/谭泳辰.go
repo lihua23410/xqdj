@@ -1,4 +1,4 @@
-// 谭泳辰老先生：开局空手随机游荡，场上散落只有他能捡的铃铛与苦无。
+// 谭泳辰老先生：开局空手随机游荡，场上散落铃铛与苦无。自己或同边战斗机碰到都算捡到，效果记在他身上。
 // 捡到苦无后每 2 秒丢一发直线苦无（3 伤，约 10% 暴击 10 伤）；有铃铛时累计
 // 3 次命中或任意暴击就净化（无敌 2s + 回已损失血量 20%）；累计 10 次命中或
 // 3 次暴击开 5 秒灵狐场域，场内苦无间隔 0.7s 但不再累计。
@@ -37,7 +37,7 @@ const (
 	kunaiDamage         = 3.0
 	kunaiCritDamage     = 10.0
 	kunaiCritChance     = 0.10
-	kunaiFlight         = 0.6 // 苦无飞行时间（秒），伤害在飞到落点时结算
+	kunaiFlight         = 0.6   // 苦无飞行时间（秒），伤害在飞到落点时结算
 	kunaiOvershoot      = 320.0 // 苦无飞过目标后继续飞的世界距离
 
 	bellHitsForPurify = 3
@@ -171,7 +171,7 @@ func (t *谭泳辰老先生) onSense(ctx unit.Context, s unit.Sense) {
 	if !t.boot {
 		t.boot = true
 		if t.rng == nil {
-			t.rng = rand.New(rand.NewPCG(ctx.ID*2654435761+7, 0x9e3779b97f4a7c15))
+			t.rng = unit.NewRNG(ctx.ID)
 		}
 		t.spawnItems(ctx, s)
 		t.nextAttackAt = s.Time
@@ -222,7 +222,7 @@ func (t *谭泳辰老先生) tryPickup(ctx unit.Context, s unit.Sense) {
 		if o.Kind != KindBell && o.Kind != KindKunai {
 			continue
 		}
-		if math.Hypot(o.X-t.x, o.Y-t.y) > tanRadius+o.Radius+pickupSlack {
+		if !itemTouchedByAlly(s, *o) {
 			continue
 		}
 		switch o.Kind {
@@ -238,6 +238,26 @@ func (t *谭泳辰老先生) tryPickup(ctx unit.Context, s unit.Sense) {
 		ctx.Out <- unit.Despawn{UnitID: o.ID}
 		ctx.Out <- unit.FX{Name: "pickup", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: o.X, Y: o.Y, Amount: pickupFlag}
 	}
+}
+
+// itemTouchedByAlly：主人自己或同边战斗机碰到才算捡到。活随从和敌方不算。
+func itemTouchedByAlly(s unit.Sense, item unit.Snapshot) bool {
+	reach := func(x, y, r float64) bool {
+		return math.Hypot(item.X-x, item.Y-y) <= r+item.Radius+pickupSlack
+	}
+	if reach(s.Self.X, s.Self.Y, s.Self.Radius) {
+		return true
+	}
+	for i := range s.Nearby {
+		p := &s.Nearby[i]
+		if p.Role != unit.RoleFighter || p.Slot != s.Self.Slot || p.ID == s.Self.ID {
+			continue
+		}
+		if reach(p.X, p.Y, p.Radius) {
+			return true
+		}
+	}
+	return false
 }
 
 // inDomain：自己是否站在己方灵狐场域里。
@@ -354,7 +374,7 @@ func (t *谭泳辰老先生) purify(ctx unit.Context, s unit.Sense) {
 	ctx.Out <- unit.FX{Name: "purify", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: t.x, Y: t.y, Amount: purifyInvuln}
 }
 
-// 静物：场上的铃铛 / 苦无，只等主人来捡，不实心、不吃伤害。
+// 静物：场上的铃铛 / 苦无，不实心、不吃伤害；主人或同边战斗机碰到由主人收走。
 type 静物 struct {
 	owner uint64
 	slot  int

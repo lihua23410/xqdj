@@ -110,16 +110,16 @@ func (a *火山) Handle(ctx unit.Context, ev unit.Event) {
 
 func (a *火山) boot(ctx unit.Context, s unit.Sense) {
 	a.booted = true
-	a.ensureRNG(ctx.ID, s.Time)
+	a.ensureRNG(ctx.ID)
 	a.hitAt = map[uint64]float64{}
 	a.slowTok = map[uint64]uint64{}
 }
 
-func (a *火山) ensureRNG(id uint64, t float64) {
+func (a *火山) ensureRNG(id uint64) {
 	if a.rng != nil {
 		return
 	}
-	a.rng = rand.New(rand.NewPCG(id, uint64(t*1e6)+1))
+	a.rng = unit.NewRNG(id)
 }
 
 func (a *火山) tickErupt(ctx unit.Context, s unit.Sense) {
@@ -199,7 +199,7 @@ func volcanoLocal() unit.Field {
 }
 
 func (a *火山) randSpot(ox, oy float64, used [][2]float64) (float64, float64) {
-	a.ensureRNG(1, 0)
+	a.ensureRNG(1)
 	f := volcanoLocal()
 	rng := a.rng
 	for n := 0; n < 120; n++ {
