@@ -1,0 +1,38 @@
+.ball.look-vortex {
+  overflow: visible;
+  box-shadow: 0 0 16px #4ec8e088, 0 0 28px #3dd6c644;
+  background:
+    radial-gradient(circle at 50% 50%, #07141c 0 18%, transparent 19%) !important;
+}
+
+.ball.look-vortex > .vortex-spin {
+  position: absolute;
+  inset: -8%;
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    conic-gradient(
+      from 0deg,
+      #4ec8e0 0 10%,
+      transparent 10% 16%,
+      #7ae8ff 16% 26%,
+      transparent 26% 33%,
+      #2a90b8 33% 44%,
+      transparent 44% 50%,
+      #4ec8e0 50% 60%,
+      transparent 60% 66%,
+      #7ae8ff 66% 76%,
+      transparent 76% 83%,
+      #2a90b8 83% 94%,
+      transparent 94% 100%
+    );
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 16%, #000 22% 72%, transparent 78%);
+  mask-image: radial-gradient(circle at 50% 50%, transparent 16%, #000 22% 72%, transparent 78%);
+  animation: widehex-vortex-spin 1.15s linear infinite;
+}
+
+@keyframes widehex-vortex-spin {
+  to {
+    transform: rotate(-360deg);
+  }
+}
