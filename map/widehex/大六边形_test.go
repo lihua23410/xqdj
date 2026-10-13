@@ -59,12 +59,17 @@ func TestBootSpawnsOppositeVortices(t *testing.T) {
 	a.Handle(ctx, unit.Sense{Time: 0, Self: unit.Snapshot{ID: 1, Kind: KindWidehex, Slot: 0}})
 	cmds := drain(out)
 	var sp []unit.Spawn
+	var bar *unit.PlaceWall
 	for _, c := range cmds {
-		s, ok := c.(unit.Spawn)
-		if !ok || s.Kind != KindVortex {
-			continue
+		switch v := c.(type) {
+		case unit.Spawn:
+			if v.Kind == KindVortex {
+				sp = append(sp, v)
+			}
+		case unit.PlaceWall:
+			cp := v
+			bar = &cp
 		}
-		sp = append(sp, s)
 	}
 	if len(sp) != 2 {
 		t.Fatalf("spawn=%d cmds=%v", len(sp), cmds)
@@ -74,6 +79,33 @@ func TestBootSpawnsOppositeVortices(t *testing.T) {
 	}
 	if math.Abs(sp[0].X+sp[1].X) > 1e-6 || math.Abs(sp[0].Y+sp[1].Y) > 1e-6 {
 		t.Fatalf("not opposite %+v %+v", sp[0], sp[1])
+	}
+	if bar == nil || !bar.Hard || !bar.VisionBlock || bar.Radius != barR {
+		t.Fatalf("bar=%+v", bar)
+	}
+	if bar.X1 != -barHalf || bar.X2 != barHalf || bar.Y1 != 0 || bar.Y2 != 0 {
+		t.Fatalf("bar ends=%+v", bar)
+	}
+}
+
+func TestBarSpinIsClockwise(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	a := &大六边形{booted: true, inside: map[uint64]uint64{}, cool: map[uint64]float64{}}
+	ctx := unit.Context{ID: 1, Kind: KindWidehex, Out: out}
+	a.Handle(ctx, unit.Sense{
+		Time: 1, Self: unit.Snapshot{ID: 1, Kind: KindWidehex},
+		Walls: []unit.WallView{{ID: 9, OwnerID: 1, VisionBlock: true, X1: -barHalf, X2: barHalf, Radius: barR}},
+	})
+	var mot *unit.SetWallMotion
+	for _, c := range drain(out) {
+		if v, ok := c.(unit.SetWallMotion); ok {
+			cp := v
+			mot = &cp
+		}
+	}
+	want := -2 * math.Pi / barPeriod
+	if mot == nil || mot.WallID != 9 || math.Abs(mot.Spin-want) > 1e-9 {
+		t.Fatalf("motion=%+v want spin %v", mot, want)
 	}
 }
 

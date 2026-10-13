@@ -1,5 +1,6 @@
-// 大六边形：平顶六边形外形，场心到场边原三倍默认连缩两次四分之一；无硬墙。
+// 大六边形：平顶六边形外形，场心到场边原三倍默认连缩两次四分之一。
 // 开局两只中心对称的旋涡绕场心逆时针转；碰上就送到对面往场心偏一截，方向倒转。
+// 场心一条挡视线硬墙，几何和转速同圆那份，由场地演员砌，不是预放墙。
 package 大六边形
 
 import (
@@ -29,6 +30,10 @@ const (
 	warpCD      = 0.4
 	armTime     = 0.25
 	vortexColor = "#4ec8e0"
+
+	barHalf   = 110.0 // 同圆：开局水平，两端留绕行空隙
+	barR      = 6.0
+	barPeriod = 8.0
 )
 
 //go:embed fx
@@ -71,6 +76,8 @@ func poseAt(t float64) (x1, y1, x2, y2 float64) {
 
 type 大六边形 struct {
 	booted bool
+	spun   bool
+	wall   uint64
 	a, b   uint64
 	inside map[uint64]uint64
 	cool   map[uint64]float64
@@ -86,10 +93,12 @@ func (a *大六边形) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	a.bind(s)
+	a.bindWall(s)
+	a.startBar(ctx)
 	if a.a == 0 || a.b == 0 {
 		return
 	}
-	a.spin(ctx, s)
+	a.orbit(ctx, s)
 	if s.Time+1e-9 >= armTime {
 		a.warp(ctx, s)
 	}
@@ -102,6 +111,12 @@ func (a *大六边形) boot(ctx unit.Context, s unit.Sense) {
 	x1, y1, x2, y2 := poseAt(s.Time)
 	ctx.Out <- unit.Spawn{Kind: KindVortex, X: x1, Y: y1, OwnerID: ctx.ID, Slot: s.Self.Slot}
 	ctx.Out <- unit.Spawn{Kind: KindVortex, X: x2, Y: y2, OwnerID: ctx.ID, Slot: s.Self.Slot}
+	ctx.Out <- unit.PlaceWall{
+		OwnerID: ctx.ID, Slot: s.Self.Slot, Kind: KindWidehex,
+		X1: -barHalf, Y1: 0, X2: barHalf, Y2: 0,
+		Radius: barR, Life: 0, Hard: true,
+		VisionBlock: true,
+	}
 }
 
 func (a *大六边形) bind(s unit.Sense) {
@@ -121,7 +136,28 @@ func (a *大六边形) bind(s unit.Sense) {
 	a.a, a.b = ids[0], ids[1]
 }
 
-func (a *大六边形) spin(ctx unit.Context, s unit.Sense) {
+func (a *大六边形) bindWall(s unit.Sense) {
+	if a.wall != 0 {
+		return
+	}
+	for i := range s.Walls {
+		w := &s.Walls[i]
+		if w.OwnerID == s.Self.ID && w.VisionBlock {
+			a.wall = w.ID
+			return
+		}
+	}
+}
+
+func (a *大六边形) startBar(ctx unit.Context) {
+	if a.spun || a.wall == 0 {
+		return
+	}
+	a.spun = true
+	ctx.Out <- unit.SetWallMotion{WallID: a.wall, Spin: -2 * math.Pi / barPeriod}
+}
+
+func (a *大六边形) orbit(ctx unit.Context, s unit.Sense) {
 	x1, y1, x2, y2 := poseAt(s.Time)
 	ctx.Out <- unit.Teleport{UnitID: a.a, X: x1, Y: y1}
 	ctx.Out <- unit.Teleport{UnitID: a.b, X: x2, Y: y2}

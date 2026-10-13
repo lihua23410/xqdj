@@ -373,4 +373,18 @@ func TestWideHexBootsOppositeVortices(t *testing.T) {
 	if math.Abs(vs[0].p.X+vs[1].p.X) > 1.5 || math.Abs(vs[0].p.Y+vs[1].p.Y) > 1.5 {
 		t.Fatalf("not opposite %+v %+v", vs[0].p, vs[1].p)
 	}
+	var bar *barrier
+	for _, w := range m.walls {
+		if w.hard && w.visionBlock {
+			bar = w
+			break
+		}
+	}
+	if bar == nil {
+		t.Fatal("missing vision-block bar")
+	}
+	wantSpin := -2 * math.Pi / 8
+	if math.Abs(bar.spin-wantSpin) > 1e-9 {
+		t.Fatalf("spin=%v want %v", bar.spin, wantSpin)
+	}
 }
