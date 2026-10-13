@@ -39,6 +39,9 @@ const (
 	maxBounce  = 3
 )
 
+// debugBootDomain 调试：进场直接开领域（第二次空军后的盖满鱼塘 + 飞着钓）。测完改 false。
+var debugBootDomain = false
+
 //go:embed fx fish.png
 var assets embed.FS
 
@@ -178,7 +181,11 @@ func (a *钓鱼佬) onSense(ctx unit.Context, s unit.Sense) {
 	a.ensureRNG(ctx.ID)
 	if !a.booted {
 		a.booted = true
-		a.plantPonds(ctx)
+		if debugBootDomain {
+			a.openDomain(ctx)
+		} else {
+			a.plantPonds(ctx)
+		}
 	}
 	if a.ram && a.ramUntil > 0 && s.Time+1e-9 >= a.ramUntil {
 		a.endRam(ctx)
@@ -408,6 +415,15 @@ func (a *钓鱼佬) setWalk(ctx unit.Context, vx, vy float64) {
 	if n > 8 {
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx / n * sp, VY: vy / n * sp}
 	}
+}
+
+func (a *钓鱼佬) openDomain(ctx unit.Context) {
+	a.misses = 2
+	ctx.Out <- unit.Spawn{
+		Kind: KindFlood, X: 0, Y: 0,
+		OwnerID: ctx.ID, Slot: a.slot,
+	}
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: a.walkSpeed()}
 }
 
 func (a *钓鱼佬) plantPonds(ctx unit.Context) {

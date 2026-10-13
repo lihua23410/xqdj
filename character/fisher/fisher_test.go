@@ -72,6 +72,8 @@ func TestSmallMidFishSpeedDoubled(t *testing.T) {
 }
 
 func TestBootSpawnsThreeRimPonds(t *testing.T) {
+	defer func(old bool) { debugBootDomain = old }(debugBootDomain)
+	debugBootDomain = false
 	out := make(chan unit.Cmd, 16)
 	a := &钓鱼佬{rng: rand.New(rand.NewPCG(1, 2))}
 	a.Handle(unit.Context{ID: 1, Kind: KindFisher, Out: out}, unit.Sense{
@@ -99,6 +101,28 @@ func TestBootSpawnsThreeRimPonds(t *testing.T) {
 		if !unit.HexContains(p.X, p.Y, pondRadius) {
 			t.Fatalf("pond %d outside hex (%v,%v)", i, p.X, p.Y)
 		}
+	}
+}
+
+func TestDebugBootOpensDomain(t *testing.T) {
+	defer func(old bool) { debugBootDomain = old }(debugBootDomain)
+	debugBootDomain = true
+	out := make(chan unit.Cmd, 16)
+	a := &钓鱼佬{}
+	a.Handle(unit.Context{ID: 1, Kind: KindFisher, Out: out}, unit.Sense{
+		Time: 0,
+		Self: selfAt(0, 0),
+	})
+	cmds := drain(out)
+	if a.misses != 2 || !a.flyFish() {
+		t.Fatalf("misses=%d fly=%v", a.misses, a.flyFish())
+	}
+	if lastSpawnKind(cmds, KindPond) != nil {
+		t.Fatalf("debug boot should skip 开局塘: %v", cmds)
+	}
+	sp := lastSpawnKind(cmds, KindFlood)
+	if sp == nil || sp.X != 0 || sp.Y != 0 {
+		t.Fatalf("领域 spawn=%v cmds=%v", sp, cmds)
 	}
 }
 
