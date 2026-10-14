@@ -39,6 +39,11 @@ func TestBuildsOnBeat(t *testing.T) {
 	if math.Abs(math.Hypot(w.X2-w.X1, w.Y2-w.Y1)-wallLen) > 1e-6 {
 		t.Fatalf("len=%v", math.Hypot(w.X2-w.X1, w.Y2-w.Y1))
 	}
+	mx := (w.X1 + w.X2) / 2
+	my := (w.Y1 + w.Y2) / 2
+	if math.Abs(mx-frontDist) > 1e-6 || math.Abs(my) > 1e-6 || math.Abs(w.X1-w.X2) > 1e-6 {
+		t.Fatalf("front wall center=(%v,%v) ends=(%v,%v)-(%v,%v)", mx, my, w.X1, w.Y1, w.X2, w.Y2)
+	}
 	if w.Radius != wallRadius || w.Amount != wallScrape || w.HitGap != wallGap || w.Life >= 0 || !w.WithOwner {
 		t.Fatalf("wall=%+v", w)
 	}
@@ -62,7 +67,7 @@ func TestSecondWallSitsBehind(t *testing.T) {
 	}
 	mx := (w.X1 + w.X2) / 2
 	my := (w.Y1 + w.Y2) / 2
-	if math.Abs(mx) > 1e-6 || math.Abs(my-wallLen/2) > 1e-6 {
+	if math.Abs(mx) > 1e-6 || math.Abs(my-behindDist) > 1e-6 {
 		t.Fatalf("center=%v,%v", mx, my)
 	}
 }
@@ -77,7 +82,7 @@ func TestBehindOutsideWaitsReady(t *testing.T) {
 		Nearby: []unit.Snapshot{{ID: 2, Slot: 1, X: 0, Y: 200, AimPriority: 15}},
 	}
 	a.Handle(unit.Context{ID: 7, Kind: KindVeteran, Out: out}, sense)
-	if len(drain(out)) != 0 || a.nextBuild != 0 {
+	if place(drain(out)) != nil || a.nextBuild != 0 {
 		t.Fatal("placed or reset clock while behind is outside")
 	}
 	sense.Nearby[0].Y = 40
@@ -87,7 +92,7 @@ func TestBehindOutsideWaitsReady(t *testing.T) {
 		t.Fatal("should place once the point is inside")
 	}
 	my := (w.Y1 + w.Y2) / 2
-	if math.Abs(my-(40+wallLen/2)) > 1e-6 {
+	if math.Abs(my-(40+behindDist)) > 1e-6 {
 		t.Fatalf("center y=%v", my)
 	}
 }
@@ -151,6 +156,53 @@ func TestChargeAcceleratesAlongNormal(t *testing.T) {
 	s1, _ := motions(drain(out))
 	if s1 == nil || math.Abs(s1.VY-(chargeV0+chargeAcc)) > 1e-6 {
 		t.Fatalf("accel vel=%v", s1)
+	}
+}
+
+func TestLeadPinsAheadOfVelocity(t *testing.T) {
+	a := newVeteran()
+	a.nextBuild = 10
+	out := make(chan unit.Cmd, 4)
+	ctx := unit.Context{ID: 7, Kind: KindVeteran, Out: out}
+	a.Handle(ctx, unit.Sense{
+		Time: 1, Field: unit.HexField(),
+		Self:  unit.Snapshot{ID: 7, X: 10, Y: 20, VX: 0, VY: 155, Radius: vetRadius},
+		Walls: []unit.WallView{seg(1, 0, 0)},
+	})
+	m := firstMotion(drain(out))
+	if m == nil || !m.Pin || !m.PassOwner {
+		t.Fatalf("motion=%+v", m)
+	}
+	if math.Abs(m.X-10) > 1e-6 || math.Abs(m.Y-(20+frontDist)) > 1e-6 {
+		t.Fatalf("pin=(%v,%v)", m.X, m.Y)
+	}
+	if math.Abs(m.VY-155) > 1e-6 || m.VX != 0 || math.Abs(m.Ang-frontAng(0, 1)) > 1e-6 {
+		t.Fatalf("vel/ang=%+v", m)
+	}
+	a.Handle(ctx, unit.Sense{
+		Time: 1.1, Field: unit.HexField(),
+		Self:  unit.Snapshot{ID: 7, X: 10, Y: 22, Radius: vetRadius},
+		Walls: []unit.WallView{seg(1, 0, 0)},
+	})
+	m = firstMotion(drain(out))
+	if m == nil || math.Abs(m.Y-(22+frontDist)) > 1e-6 || math.Abs(m.X-10) > 1e-6 {
+		t.Fatalf("kept dir pin=(%v,%v)", m.X, m.Y)
+	}
+}
+
+func TestStunStopsLeadWall(t *testing.T) {
+	a := newVeteran()
+	a.leadID = 4
+	out := make(chan unit.Cmd, 2)
+	a.Handle(unit.Context{ID: 7, Kind: KindVeteran, Out: out}, unit.Stunned{Time: 3})
+	m := firstMotion(drain(out))
+	if m == nil || m.WallID != 4 || m.Pin || m.VX != 0 || m.VY != 0 || m.Spin != 0 || !m.PassOwner {
+		t.Fatalf("stun motion=%+v", m)
+	}
+	a.phase = phasePair
+	a.Handle(unit.Context{ID: 7, Kind: KindVeteran, Out: out}, unit.Stunned{Time: 4})
+	if len(drain(out)) != 0 {
+		t.Fatal("froze a charging pair")
 	}
 }
 
@@ -218,6 +270,15 @@ func place(cmds []unit.Cmd) *unit.PlaceWall {
 	for _, c := range cmds {
 		if w, ok := c.(unit.PlaceWall); ok {
 			return &w
+		}
+	}
+	return nil
+}
+
+func firstMotion(cmds []unit.Cmd) *unit.SetWallMotion {
+	for _, c := range cmds {
+		if m, ok := c.(unit.SetWallMotion); ok {
+			return &m
 		}
 	}
 	return nil

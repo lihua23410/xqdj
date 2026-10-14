@@ -111,6 +111,10 @@ type 教父青年 struct {
 	hitReady  float64
 	struck    bool
 	opened    bool
+	back      bool
+	backX     float64
+	backY     float64
+	walled    bool
 	inside    map[uint64]bool
 	marks     map[uint64]aimMark
 }
@@ -123,11 +127,21 @@ type aimMark struct {
 func (a *教父青年) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
+		if a.ramming() {
+			unit.BlockHit(ctx, e)
+			return
+		}
 		unit.ConfirmHit(ctx, e)
+	case unit.Stunned:
+		a.interrupt(ctx, e.Time)
 	case unit.WallHit:
-		if a.phase == phRam || a.phase == phReturn {
+		if a.ramming() {
 			a.ramX, a.ramY = reflectDir(a.ramX, a.ramY, e.NX, e.NY)
 			a.finish(ctx, e.Time)
+			return
+		}
+		if a.back {
+			a.walled = true
 		}
 	case unit.Collision:
 		a.connect(ctx, e.Time, e.Other)
@@ -158,7 +172,8 @@ func (a *教父青年) onSense(ctx unit.Context, s unit.Sense) {
 		dt = 0
 	}
 	a.lastT = s.Time
-	if a.phase != phRam && a.phase != phReturn {
+	a.keepRestore(ctx, s)
+	if !a.ramming() {
 		a.steer(ctx, s)
 	}
 	a.act(ctx, s, dt)
@@ -463,16 +478,57 @@ func (a *教父青年) connect(ctx unit.Context, now float64, other unit.Snapsho
 	}
 }
 
+func (a *教父青年) ramming() bool {
+	return a.phase == phRam || a.phase == phReturn
+}
+
+func (a *教父青年) cruiseNow(now float64) float64 {
+	if now+1e-9 < a.buffUntil {
+		return buffCruise
+	}
+	return cruise
+}
+
+func (a *教父青年) interrupt(ctx unit.Context, now float64) {
+	if !a.ramming() {
+		return
+	}
+	speed := a.cruiseNow(now)
+	a.stopRam(ctx, now, a.ramX*speed, a.ramY*speed)
+}
+
 func (a *教父青年) finish(ctx unit.Context, now float64) {
+	speed := a.cruiseNow(now)
+	a.stopRam(ctx, now, a.ramX*speed, a.ramY*speed)
+}
+
+func (a *教父青年) stopRam(ctx unit.Context, now, vx, vy float64) {
 	a.phase = phIdle
 	a.readyAt = now + ramRecover
-	speed := cruise
-	if now+1e-9 < a.buffUntil {
-		speed = buffCruise
-	}
+	a.back = true
+	a.backX, a.backY = vx, vy
+	a.walled = false
 	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
-	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: speed}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: a.ramX * speed, VY: a.ramY * speed}
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: a.cruiseNow(now)}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
+}
+
+func (a *教父青年) keepRestore(ctx unit.Context, s unit.Sense) {
+	if !a.back || a.ramming() {
+		a.back = false
+		return
+	}
+	if s.Knock {
+		a.walled = false
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: a.backX, VY: a.backY}
+		return
+	}
+	if a.walled {
+		a.back = false
+		return
+	}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: a.backX, VY: a.backY}
+	a.back = false
 }
 
 func dist(a, b unit.Snapshot) float64 {

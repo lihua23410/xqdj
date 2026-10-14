@@ -1,4 +1,4 @@
-// 筑墙者(百战)不转向。自己的胶囊墙不满两堵就砌；满了先转到法线重合，再沿这条法线对冲。
+// 筑墙者(百战)不转向。只有一堵自己的胶囊墙时那是前墙，钉在身前。满两堵先转到法线重合，再沿这条法线对冲。
 package 筑墙者_百战
 
 import (
@@ -20,16 +20,18 @@ const (
 	vetColor  = "#b85c38"
 
 	wallEvery  = 1.27
-	wallLen    = 155.0
+	wallLen    = 100.0
 	wallRadius = 6.0
-	wallScrape = 3.0
+	wallScrape = 2.0
 	wallGap    = 0.3
+	behindDist = 77.5
+	frontDist  = 50.0
 
 	turnRate   = math.Pi / 2 // 每秒 90°
 	tick       = 1.0 / 60.0
 	chargeV0   = 300.0
 	chargeAcc  = 500.0
-	ramDamage  = 8.0
+	ramDamage  = 6.0
 	stunRadius = wallLen / 2
 	stunDur    = 2.8
 
@@ -71,6 +73,10 @@ type 百战 struct {
 	chargeFrom float64
 	axisX      float64
 	axisY      float64
+	dirX       float64
+	dirY       float64
+	hasDir     bool
+	leadID     uint64
 	rng        *rand.Rand
 }
 
@@ -81,6 +87,8 @@ func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.WallSlam:
 		a.onSlam(e)
+	case unit.Stunned:
+		a.onStun(ctx)
 	case unit.Sense:
 		a.onSense(ctx, e)
 	}
@@ -89,7 +97,15 @@ func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
 func (a *百战) onSlam(e unit.WallSlam) {
 	a.phase = phaseIdle
 	a.locked = false
+	a.leadID = 0
 	a.nextBuild = e.Time + wallEvery
+}
+
+func (a *百战) onStun(ctx unit.Context) {
+	if a.phase == phasePair || a.leadID == 0 {
+		return
+	}
+	ctx.Out <- unit.SetWallMotion{WallID: a.leadID, PassOwner: true}
 }
 
 func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
@@ -99,22 +115,31 @@ func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
 			a.savedLeft = wallEvery
 			a.phase = phasePair
 		}
+		a.leadID = 0
 		a.drivePair(ctx, s, walls[0], walls[1])
 		return
 	}
 	if a.phase != phaseIdle {
-		if len(walls) == 1 {
-			stopWall(ctx, walls[0].ID)
-		}
 		a.nextBuild = s.Time + a.savedLeft
 		a.phase = phaseIdle
 		a.locked = false
 	}
-	if s.Time+1e-9 < a.nextBuild {
+	ready := s.Time+1e-9 >= a.nextBuild
+	if len(walls) == 1 && !ready {
+		a.lead(ctx, s, walls[0])
+		return
+	}
+	if !ready {
 		return
 	}
 	if !a.place(ctx, s, walls) {
+		if len(walls) == 1 {
+			a.lead(ctx, s, walls[0])
+		}
 		return
+	}
+	if len(walls) == 1 {
+		a.leadID = 0
 	}
 	a.nextBuild = s.Time + wallEvery
 }
@@ -126,7 +151,11 @@ func (a *百战) place(ctx unit.Context, s unit.Sense, walls []unit.WallView) bo
 	var x, y, ang float64
 	var ok bool
 	if len(walls) == 0 {
-		x, y, ang, ok = sampleWall(s.Field, a.rng)
+		hx, hy := a.heading(s.Self.VX, s.Self.VY)
+		x = s.Self.X + hx*frontDist
+		y = s.Self.Y + hy*frontDist
+		ang = frontAng(hx, hy)
+		ok = true
 	} else {
 		x, y, ang, ok = a.behind(s, walls[0])
 	}
@@ -151,6 +180,37 @@ func (a *百战) place(ctx unit.Context, s unit.Sense, walls []unit.WallView) bo
 	return true
 }
 
+func (a *百战) lead(ctx unit.Context, s unit.Sense, w unit.WallView) {
+	a.leadID = w.ID
+	hx, hy := a.heading(s.Self.VX, s.Self.VY)
+	ctx.Out <- unit.SetWallMotion{
+		WallID:    w.ID,
+		Pin:       true,
+		X:         s.Self.X + hx*frontDist,
+		Y:         s.Self.Y + hy*frontDist,
+		Ang:       frontAng(hx, hy),
+		VX:        s.Self.VX,
+		VY:        s.Self.VY,
+		PassOwner: true,
+	}
+}
+
+func (a *百战) heading(vx, vy float64) (float64, float64) {
+	if math.Hypot(vx, vy) >= 1e-6 {
+		n := math.Hypot(vx, vy)
+		a.dirX, a.dirY = vx/n, vy/n
+		a.hasDir = true
+	} else if !a.hasDir {
+		a.dirX, a.dirY = 1, 0
+		a.hasDir = true
+	}
+	return a.dirX, a.dirY
+}
+
+func frontAng(hx, hy float64) float64 {
+	return math.Atan2(hx, -hy)
+}
+
 func (a *百战) behind(s unit.Sense, wall unit.WallView) (x, y, ang float64, ok bool) {
 	enemy := unit.Seek(s)
 	if enemy == nil {
@@ -162,8 +222,8 @@ func (a *百战) behind(s unit.Sense, wall unit.WallView) (x, y, ang float64, ok
 	if n < 1e-6 {
 		return 0, 0, 0, false
 	}
-	x = enemy.X + dx/n*(wallLen/2)
-	y = enemy.Y + dy/n*(wallLen/2)
+	x = enemy.X + dx/n*behindDist
+	y = enemy.Y + dy/n*behindDist
 	if !s.Field.OutlineContains(x, y, 0) {
 		return 0, 0, 0, false
 	}
@@ -215,10 +275,6 @@ func motion(id uint64, spin, vx, vy, ram float64) unit.SetWallMotion {
 	return m
 }
 
-func stopWall(ctx unit.Context, id uint64) {
-	ctx.Out <- unit.SetWallMotion{WallID: id}
-}
-
 func ownWalls(all []unit.WallView, owner uint64) []unit.WallView {
 	var out []unit.WallView
 	for _, w := range all {
@@ -267,19 +323,4 @@ func wrapPi(x float64) float64 {
 		x += math.Pi
 	}
 	return x
-}
-
-func sampleWall(f unit.Field, rng *rand.Rand) (x, y, ang float64, ok bool) {
-	ext := f.Extent
-	if ext <= 0 {
-		ext = unit.HexRadius
-	}
-	for i := 0; i < 64; i++ {
-		x = (rng.Float64()*2 - 1) * ext
-		y = (rng.Float64()*2 - 1) * ext
-		if f.OutlineContains(x, y, 0) {
-			return x, y, rng.Float64() * math.Pi, true
-		}
-	}
-	return 0, 0, 0, false
 }

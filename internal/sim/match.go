@@ -123,6 +123,7 @@ type barrier struct {
 	stunR        float64
 	stunDur      float64
 	riding       map[uint64]struct{}
+	passOwner    bool
 }
 
 type wallSnap struct {
@@ -1107,6 +1108,9 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		mul := u.cruiseMul()
 		u.setVel(vec{c.VX, c.VY}.mul(mul))
 		u.velM = mul
+		if u.held {
+			u.holdVel = u.v
+		}
 	case unitpkg.SetCruise:
 		m.applySetCruiseLocked(c)
 	case unitpkg.AddFS:
@@ -1311,6 +1315,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		} else {
 			u.stunUntil = c.Until
 			m.noteStunLocked(u, c.Until, false)
+			m.send(u, unitpkg.Stunned{Time: m.time, Until: c.Until})
 		}
 	case unitpkg.VisionBlock:
 		u := m.units[c.UnitID]
@@ -1882,6 +1887,7 @@ func (m *Match) holdStillLocked(id uint64, until float64) {
 	u.stun = true
 	u.stunUntil = until
 	m.noteStunLocked(u, until, false)
+	m.send(u, unitpkg.Stunned{Time: m.time, Until: until})
 }
 
 func (m *Match) dropOwnerWallsLocked(id uint64) {
@@ -1907,14 +1913,22 @@ func (m *Match) setWallMotionLocked(c unitpkg.SetWallMotion) {
 		return
 	}
 	w.bindPose()
+	if c.Pin {
+		w.pivot = vec{c.X, c.Y}
+		w.base = c.Ang
+		w.ang = 0
+		w.pose()
+	}
 	same := logSame(w.spin, c.Spin) && logSame(w.vx, c.VX) && logSame(w.vy, c.VY) &&
-		logSame(w.ram, c.Ram) && logSame(w.stunR, c.StunRadius) && logSame(w.stunDur, c.StunDur)
+		logSame(w.ram, c.Ram) && logSame(w.stunR, c.StunRadius) && logSame(w.stunDur, c.StunDur) &&
+		w.passOwner == c.PassOwner
 	wasRam := w.ram > 0
 	w.spin = c.Spin
 	w.vx, w.vy = c.VX, c.VY
 	w.ram = c.Ram
 	w.stunR = c.StunRadius
 	w.stunDur = c.StunDur
+	w.passOwner = c.PassOwner
 	if !same {
 		m.noteWallMotionLocked(w)
 	}
@@ -2146,6 +2160,9 @@ func (m *Match) shoveWallLocked(w *barrier) {
 		if u.breakWalls && w.hard {
 			continue
 		}
+		if w.passOwner && u.id == w.owner {
+			continue
+		}
 		cc, cr := colOf(u.p, u.face, u.radius, u.semi)
 		d := distPointOBB(cc, w.a, w.b, w.radius)
 		need := cr + skin
@@ -2260,6 +2277,9 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 			cc, cr := colOf(u.p, u.face, u.radius, u.semi)
 			for _, w := range m.walls {
 				if ignoreUW[uwID{u.id, w.id}] {
+					continue
+				}
+				if w.passOwner && u.id == w.owner {
 					continue
 				}
 				if u.breakWalls && w.hard {
@@ -2477,6 +2497,9 @@ func (m *Match) constrainUnitLocked(u *unit) {
 		if u.breakWalls && w.hard {
 			continue
 		}
+		if w.passOwner && u.id == w.owner {
+			continue
+		}
 		if w.square {
 			m.pushOutOBB(u, w, cc, cr)
 			cc, cr = colOf(u.p, u.face, u.radius, u.semi)
@@ -2542,7 +2565,7 @@ func (m *Match) emitLocked() {
 		if u == nil || u.stopped || u.stun {
 			continue
 		}
-		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field, Walls: views}
+		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field, Walls: views, Knock: len(u.fsList) > 0}
 		vr2 := u.vision * u.vision
 		for _, o := range snaps {
 			if o.ID == u.id {

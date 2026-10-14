@@ -50,6 +50,8 @@ type Sense struct {
 	Nearby []Snapshot
 	Walls  []WallView
 	Field  Field
+	// Knock 身上有击退，当前速度被盖住。
+	Knock bool
 }
 
 type Collision struct {
@@ -80,6 +82,12 @@ type WallSlam struct {
 // FactionChanged 阵营刚变时发给该战斗机。撞墙轮换和 MarkFaction 改派系都会发；Stun 拦不住。
 type FactionChanged struct {
 	Faction string
+}
+
+// Stunned 眩晕刚挂上，发给本人。眩晕期间不发 Sense，收招靠这条。
+type Stunned struct {
+	Time  float64
+	Until float64
 }
 
 type Cmd any
@@ -280,6 +288,8 @@ type PlaceWall struct {
 // SetWallMotion 改一截墙绕自己墙心的转速，以及墙心的平移速度。
 // Spin 弧度每秒，逆时针为正。Ram > 0 时这截在平移途中对每个敌方目标结一次这个伤害。
 // StunRadius > 0 的两截同一主人的墙，胶囊重叠时一起消失，并让圈里的敌方站死 StunDur 秒。主人不晕。
+// Pin 为真时立刻把墙心放到 (X,Y)，墙身朝向 Ang（弧度，从墙心指向端点）。
+// PassOwner 为真时这截墙不弹开主人。
 type SetWallMotion struct {
 	WallID     uint64
 	Spin       float64
@@ -287,6 +297,10 @@ type SetWallMotion struct {
 	Ram        float64
 	StunRadius float64
 	StunDur    float64
+	Pin        bool
+	X, Y       float64
+	Ang        float64
+	PassOwner  bool
 }
 
 // HoldStill 到 Until 之前不发感知，速度保持为 0。

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>13 支队伍瑞士轮</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --line: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --btn: #238636;
+      --btn-ghost: #21262d;
+      --warn: #9e6a03;
+      --ok: #3fb950;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: radial-gradient(ellipse at top, #182030, var(--bg));
+      color: var(--text);
+      font-family: "Segoe UI", "PingFang SC", sans-serif;
+    }
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    h1 { margin: 0 0 8px; letter-spacing: 0.06em; font-size: 28px; }
+    h2 { margin: 28px 0 12px; font-size: 18px; font-weight: 600; }
+    .sub { color: var(--muted); margin: 0 0 22px; line-height: 1.5; }
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 28px;
+      margin-bottom: 20px;
+    }
+    .stat b { display: block; font-size: 22px; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    .stat.ok b { color: var(--ok); }
+    .stat.warn b { color: #d29922; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .spacer { flex: 1; min-width: 8px; }
+    button, select {
+      font: inherit;
+      color: var(--text);
+    }
+    button {
+      background: var(--btn);
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.ghost {
+      background: var(--btn-ghost);
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    button.tab {
+      background: #21262d;
+      border: 1px solid var(--line);
+    }
+    button.tab.active {
+      border-color: #58a6ff;
+      background: color-mix(in srgb, #58a6ff 18%, #21262d);
+    }
+    button.swap {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      padding: 6px 8px;
+      min-width: 40px;
+    }
+    .note {
+      background: color-mix(in srgb, var(--warn) 16%, var(--panel));
+      border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line));
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #e3b341;
+      margin: 0 0 14px;
+      font-size: 14px;
+    }
+    .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+    table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:nth-child(even) { background: #1b2230; }
+    tbody tr.done td:first-child { color: var(--ok); }
+    tbody tr.lead td { color: var(--ok); }
+    .num, .right { text-align: right; font-variant-numeric: tabular-nums; }
+    .vs { text-align: center; width: 48px; }
+    select {
+      background: #21262d;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 8px;
+      min-width: 132px;
+    }
+    details {
+      margin-top: 28px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    details p { line-height: 1.55; }
+    @media (max-width: 720px) {
+      .wrap { padding: 20px 12px 48px; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>13 支队伍瑞士轮</h1>
+    <p class="sub">
+      胜 1 分，平 0.5 分，负 0 分，每轮轮空的一支记 1 分。同分先互碰，轮空给还没轮空过的最低分。
+      不算平局时，至少 3 轮才可能只剩一支积分最高。
+    </p>
+    <div class="stats" id="stats"></div>
+    <div class="toolbar">
+      <div class="tabs" id="tabs"></div>
+      <div class="spacer"></div>
+      <button type="button" id="btn-next">生成下一轮</button>
+      <button type="button" class="ghost" id="btn-reset">恢复初始对阵</button>
+    </div>
+    <p class="note" id="warn" hidden></p>
+    <p class="hint" id="hint"></p>
+    <h2 id="round-title">第 1 轮</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">场</th>
+            <th>A</th>
+            <th></th>
+            <th>B</th>
+            <th>结果</th>
+          </tr>
+        </thead>
+        <tbody id="matches"></tbody>
+      </table>
+    </div>
+    <h2>积分榜</h2>
+    <p class="hint">对手分是已赛对手的积分和，轮空不加对手分。唯一冠军只看积分严格最高，不靠对手分拆并列。</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="right">#</th>
+            <th>队伍</th>
+            <th>榜首</th>
+            <th class="right">胜</th>
+            <th class="right">负</th>
+            <th class="right">平</th>
+            <th class="right">分</th>
+            <th class="right">对手分</th>
+            <th class="right">已赛</th>
+          </tr>
+        </thead>
+        <tbody id="board"></tbody>
+      </table>
+    </div>
+    <details>
+      <summary>为什么至少 3 轮</summary>
+      <p>
+        13 支每轮 6 场加 1 个轮空。不算平局时，第 1 轮结束必是 7 支 1 分。
+        第 2 轮这 7 支先互碰，3 场至少留下 3 支 2 分，下沉那支就算输了也清不掉这 3 支。
+        第 3 轮若只剩这 3 支领先，再让下沉的那支输掉，就只剩 1 支 3 分。
+        有平局时榜首可以一直和棋，积分保证不了唯一冠军。
+      </p>
+    </details>
+  </main>
+  <script>
+    const STORE = "xqdj-team-swiss-v1";
+    const MIN_ROUNDS = 3;
+    const TEAMS = [
+      { slug: "lao", name: "老头组" },
+      { slug: "yue", name: "月计组" },
+      { slug: "yuan", name: "原型机组" },
+      { slug: "bai", name: "百战组" },
+      { slug: "guai", name: "怪猎组" },
+      { slug: "xi", name: "西幻组" },
+      { slug: "zhu", name: "主角组" },
+      { slug: "mi", name: "神秘组" },
+      { slug: "shua", name: "耍起组" },
+      { slug: "zui", name: "犯罪组" },
+      { slug: "gong", name: "工程组" },
+      { slug: "an", name: "安保组" },
+      { slug: "yi", name: "艺教组" },
+    ];
+    const SEED = Object.fromEntries(TEAMS.map((t, i) => [t.slug, i]));
+    const BY_SLUG = Object.fromEntries(TEAMS.map((t) => [t.slug, t]));
+    const INITIAL = {
+      rounds: [[
+        { left: "lao", right: "yue", result: "" },
+        { left: "yuan", right: "bai", result: "" },
+        { left: "guai", right: "xi", result: "" },
+        { left: "zhu", right: "mi", result: "" },
+        { left: "shua", right: "zui", result: "" },
+        { left: "gong", right: "an", result: "" },
+      ]],
+      byes: ["yi"],
+      view: 0,
+    };
+
+    let state = load();
+
+    function cloneRounds(rounds) {
+      return rounds.map((round) => round.map((m) => ({ ...m })));
+    }
+    function pairKey(a, b) {
+      return a < b ? a + "|" + b : b + "|" + a;
+    }
+    function playedSet(rounds) {
+      const seen = new Set();
+      for (const round of rounds) {
+        for (const match of round) seen.add(pairKey(match.left, match.right));
+      }
+      return seen;
+    }
+    function pendingCount(round) {
+      return round.filter((m) => !m.result).length;
+    }
+    function sameInit() {
+      if (state.rounds.length !== 1 || state.byes.length !== 1 || state.byes[0] !== INITIAL.byes[0]) return false;
+      return state.rounds[0].every((m, i) =>
+        m.left === INITIAL.rounds[0][i].left &&
+        m.right === INITIAL.rounds[0][i].right &&
+        m.result === "");
+    }
+    function teamSelect(slug, matchIndex, side) {
+      const opts = TEAMS.map((t) =>
+        `<option value="${t.slug}"${t.slug === slug ? " selected" : ""}>${t.name}</option>`
+      ).join("");
+      return `<select data-act="team" data-i="${matchIndex}" data-side="${side}">${opts}</select>`;
+    }
+    function byeSelect(slug) {
+      const opts = TEAMS.map((t) =>
+        `<option value="${t.slug}"${t.slug === slug ? " selected" : ""}>${t.name}</option>`
+      ).join("");
+      return `<select data-act="bye">${opts}</select>`;
+    }
+    function assignTeam(matches, matchIndex, side, slug) {
+      const next = matches.map((m) => ({ ...m }));
+      const current = next[matchIndex][side];
+      if (current === slug) return matches;
+      for (let i = 0; i < next.length; i++) {
+        if (next[i].left === slug) { next[i] = { ...next[i], left: current }; break; }
+        if (next[i].right === slug) { next[i] = { ...next[i], right: current }; break; }
+      }
+      next[matchIndex] = { ...next[matchIndex], [side]: slug };
+      return next;
+    }
+    function setBye(matches, oldBye, newBye) {
+      if (oldBye === newBye) return { matches, bye: oldBye };
+      const next = matches.map((m) => ({ ...m }));
+      for (let i = 0; i < next.length; i++) {
+        if (next[i].left === newBye) { next[i] = { ...next[i], left: oldBye }; break; }
+        if (next[i].right === newBye) { next[i] = { ...next[i], right: oldBye }; break; }
+      }
+      return { matches: next, bye: newBye };
+    }
+    function swapSides(matches, matchIndex) {
+      return matches.map((m, i) => {
+        if (i !== matchIndex) return m;
+        const result = m.result === "left" ? "right" : m.result === "right" ? "left" : m.result;
+        return { left: m.right, right: m.left, result };
+      });
+    }
+    function standings(rounds, byes) {
+      const rows = {};
+      for (const t of TEAMS) {
+        rows[t.slug] = { slug: t.slug, wins: 0, losses: 0, draws: 0, points: 0, sos: 0, played: 0, opponents: [] };
+      }
+      for (const round of rounds) {
+        for (const match of round) {
+          if (!match.result) continue;
+          const a = rows[match.left];
+          const b = rows[match.right];
+          a.played += 1; b.played += 1;
+          a.opponents.push(match.right);
+          b.opponents.push(match.left);
+          if (match.result === "left") { a.wins += 1; a.points += 1; b.losses += 1; }
+          else if (match.result === "right") { b.wins += 1; b.points += 1; a.losses += 1; }
+          else { a.draws += 1; b.draws += 1; a.points += 0.5; b.points += 0.5; }
+        }
+      }
+      for (const slug of byes) {
+        if (!slug || !rows[slug]) continue;
+        rows[slug].points += 1;
+        rows[slug].played += 1;
+      }
+      for (const row of Object.values(rows)) {
+        row.sos = row.opponents.reduce((sum, slug) => sum + rows[slug].points, 0);
+      }
+      return Object.values(rows).sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.sos !== a.sos) return b.sos - a.sos;
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        return SEED[a.slug] - SEED[b.slug];
+      });
+    }
+    function swissPair(order, history) {
+      const used = new Set();
+      const matches = [];
+      for (let i = 0; i < order.length; i++) {
+        const a = order[i];
+        if (used.has(a)) continue;
+        let pick = -1;
+        for (let j = i + 1; j < order.length; j++) {
+          if (used.has(order[j]) || history.has(pairKey(a, order[j]))) continue;
+          pick = j; break;
+        }
+        if (pick < 0) {
+          for (let j = i + 1; j < order.length; j++) {
+            if (!used.has(order[j])) { pick = j; break; }
+          }
+        }
+        const b = order[pick];
+        used.add(a); used.add(b);
+        matches.push({ left: a, right: b, result: "" });
+      }
+      return matches;
+    }
+    function pickBye(board, byes) {
+      const had = new Set(byes);
+      const pool = board.filter((r) => !had.has(r.slug));
+      const list = pool.length ? pool : board;
+      return list[list.length - 1].slug;
+    }
+    function leadersOf(board) {
+      if (!board.length) return [];
+      const top = board[0].points;
+      return board.filter((r) => r.points === top);
+    }
+    function latestComplete() {
+      const last = state.rounds[state.rounds.length - 1];
+      return pendingCount(last) === 0;
+    }
+    function phaseOf(slug, board, complete) {
+      if (!complete) return "";
+      const leaders = leadersOf(board);
+      if (!leaders.some((r) => r.slug === slug)) return "";
+      return leaders.length === 1 ? "唯一领先" : "并列";
+    }
+    function fmtPoints(n) {
+      return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    }
+    function commit(rounds, byes, view) {
+      state = { rounds, byes, view };
+      save();
+      render();
+    }
+    function patchView(nextMatches, nextBye) {
+      const view = Math.min(state.view, state.rounds.length - 1);
+      const rounds = cloneRounds(state.rounds).slice(0, view + 1);
+      const byes = state.byes.slice(0, view + 1);
+      rounds[view] = nextMatches;
+      byes[view] = nextBye;
+      commit(rounds, byes, view);
+    }
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORE);
+        if (!raw) return structuredClone(INITIAL);
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed.rounds) || !parsed.rounds.length) return structuredClone(INITIAL);
+        if (!Array.isArray(parsed.byes) || parsed.byes.length !== parsed.rounds.length) return structuredClone(INITIAL);
+        return parsed;
+      } catch {
+        return structuredClone(INITIAL);
+      }
+    }
+    function save() {
+      localStorage.setItem(STORE, JSON.stringify(state));
+    }
+
+    function render() {
+      const view = Math.min(state.view, state.rounds.length - 1);
+      state.view = view;
+      const round = state.rounds[view];
+      const bye = state.byes[view];
+      const board = standings(state.rounds, state.byes);
+      const complete = latestComplete();
+      const leaders = complete ? leadersOf(board) : [];
+      const unique = leaders.length === 1 ? leaders[0] : null;
+      const decided = state.rounds.reduce((n, r) => n + r.filter((m) => m.result).length, 0);
+      const open = pendingCount(state.rounds[state.rounds.length - 1]);
+      const canNext = open === 0;
+      const later = view < state.rounds.length - 1;
+
+      const leaderStat = !complete
+        ? `<div class="stat warn"><b>未录完</b><span>当前轮还有 ${open} 场</span></div>`
+        : unique
+          ? `<div class="stat ok"><b>${BY_SLUG[unique.slug].name}</b><span>第 ${state.rounds.length} 轮唯一领先</span></div>`
+          : `<div class="stat warn"><b>${leaders.length} 支并列</b><span>还没有唯一冠军</span></div>`;
+      document.getElementById("stats").innerHTML = `
+        <div class="stat"><b>${MIN_ROUNDS}</b><span>最少轮数（无平局）</span></div>
+        <div class="stat"><b>${state.rounds.length}</b><span>已进行轮数</span></div>
+        <div class="stat"><b>${decided} / ${state.rounds.length * 6}</b><span>已录入场次</span></div>
+        ${leaderStat}`;
+
+      document.getElementById("tabs").innerHTML = state.rounds.map((_, i) =>
+        `<button type="button" class="tab${i === view ? " active" : ""}" data-act="view" data-i="${i}">第 ${i + 1} 轮</button>`
+      ).join("");
+
+      const nextBtn = document.getElementById("btn-next");
+      nextBtn.disabled = !canNext;
+      document.getElementById("btn-reset").disabled = sameInit();
+
+      const warn = document.getElementById("warn");
+      if (later) {
+        warn.hidden = false;
+        warn.textContent = `第 ${view + 1} 轮之后还有赛程。改对阵或结果会删掉后面的轮次。`;
+      } else {
+        warn.hidden = true;
+      }
+
+      const hint = document.getElementById("hint");
+      if (!complete && view === state.rounds.length - 1) {
+        hint.textContent = `本轮还剩 ${open} 场未录入。轮空 ${BY_SLUG[bye].name} 已记 1 分。`;
+      } else if (complete && !unique) {
+        hint.textContent = `榜首还有 ${leaders.length} 支同分。无平局时，第 2 轮结束至少仍是 3 支。`;
+      } else if (unique) {
+        hint.textContent = `${BY_SLUG[unique.slug].name} 以 ${fmtPoints(unique.points)} 分单独领先。这是这种赛果，不是实力预测。`;
+      } else {
+        hint.textContent = "";
+      }
+
+      document.getElementById("round-title").textContent = `第 ${view + 1} 轮`;
+      const resultOpts = (result) => [
+        ["", "未赛"],
+        ["left", "A 胜"],
+        ["right", "B 胜"],
+        ["draw", "平"],
+      ].map(([v, l]) => `<option value="${v}"${result === v ? " selected" : ""}>${l}</option>`).join("");
+      const rows = round.map((match, i) => `<tr class="${match.result ? "done" : ""}">
+          <td class="num">${i + 1}</td>
+          <td>${teamSelect(match.left, i, "left")}</td>
+          <td class="vs"><button type="button" class="swap" data-act="swap" data-i="${i}" title="对调双方">对调</button></td>
+          <td>${teamSelect(match.right, i, "right")}</td>
+          <td><select data-act="result" data-i="${i}">${resultOpts(match.result)}</select></td>
+        </tr>`).join("");
+      document.getElementById("matches").innerHTML = rows + `<tr class="done">
+          <td class="num">轮空</td>
+          <td colspan="3">${byeSelect(bye)}</td>
+          <td>记 1 分</td>
+        </tr>`;
+
+      document.getElementById("board").innerHTML = board.map((row, i) => `
+        <tr class="${complete && unique && row.slug === unique.slug ? "lead" : ""}">
+          <td class="right">${i + 1}</td>
+          <td>${BY_SLUG[row.slug].name}</td>
+          <td>${phaseOf(row.slug, board, complete)}</td>
+          <td class="right">${row.wins}</td>
+          <td class="right">${row.losses}</td>
+          <td class="right">${row.draws}</td>
+          <td class="right">${fmtPoints(row.points)}</td>
+          <td class="right">${fmtPoints(row.sos)}</td>
+          <td class="right">${row.played}</td>
+        </tr>`).join("");
+    }
+
+    document.body.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (!btn || btn.tagName !== "BUTTON") return;
+      const act = btn.dataset.act;
+      const i = Number(btn.dataset.i);
+      if (act === "view") {
+        state = { ...state, view: i };
+        save();
+        render();
+      } else if (act === "swap") {
+        const view = Math.min(state.view, state.rounds.length - 1);
+        patchView(swapSides(state.rounds[view], i), state.byes[view]);
+      }
+    });
+    document.body.addEventListener("change", (e) => {
+      const el = e.target;
+      if (!(el instanceof HTMLSelectElement) || !el.dataset.act) return;
+      const view = Math.min(state.view, state.rounds.length - 1);
+      const i = Number(el.dataset.i);
+      if (el.dataset.act === "team") {
+        patchView(assignTeam(state.rounds[view], i, el.dataset.side, el.value), state.byes[view]);
+      } else if (el.dataset.act === "result") {
+        const round = state.rounds[view].map((m, j) => j === i ? { ...m, result: el.value } : m);
+        patchView(round, state.byes[view]);
+      } else if (el.dataset.act === "bye") {
+        const next = setBye(state.rounds[view], state.byes[view], el.value);
+        patchView(next.matches, next.bye);
+      }
+    });
+    document.getElementById("btn-next").addEventListener("click", () => {
+      const last = state.rounds[state.rounds.length - 1];
+      if (pendingCount(last) > 0) return;
+      const board = standings(state.rounds, state.byes);
+      const bye = pickBye(board, state.byes);
+      const order = board.map((r) => r.slug).filter((slug) => slug !== bye);
+      const next = swissPair(order, playedSet(state.rounds));
+      commit(
+        [...cloneRounds(state.rounds), next],
+        [...state.byes, bye],
+        state.rounds.length,
+      );
+    });
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      state = structuredClone(INITIAL);
+      save();
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
-// 雷达(百战)不转向。扫掠线被墙裁断，本身不出伤；扫到敌方战斗机或活随从则挂大炮击或小炮击。
+// 雷达(百战)不转向。没有点名时扫掠线被墙裁断，本身不出伤。
+// 扫到的第一个人被点名：线消失，立炮 1 秒后满 1、2、3、4 秒各挂一轮，第四轮挂出或人没了再收炮 1 秒，线回来。
 package 雷达_百战
 
 import (
@@ -24,14 +25,18 @@ const (
 	vetColor  = "#1a6b6b"
 
 	sweepWidth = 4.0
-	sweepSpin  = 3.0 // 顺时针转一圈的秒数
-	sweepHitCD = 1.2 // 同一目标两次挂炮击的间隔
+	sweepSpin  = 6.0 // 顺时针转一圈的秒数
+	nameGap    = 1.0
+	nameShots  = 4
+	nameAim    = 1
+	morphDur   = 1.0
 
 	bigDelay    = 0.64
 	bigDamage   = 12.0
 	bigRadius   = 80.0
 	bigKnockSp  = 280.0
 	bigKnockDur = 0.25
+	bigRise     = 0.36
 
 	smallCount    = 3
 	smallScatter  = 35.0
@@ -41,6 +46,7 @@ const (
 	smallRadius   = 55.0
 	smallKnockSp  = 200.0
 	smallKnockDur = 0.15
+	smallRise     = 0.20
 
 	modeRandom = 0
 	modeBig    = 1
@@ -65,9 +71,7 @@ func init() {
 			FX:    []string{"radar-vet"},
 		},
 	}, func(unit.SpawnInfo) unit.Actor {
-		return &百战{
-			hitAt: map[uint64]float64{},
-		}
+		return &百战{}
 	})
 	p.Register(unit.Spec{
 		Kind:     KindBarrage,
@@ -126,10 +130,22 @@ func popArmWait() float64 {
 	return v
 }
 
+const (
+	phaseSweep = iota
+	phaseRaise
+	phaseBarrage
+	phaseLower
+)
+
 type 百战 struct {
-	hitAt map[uint64]float64
-	rng   *rand.Rand
-	mode  int // 0 随机；测试可钉死大/小
+	rng      *rand.Rand
+	mode     int // 0 随机；测试可钉死大/小
+	phase    int
+	morphAt  float64
+	nameID   uint64
+	nameAim  uint8
+	shots    int
+	nextShot float64
 }
 
 func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
@@ -143,39 +159,142 @@ func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
 	if a.rng == nil {
 		a.rng = unit.NewRNG(ctx.ID)
 	}
+	started := a.phase
+	if started == phaseRaise {
+		if _, alive := namedOf(s, a.nameID); !alive {
+			a.startLower(ctx, s, unit.Snapshot{}, false)
+		} else if s.Time+1e-9 >= a.morphAt+morphDur {
+			a.phase = phaseBarrage
+			a.shots = 0
+			a.nextShot = a.morphAt + morphDur + nameGap
+		}
+	}
+	if a.phase == phaseBarrage {
+		a.tickBarrage(ctx, s)
+	}
+	if started == phaseLower && s.Time+1e-9 >= a.morphAt+morphDur {
+		a.phase = phaseSweep
+	}
 	dx, dy := sweepDir(s.Time)
 	reach := clipReach(s.Self.X, s.Self.Y, dx, dy, visionOf(s), sweepWidth/2, s.Field, s.Walls)
-	a.sweep(ctx, s, dx, dy, reach)
+	if a.phase == phaseSweep {
+		if o, ok := a.nearest(s, dx, dy, reach); ok {
+			a.beginName(ctx, s, o)
+		}
+	}
+	a.emitPose(ctx, s, dx, dy, reach)
+}
+
+func (a *百战) tickBarrage(ctx unit.Context, s unit.Sense) {
+	o, alive := namedOf(s, a.nameID)
+	if !alive {
+		a.startLower(ctx, s, unit.Snapshot{}, false)
+		return
+	}
+	if s.Time+1e-9 < a.nextShot {
+		return
+	}
+	a.hangRound(ctx, s, o.X, o.Y)
+	a.shots++
+	a.nextShot += nameGap
+	if a.shots >= nameShots {
+		a.startLower(ctx, s, o, true)
+	}
+}
+
+func (a *百战) beginName(ctx unit.Context, s unit.Sense, o unit.Snapshot) {
+	a.phase = phaseRaise
+	a.morphAt = s.Time
+	a.nameID = o.ID
+	a.nameAim = o.AimPriority
+	a.shots = 0
+	if o.AimPriority != 0 {
+		ctx.Out <- unit.SetAimPriority{From: ctx.ID, UnitID: o.ID, Value: nameAim}
+	}
+}
+
+func (a *百战) startLower(ctx unit.Context, s unit.Sense, o unit.Snapshot, restore bool) {
+	a.phase = phaseLower
+	a.morphAt = s.Time
+	if restore && a.nameAim != 0 {
+		ctx.Out <- unit.SetAimPriority{From: ctx.ID, UnitID: o.ID, Value: a.nameAim}
+	}
+}
+
+func (a *百战) emitPose(ctx unit.Context, s unit.Sense, dx, dy, reach float64) {
+	grow, gun := a.gunGrow(s.Time)
+	a.emitGun(ctx, s, grow, gun)
+	if a.phase == phaseRaise || a.phase == phaseBarrage {
+		if o, ok := namedOf(s, a.nameID); ok {
+			a.emitName(ctx, s, o)
+		} else {
+			a.emitName(ctx, s, unit.Snapshot{})
+		}
+		a.emitBeam(ctx, s, 0, 0, 0)
+		return
+	}
+	a.emitName(ctx, s, unit.Snapshot{})
+	if a.phase == phaseLower {
+		a.emitBeam(ctx, s, 0, 0, 0)
+		return
+	}
 	a.emitBeam(ctx, s, dx, dy, reach)
 }
 
-func (a *百战) sweep(ctx unit.Context, s unit.Sense, dx, dy, reach float64) {
-	if a.hitAt == nil {
-		a.hitAt = map[uint64]float64{}
+func (a *百战) gunGrow(t float64) (float64, bool) {
+	switch a.phase {
+	case phaseRaise:
+		return morphProgress(t, a.morphAt), true
+	case phaseBarrage:
+		return 1, true
+	case phaseLower:
+		return 1 - morphProgress(t, a.morphAt), true
+	default:
+		return 0, false
 	}
+}
+
+func morphProgress(t, start float64) float64 {
+	p := (t - start) / morphDur
+	if p < 0 {
+		return 0
+	}
+	if p > 1 {
+		return 1
+	}
+	return p
+}
+
+func (a *百战) nearest(s unit.Sense, dx, dy, reach float64) (unit.Snapshot, bool) {
 	half := sweepWidth / 2
+	var best unit.Snapshot
+	var bestAlong float64
+	found := false
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if !unit.Hittable(*o, s.Self.Slot) {
 			continue
 		}
-		mx, my, ok := markPoint(s.Self.X, s.Self.Y, dx, dy, reach, o.X, o.Y, o.Radius, half)
+		along, ok := sweepAlong(s.Self.X, s.Self.Y, dx, dy, reach, o.X, o.Y, o.Radius, half)
 		if !ok {
 			continue
 		}
-		if at, seen := a.hitAt[o.ID]; seen && s.Time+1e-9 < at+sweepHitCD {
-			continue
+		if !found || along < bestAlong {
+			best = *o
+			bestAlong = along
+			found = true
 		}
-		a.hitAt[o.ID] = s.Time
-		if a.pickBig() {
-			ctx.Out <- unit.Spawn{
-				Kind: KindBarrage, X: mx, Y: my,
-				OwnerID: ctx.ID, Slot: s.Self.Slot,
-			}
-			continue
-		}
-		a.hangSmall(ctx, s, mx, my)
 	}
+	return best, found
+}
+
+func namedOf(s unit.Sense, id uint64) (unit.Snapshot, bool) {
+	for i := range s.Nearby {
+		if s.Nearby[i].ID == id {
+			return s.Nearby[i], true
+		}
+	}
+	return unit.Snapshot{}, false
 }
 
 func (a *百战) pickBig() bool {
@@ -189,6 +308,18 @@ func (a *百战) pickBig() bool {
 	}
 }
 
+func (a *百战) hangRound(ctx unit.Context, s unit.Sense, x, y float64) {
+	if a.pickBig() {
+		a.emitLaunch(ctx, s, true, 0, 0)
+		ctx.Out <- unit.Spawn{
+			Kind: KindBarrage, X: x, Y: y,
+			OwnerID: ctx.ID, Slot: s.Self.Slot,
+		}
+		return
+	}
+	a.hangSmall(ctx, s, x, y)
+}
+
 func (a *百战) hangSmall(ctx unit.Context, s unit.Sense, mx, my float64) {
 	arm := 0.0
 	for i := 0; i < smallCount; i++ {
@@ -197,10 +328,45 @@ func (a *百战) hangSmall(ctx unit.Context, s unit.Sense, mx, my float64) {
 		}
 		x, y := scatterNear(mx, my, smallScatter, a.rng)
 		pushArmWait(arm)
+		a.emitLaunch(ctx, s, false, arm, float64(i-1)*10)
 		ctx.Out <- unit.Spawn{
 			Kind: KindSmallBarrage, X: x, Y: y,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
 		}
+	}
+}
+
+func (a *百战) emitLaunch(ctx unit.Context, s unit.Sense, big bool, delay, side float64) {
+	amt := 0.0
+	if big {
+		amt = 1
+	}
+	ctx.Out <- unit.FX{
+		Name:   "launch",
+		Kind:   ctx.Kind,
+		UnitID: ctx.ID,
+		Slot:   s.Self.Slot,
+		X:      s.Self.X,
+		Y:      s.Self.Y,
+		VX:     side,
+		VY:     delay,
+		Amount: amt,
+	}
+}
+
+func (a *百战) emitGun(ctx unit.Context, s unit.Sense, grow float64, on bool) {
+	amt := -1.0
+	if on {
+		amt = grow
+	}
+	ctx.Out <- unit.FX{
+		Name:   "gun",
+		Kind:   ctx.Kind,
+		UnitID: ctx.ID,
+		Slot:   s.Self.Slot,
+		X:      s.Self.X,
+		Y:      s.Self.Y,
+		Amount: amt,
 	}
 }
 
@@ -218,6 +384,20 @@ func (a *百战) emitBeam(ctx unit.Context, s unit.Sense, dx, dy, reach float64)
 	}
 }
 
+func (a *百战) emitName(ctx unit.Context, s unit.Sense, o unit.Snapshot) {
+	fx := unit.FX{
+		Name:   "name",
+		Kind:   ctx.Kind,
+		UnitID: ctx.ID,
+		Slot:   s.Self.Slot,
+	}
+	if o.ID != 0 {
+		fx.X, fx.Y = o.X, o.Y
+		fx.Amount = o.Radius
+	}
+	ctx.Out <- fx
+}
+
 type 炮击 struct {
 	owner    uint64
 	slot     int
@@ -230,6 +410,7 @@ type 炮击 struct {
 	booted   bool
 	pass     bool
 	armAt    float64
+	showAt   float64
 	boomAt   float64
 	dead     bool
 }
@@ -243,6 +424,17 @@ func newShell(info unit.SpawnInfo, delay, damage, radius, knockSp, knockDur, arm
 		delay: delay, damage: damage, radius: radius,
 		knockSp: knockSp, knockDur: knockDur, armWait: armWait,
 	}
+}
+
+func (b *炮击) rise() float64 {
+	lead := smallRise
+	if b.delay+1e-9 >= bigDelay {
+		lead = bigRise
+	}
+	if lead >= b.delay {
+		return 0
+	}
+	return lead
 }
 
 func (b *炮击) Handle(ctx unit.Context, ev unit.Event) {
@@ -260,17 +452,15 @@ func (b *炮击) Handle(ctx unit.Context, ev unit.Event) {
 	if !b.booted {
 		b.booted = true
 		b.armAt = s.Time + b.armWait
+		b.showAt = b.armAt + b.rise()
 		b.boomAt = b.armAt + b.delay
 	}
-	if s.Time+1e-9 < b.armAt {
+	if s.Time+1e-9 < b.showAt {
 		return
 	}
-	prog := (s.Time - b.armAt) / b.delay
-	if prog < 0 {
-		prog = 0
-	}
-	if prog > 1 {
-		prog = 1
+	remain := b.boomAt - s.Time
+	if remain < 0.05 {
+		remain = 0.05
 	}
 	ctx.Out <- unit.FX{
 		Name:   "mark",
@@ -279,7 +469,8 @@ func (b *炮击) Handle(ctx unit.Context, ev unit.Event) {
 		Slot:   b.slot,
 		X:      s.Self.X,
 		Y:      s.Self.Y,
-		Amount: b.radius * prog,
+		Amount: b.radius,
+		VY:     remain,
 	}
 	if s.Time+1e-9 < b.boomAt {
 		return
@@ -417,29 +608,16 @@ func segDist(px, py, x1, y1, x2, y2 float64) float64 {
 	return math.Hypot(px-(x1+dx*t), py-(y1+dy*t))
 }
 
-// markPoint：射线扫到目标圆时的扫掠地点（与圆的最近点；相交取先碰到的点）。
-func markPoint(px, py, ux, uy, reach, hx, hy, hr, halfW float64) (mx, my float64, ok bool) {
+// sweepAlong 是目标圆心在扫掠线上的投影。线够到这个圆才算碰到。
+func sweepAlong(px, py, ux, uy, reach, hx, hy, hr, halfW float64) (along float64, ok bool) {
 	dx, dy := hx-px, hy-py
-	along := dx*ux + dy*uy
+	along = dx*ux + dy*uy
 	if along < 0 || along > reach {
-		return 0, 0, false
+		return 0, false
 	}
 	cx, cy := px+ux*along, py+uy*along
-	perp := math.Hypot(hx-cx, hy-cy)
-	if perp > hr+halfW {
-		return 0, 0, false
+	if math.Hypot(hx-cx, hy-cy) > hr+halfW {
+		return 0, false
 	}
-	dist2 := dx*dx + dy*dy
-	disc := along*along - (dist2 - hr*hr)
-	if disc >= 0 {
-		root := math.Sqrt(disc)
-		t0 := along - root
-		if t0 < 0 {
-			t0 = along + root
-		}
-		if t0 >= 0 && t0 <= reach {
-			return px + ux*t0, py + uy*t0, true
-		}
-	}
-	return cx, cy, true
+	return along, true
 }

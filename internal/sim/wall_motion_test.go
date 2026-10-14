@@ -215,6 +215,28 @@ func TestSlamSweptCatchesTunnel(t *testing.T) {
 	}
 }
 
+func TestPassOwnerDoesNotBounceSelf(t *testing.T) {
+	m := newWallMatch(t)
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	owner := fighterByKind(m, character.KindWaller)
+	enemy := fighterByKind(m, character.KindRanged)
+	owner.p = vec{0, 0}
+	owner.setVel(vec{400, 0})
+	enemy.p = vec{0, 240}
+	enemy.setVel(vec{})
+	m.placeWallLocked(unitpkg.PlaceWall{
+		OwnerID: owner.id, Slot: owner.slot, Kind: owner.kind,
+		X1: 30, Y1: -40, X2: 30, Y2: 40, Radius: 6, Life: -1,
+	})
+	m.walls[0].passOwner = true
+	m.physicsLocked(DT)
+	if math.Abs(owner.v.X-400) > 1e-6 || owner.p.X < 6 {
+		t.Fatalf("owner vel=%v pos=%v", owner.v, owner.p)
+	}
+}
+
 func newWallMatch(t *testing.T) *Match {
 	t.Helper()
 	m := NewMatchSeeded(1)

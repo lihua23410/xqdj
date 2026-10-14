@@ -356,6 +356,161 @@ func TestCloseDuringCooldownStillRams(t *testing.T) {
 	}
 }
 
+func TestRamBlocksDamage(t *testing.T) {
+	a := &教父青年{roll: func() float64 { return 0.5 }}
+	ctx, out := ctxOf()
+	a.Handle(ctx, senseAt(0, 100, []unit.Snapshot{foe(2, 80, 0)}))
+	_ = drain(out)
+	a.Handle(ctx, unit.IncomingDamage{Token: 7, From: 2, Amount: 10, Time: 0.1})
+	cmds := drain(out)
+	if _, ok := lastCmd[unit.ConfirmDamage](cmds); ok {
+		t.Fatal("ram confirmed a hit")
+	}
+	b, ok := lastCmd[unit.BlockDamage](cmds)
+	if !ok || b.Token != 7 || b.UnitID != 1 || a.phase != phRam {
+		t.Fatalf("block=%v phase=%d", b, a.phase)
+	}
+}
+
+func TestRamEndTakesDamage(t *testing.T) {
+	a := &教父青年{roll: func() float64 { return 0.5 }}
+	ctx, out := ctxOf()
+	a.Handle(ctx, senseAt(0, 100, []unit.Snapshot{foe(2, 80, 0)}))
+	_ = drain(out)
+	a.Handle(ctx, unit.WallHit{Time: 0.2, NX: -1})
+	end := drain(out)
+	if a.phase != phIdle || !droppedPass(end) {
+		t.Fatalf("phase=%d pass=%v", a.phase, end)
+	}
+	a.Handle(ctx, unit.IncomingDamage{Token: 8, From: 2, Amount: 4, Time: 0.3})
+	cmds := drain(out)
+	if _, ok := lastCmd[unit.BlockDamage](cmds); ok {
+		t.Fatal("ended ram still blocked")
+	}
+	if c, ok := lastCmd[unit.ConfirmDamage](cmds); !ok || c.Token != 8 {
+		t.Fatalf("confirm=%v", cmds)
+	}
+}
+
+func TestStunInterruptsRam(t *testing.T) {
+	a := &教父青年{roll: func() float64 { return 0.5 }}
+	ctx, out := ctxOf()
+	a.Handle(ctx, senseAt(0, 100, []unit.Snapshot{foe(2, 80, 0)}))
+	_ = drain(out)
+	a.Handle(ctx, unit.Stunned{Time: 0.2, Until: 1})
+	cmds := drain(out)
+	v := lastVel(cmds)
+	if a.phase != phIdle || !droppedPass(cmds) || math.Abs(a.readyAt-0.65) > 1e-9 {
+		t.Fatalf("phase=%d ready=%v cmds=%v", a.phase, a.readyAt, cmds)
+	}
+	if v == nil || math.Abs(v.VX-cruise) > 1e-9 || math.Abs(v.VY) > 1e-9 {
+		t.Fatalf("vel=%v", v)
+	}
+	a.Handle(ctx, unit.Collision{Time: 0.21, Other: foe(2, 10, 0)})
+	var dmg float64
+	for _, c := range drain(out) {
+		if d, ok := c.(unit.Damage); ok {
+			dmg += d.Amount
+		}
+	}
+	if dmg != 0 {
+		t.Fatalf("damage after stun=%v", dmg)
+	}
+	a.Handle(ctx, unit.IncomingDamage{Token: 9, From: 2, Amount: 3, Time: 0.22})
+	cmds = drain(out)
+	if _, ok := lastCmd[unit.BlockDamage](cmds); ok {
+		t.Fatal("blocked after interrupt")
+	}
+	if c, ok := lastCmd[unit.ConfirmDamage](cmds); !ok || c.Token != 9 {
+		t.Fatalf("confirm=%v", cmds)
+	}
+}
+
+func TestStunOnReturnKeepsReturnDirection(t *testing.T) {
+	a := &教父青年{roll: func() float64 { return 0.5 }}
+	ctx, out := ctxOf()
+	a.buffUntil = 8
+	a.Handle(ctx, senseAt(0, 100, []unit.Snapshot{foe(2, 80, 0)}))
+	_ = drain(out)
+	a.Handle(ctx, unit.Collision{Time: 0.05, Other: foe(2, 20, 0)})
+	_ = drain(out)
+	a.Handle(ctx, unit.Stunned{Time: 0.2, Until: 1})
+	v := lastVel(drain(out))
+	if a.phase != phIdle || v == nil || math.Abs(v.VX-(-buffCruise)) > 1e-9 || math.Abs(v.VY) > 1e-9 {
+		t.Fatalf("phase=%d vel=%v", a.phase, v)
+	}
+}
+
+func TestKnockRestoresCruiseWhenRamEnded(t *testing.T) {
+	a := &教父青年{roll: func() float64 { return 0.5 }}
+	ctx, out := ctxOf()
+	a.Handle(ctx, senseAt(0, 100, []unit.Snapshot{foe(2, 80, 0)}))
+	_ = drain(out)
+	a.Handle(ctx, unit.WallHit{Time: 0.2, NX: -1})
+	_ = drain(out)
+	s := senseAt(0.3, 100, nil)
+	s.Knock = true
+	a.Handle(ctx, s)
+	v := lastVel(drain(out))
+	if v == nil || math.Abs(v.VX-(-cruise)) > 1e-9 {
+		t.Fatalf("held vel=%v", v)
+	}
+	s.Knock = false
+	s.Time = 0.5
+	a.Handle(ctx, s)
+	v = lastVel(drain(out))
+	if v == nil || math.Abs(v.VX-(-cruise)) > 1e-9 {
+		t.Fatalf("release vel=%v", v)
+	}
+	s.Time = 0.6
+	a.Handle(ctx, s)
+	if lastVel(drain(out)) != nil {
+		t.Fatal("restore repeated")
+	}
+}
+
+func TestWallAfterStunLeavesBounce(t *testing.T) {
+	a := &教父青年{roll: func() float64 { return 0.5 }}
+	ctx, out := ctxOf()
+	a.Handle(ctx, senseAt(0, 100, []unit.Snapshot{foe(2, 80, 0)}))
+	_ = drain(out)
+	a.Handle(ctx, unit.Stunned{Time: 0.2, Until: 1})
+	_ = drain(out)
+	a.Handle(ctx, unit.WallHit{Time: 0.25, NX: -1})
+	if len(drain(out)) != 0 {
+		t.Fatal("wall after stun re-finished")
+	}
+	a.Handle(ctx, senseAt(1.2, 100, nil))
+	if lastVel(drain(out)) != nil {
+		t.Fatal("rewrote bounce")
+	}
+}
+
+func lastCmd[T any](cmds []unit.Cmd) (T, bool) {
+	var got T
+	var ok bool
+	for _, c := range cmds {
+		if v, is := c.(T); is {
+			got = v
+			ok = true
+		}
+	}
+	return got, ok
+}
+
+func lastVel(cmds []unit.Cmd) *unit.SetVelocity {
+	v, ok := lastCmd[unit.SetVelocity](cmds)
+	if !ok {
+		return nil
+	}
+	return &v
+}
+
+func droppedPass(cmds []unit.Cmd) bool {
+	p, ok := lastCmd[unit.Pass](cmds)
+	return ok && !p.Hold
+}
+
 func TestBuffShotKnocks(t *testing.T) {
 	b := &手枪弹{owner: 1, slot: 0, dmg: buffShotDmg, knock: true, ux: 1, uy: 0, aimed: true}
 	out := make(chan unit.Cmd, 8)
