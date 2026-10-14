@@ -121,26 +121,67 @@ function paintLock(el, u, ctx) {
   lock.style.setProperty("--d", `${d}px`);
 }
 
+function markFrac(st) {
+  const dur = Math.max(1, st.dur || 1);
+  const t = Math.max(0, Math.min(1, (performance.now() - st.born) / dur));
+  let frac = t * t * (3 - 2 * t);
+  if (frac < 0.04) frac = 0.04;
+  return { t, frac };
+}
+
+function paintMarkSize(mark, st) {
+  const { t, frac } = markFrac(st);
+  const full = st.r || 4;
+  const r = Math.max(3, full * frac * (st.scale || 1) * 2);
+  mark.style.setProperty("--r", `${r}px`);
+  return t;
+}
+
+function finishMark(id, st) {
+  if (!st || st.done) return;
+  st.done = true;
+  st.el?.remove();
+  st.el = null;
+  if (typeof window.radarVetBoom === "function") window.radarVetBoom(id, st);
+}
+
 function tickShellMark(el, u, ctx, lookClass, markClass) {
   if (!el || !el.classList.contains(lookClass)) return;
+  const st = window.radarVetMark[u.id];
   let mark = el.querySelector(`:scope > .${markClass}`);
+  if (!st || !st.born || st.done) {
+    mark?.remove();
+    return;
+  }
+  if (ctx && ctx.scale) st.scale = ctx.scale;
   if (!mark) {
     mark = document.createElement("i");
     mark.className = markClass;
     el.appendChild(mark);
   }
-  const st = window.radarVetMark[u.id];
-  const scale = (ctx && ctx.scale) || 1;
-  let frac = 0.04;
-  if (st && st.born) {
-    const t = Math.max(0, Math.min(1, (performance.now() - st.born) / st.dur));
-    frac = t * t * (3 - 2 * t);
-    if (frac < 0.04) frac = 0.04;
-  }
-  const full = (st && st.r) || 4;
-  const r = Math.max(3, full * frac * scale * 2);
-  mark.style.setProperty("--r", `${r}px`);
+  st.el = mark;
+  if (paintMarkSize(mark, st) >= 1) finishMark(u.id, st);
 }
+
+(function radarVetMarkLoop() {
+  const marks = window.radarVetMark || {};
+  const now = performance.now();
+  for (const [id, st] of Object.entries(marks)) {
+    if (!st || !st.born || st.done) continue;
+    let mark = st.el && st.el.isConnected ? st.el : null;
+    if (!mark) {
+      const host = document.getElementById(`u-${id}`);
+      mark = host && host.querySelector(":scope > .radar-shell-mark, :scope > .radar-shell-mark-sm");
+      if (mark) st.el = mark;
+    }
+    if (mark) {
+      if (paintMarkSize(mark, st) >= 1) finishMark(id, st);
+    } else if (now - st.born >= st.dur) {
+      finishMark(id, st);
+    }
+  }
+  requestAnimationFrame(radarVetMarkLoop);
+})();
 
 window.lookFX["radar-shell"] = {
   unmount(el) {

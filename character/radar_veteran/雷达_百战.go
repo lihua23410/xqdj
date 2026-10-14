@@ -37,6 +37,7 @@ const (
 	bigKnockSp  = 280.0
 	bigKnockDur = 0.25
 	bigRise     = 0.36
+	blastHold   = 0.75 // 爆炸后炮弹还留着，落弹影和爆炸特效能熬过被丢掉的帧
 
 	smallCount    = 3
 	smallScatter  = 35.0
@@ -146,6 +147,15 @@ type 百战 struct {
 	nameAim  uint8
 	shots    int
 	nextShot float64
+	cues     []launchCue
+}
+
+// launchCue 升起这一段里每帧都再发一次发射，避免单帧特效被挤掉。
+type launchCue struct {
+	until float64
+	big   bool
+	delay float64
+	side  float64
 }
 
 func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
@@ -183,6 +193,7 @@ func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
 		}
 	}
 	a.emitPose(ctx, s, dx, dy, reach)
+	a.flushLaunches(ctx, s)
 }
 
 func (a *百战) tickBarrage(ctx unit.Context, s unit.Sense) {
@@ -310,7 +321,7 @@ func (a *百战) pickBig() bool {
 
 func (a *百战) hangRound(ctx unit.Context, s unit.Sense, x, y float64) {
 	if a.pickBig() {
-		a.emitLaunch(ctx, s, true, 0, 0)
+		a.noteLaunch(s, true, 0, 0)
 		ctx.Out <- unit.Spawn{
 			Kind: KindBarrage, X: x, Y: y,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
@@ -328,12 +339,39 @@ func (a *百战) hangSmall(ctx unit.Context, s unit.Sense, mx, my float64) {
 		}
 		x, y := scatterNear(mx, my, smallScatter, a.rng)
 		pushArmWait(arm)
-		a.emitLaunch(ctx, s, false, arm, float64(i-1)*10)
+		a.noteLaunch(s, false, arm, float64(i-1)*10)
 		ctx.Out <- unit.Spawn{
 			Kind: KindSmallBarrage, X: x, Y: y,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
 		}
 	}
+}
+
+func (a *百战) noteLaunch(s unit.Sense, big bool, delay, side float64) {
+	dur := smallRise
+	if big {
+		dur = bigRise
+	}
+	a.cues = append(a.cues, launchCue{
+		until: s.Time + dur, big: big, delay: delay, side: side,
+	})
+}
+
+func (a *百战) flushLaunches(ctx unit.Context, s unit.Sense) {
+	if len(a.cues) == 0 {
+		return
+	}
+	keep := make([]launchCue, 0, len(a.cues))
+	for _, c := range a.cues {
+		if s.Time > c.until+1e-9 {
+			continue
+		}
+		a.emitLaunch(ctx, s, c.big, c.delay, c.side)
+		if s.Time+1e-9 < c.until {
+			keep = append(keep, c)
+		}
+	}
+	a.cues = keep
 }
 
 func (a *百战) emitLaunch(ctx unit.Context, s unit.Sense, big bool, delay, side float64) {
@@ -412,6 +450,7 @@ type 炮击 struct {
 	armAt    float64
 	showAt   float64
 	boomAt   float64
+	boomed   bool
 	dead     bool
 }
 
@@ -458,24 +497,40 @@ func (b *炮击) Handle(ctx unit.Context, ev unit.Event) {
 	if s.Time+1e-9 < b.showAt {
 		return
 	}
-	remain := b.boomAt - s.Time
-	if remain < 0.05 {
-		remain = 0.05
+	if s.Time+1e-9 < b.boomAt {
+		shadow := b.boomAt - b.showAt
+		if shadow < 0.16 {
+			shadow = 0.16
+		}
+		ctx.Out <- unit.FX{
+			Name:   "mark",
+			Kind:   ctx.Kind,
+			UnitID: ctx.ID,
+			Slot:   b.slot,
+			X:      s.Self.X,
+			Y:      s.Self.Y,
+			Amount: b.radius,
+			VY:     shadow,
+		}
+		return
+	}
+	if !b.boomed {
+		b.boomed = true
+		b.explode(ctx, s)
 	}
 	ctx.Out <- unit.FX{
-		Name:   "mark",
+		Name:   "blast",
 		Kind:   ctx.Kind,
 		UnitID: ctx.ID,
 		Slot:   b.slot,
 		X:      s.Self.X,
 		Y:      s.Self.Y,
 		Amount: b.radius,
-		VY:     remain,
 	}
-	if s.Time+1e-9 < b.boomAt {
-		return
+	if s.Time+1e-9 >= b.boomAt+blastHold {
+		b.dead = true
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
-	b.explode(ctx, s)
 }
 
 func (b *炮击) explode(ctx unit.Context, s unit.Sense) {
@@ -501,17 +556,6 @@ func (b *炮击) explode(ctx unit.Context, s unit.Sense) {
 			}
 		}
 	}
-	ctx.Out <- unit.FX{
-		Name:   "blast",
-		Kind:   ctx.Kind,
-		UnitID: ctx.ID,
-		Slot:   b.slot,
-		X:      x,
-		Y:      y,
-		Amount: b.radius,
-	}
-	b.dead = true
-	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }
 
 func scatterNear(cx, cy, r float64, rng *rand.Rand) (float64, float64) {

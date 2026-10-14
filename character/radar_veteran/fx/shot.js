@@ -42,20 +42,37 @@
     window.radarVetGun[fx.unitId] = { grow: fx.amount || 0 };
   });
 
-  arena.registerShot("mark", (fx) => {
+  arena.registerShot("mark", (fx, ctx) => {
     if (!fx || fx.unitId == null) return;
     const prev = window.radarVetMark[fx.unitId];
-    if (prev && prev.born) return;
+    // 同一发的补帧只更新落点。播完的记录留着，不能清掉再开一遍。
+    if (prev && prev.born) {
+      if (prev.done || !ctx) return;
+      prev.x = ctx.x;
+      prev.y = ctx.y;
+      prev.scale = ctx.scale || prev.scale;
+      return;
+    }
     window.radarVetMark[fx.unitId] = {
       born: performance.now(),
-      dur: Math.max(120, (fx.vy || 0.28) * 1000),
+      dur: Math.max(200, (fx.vy || 0.28) * 1000),
       r: fx.amount || 4,
+      kind: fx.kind,
+      x: ctx && ctx.x,
+      y: ctx && ctx.y,
+      scale: (ctx && ctx.scale) || 1,
     };
   });
 
   arena.registerShot("launch", (fx, ctx) => {
     if (!fx || !ctx) return;
     if (fx.kind !== "雷达(百战)") return;
+    const seen = window.radarVetLaunchAt || (window.radarVetLaunchAt = {});
+    const key = [fx.unitId, fx.amount || 0, fx.vx || 0, Math.round((fx.vy || 0) * 1000)].join(":");
+    const now = performance.now();
+    const prevAt = seen[key];
+    if (prevAt && now - prevAt < 900) return;
+    seen[key] = now;
     const big = (fx.amount || 0) > 0;
     const tone = big ? "" : " sm";
     const vars = {
@@ -69,14 +86,11 @@
     if (fx.unitId != null) window.radarVetGunKick[fx.unitId] = performance.now();
   });
 
-  arena.registerShot("blast", (fx, ctx) => {
-    if (!fx) return;
+  function playBlastAt(kind, x, y, scale, amount) {
+    const fx = { kind, amount };
+    const ctx = { x, y, scale: scale || 1 };
     const play = (cls, r, extra) => {
-      const el = arena.spawnFx(cls, ctx.x, ctx.y, fx.kind, { "--r": `${r}px`, ...(extra || {}) });
-      if (!el) return;
-      el.style.animation = "none";
-      void el.offsetWidth;
-      el.style.animation = "";
+      arena.spawnFx(cls, ctx.x, ctx.y, fx.kind, { "--r": `${r}px`, ...(extra || {}) });
     };
     const spin = `${Math.floor(Math.random() * 360)}deg`;
     const shards = (n, reach) => {
@@ -111,5 +125,29 @@
       shards(5, r * 0.5);
       arena.burst(ctx.x, ctx.y, fx.kind, 12);
     }
+  }
+
+  window.radarVetBlasted = window.radarVetBlasted || {};
+  window.radarVetBoom = (id, st) => {
+    if (id == null || window.radarVetBlasted[id] || !st) return;
+    window.radarVetBlasted[id] = performance.now();
+    playBlastAt(st.kind, st.x, st.y, st.scale, st.r);
+  };
+
+  arena.registerShot("blast", (fx, ctx) => {
+    if (!fx || !ctx || fx.unitId == null) return;
+    if (window.radarVetBlasted[fx.unitId]) return;
+    const st = window.radarVetMark[fx.unitId];
+    const now = performance.now();
+    if (st && st.born && !st.done && now - st.born < st.dur) {
+      st.kind = fx.kind;
+      st.x = ctx.x;
+      st.y = ctx.y;
+      st.scale = ctx.scale || st.scale;
+      st.r = fx.amount || st.r;
+      return;
+    }
+    window.radarVetBlasted[fx.unitId] = now;
+    playBlastAt(fx.kind, ctx.x, ctx.y, ctx.scale, fx.amount);
   });
 })();
