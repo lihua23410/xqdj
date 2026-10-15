@@ -28,6 +28,8 @@ const (
 	knightArcOuter = knightRadius + 2
 	knightArcSpan  = 120.0
 	knightColor    = "#ff2a2a"
+	lockHP         = 10.0
+	markLock       = "锁血"
 )
 
 func init() {
@@ -43,7 +45,7 @@ func init() {
 		Fighter: true,
 		Look:    unit.Look{Color: knightColor, Ghost: 250},
 	}, func(unit.SpawnInfo) unit.Actor {
-		return &小骑士{readyAt: knightCD}
+		return &小骑士{readyAt: knightCD, hp: knightStartHP}
 	})
 	p.Register(unit.Spec{
 		Kind:     KindKnightArc,
@@ -63,23 +65,54 @@ func init() {
 }
 
 type 小骑士 struct {
-	readyAt float64
-	arc     unit.AttachState
-	rng     *rand.Rand
+	readyAt   float64
+	arc       unit.AttachState
+	rng       *rand.Rand
+	hp        float64
+	x, y      float64
+	slot      int
+	usedLock  bool
+	locking   bool
+	lockUntil float64
 }
 
 func (k *小骑士) Handle(ctx unit.Context, ev unit.Event) {
-	if unit.AcceptHit(ctx, ev) {
-		return
+	switch e := ev.(type) {
+	case unit.IncomingDamage:
+		k.hurt(ctx, e)
+	case unit.Sense:
+		k.onSense(ctx, e)
 	}
-	s, ok := ev.(unit.Sense)
-	if !ok {
-		return
+}
+
+func (k *小骑士) onSense(ctx unit.Context, s unit.Sense) {
+	k.hp, k.x, k.y, k.slot = s.Self.HP, s.Self.X, s.Self.Y, s.Self.Slot
+	if k.locking && s.Time+1e-9 >= k.lockUntil {
+		k.locking = false
+		ctx.Out <- unit.ClearMarks{UnitID: ctx.ID, Kind: markLock}
 	}
 	if unit.RearmAttach(s, ctx.ID, KindKnightArc, knightHitCD, &k.arc) {
 		unit.SpawnAttach(ctx, s, KindKnightArc)
 	}
 	k.tryRam(ctx, s)
+}
+
+func (k *小骑士) hurt(ctx unit.Context, d unit.IncomingDamage) {
+	if k.locking && d.Time+1e-9 < k.lockUntil {
+		unit.BlockHit(ctx, d)
+		return
+	}
+	if !k.usedLock && k.hp-d.Amount <= 1e-9 {
+		k.usedLock = true
+		k.locking = true
+		k.lockUntil = d.Time + lockHP
+		unit.BlockHit(ctx, d)
+		ctx.Out <- unit.StackMark{UnitID: ctx.ID, Kind: markLock, Delta: 1}
+		ctx.Out <- unit.FX{Name: "lock", Kind: ctx.Kind, UnitID: ctx.ID, Slot: k.slot, X: k.x, Y: k.y}
+		return
+	}
+	k.hp -= d.Amount
+	unit.ConfirmHit(ctx, d)
 }
 
 type 骑士弧 struct {

@@ -18,7 +18,7 @@ const KindTwinBlueArc = "无下限弧"
 const (
 	twinRadius    = 18.0
 	twinSpeed     = 200.0
-	twinHP        = 100.0
+	twinHP        = 150.0
 	halfHP        = 9999.0
 	twinDamage    = 7.0
 	twinHitCD     = 0.1
