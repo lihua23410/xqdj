@@ -3,6 +3,103 @@ let prevHP = new Map();
 let dashGhostAt = new Map();
 
 const FALLBACK_COLOR = "#3dd6c6";
+// GSAP 在本文件之前加载，已经抓住原生 requestAnimationFrame。
+// 这里包一层只拦住特效脚本；世代一加，局界前登记的回调到点直接返回。
+const nativeRAF = window.requestAnimationFrame.bind(window);
+const nativeST = window.setTimeout.bind(window);
+const nativeSI = window.setInterval.bind(window);
+const nativeCI = window.clearInterval.bind(window);
+const NativeAudio = window.Audio;
+let spectatorGen = 0;
+const spectatorAudios = [];
+const spectatorListeners = [];
+
+window.requestAnimationFrame = (cb) => {
+  const gen = spectatorGen;
+  return nativeRAF((t) => {
+    if (gen !== spectatorGen || typeof cb !== "function") return;
+    cb(t);
+  });
+};
+window.setTimeout = (cb, ms, ...args) => {
+  const gen = spectatorGen;
+  return nativeST(() => {
+    if (gen !== spectatorGen || typeof cb !== "function") return;
+    cb(...args);
+  }, ms);
+};
+window.setInterval = (cb, ms, ...args) => {
+  const gen = spectatorGen;
+  const id = nativeSI(() => {
+    if (gen !== spectatorGen) {
+      nativeCI(id);
+      return;
+    }
+    if (typeof cb === "function") cb(...args);
+  }, ms);
+  return id;
+};
+
+function TrackedAudio(...args) {
+  const audio = new NativeAudio(...args);
+  spectatorAudios.push(audio);
+  return audio;
+}
+TrackedAudio.prototype = NativeAudio.prototype;
+window.Audio = TrackedAudio;
+
+function watchPackListeners(target) {
+  const add = target.addEventListener;
+  target.addEventListener = function (type, fn, opts) {
+    const script = document.currentScript;
+    if (script && script.dataset && script.dataset.pack && fn) {
+      spectatorListeners.push({ target, type, fn, opts });
+    }
+    return add.call(this, type, fn, opts);
+  };
+}
+watchPackListeners(document);
+watchPackListeners(window);
+
+let spectatorBaseline = null;
+let bodySkeleton = null;
+let packHold = null;
+let releaseSeq = 0;
+
+function hushSpectatorAudio() {
+  for (const audio of spectatorAudios) {
+    audio.pause();
+    try { audio.currentTime = 0; } catch { /* 还没载入 */ }
+  }
+  spectatorAudios.length = 0;
+}
+
+function dropPackListeners() {
+  for (const item of spectatorListeners) {
+    item.target.removeEventListener(item.type, item.fn, item.opts);
+  }
+  spectatorListeners.length = 0;
+}
+
+function dropStrayBody() {
+  if (!bodySkeleton) return;
+  for (const child of [...document.body.children]) {
+    if (!bodySkeleton.has(child)) child.remove();
+  }
+}
+
+function dropWindowBags() {
+  if (!spectatorBaseline) return;
+  for (const key of Object.keys(window)) {
+    if (spectatorBaseline.has(key)) continue;
+    try { delete window[key]; } catch { /* 删不掉的宿主属性 */ }
+  }
+  const shots = window.shotFX;
+  if (shots) {
+    for (const key of Object.keys(shots)) delete shots[key];
+  }
+}
+
 const ENGINE_FX = new Set([
   "hurt",
   "heal",
@@ -101,8 +198,15 @@ window.arena = {
   registerFactions,
 };
 
-function ensurePacks() {
+function ensurePacks(onReady) {
   const packs = (state && state.packs) || {};
+  let pending = 0;
+  let fired = false;
+  const fire = () => {
+    if (fired || !onReady) return;
+    fired = true;
+    queueMicrotask(onReady);
+  };
   for (const pack of Object.values(packs)) {
     const base = pack.base || "";
     ingestFactions(pack.factions, base);
@@ -120,10 +224,23 @@ function ensurePacks() {
         script.src = url;
         script.async = false;
         if (base) script.dataset.pack = base;
+        if (onReady) {
+          pending++;
+          let settled = false;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            pending--;
+            if (pending === 0) fire();
+          };
+          script.addEventListener("load", done);
+          script.addEventListener("error", done);
+        }
         document.head.appendChild(script);
       }
     }
   }
+  if (onReady && pending === 0) queueMicrotask(fire);
 }
 
 function applyLookFX(el, kind) {
@@ -398,6 +515,10 @@ function playWallFx(fx, scale, cx, cy, fading) {
 }
 
 function playEffects(effects, scale, cx, cy) {
+  if (packHold) {
+    packHold.push({ effects: [...(effects || [])], scale, cx, cy });
+    return;
+  }
   for (const fx of effects || []) {
     const [x, y] = screenPos(fx.x, fx.y, scale, cx, cy);
     const kind = fx.kind;
@@ -1351,7 +1472,7 @@ function renderArena() {
   }
 }
 
-let wasLobby = true;
+let prevPhase = "select";
 
 function releaseLobby() {
   for (const id of ["roster-list-0", "roster-list-1", "kinds-0", "kinds-1"]) {
@@ -1360,7 +1481,51 @@ function releaseLobby() {
   }
 }
 
+function flushHeldFX() {
+  const queued = packHold;
+  packHold = null;
+  if (!queued || state.phase !== "running") return;
+  for (const item of queued) playEffects(item.effects, item.scale, item.cx, item.cy);
+}
+
+function reloadPackScripts() {
+  for (const url of [...loadedPackFiles]) {
+    if (url.endsWith(".js")) loadedPackFiles.delete(url);
+  }
+  document.querySelectorAll("script[data-pack]").forEach((el) => el.remove());
+  const seq = releaseSeq;
+  ensurePacks(() => {
+    if (seq !== releaseSeq) return;
+    flushHeldFX();
+  });
+}
+
+function releaseSpectator() {
+  spectatorGen++;
+  releaseSeq++;
+  hushSpectatorAudio();
+  dropPackListeners();
+  if (window.gsap && gsap.globalTimeline) gsap.globalTimeline.clear();
+  for (const el of [fxRoot, unitsEl, wallsEl, guidesEl, overEl]) {
+    if (el) el.replaceChildren();
+  }
+  prevHP.clear();
+  dashGhostAt.clear();
+  dropStrayBody();
+  dropWindowBags();
+  packHold = [];
+  reloadPackScripts();
+}
+
 function render() {
+  const phase = state.phase;
+  const enteredSelect = phase === "select" && prevPhase !== "select";
+  const restarted = phase === "running" && prevPhase === "ended";
+  prevPhase = phase;
+  if (enteredSelect || restarted) {
+    if (enteredSelect) hudKey = "";
+    releaseSpectator();
+  }
   ensurePacks();
   const inLobby = state.phase === "select";
   lobby.classList.toggle("hidden", !inLobby);
@@ -1368,18 +1533,8 @@ function render() {
   if (state.phase === "ended" || inLobby) window.youthBuff = {};
   if (inLobby) window.youthDoses = {};
   if (inLobby) {
-    if (!wasLobby) {
-      prevHP.clear();
-      hudKey = "";
-      if (fxRoot) fxRoot.innerHTML = "";
-      if (wallsEl) wallsEl.innerHTML = "";
-      if (guidesEl) guidesEl.innerHTML = "";
-      if (overEl) overEl.innerHTML = "";
-    }
-    wasLobby = true;
     renderLobby();
   } else {
-    wasLobby = false;
     if (lobbyKey !== "") {
       lobbyKey = "";
       releaseLobby();
@@ -1388,3 +1543,6 @@ function render() {
   }
   renderLogChrome();
 }
+
+spectatorBaseline = new Set(Object.keys(window));
+bodySkeleton = new Set(document.body.children);
