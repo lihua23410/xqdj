@@ -75,7 +75,7 @@ func TestSecondWallSitsBehind(t *testing.T) {
 func TestBehindOutsideWaitsReady(t *testing.T) {
 	a := newVeteran()
 	a.nextBuild = 0
-	out := make(chan unit.Cmd, 2)
+	out := make(chan unit.Cmd, 8)
 	sense := unit.Sense{
 		Time: 2, Self: self(), Field: unit.HexField(),
 		Walls:  []unit.WallView{seg(1, 0, 0)},
@@ -100,7 +100,7 @@ func TestBehindOutsideWaitsReady(t *testing.T) {
 func TestWaitsUntilNormalsCoincide(t *testing.T) {
 	a := newVeteran()
 	a.phase = phasePair
-	out := make(chan unit.Cmd, 4)
+	out := make(chan unit.Cmd, 8)
 	// 两堵都横着，但左右分开。法线是竖的，墙心连线是横的，还不能撞。
 	a.Handle(unit.Context{ID: 7, Kind: KindVeteran, Out: out}, unit.Sense{
 		Time:  6,
@@ -122,7 +122,7 @@ func TestWaitsUntilNormalsCoincide(t *testing.T) {
 func TestAlignedNormalCharges(t *testing.T) {
 	a := newVeteran()
 	a.phase = phasePair
-	out := make(chan unit.Cmd, 4)
+	out := make(chan unit.Cmd, 8)
 	// 上下叠着的两堵横墙，法线已经是同一条竖线。
 	a.Handle(unit.Context{ID: 7, Kind: KindVeteran, Out: out}, unit.Sense{
 		Time:  8,
@@ -147,7 +147,7 @@ func TestChargeAcceleratesAlongNormal(t *testing.T) {
 	a.locked = true
 	a.chargeFrom = 8
 	a.axisX, a.axisY = 0, 1
-	out := make(chan unit.Cmd, 4)
+	out := make(chan unit.Cmd, 8)
 	a.Handle(unit.Context{ID: 7, Kind: KindVeteran, Out: out}, unit.Sense{
 		Time:  9,
 		Self:  self(),
@@ -210,7 +210,18 @@ func TestSlamRestartsClockAfterStun(t *testing.T) {
 	a := newVeteran()
 	a.phase = phasePair
 	a.locked = true
-	a.Handle(unit.Context{ID: 7, Kind: KindVeteran}, unit.WallSlam{Time: 10, SelfStunned: true})
+	a.axisX, a.axisY = 0, 1
+	out := make(chan unit.Cmd, 8)
+	a.Handle(unit.Context{ID: 7, Kind: KindVeteran, Out: out}, unit.WallSlam{Time: 10, X: 3, Y: 4, SelfStunned: true})
+	got := drain(out)
+	shards := fxNamed(got, "shard")
+	if len(shards) != 2 || shards[0].X != 3 || shards[0].Y != 4 || shards[0].VY != 1 || shards[1].VY != -1 {
+		t.Fatalf("shards=%+v", shards)
+	}
+	cleared := fxNamed(got, "mason")
+	if len(cleared) != 1 || cleared[0].Amount != poseOff {
+		t.Fatalf("clear=%+v", cleared)
+	}
 	if a.phase != phaseIdle || a.locked {
 		t.Fatal("phase")
 	}
@@ -230,14 +241,78 @@ func TestBreakResumesSavedInterval(t *testing.T) {
 		Walls: []unit.WallView{seg(1, 0, 0)},
 	})
 	got := drain(out)
-	if len(got) != 1 {
-		t.Fatalf("cmds=%d", len(got))
-	}
-	if _, ok := got[0].(unit.SetWallMotion); !ok {
-		t.Fatalf("cmd=%T", got[0])
+	if n := countMotion(got); n != 1 {
+		t.Fatalf("motions=%d", n)
 	}
 	if math.Abs(a.nextBuild-(9+wallEvery)) > 1e-9 {
 		t.Fatalf("next=%v", a.nextBuild)
+	}
+}
+
+func TestLeadPoseCarriesSpeed(t *testing.T) {
+	a := newVeteran()
+	a.nextBuild = 10
+	out := make(chan unit.Cmd, 8)
+	ctx := unit.Context{ID: 7, Kind: KindVeteran, Out: out}
+	a.Handle(ctx, unit.Sense{
+		Time: 1, Field: unit.HexField(),
+		Self: unit.Snapshot{ID: 7, X: 10, Y: 20, VX: 0, VY: 155, Radius: vetRadius},
+		Walls: []unit.WallView{seg(1, 0, 0)},
+	})
+	got := drain(out)
+	mason := fxNamed(got, "mason")
+	if len(mason) != 1 || mason[0].Amount != poseLead || math.Abs(mason[0].X-155) > 1e-6 || math.Abs(mason[0].VY-1) > 1e-6 {
+		t.Fatalf("mason=%+v", mason)
+	}
+	if len(fxNamed(got, "course")) != 1 {
+		t.Fatal("missing course")
+	}
+	a.Handle(ctx, unit.Sense{
+		Time: 1.1, Field: unit.HexField(),
+		Self: unit.Snapshot{ID: 7, X: 10, Y: 22, Radius: vetRadius},
+		Walls: []unit.WallView{seg(1, 0, 0)},
+	})
+	mason = fxNamed(drain(out), "mason")
+	if len(mason) != 1 || math.Abs(mason[0].X) > 1e-9 || math.Abs(mason[0].VY-1) > 1e-6 {
+		t.Fatalf("stopped mason=%+v", mason)
+	}
+}
+
+func TestTurnPoseMarksWhoArrived(t *testing.T) {
+	a := newVeteran()
+	a.phase = phasePair
+	out := make(chan unit.Cmd, 8)
+	a.Handle(unit.Context{ID: 7, Kind: KindVeteran, Out: out}, unit.Sense{
+		Time: 6, Self: self(),
+		Walls: []unit.WallView{segAt(1, 0, 0, 0), segAt(2, 20*math.Pi/180, 0, 120)},
+	})
+	got := drain(out)
+	mason := fxNamed(got, "mason")
+	if len(mason) != 1 || mason[0].Amount != poseTurn {
+		t.Fatalf("mason=%+v", mason)
+	}
+	course := fxNamed(got, "course")
+	if len(course) != 2 || course[0].Amount != 1 || course[1].Amount != 0 {
+		t.Fatalf("course=%+v", course)
+	}
+}
+
+func TestRamPoseCarriesAxis(t *testing.T) {
+	a := newVeteran()
+	a.phase = phasePair
+	out := make(chan unit.Cmd, 8)
+	a.Handle(unit.Context{ID: 7, Kind: KindVeteran, Out: out}, unit.Sense{
+		Time: 8, Self: self(),
+		Walls: []unit.WallView{seg(1, 0, 0), seg(2, 0, 100)},
+	})
+	got := drain(out)
+	mason := fxNamed(got, "mason")
+	if len(mason) != 1 || mason[0].Amount != poseRam || math.Abs(mason[0].X-chargeV0) > 1e-6 || math.Abs(mason[0].VY-1) > 1e-6 {
+		t.Fatalf("mason=%+v", mason)
+	}
+	course := fxNamed(got, "course")
+	if len(course) != 2 || course[0].Amount != 1 || course[1].Amount != -1 {
+		t.Fatalf("course=%+v", course)
 	}
 }
 
@@ -282,6 +357,26 @@ func firstMotion(cmds []unit.Cmd) *unit.SetWallMotion {
 		}
 	}
 	return nil
+}
+
+func fxNamed(cmds []unit.Cmd, name string) []unit.FX {
+	var out []unit.FX
+	for _, c := range cmds {
+		if fx, ok := c.(unit.FX); ok && fx.Name == name {
+			out = append(out, fx)
+		}
+	}
+	return out
+}
+
+func countMotion(cmds []unit.Cmd) int {
+	n := 0
+	for _, c := range cmds {
+		if _, ok := c.(unit.SetWallMotion); ok {
+			n++
+		}
+	}
+	return n
 }
 
 func motions(cmds []unit.Cmd) (a, b *unit.SetWallMotion) {

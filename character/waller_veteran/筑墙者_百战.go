@@ -36,6 +36,11 @@ const (
 	stunDur    = 2.8
 
 	parallelEps = 0.5 * math.Pi / 180
+
+	poseOff  = -1.0
+	poseLead = 0.0
+	poseTurn = 1.0
+	poseRam  = 2.0
 )
 
 //go:embed fx
@@ -86,7 +91,7 @@ func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	switch e := ev.(type) {
 	case unit.WallSlam:
-		a.onSlam(e)
+		a.onSlam(ctx, e)
 	case unit.Stunned:
 		a.onStun(ctx)
 	case unit.Sense:
@@ -94,7 +99,14 @@ func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
 	}
 }
 
-func (a *百战) onSlam(e unit.WallSlam) {
+func (a *百战) onSlam(ctx unit.Context, e unit.WallSlam) {
+	ax, ay := a.axisX, a.axisY
+	if ax == 0 && ay == 0 {
+		ax, ay = 1, 0
+	}
+	ctx.Out <- unit.FX{Name: "shard", Kind: ctx.Kind, UnitID: ctx.ID, X: e.X, Y: e.Y, VX: ax, VY: ay}
+	ctx.Out <- unit.FX{Name: "shard", Kind: ctx.Kind, UnitID: ctx.ID, X: e.X, Y: e.Y, VX: -ax, VY: -ay}
+	a.emitMason(ctx, poseOff, 0, 0, 0)
 	a.phase = phaseIdle
 	a.locked = false
 	a.leadID = 0
@@ -106,6 +118,7 @@ func (a *百战) onStun(ctx unit.Context) {
 		return
 	}
 	ctx.Out <- unit.SetWallMotion{WallID: a.leadID, PassOwner: true}
+	a.emitMason(ctx, poseOff, 0, 0, 0)
 }
 
 func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
@@ -183,6 +196,8 @@ func (a *百战) place(ctx unit.Context, s unit.Sense, walls []unit.WallView) bo
 func (a *百战) lead(ctx unit.Context, s unit.Sense, w unit.WallView) {
 	a.leadID = w.ID
 	hx, hy := a.heading(s.Self.VX, s.Self.VY)
+	a.emitMason(ctx, poseLead, math.Hypot(s.Self.VX, s.Self.VY), hx, hy)
+	emitCourse(ctx, w, 0)
 	ctx.Out <- unit.SetWallMotion{
 		WallID:    w.ID,
 		Pin:       true,
@@ -242,14 +257,41 @@ func (a *百战) drivePair(ctx unit.Context, s unit.Sense, w1, w2 unit.WallView)
 			a.chargeFrom = s.Time
 			a.axisX, a.axisY = ax, ay
 		} else {
+			a.emitMason(ctx, poseTurn, 0, ax, ay)
+			emitCourse(ctx, w1, poseHold(d1))
+			emitCourse(ctx, w2, poseHold(d2))
 			ctx.Out <- motion(w1.ID, spinToward(d1), 0, 0, 0)
 			ctx.Out <- motion(w2.ID, spinToward(d2), 0, 0, 0)
 			return
 		}
 	}
 	speed := chargeV0 + chargeAcc*(s.Time-a.chargeFrom)
+	a.emitMason(ctx, poseRam, speed, a.axisX, a.axisY)
+	emitCourse(ctx, w1, 1)
+	emitCourse(ctx, w2, -1)
 	ctx.Out <- motion(w1.ID, 0, a.axisX*speed, a.axisY*speed, ramDamage)
 	ctx.Out <- motion(w2.ID, 0, -a.axisX*speed, -a.axisY*speed, ramDamage)
+}
+
+func (a *百战) emitMason(ctx unit.Context, phase, speed, dx, dy float64) {
+	ctx.Out <- unit.FX{
+		Name: "mason", Kind: ctx.Kind, UnitID: ctx.ID,
+		Amount: phase, X: speed, VX: dx, VY: dy,
+	}
+}
+
+func emitCourse(ctx unit.Context, w unit.WallView, amount float64) {
+	ctx.Out <- unit.FX{
+		Name: "course", Kind: ctx.Kind, UnitID: ctx.ID,
+		X: w.X1, Y: w.Y1, VX: w.X2, VY: w.Y2, Amount: amount,
+	}
+}
+
+func poseHold(d float64) float64 {
+	if math.Abs(d) < parallelEps {
+		return 1
+	}
+	return 0
 }
 
 func spinToward(d float64) float64 {

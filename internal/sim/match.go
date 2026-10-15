@@ -1677,15 +1677,17 @@ func (m *Match) expireWallsLocked() {
 	m.walls = m.walls[:n]
 }
 
-func (m *Match) breakWallLocked(id uint64) {
+func (m *Match) breakWallLocked(id uint64, fade bool) {
 	n := 0
 	for _, w := range m.walls {
 		if w.id == id {
 			m.noteWallLocked("拆墙", w)
-			m.fx = append(m.fx, unitpkg.FX{
-				Name: "wall-fade", Kind: w.kind, Slot: w.slot,
-				X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
-			})
+			if fade {
+				m.fx = append(m.fx, unitpkg.FX{
+					Name: "wall-fade", Kind: w.kind, Slot: w.slot,
+					X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
+				})
+			}
 			continue
 		}
 		m.walls[n] = w
@@ -2035,8 +2037,8 @@ func (m *Match) resolveSlamLocked(a, b *barrier) {
 		}
 	}
 	owner := m.units[a.owner]
-	m.breakWallLocked(a.id)
-	m.breakWallLocked(b.id)
+	m.breakWallLocked(a.id, false)
+	m.breakWallLocked(b.id, false)
 	m.fx = append(m.fx, unitpkg.FX{
 		Name: "slam", Kind: a.kind, Slot: a.slot,
 		X: c.X, Y: c.Y, Amount: r,
@@ -2382,7 +2384,7 @@ func (m *Match) resolveLocked(h ccdHit) {
 			return
 		}
 		if u.breakWalls && !w.hard {
-			m.breakWallLocked(w.id)
+			m.breakWallLocked(w.id, true)
 			return
 		}
 		cc, cr := colOf(u.p, u.face, u.radius, u.semi)

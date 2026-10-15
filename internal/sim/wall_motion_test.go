@@ -176,6 +176,18 @@ func TestOverlappingWallsSlam(t *testing.T) {
 	if len(m.walls) != 0 {
 		t.Fatalf("walls=%d", len(m.walls))
 	}
+	sawSlam := false
+	for _, fx := range m.fx {
+		if fx.Name == "wall-fade" {
+			t.Fatal("slam played wall-fade")
+		}
+		if fx.Name == "slam" {
+			sawSlam = true
+		}
+	}
+	if !sawSlam {
+		t.Fatal("missing slam")
+	}
 	if owner.held || owner.stun || math.Abs(owner.v.X-40) > 1e-9 {
 		t.Fatalf("owner held=%v stun=%v vel=%v", owner.held, owner.stun, owner.v)
 	}

@@ -46,3 +46,53 @@
   0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
   100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
 }
+
+.guide.mason-tick {
+  border-top-style: solid;
+  border-top-width: 3px;
+  opacity: 0.4;
+  filter: none;
+}
+
+.guide.mason-tick.held {
+  opacity: 1;
+  border-top-width: 4px;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.fx-mason-dust {
+  width: 5px;
+  height: 3px;
+  border-radius: 1px;
+  background: #8a4530;
+  animation: mason-dust 0.28s linear forwards;
+}
+
+.fx-mason-dust.ram {
+  width: 8px;
+  height: 5px;
+  background: #a85a38;
+  animation-duration: 0.4s;
+}
+
+@keyframes mason-dust {
+  to {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)));
+    opacity: 0;
+  }
+}
+
+.fx-mason-shard {
+  border-radius: 2px;
+  background: linear-gradient(180deg, #e7b090 0%, #b85c38 46%, #5c2c16 100%);
+  box-shadow: 0 0 10px color-mix(in srgb, currentColor 55%, transparent);
+  animation: mason-shard 0.5s cubic-bezier(0.16, 0.72, 0.28, 1) forwards;
+}
+
+@keyframes mason-shard {
+  0% { transform: translate(-50%, -50%) rotate(var(--spin, 0deg)); opacity: 1; }
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(calc(var(--spin, 0deg) + 24deg));
+    opacity: 0;
+  }
+}
