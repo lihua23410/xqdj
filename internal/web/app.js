@@ -160,6 +160,8 @@ function runLookGuides(scale, cx, cy, seen) {
     scale,
     cx,
     cy,
+    time: state.time || 0,
+    effects: state.effects || [],
     units: state.units || [],
     ensureGuide,
     placeSeg,
@@ -399,7 +401,7 @@ function playEffects(effects, scale, cx, cy) {
   for (const fx of effects || []) {
     const [x, y] = screenPos(fx.x, fx.y, scale, cx, cy);
     const kind = fx.kind;
-    const ctx = { x, y, kind, scale, cx, cy };
+    const ctx = { x, y, kind, scale, cx, cy, time: state.time || 0 };
     if (fx.name === "heal") {
       const n = Math.round(fx.amount || 0);
       const el = spawnFx("fx-dmg heal", x, y - 12, kind, dmgPop(n));
@@ -1329,6 +1331,7 @@ function renderArena() {
         if (!seen.has(id)) child.remove();
         continue;
       }
+      if (child.classList.contains("integrated-trails")) continue;
       const id = child.id.slice(2);
       if (!seen.has(id)) child.remove();
     }

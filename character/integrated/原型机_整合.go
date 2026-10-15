@@ -107,6 +107,7 @@ func (a *原型机_整合) track(ctx unit.Context, s unit.Sense) {
 		a.lock(ctx, s, a.insideNow(s))
 		a.remember(s)
 		a.opened = true
+		a.broadcast(ctx, s)
 		return
 	}
 	if a.trackID != 0 && !a.stillTracked(s) {
@@ -118,6 +119,14 @@ func (a *原型机_整合) track(ctx unit.Context, s unit.Sense) {
 	}
 	a.shove(ctx, s, a.crossed(s, fleeRadius, a.fleeInside))
 	a.remember(s)
+	a.broadcast(ctx, s)
+}
+
+func (a *原型机_整合) broadcast(ctx unit.Context, s unit.Sense) {
+	if a.trackID == 0 {
+		return
+	}
+	a.emitTrack(ctx, s, 1, a.trackID)
 }
 
 func (a *原型机_整合) stillTracked(s unit.Sense) bool {
@@ -242,10 +251,7 @@ func (a *原型机_整合) lock(ctx unit.Context, s unit.Sense, cands []unit.Sna
 	a.trackUntil = s.Time + trackSeconds
 	a.prevAim = best.AimPriority
 	ctx.Out <- unit.SetAimPriority{From: ctx.ID, UnitID: best.ID, Value: 1}
-	if !a.tracking {
-		a.tracking = true
-		a.emitTrack(ctx, s, 1, best.ID)
-	}
+	a.tracking = true
 }
 
 func (a *原型机_整合) clear(ctx unit.Context, s unit.Sense) {
@@ -263,6 +269,13 @@ func (a *原型机_整合) clear(ctx unit.Context, s unit.Sense) {
 }
 
 func (a *原型机_整合) emitTrack(ctx unit.Context, s unit.Sense, amount float64, target uint64) {
+	remain := 0.0
+	if amount > 0 {
+		remain = a.trackUntil - s.Time
+		if remain < 0 {
+			remain = 0
+		}
+	}
 	ctx.Out <- unit.FX{
 		Name:   "track",
 		UnitID: ctx.ID,
@@ -270,6 +283,7 @@ func (a *原型机_整合) emitTrack(ctx unit.Context, s unit.Sense, amount floa
 		X:      s.Self.X,
 		Y:      s.Self.Y,
 		VX:     float64(target),
+		VY:     remain,
 		Slot:   s.Self.Slot,
 		Amount: amount,
 	}
