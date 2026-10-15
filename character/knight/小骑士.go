@@ -43,7 +43,7 @@ func init() {
 		Speed:   knightSpeed,
 		Vision:  knightVision,
 		Fighter: true,
-		Look:    unit.Look{Color: knightColor, Ghost: 250},
+		Look:    unit.Look{Color: knightColor, Ghost: 250, FX: []string{"knight"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &小骑士{readyAt: knightCD, hp: knightStartHP}
 	})
@@ -58,7 +58,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  unit.Deg(knightArcSpan),
 		ArcInner: knightArcInner,
-		Look:     unit.Look{Color: knightColor, Overlay: true},
+		Look:     unit.Look{Color: knightColor, Overlay: true, FX: []string{"knight-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &骑士弧{slot: info.Slot}
 	})
@@ -90,6 +90,7 @@ func (k *小骑士) onSense(ctx unit.Context, s unit.Sense) {
 	if k.locking && s.Time+1e-9 >= k.lockUntil {
 		k.locking = false
 		ctx.Out <- unit.ClearMarks{UnitID: ctx.ID, Kind: markLock}
+		ctx.Out <- unit.FX{Name: "lock-end", Kind: ctx.Kind, UnitID: ctx.ID, Slot: k.slot, X: k.x, Y: k.y}
 	}
 	if unit.RearmAttach(s, ctx.ID, KindKnightArc, knightHitCD, &k.arc) {
 		unit.SpawnAttach(ctx, s, KindKnightArc)
@@ -100,6 +101,7 @@ func (k *小骑士) onSense(ctx unit.Context, s unit.Sense) {
 func (k *小骑士) hurt(ctx unit.Context, d unit.IncomingDamage) {
 	if k.locking && d.Time+1e-9 < k.lockUntil {
 		unit.BlockHit(ctx, d)
+		ctx.Out <- unit.FX{Name: "lock-hit", Kind: ctx.Kind, UnitID: ctx.ID, Slot: k.slot, X: k.x, Y: k.y}
 		return
 	}
 	if !k.usedLock && k.hp-d.Amount <= 1e-9 {
@@ -139,7 +141,9 @@ func (k *小骑士) tryRam(ctx unit.Context, sense unit.Sense) {
 	tx, ty := beside(sense.Self, *enemy)
 	ctx.Out <- unit.FX{
 		Name: "blink", Kind: ctx.Kind,
-		X: sense.Self.X, Y: sense.Self.Y, Slot: sense.Self.Slot,
+		X: sense.Self.X, Y: sense.Self.Y,
+		VX: tx, VY: ty, // 落点世界坐标。这条不表示速度
+		Slot: sense.Self.Slot,
 	}
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: tx, Y: ty}
 	dx := enemy.X - tx
