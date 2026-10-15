@@ -145,6 +145,7 @@ type Match struct {
 	mu         sync.Mutex
 	phase      Phase
 	slots      [2][]string
+	teamPick   [2][]string // 团队赛人选。当场名单会清空，这一份留下来
 	lineup     [2][]string // 开局名单，胜负文案和血条用
 	team       bool
 	units      map[uint64]*unit
@@ -419,6 +420,7 @@ func (m *Match) SetSlot(slot int, kind string) {
 			return
 		}
 		m.slots[slot] = append(m.slots[slot], kind)
+		m.rememberTeamLocked()
 		return
 	}
 	m.slots[slot] = []string{kind}
@@ -438,6 +440,7 @@ func (m *Match) RemoveSeat(side, index int) {
 		return
 	}
 	m.slots[side] = append(cur[:index:index], cur[index+1:]...)
+	m.rememberTeamLocked()
 }
 
 func (m *Match) SetSeat(side, index int, kind string) {
@@ -453,6 +456,7 @@ func (m *Match) SetSeat(side, index int, kind string) {
 		return
 	}
 	m.slots[side][index] = kind
+	m.rememberTeamLocked()
 }
 
 func (m *Match) SetSideLen(side, n int) {
@@ -476,6 +480,7 @@ func (m *Match) SetSideLen(side, n int) {
 		cur = append(cur, nextSideKind(kinds, cur))
 	}
 	m.slots[side] = cur[:n]
+	m.rememberTeamLocked()
 }
 
 func (m *Match) UseTeam() {
@@ -493,6 +498,25 @@ func (m *Match) UseTeam() {
 	}
 	m.slots[0] = []string{}
 	m.slots[1] = []string{}
+	m.restoreTeamLocked()
+}
+
+func (m *Match) rememberTeamLocked() {
+	if !m.team {
+		return
+	}
+	for i := 0; i < 2; i++ {
+		m.teamPick[i] = append([]string{}, m.slots[i]...)
+	}
+}
+
+func (m *Match) restoreTeamLocked() {
+	if len(m.teamPick[0]) == 0 && len(m.teamPick[1]) == 0 {
+		return
+	}
+	for i := 0; i < 2; i++ {
+		m.slots[i] = append([]string{}, m.teamPick[i]...)
+	}
 }
 
 func (m *Match) UseDuel() {

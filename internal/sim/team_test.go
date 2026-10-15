@@ -238,6 +238,51 @@ func TestSlimeKillCreditsSummoner(t *testing.T) {
 	t.Fatalf("slime kill exp %v", exp)
 }
 
+func TestTeamPickSurvivesUseTeam(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.UseTeam()
+	m.SetSlot(0, character.KindDummy)
+	m.SetSlot(0, character.KindMelee)
+	m.SetSlot(1, character.KindRanged)
+	want := [2][]string{
+		{character.KindDummy, character.KindMelee},
+		{character.KindRanged},
+	}
+	m.UseTeam()
+	if got := sideCopy(m); !sameSides(got, want) {
+		t.Fatalf("after UseTeam %v want %v", got, want)
+	}
+	m.End()
+	m.UseTeam()
+	if got := sideCopy(m); !sameSides(got, want) {
+		t.Fatalf("after End %v want %v", got, want)
+	}
+}
+
+func sameSides(got, want [2][]string) bool {
+	for i := 0; i < 2; i++ {
+		if len(got[i]) != len(want[i]) {
+			return false
+		}
+		for j := range got[i] {
+			if got[i][j] != want[i][j] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func sideCopy(m *Match) [2][]string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out [2][]string
+	for i := 0; i < 2; i++ {
+		out[i] = append([]string{}, m.slots[i]...)
+	}
+	return out
+}
+
 func TestTeamPickAppendsAndDrops(t *testing.T) {
 	m := NewMatchSeeded(1)
 	m.UseTeam()
