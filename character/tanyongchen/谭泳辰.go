@@ -52,7 +52,7 @@ const (
 
 	milkRadius = 14.0
 	milkHeal   = 5.0
-	milkEvery  = 5 // 每这么多次苦无攻击掉一个奶符
+	milkEvery  = 6 // 每这么多次苦无攻击掉一个奶符
 
 	pickupSlack = 10.0
 )
@@ -223,7 +223,8 @@ func (t *谭泳辰老先生) tryPickup(ctx unit.Context, s unit.Sense) {
 		if o.Kind != KindBell && o.Kind != KindKunai {
 			continue
 		}
-		if !itemTouchedByAlly(s, *o) {
+		// 只有谭泳辰本人能捡，队友和敌人都不能。
+		if math.Hypot(o.X-t.x, o.Y-t.y) > tanRadius+o.Radius+pickupSlack {
 			continue
 		}
 		switch o.Kind {
@@ -239,26 +240,6 @@ func (t *谭泳辰老先生) tryPickup(ctx unit.Context, s unit.Sense) {
 		ctx.Out <- unit.Despawn{UnitID: o.ID}
 		ctx.Out <- unit.FX{Name: "pickup", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: o.X, Y: o.Y, Amount: pickupFlag}
 	}
-}
-
-// itemTouchedByAlly：主人自己或同边战斗机碰到才算捡到。活随从和敌方不算。
-func itemTouchedByAlly(s unit.Sense, item unit.Snapshot) bool {
-	reach := func(x, y, r float64) bool {
-		return math.Hypot(item.X-x, item.Y-y) <= r+item.Radius+pickupSlack
-	}
-	if reach(s.Self.X, s.Self.Y, s.Self.Radius) {
-		return true
-	}
-	for i := range s.Nearby {
-		p := &s.Nearby[i]
-		if p.Role != unit.RoleFighter || p.Slot != s.Self.Slot || p.ID == s.Self.ID {
-			continue
-		}
-		if reach(p.X, p.Y, p.Radius) {
-			return true
-		}
-	}
-	return false
 }
 
 // inDomain：自己是否站在己方灵狐场域里。
@@ -296,7 +277,7 @@ func (t *谭泳辰老先生) attack(ctx unit.Context, s unit.Sense, inDomain boo
 	})
 	ctx.Out <- unit.FX{Name: "kunai", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: t.x, Y: t.y, VX: ux, VY: uy, Amount: total}
 
-	// 每 milkEvery 次出手掉一个奶符（任何人可吃，回 5 血）。
+	// 每 milkEvery 次出手掉一个奶符（同队可吃，回 5 血）。
 	t.attacks++
 	if t.attacks >= milkEvery {
 		t.attacks = 0
