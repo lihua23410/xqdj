@@ -52,7 +52,7 @@ const (
 
 	milkRadius = 14.0
 	milkHeal   = 5.0
-	milkEvery  = 6 // 每这么多次苦无攻击掉一个奶符
+	milkEvery  = 5 // 每这么多次苦无攻击掉一个奶符
 
 	pickupSlack = 10.0
 )
@@ -142,12 +142,15 @@ type 谭泳辰老先生 struct {
 	pending     []pendingKunai
 }
 
-// pendingKunai：一发已出手、尚未飞到落点的苦无。
+// pendingKunai：一发已出手、正在直线飞行的苦无。逐帧扫掠，飞到谁就结算谁。
 type pendingKunai struct {
-	at       float64
-	x, y     float64
+	start    float64 // 出手时刻
+	ox, oy   float64 // 出手位置
+	ux, uy   float64 // 飞行方向（单位向量）
+	total    float64 // 总飞行距离
+	speed    float64 // 飞行速度（世界单位/秒）
+	traveled float64 // 已飞距离
 	crit     bool
-	inDomain bool
 }
 
 func (t *谭泳辰老先生) Handle(ctx unit.Context, ev unit.Event) {
@@ -270,10 +273,11 @@ func (t *谭泳辰老先生) attack(ctx unit.Context, s unit.Sense, inDomain boo
 	ux, uy := dx/n, dy/n
 	crit := t.rng.Float64() < kunaiCritChance
 	// 只预约这一发；伤害等飞到落点那一拍才结算。
-	// 苦无飞过目标后继续飞一段；伤害在飞到目标点那一拍才结算。
+	// 苦无飞过目标后继续飞一段；逐帧扫掠，飞到谁就在那一刻结算谁。
 	total := n + kunaiOvershoot
 	t.pending = append(t.pending, pendingKunai{
-		at: s.Time + kunaiFlight*n/total, x: target.X, y: target.Y, crit: crit, inDomain: inDomain,
+		start: s.Time, ox: t.x, oy: t.y, ux: ux, uy: uy,
+		total: total, speed: total / kunaiFlight, crit: crit,
 	})
 	ctx.Out <- unit.FX{Name: "kunai", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: t.x, Y: t.y, VX: ux, VY: uy, Amount: total}
 
@@ -293,31 +297,65 @@ func (t *谭泳辰老先生) resolvePending(ctx unit.Context, s unit.Sense) {
 	}
 	keep := t.pending[:0]
 	for _, p := range t.pending {
-		if s.Time+1e-9 < p.at {
-			keep = append(keep, p)
-			continue
+		traveled := p.speed * (s.Time - p.start)
+		if traveled >= p.total {
+			continue // 飞完，没碰到
 		}
+		from := p.traveled
+		ax := p.ox + p.ux*from
+		ay := p.oy + p.uy*from
+		bx := p.ox + p.ux*traveled
+		by := p.oy + p.uy*traveled
+
+		hit := -1
+		bestT := math.MaxFloat64
 		for i := range s.Nearby {
 			o := &s.Nearby[i]
 			if !unit.Hittable(*o, s.Self.Slot) {
 				continue
 			}
-			if math.Hypot(o.X-p.x, o.Y-p.y) > o.Radius+kunaiRadius+6 {
+			d, tt := segClosest(ax, ay, bx, by, o.X, o.Y)
+			if d > o.Radius+kunaiRadius+6 {
 				continue
 			}
-			amt := kunaiDamage
-			critFlag := 0.0
-			if p.crit {
-				amt = kunaiCritDamage
-				critFlag = 1
+			if tt < bestT {
+				bestT, hit = tt, i
 			}
-			ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: amt}
-			ctx.Out <- unit.FX{Name: "kunai-hit", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: o.X, Y: o.Y, Amount: critFlag}
-				t.accumulate(ctx, s, p.crit)
-			break
 		}
+		if hit < 0 {
+			p.traveled = traveled
+			keep = append(keep, p)
+			continue
+		}
+		o := &s.Nearby[hit]
+		amt := kunaiDamage
+		critFlag := 0.0
+		if p.crit {
+			amt = kunaiCritDamage
+			critFlag = 1
+		}
+		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: amt}
+		ctx.Out <- unit.FX{Name: "kunai-hit", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: o.X, Y: o.Y, Amount: critFlag}
+		t.accumulate(ctx, s, p.crit)
 	}
 	t.pending = keep
+}
+
+// segClosest：点 (px,py) 到线段 (ax,ay)-(bx,by) 的距离，以及在线段上的参数 t。
+func segClosest(ax, ay, bx, by, px, py float64) (dist, t float64) {
+	dx, dy := bx-ax, by-ay
+	l2 := dx*dx + dy*dy
+	if l2 < 1e-9 {
+		return math.Hypot(px-ax, py-ay), 0
+	}
+	tt := ((px-ax)*dx + (py-ay)*dy) / l2
+	if tt < 0 {
+		tt = 0
+	} else if tt > 1 {
+		tt = 1
+	}
+	cx, cy := ax+dx*tt, ay+dy*tt
+	return math.Hypot(px-cx, py-cy), tt
 }
 
 // accumulate：一次命中的累计（铃铛净化 / 灵狐场域）。
