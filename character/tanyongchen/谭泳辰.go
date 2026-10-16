@@ -323,6 +323,20 @@ func (t *谭泳辰老先生) resolvePending(ctx unit.Context, s unit.Sense) {
 			}
 		}
 		if hit < 0 {
+			// 没碰到人：看这一拍有没有撞墙，撞到就停在墙上。
+			blocked := !s.Field.OutlineContains(bx, by, kunaiRadius) // 飞出场地边界也算撞墙
+			if !blocked {
+				for _, w := range s.Walls {
+					if segSegDist(ax, ay, bx, by, w.X1, w.Y1, w.X2, w.Y2) <= w.Radius+kunaiRadius {
+						blocked = true
+						break
+					}
+				}
+			}
+			if blocked {
+				ctx.Out <- unit.FX{Name: "kunai-hit", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: bx, Y: by, Amount: -1}
+				continue // 被墙挡下，苦无消失
+			}
 			p.traveled = traveled
 			keep = append(keep, p)
 			continue
@@ -356,6 +370,60 @@ func segClosest(ax, ay, bx, by, px, py float64) (dist, t float64) {
 	}
 	cx, cy := ax+dx*tt, ay+dy*tt
 	return math.Hypot(px-cx, py-cy), tt
+}
+
+// segSegDist：两条线段 (p1,q1) 与 (p2,q2) 的最短距离。
+func segSegDist(p1x, p1y, q1x, q1y, p2x, p2y, q2x, q2y float64) float64 {
+	d1x, d1y := q1x-p1x, q1y-p1y
+	d2x, d2y := q2x-p2x, q2y-p2y
+	rx, ry := p1x-p2x, p1y-p2y
+	a := d1x*d1x + d1y*d1y
+	e := d2x*d2x + d2y*d2y
+	f := d2x*rx + d2y*ry
+	const eps = 1e-9
+	var s, t float64
+	switch {
+	case a <= eps && e <= eps:
+		return math.Hypot(rx, ry)
+	case a <= eps:
+		s = 0
+		t = clamp01(f / e)
+	default:
+		c := d1x*rx + d1y*ry
+		if e <= eps {
+			t = 0
+			s = clamp01(-c / a)
+		} else {
+			b := d1x*d2x + d1y*d2y
+			denom := a*e - b*b
+			if denom > eps {
+				s = clamp01((b*f - c*e) / denom)
+			} else {
+				s = 0
+			}
+			t = (b*s + f) / e
+			if t < 0 {
+				t = 0
+				s = clamp01(-c / a)
+			} else if t > 1 {
+				t = 1
+				s = clamp01((b - c) / a)
+			}
+		}
+	}
+	c1x, c1y := p1x+d1x*s, p1y+d1y*s
+	c2x, c2y := p2x+d2x*t, p2y+d2y*t
+	return math.Hypot(c1x-c2x, c1y-c2y)
+}
+
+func clamp01(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 // accumulate：一次命中的累计（铃铛净化 / 灵狐场域）。
