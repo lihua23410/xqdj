@@ -100,7 +100,7 @@
   /* 苦无图自带约 74° 倾角：多转 180°（=106°）既摆正又让刀尖朝前。 */
   transform: rotate(var(--kunai-fix, 106deg));
   filter: drop-shadow(0 0 5px #cff6ff);
-  animation: tan-kunai-fly 0.6s linear forwards;
+  animation: tan-kunai-fly 0.5s linear forwards;
 }
 @keyframes tan-kunai-fly {
   0% { translate: 0 0; opacity: 0; }

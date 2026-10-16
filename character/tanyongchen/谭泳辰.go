@@ -23,7 +23,7 @@ const KindMilk = "奶符"
 
 const (
 	tanRadius = 18.0
-	tanHP     = 85.0
+	tanHP     = 90.0
 	tanSpeed  = 165.0
 	tanVision = 9999.0
 	tanColor  = "#4fd8e8" // 青色
@@ -32,17 +32,18 @@ const (
 	kunaiRadius = 14.0
 
 	kunaiInterval       = 2.0
-	kunaiIntervalDomain = 0.7
+	kunaiIntervalDomain = 0.55
 	kunaiRange          = 620.0
 	kunaiDamage         = 3.0
-	kunaiCritDamage     = 10.0
+	kunaiCritDamage     = 12.0
 	kunaiCritChance     = 0.10
-	kunaiFlight         = 0.6   // 苦无飞行时间（秒），伤害在飞到落点时结算
+	kunaiFlight         = 0.5   // 苦无飞行时间（秒），伤害在飞到落点时结算
 	kunaiOvershoot      = 320.0 // 苦无飞过目标后继续飞的世界距离
 
 	bellHitsForPurify = 3
 	purifyInvuln      = 2.0
 	purifyHealFrac    = 0.20
+	purifyTeamR       = 240.0 // 净化顺手回血的队友范围
 
 	domainHits     = 10
 	domainCrits    = 3
@@ -264,7 +265,8 @@ func itemTouchedByAlly(s unit.Sense, item unit.Snapshot) bool {
 func (t *谭泳辰老先生) inDomain(s unit.Sense) bool {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind == KindDomain && o.OwnerID == s.Self.ID {
+		// 队友（同 Slot）的灵狐场域也算，团队共享攻速。
+		if o.Kind == KindDomain && o.Slot == s.Self.Slot {
 			if math.Hypot(o.X-t.x, o.Y-t.y) <= o.Radius {
 				return true
 			}
@@ -330,9 +332,7 @@ func (t *谭泳辰老先生) resolvePending(ctx unit.Context, s unit.Sense) {
 			}
 			ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: amt}
 			ctx.Out <- unit.FX{Name: "kunai-hit", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: o.X, Y: o.Y, Amount: critFlag}
-			if !p.inDomain {
 				t.accumulate(ctx, s, p.crit)
-			}
 			break
 		}
 	}
@@ -370,6 +370,25 @@ func (t *谭泳辰老先生) purify(ctx unit.Context, s unit.Sense) {
 	heal := missing * purifyHealFrac
 	if heal > 0 {
 		ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: heal}
+	}
+	// 净化也顺手照顾身边队友（同 Slot），各回自己已损血量的同样比例。
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.ID == s.Self.ID || o.Slot != s.Self.Slot {
+			continue
+		}
+		if o.Role != unit.RoleFighter && !o.Mortal {
+			continue
+		}
+		if math.Hypot(o.X-t.x, o.Y-t.y) > purifyTeamR {
+			continue
+		}
+		om := o.MaxHP - o.HP
+		if om <= 0 {
+			continue
+		}
+		ctx.Out <- unit.Heal{UnitID: o.ID, Amount: om * purifyHealFrac}
+		ctx.Out <- unit.FX{Name: "purify", Kind: ctx.Kind, Slot: o.Slot, X: o.X, Y: o.Y, UnitID: o.ID}
 	}
 	ctx.Out <- unit.FX{Name: "purify", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: t.x, Y: t.y, Amount: purifyInvuln}
 }
@@ -420,6 +439,9 @@ func (m *奶符) Handle(ctx unit.Context, ev unit.Event) {
 		o := &s.Nearby[i]
 		if o.Nonsolid {
 			continue
+		}
+		if o.Slot != m.slot {
+			continue // 只回己方队伍（含自己）
 		}
 		if o.Role != unit.RoleFighter && !o.Mortal {
 			continue
