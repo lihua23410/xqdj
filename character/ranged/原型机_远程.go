@@ -20,7 +20,8 @@ const (
 
 	kindBullet    = "子弹"
 	bulletRadius  = 6.0
-	bulletSpeed   = 185.0
+	bulletMuzzle  = 80.0
+	bulletAccel   = 200.0
 	bulletHP      = 1.0
 	bulletDamage  = 9.0
 	bulletBounces = 3
@@ -45,10 +46,10 @@ func init() {
 		Role:    unit.RoleProjectile,
 		Radius:  bulletRadius,
 		MaxHP:   bulletHP,
-		Speed:   bulletSpeed,
+		Speed:   bulletMuzzle,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: "#f0a050"},
+		Look:    unit.Look{Color: "#f0a050", FX: []string{"rocket"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &远程子弹{owner: info.OwnerID, slot: info.Slot}
 	})
@@ -88,8 +89,8 @@ func (r *原型机_远程) shoot(ctx unit.Context, s unit.Sense) {
 		Kind:    kindBullet,
 		X:       s.Self.X + ux*gap,
 		Y:       s.Self.Y + uy*gap,
-		VX:      ux * bulletSpeed,
-		VY:      uy * bulletSpeed,
+		VX:      ux * bulletMuzzle,
+		VY:      uy * bulletMuzzle,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
 	}
@@ -109,34 +110,106 @@ func (r *原型机_远程) shoot(ctx unit.Context, s unit.Sense) {
 		Kind:   ctx.Kind,
 		X:      s.Self.X,
 		Y:      s.Self.Y,
-		VX:     ux * bulletSpeed,
-		VY:     uy * bulletSpeed,
+		VX:     ux * bulletMuzzle,
+		VY:     uy * bulletMuzzle,
 		Slot:   s.Self.Slot,
 	}
 }
 
 type 远程子弹 struct {
-	owner   uint64
-	slot    int
-	bounces int
+	owner    uint64
+	slot     int
+	bounces  int
+	dx, dy   float64
+	legAt    float64
+	fromRest bool
+	aimed    bool
+	clock    bool
+	dead     bool
 }
 
 func (b *远程子弹) Handle(ctx unit.Context, ev unit.Event) {
+	if b.dead {
+		return
+	}
 	switch e := ev.(type) {
+	case unit.Sense:
+		b.fly(ctx, e)
 	case unit.Collision:
 		b.onHit(ctx, e.Other)
 	case unit.WallHit:
-		b.bounces++
-		if b.bounces >= bulletBounces {
-			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+		b.onWall(ctx, e)
+	}
+}
+
+func (b *远程子弹) fly(ctx unit.Context, s unit.Sense) {
+	if !b.aimed {
+		b.capture(s.Self.VX, s.Self.VY)
+	}
+	if !b.aimed {
+		return
+	}
+	if !b.clock {
+		b.clock = true
+		if !b.fromRest {
+			b.legAt = s.Time
 		}
 	}
+	t := s.Time - b.legAt
+	if t < 0 {
+		t = 0
+	}
+	v0 := bulletMuzzle
+	if b.fromRest {
+		v0 = 0
+	}
+	speed := v0 + bulletAccel*t
+	ctx.Out <- unit.SetVelocity{
+		UnitID: ctx.ID,
+		VX:     b.dx * speed,
+		VY:     b.dy * speed,
+	}
+}
+
+func (b *远程子弹) capture(vx, vy float64) {
+	n := math.Hypot(vx, vy)
+	if n < 1e-6 {
+		return
+	}
+	b.dx, b.dy = vx/n, vy/n
+	b.aimed = true
+}
+
+func (b *远程子弹) onWall(ctx unit.Context, e unit.WallHit) {
+	b.bounces++
+	if b.bounces >= bulletBounces {
+		b.dead = true
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+		return
+	}
+	if b.aimed {
+		dot := b.dx*e.NX + b.dy*e.NY
+		b.dx -= 2 * dot * e.NX
+		b.dy -= 2 * dot * e.NY
+		n := math.Hypot(b.dx, b.dy)
+		if n < 1e-6 {
+			b.aimed = false
+		} else {
+			b.dx /= n
+			b.dy /= n
+		}
+	}
+	b.fromRest = true
+	b.legAt = e.Time
+	b.clock = true
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID}
 }
 
 func (b *远程子弹) onHit(ctx unit.Context, other unit.Snapshot) {
 	if other.ID == b.owner {
 		return
 	}
+	b.dead = true
 	if !unit.Hittable(other, b.slot) {
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		return

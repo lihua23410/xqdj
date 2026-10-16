@@ -1,0 +1,10 @@
+/* 子弹：圆不画。火箭和尾焰按场地坐标画在圆心上，尖头朝速度方向。 */
+.ball.look-rocket {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.look-rocket .rocket {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
