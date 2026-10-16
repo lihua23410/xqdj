@@ -82,7 +82,7 @@ func TestBreakWallsRemovesPlacedWall(t *testing.T) {
 		t.Fatalf("walls=%d", len(m.walls))
 	}
 	id := m.walls[0].id
-	m.breakWallLocked(id)
+	m.breakWallLocked(id, true)
 	if len(m.walls) != 0 {
 		t.Fatalf("wall still there: %d", len(m.walls))
 	}

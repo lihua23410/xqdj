@@ -100,6 +100,9 @@ func damages(cmds []unit.Cmd) []unit.Damage {
 }
 
 func boot(a *酒翁, out chan unit.Cmd, near []unit.Snapshot) {
+	if a.rng == nil {
+		a.rng = rand.New(rand.NewPCG(1, 2))
+	}
 	ctx := unit.Context{ID: 1, Kind: KindSot, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: sotAt(0, 0), Nearby: near, Field: unit.HexField()})
 	_ = drain(out)
@@ -118,9 +121,8 @@ func TestFirstSmashDropsOnEnemyHead(t *testing.T) {
 	a.Handle(ctx, unit.Sense{Time: smashFirst, Self: sotAt(0, 0), Nearby: near, Field: unit.HexField()})
 	cmds := drain(out)
 	wines := spawns(cmds, KindSotWine)
-	want := rand.New(rand.NewPCG(1, 1)).IntN(3) + 1
 	if len(wines) != 1 {
-		t.Fatalf("到点先砸第 1 坛, got %d want 1 (本轮共 %d)", len(wines), want)
+		t.Fatalf("到点先砸第 1 坛, got %d", len(wines))
 	}
 	topX, topY := dropPoint(unit.HexField(), 80, wineRadius)
 	wantX, wantY := insetFromOutline(unit.HexField(), topX, topY, wineRadius, wineSpawnPad)
@@ -329,6 +331,28 @@ func TestWineHitsMinion(t *testing.T) {
 	w.Handle(ctx, unit.Collision{Other: minion})
 	if ds := damages(drain(out)); len(ds) != 1 || ds[0].To != 5 {
 		t.Fatalf("活随从也该挨打: %+v", ds)
+	}
+}
+
+func TestWineStopsOnTeammate(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := &酒{owner: 1, slot: 0, booted: true, x: 0, y: 0}
+	ctx := unit.Context{ID: 9, Kind: KindSotWine, Out: out}
+	mate := sotAt(0, 0)
+	mate.ID = 8
+	w.Handle(ctx, unit.Collision{Other: mate})
+	cmds := drain(out)
+	if lastSpawn(cmds, KindSotStain) != nil || len(damages(cmds)) != 0 {
+		t.Fatalf("同边战斗机不该留酒场、不该出伤: %v", cmds)
+	}
+	gone := false
+	for _, c := range cmds {
+		if _, ok := c.(unit.Despawn); ok {
+			gone = true
+		}
+	}
+	if !gone {
+		t.Fatalf("同边战斗机该打掉酒坛: %v", cmds)
 	}
 }
 

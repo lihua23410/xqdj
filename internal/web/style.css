@@ -37,10 +37,12 @@ html, body {
   margin: 0 auto;
   padding: 32px 20px 48px;
 }
+body[data-page="team"] .panel { max-width: 1180px; }
 .hidden { display: none !important; }
 
 h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
 .sub { color: var(--muted); margin: 0 0 28px; }
+.sub a { color: var(--text); }
 
 .slots {
   display: grid;
@@ -101,8 +103,50 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   cursor: pointer;
 }
 #btn-start { width: 100%; }
+#btn-start:disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
 #btn-pause { background: #9e6a03; }
 #btn-end { background: #da3633; }
+
+.log-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  pointer-events: auto;
+}
+.log-actions button {
+  flex: 1;
+  background: #21262d;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.banner .log-actions { justify-content: center; }
+.banner .log-actions button { flex: 0 1 auto; }
+.log-box {
+  position: fixed;
+  z-index: 5;
+  left: 16px;
+  right: 16px;
+  top: 16px;
+  max-height: 28vh;
+  overflow: auto;
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  font: 13px/1.45 ui-monospace, monospace;
+  white-space: pre-wrap;
+  user-select: text;
+}
 
 .hud {
   display: grid;
@@ -118,7 +162,9 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   margin-bottom: 2px;
 }
 .fighter .name { font-size: 14px; color: var(--kind, var(--text)); }
-#fighter-1 .name-row { flex-direction: row-reverse; }
+.side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.side .fighter { min-width: 0; }
+.side[data-slot="1"] .name-row { flex-direction: row-reverse; }
 .faction-hud {
   display: flex;
   align-items: center;
@@ -159,10 +205,11 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   text-shadow: 0 1px 2px #000, 0 0 6px #000;
 }
 .hp-num { display: block; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-#fighter-1 .hp-num { text-align: right; }
-#fighter-1 .name { text-align: right; }
+.side[data-slot="1"] .hp-num { text-align: right; }
+.side[data-slot="1"] .name { text-align: right; }
 .hp {
   height: 10px;
+  cursor: pointer;
   background: #21262d;
   border-radius: 99px;
   overflow: hidden;
@@ -175,8 +222,53 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   background: var(--kind, #3dd6c6);
   transform-origin: left center;
 }
-#fighter-1 .hp i {
+.side[data-slot="1"] .hp i {
   margin-left: auto;
+}
+.team-pick {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) 1fr minmax(140px, 180px);
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 28px;
+}
+.team-pick .slots {
+  margin-bottom: 0;
+}
+.roster {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 120px;
+}
+.roster[data-slot="0"] { box-shadow: inset 3px 0 0 var(--kind, var(--line)); }
+.roster[data-slot="1"] { box-shadow: inset -3px 0 0 var(--kind, var(--line)); }
+.roster h2 { margin: 0 0 12px; font-size: 16px; color: var(--muted); font-weight: 600; }
+.roster[data-slot="1"] h2 { text-align: right; }
+.roster-list { display: flex; flex-direction: column; gap: 8px; }
+.roster[data-slot="1"] .roster-list { align-items: stretch; }
+.roster-list button {
+  background: #21262d;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--kind, var(--line));
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.roster[data-slot="1"] .roster-list button {
+  border-left: 1px solid var(--line);
+  border-right: 3px solid var(--kind, var(--line));
+  text-align: right;
+}
+.roster-empty { margin: 0; color: var(--muted); font-size: 13px; }
+.roster[data-slot="1"] .roster-empty { text-align: right; }
+body[data-page="team"] .kinds { max-height: 360px; overflow: auto; }
+.kinds button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 #arena.panel {
@@ -628,4 +720,16 @@ h1 { margin: 0 0 8px; letter-spacing: 0.08em; }
   border-radius: 12px;
   font-size: 22px;
   pointer-events: none;
+  text-align: center;
+  min-width: 280px;
 }
+.banner-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  margin-bottom: 12px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.banner-sides div:first-child { text-align: left; }
+.banner-sides div:last-child { text-align: right; }

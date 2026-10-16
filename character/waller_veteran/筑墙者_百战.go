@@ -1,4 +1,4 @@
-// 筑墙者(百战)不转向。自己的胶囊墙不满两堵就砌；满了先转到法线重合，再沿这条法线对冲。
+// 筑墙者(百战)不转向。只有一堵自己的胶囊墙时那是前墙，钉在身前。满两堵先转到法线重合，再沿这条法线对冲。
 package 筑墙者_百战
 
 import (
@@ -20,20 +20,27 @@ const (
 	vetColor  = "#b85c38"
 
 	wallEvery  = 1.27
-	wallLen    = 155.0
+	wallLen    = 100.0
 	wallRadius = 6.0
-	wallScrape = 3.0
+	wallScrape = 2.0
 	wallGap    = 0.3
+	behindDist = 77.5
+	frontDist  = 50.0
 
 	turnRate   = math.Pi / 2 // 每秒 90°
 	tick       = 1.0 / 60.0
 	chargeV0   = 300.0
 	chargeAcc  = 500.0
-	ramDamage  = 8.0
+	ramDamage  = 6.0
 	stunRadius = wallLen / 2
 	stunDur    = 2.8
 
 	parallelEps = 0.5 * math.Pi / 180
+
+	poseOff  = -1.0
+	poseLead = 0.0
+	poseTurn = 1.0
+	poseRam  = 2.0
 )
 
 //go:embed fx
@@ -50,11 +57,10 @@ func init() {
 		Vision:  vetVision,
 		Fighter: true,
 		Look:    unit.Look{Color: vetColor, FX: []string{"veteran"}},
-	}, func(info unit.SpawnInfo) unit.Actor {
+	}, func(unit.SpawnInfo) unit.Actor {
 		return &百战{
 			nextBuild: wallEvery,
 			savedLeft: wallEvery,
-			rng:       rand.New(rand.NewPCG(uint64(info.Slot+1)*0x9E3779B97F4A7C15, 0xB7A11)),
 		}
 	})
 }
@@ -72,6 +78,10 @@ type 百战 struct {
 	chargeFrom float64
 	axisX      float64
 	axisY      float64
+	dirX       float64
+	dirY       float64
+	hasDir     bool
+	leadID     uint64
 	rng        *rand.Rand
 }
 
@@ -81,16 +91,34 @@ func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	switch e := ev.(type) {
 	case unit.WallSlam:
-		a.onSlam(e)
+		a.onSlam(ctx, e)
+	case unit.Stunned:
+		a.onStun(ctx)
 	case unit.Sense:
 		a.onSense(ctx, e)
 	}
 }
 
-func (a *百战) onSlam(e unit.WallSlam) {
+func (a *百战) onSlam(ctx unit.Context, e unit.WallSlam) {
+	ax, ay := a.axisX, a.axisY
+	if ax == 0 && ay == 0 {
+		ax, ay = 1, 0
+	}
+	ctx.Out <- unit.FX{Name: "shard", Kind: ctx.Kind, UnitID: ctx.ID, X: e.X, Y: e.Y, VX: ax, VY: ay}
+	ctx.Out <- unit.FX{Name: "shard", Kind: ctx.Kind, UnitID: ctx.ID, X: e.X, Y: e.Y, VX: -ax, VY: -ay}
+	a.emitMason(ctx, poseOff, 0, 0, 0)
 	a.phase = phaseIdle
 	a.locked = false
+	a.leadID = 0
 	a.nextBuild = e.Time + wallEvery
+}
+
+func (a *百战) onStun(ctx unit.Context) {
+	if a.phase == phasePair || a.leadID == 0 {
+		return
+	}
+	ctx.Out <- unit.SetWallMotion{WallID: a.leadID, PassOwner: true}
+	a.emitMason(ctx, poseOff, 0, 0, 0)
 }
 
 func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
@@ -100,34 +128,47 @@ func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
 			a.savedLeft = wallEvery
 			a.phase = phasePair
 		}
+		a.leadID = 0
 		a.drivePair(ctx, s, walls[0], walls[1])
 		return
 	}
 	if a.phase != phaseIdle {
-		if len(walls) == 1 {
-			stopWall(ctx, walls[0].ID)
-		}
 		a.nextBuild = s.Time + a.savedLeft
 		a.phase = phaseIdle
 		a.locked = false
 	}
-	if s.Time+1e-9 < a.nextBuild {
+	ready := s.Time+1e-9 >= a.nextBuild
+	if len(walls) == 1 && !ready {
+		a.lead(ctx, s, walls[0])
+		return
+	}
+	if !ready {
 		return
 	}
 	if !a.place(ctx, s, walls) {
+		if len(walls) == 1 {
+			a.lead(ctx, s, walls[0])
+		}
 		return
+	}
+	if len(walls) == 1 {
+		a.leadID = 0
 	}
 	a.nextBuild = s.Time + wallEvery
 }
 
 func (a *百战) place(ctx unit.Context, s unit.Sense, walls []unit.WallView) bool {
 	if a.rng == nil {
-		a.rng = rand.New(rand.NewPCG(ctx.ID|1, 0xB7A11))
+		a.rng = unit.NewRNG(ctx.ID)
 	}
 	var x, y, ang float64
 	var ok bool
 	if len(walls) == 0 {
-		x, y, ang, ok = sampleWall(s.Field, a.rng)
+		hx, hy := a.heading(s.Self.VX, s.Self.VY)
+		x = s.Self.X + hx*frontDist
+		y = s.Self.Y + hy*frontDist
+		ang = frontAng(hx, hy)
+		ok = true
 	} else {
 		x, y, ang, ok = a.behind(s, walls[0])
 	}
@@ -152,6 +193,39 @@ func (a *百战) place(ctx unit.Context, s unit.Sense, walls []unit.WallView) bo
 	return true
 }
 
+func (a *百战) lead(ctx unit.Context, s unit.Sense, w unit.WallView) {
+	a.leadID = w.ID
+	hx, hy := a.heading(s.Self.VX, s.Self.VY)
+	a.emitMason(ctx, poseLead, math.Hypot(s.Self.VX, s.Self.VY), hx, hy)
+	emitCourse(ctx, w, 0)
+	ctx.Out <- unit.SetWallMotion{
+		WallID:    w.ID,
+		Pin:       true,
+		X:         s.Self.X + hx*frontDist,
+		Y:         s.Self.Y + hy*frontDist,
+		Ang:       frontAng(hx, hy),
+		VX:        s.Self.VX,
+		VY:        s.Self.VY,
+		PassOwner: true,
+	}
+}
+
+func (a *百战) heading(vx, vy float64) (float64, float64) {
+	if math.Hypot(vx, vy) >= 1e-6 {
+		n := math.Hypot(vx, vy)
+		a.dirX, a.dirY = vx/n, vy/n
+		a.hasDir = true
+	} else if !a.hasDir {
+		a.dirX, a.dirY = 1, 0
+		a.hasDir = true
+	}
+	return a.dirX, a.dirY
+}
+
+func frontAng(hx, hy float64) float64 {
+	return math.Atan2(hx, -hy)
+}
+
 func (a *百战) behind(s unit.Sense, wall unit.WallView) (x, y, ang float64, ok bool) {
 	enemy := unit.Seek(s)
 	if enemy == nil {
@@ -163,8 +237,8 @@ func (a *百战) behind(s unit.Sense, wall unit.WallView) (x, y, ang float64, ok
 	if n < 1e-6 {
 		return 0, 0, 0, false
 	}
-	x = enemy.X + dx/n*(wallLen/2)
-	y = enemy.Y + dy/n*(wallLen/2)
+	x = enemy.X + dx/n*behindDist
+	y = enemy.Y + dy/n*behindDist
 	if !s.Field.OutlineContains(x, y, 0) {
 		return 0, 0, 0, false
 	}
@@ -183,14 +257,41 @@ func (a *百战) drivePair(ctx unit.Context, s unit.Sense, w1, w2 unit.WallView)
 			a.chargeFrom = s.Time
 			a.axisX, a.axisY = ax, ay
 		} else {
+			a.emitMason(ctx, poseTurn, 0, ax, ay)
+			emitCourse(ctx, w1, poseHold(d1))
+			emitCourse(ctx, w2, poseHold(d2))
 			ctx.Out <- motion(w1.ID, spinToward(d1), 0, 0, 0)
 			ctx.Out <- motion(w2.ID, spinToward(d2), 0, 0, 0)
 			return
 		}
 	}
 	speed := chargeV0 + chargeAcc*(s.Time-a.chargeFrom)
+	a.emitMason(ctx, poseRam, speed, a.axisX, a.axisY)
+	emitCourse(ctx, w1, 1)
+	emitCourse(ctx, w2, -1)
 	ctx.Out <- motion(w1.ID, 0, a.axisX*speed, a.axisY*speed, ramDamage)
 	ctx.Out <- motion(w2.ID, 0, -a.axisX*speed, -a.axisY*speed, ramDamage)
+}
+
+func (a *百战) emitMason(ctx unit.Context, phase, speed, dx, dy float64) {
+	ctx.Out <- unit.FX{
+		Name: "mason", Kind: ctx.Kind, UnitID: ctx.ID,
+		Amount: phase, X: speed, VX: dx, VY: dy,
+	}
+}
+
+func emitCourse(ctx unit.Context, w unit.WallView, amount float64) {
+	ctx.Out <- unit.FX{
+		Name: "course", Kind: ctx.Kind, UnitID: ctx.ID,
+		X: w.X1, Y: w.Y1, VX: w.X2, VY: w.Y2, Amount: amount,
+	}
+}
+
+func poseHold(d float64) float64 {
+	if math.Abs(d) < parallelEps {
+		return 1
+	}
+	return 0
 }
 
 func spinToward(d float64) float64 {
@@ -214,10 +315,6 @@ func motion(id uint64, spin, vx, vy, ram float64) unit.SetWallMotion {
 		m.StunDur = stunDur
 	}
 	return m
-}
-
-func stopWall(ctx unit.Context, id uint64) {
-	ctx.Out <- unit.SetWallMotion{WallID: id}
 }
 
 func ownWalls(all []unit.WallView, owner uint64) []unit.WallView {
@@ -268,19 +365,4 @@ func wrapPi(x float64) float64 {
 		x += math.Pi
 	}
 	return x
-}
-
-func sampleWall(f unit.Field, rng *rand.Rand) (x, y, ang float64, ok bool) {
-	ext := f.Extent
-	if ext <= 0 {
-		ext = unit.HexRadius
-	}
-	for i := 0; i < 64; i++ {
-		x = (rng.Float64()*2 - 1) * ext
-		y = (rng.Float64()*2 - 1) * ext
-		if f.OutlineContains(x, y, 0) {
-			return x, y, rng.Float64() * math.Pi, true
-		}
-	}
-	return 0, 0, 0, false
 }

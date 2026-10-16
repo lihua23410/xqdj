@@ -56,7 +56,8 @@ func (a *八边形) Handle(ctx unit.Context, ev unit.Event) {
 	a.booted = true
 	for i := 0; i < 3; i++ {
 		ang := math.Pi/2 + float64(i)*2*math.Pi/3 // 90°、210°、330°：绕场心中心对称
-		cx, cy := wallDist*math.Cos(ang), wallDist*math.Sin(ang)
+		cx := s.Self.X + wallDist*math.Cos(ang)
+		cy := s.Self.Y + wallDist*math.Sin(ang)
 		tx, ty := -math.Sin(ang), math.Cos(ang) // 切向：墙面正对场心
 		half := wallLen / 2
 		ctx.Out <- unit.PlaceWall{

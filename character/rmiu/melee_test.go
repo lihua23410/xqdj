@@ -51,6 +51,25 @@ func TestMeleeSpawnsRangeArc(t *testing.T) {
 	}
 }
 
+func TestFindTargetsIgnoresTeammateBody(t *testing.T) {
+	m := meleeMiu()
+	got := m.findTargets(unit.Sense{
+		Self: miuSelf(),
+		Nearby: []unit.Snapshot{
+			{ID: 1, Kind: KindRMiu, Role: unit.RoleFighter, Slot: 0, X: 20, Y: 0, Radius: 18, AimPriority: 15},
+			{ID: 99, Kind: KindRMiu, Role: unit.RoleFighter, Slot: 0, X: 30, Y: 0, Radius: 18, AimPriority: 15},
+			foe(2, 40, 0),
+		},
+	})
+	seen := map[uint64]bool{}
+	for _, o := range got {
+		seen[o.ID] = true
+	}
+	if !seen[1] || !seen[2] || seen[99] {
+		t.Fatalf("targets %v", got)
+	}
+}
+
 func TestMeleeHitsFront(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	m := meleeMiu()

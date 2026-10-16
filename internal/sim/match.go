@@ -5,10 +5,12 @@ import (
 	"math"
 	"math/rand/v2"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
 	unitpkg "xqdj/internal/unit"
+	奇美拉 "xqdj/map/chimera"
 )
 
 type Phase string
@@ -25,6 +27,7 @@ type unit struct {
 	kind            string
 	role            string
 	slot            int
+	seat            int
 	owner           uint64
 	p, v            vec
 	radius          float64
@@ -79,57 +82,72 @@ type unit struct {
 }
 
 type spawnSpot struct {
-	p vec
-	r float64
+	p    vec
+	r    float64
+	side int
 }
 
+const (
+	minSideN = 1
+	maxSideN = 3
+	teamSep  = 220.0
+	sepStep  = 40.0
+	spawnPad = 8.0
+)
+
 type barrier struct {
-	id        uint64
-	owner     uint64
-	slot      int
-	kind      string
-	a, b      vec
-	radius    float64
-	until     float64
-	amount    float64
-	hitAt     map[uint64]float64
-	hard      bool
-	square    bool
-	visionBlock bool
-	field     bool
-	spin      float64 // 弧度每秒，逆时针为正。0 表示不转。
-	ang       float64
-	base      float64
-	pivot     vec
-	halfLen   float64
-	vx, vy    float64
-	hitGap    float64
-	withOwner bool
-	ram       float64
-	rammed    map[uint64]struct{}
-	stunR     float64
-	stunDur   float64
-	riding    map[uint64]struct{}
+	id           uint64
+	owner        uint64
+	slot         int
+	kind         string
+	a, b         vec
+	prevA, prevB vec
+	radius       float64
+	until        float64
+	amount       float64
+	hitAt        map[uint64]float64
+	hard         bool
+	square       bool
+	visionBlock  bool
+	field        bool
+	spin         float64 // 弧度每秒，逆时针为正。0 表示不转。
+	ang          float64
+	base         float64
+	pivot        vec
+	halfLen      float64
+	vx, vy       float64
+	hitGap       float64
+	withOwner    bool
+	ram          float64
+	rammed       map[uint64]struct{}
+	stunR        float64
+	stunDur      float64
+	riding       map[uint64]struct{}
+	passOwner    bool
 }
 
 type wallSnap struct {
-	ID     uint64  `json:"id"`
-	X1     float64 `json:"x1"`
-	Y1     float64 `json:"y1"`
-	X2     float64 `json:"x2"`
-	Y2     float64 `json:"y2"`
-	Radius float64 `json:"radius"`
-	Kind   string  `json:"kind"`
-	Slot   int     `json:"slot"`
-	Hard   bool    `json:"hard,omitempty"`
-	Square bool    `json:"square,omitempty"`
-	Field  bool    `json:"field,omitempty"`
+	ID          uint64  `json:"id"`
+	X1          float64 `json:"x1"`
+	Y1          float64 `json:"y1"`
+	X2          float64 `json:"x2"`
+	Y2          float64 `json:"y2"`
+	Radius      float64 `json:"radius"`
+	Kind        string  `json:"kind"`
+	Slot        int     `json:"slot"`
+	Hard        bool    `json:"hard,omitempty"`
+	Square      bool    `json:"square,omitempty"`
+	Field       bool    `json:"field,omitempty"`
+	VisionBlock bool    `json:"visionBlock,omitempty"`
 }
 
 type Match struct {
 	mu         sync.Mutex
 	phase      Phase
-	slots      [2]string
+	slots      [2][]string
+	teamPick   [2][]string // 团队赛人选。当场名单会清空，这一份留下来
+	lineup     [2][]string // 开局名单，胜负文案和血条用
+	team       bool
 	units      map[uint64]*unit
 	order      []uint64
 	actors     []*unit // 本场开过的所有角色（离场的也留着，停场要等它们的协程真退出）
@@ -141,6 +159,14 @@ type Match struct {
 	winnerID   uint64
 	seq        uint64
 	rng        *rand.Rand
+	seed       uint64
+	recap      strings.Builder
+	trace      strings.Builder
+	logReady   bool
+	logMute    bool
+	logNames   map[uint64]string
+	logLeapAt  map[uint64]float64 // 上一拍瞬移的时刻。连续每拍瞬移不当成一下子挪走
+	logLeaps   []logLeap
 	fx         []unitpkg.FX
 	hitStop    int
 	walls      []*barrier
@@ -163,6 +189,10 @@ type dmgOffer struct {
 	// 不能等确认时才去找发起者：剑弧、子弹这类发起者往往发完伤害就自己消失了，
 	// 到确认那一拍 m.units[from] 已经是 nil，击杀就记丢了。
 	credit uint64
+	// 提出那一刻双方的速率，和还挂在身上的瞬时推动。确认时再抄就晚了。
+	atkSpeed, defSpeed float64
+	atkImpulse         []float64
+	defImpulse         []float64
 }
 
 func NewMatch() *Match {
@@ -171,9 +201,9 @@ func NewMatch() *Match {
 
 func NewMatchSeeded(seed uint64) *Match {
 	kinds := unitpkg.FighterKinds()
-	var slots [2]string
+	var slots [2][]string
 	if len(kinds) >= 2 {
-		slots = [2]string{kinds[0], kinds[1]}
+		slots = [2][]string{{kinds[0]}, {kinds[1]}}
 	}
 	spec := defaultField()
 	unitpkg.SetLiveField(spec.toUnitField())
@@ -184,6 +214,8 @@ func NewMatchSeeded(seed uint64) *Match {
 		cmds:       make(chan unitpkg.Cmd, 512),
 		spec:       spec,
 		rng:        rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
+		seed:       seed,
+		logNames:   map[uint64]string{},
 		pendingDmg: make(map[uint64]dmgOffer),
 		wardAbsorb: make(map[uint64]bool),
 	}
@@ -198,7 +230,9 @@ func (m *Match) SnapshotJSON() []byte {
 	msg := struct {
 		Type     string                      `json:"type"`
 		Phase    Phase                       `json:"phase"`
-		Slots    [2]string                   `json:"slots"`
+		Slots    [2][]string                 `json:"slots"`
+		Roster   [2][]string                 `json:"roster"`
+		Team     bool                        `json:"team"`
 		Kinds    []string                    `json:"kinds"`
 		Looks    map[string]unitpkg.Look     `json:"looks"`
 		Packs    map[string]unitpkg.PackInfo `json:"packs"`
@@ -211,13 +245,16 @@ func (m *Match) SnapshotJSON() []byte {
 		Field    string                      `json:"field"`
 		Shape    string                      `json:"fieldShape"`
 		HitStop  int                         `json:"hitStop"`
+		LogReady bool                        `json:"logReady"`
 		Units    []unitpkg.Snapshot          `json:"units"`
 		Walls    []wallSnap                  `json:"walls"`
 		Effects  []unitpkg.FX                `json:"effects"`
 	}{
 		Type:     "state",
 		Phase:    m.phase,
-		Slots:    m.slots,
+		Slots:    sidesOrEmpty(m.slots),
+		Roster:   sidesOrEmpty(m.lineup),
+		Team:     m.team,
 		Kinds:    unitpkg.FighterKinds(),
 		Looks:    unitpkg.Looks(),
 		Packs:    unitpkg.Packs(),
@@ -226,10 +263,11 @@ func (m *Match) SnapshotJSON() []byte {
 		Time:     m.time,
 		Seq:      m.seq,
 		HexR:     m.spec.extent,
-		Fields:   fieldNames(),
+		Fields:   m.listFieldsLocked(),
 		Field:    m.spec.name,
 		Shape:    m.spec.shape,
 		HitStop:  m.hitStop,
+		LogReady: m.logReady,
 		Units:    make([]unitpkg.Snapshot, 0, len(m.order)),
 		Walls:    make([]wallSnap, 0, len(m.walls)),
 		Effects:  append([]unitpkg.FX(nil), m.fx...),
@@ -246,6 +284,7 @@ func (m *Match) SnapshotJSON() []byte {
 			ID: w.id, X1: w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
 			Radius: w.radius, Kind: w.kind, Slot: w.slot,
 			Hard: w.hard, Square: w.square, Field: w.field,
+			VisionBlock: w.visionBlock,
 		})
 	}
 	if m.phase == PhaseSelect {
@@ -282,6 +321,7 @@ func (u *unit) snap() unitpkg.Snapshot {
 		Vision:          u.vision,
 		OwnerID:         u.owner,
 		Slot:            u.slot,
+		Seat:            u.seat,
 		Semi:            u.semi,
 		FaceX:           u.face.X,
 		FaceY:           u.face.Y,
@@ -344,6 +384,9 @@ func (m *Match) SetField(name string) {
 	if m.phase != PhaseSelect {
 		return
 	}
+	if !m.team && name == 奇美拉.Name {
+		return
+	}
 	spec, ok := lookupField(name)
 	if !ok {
 		return
@@ -352,11 +395,19 @@ func (m *Match) SetField(name string) {
 	unitpkg.SetLiveField(m.spec.toUnitField())
 }
 
-func (m *Match) SetSlot(slot int, kind string) {
-	if slot < 0 || slot > 1 {
-		return
+func sidesOrEmpty(in [2][]string) [2][]string {
+	var out [2][]string
+	for i := 0; i < 2; i++ {
+		out[i] = append([]string{}, in[i]...)
+		if out[i] == nil {
+			out[i] = []string{}
+		}
 	}
-	if !unitpkg.IsFighterKind(kind) {
+	return out
+}
+
+func (m *Match) SetSlot(slot int, kind string) {
+	if slot < 0 || slot > 1 || !unitpkg.IsFighterKind(kind) {
 		return
 	}
 	m.mu.Lock()
@@ -364,7 +415,180 @@ func (m *Match) SetSlot(slot int, kind string) {
 	if m.phase != PhaseSelect {
 		return
 	}
-	m.slots[slot] = kind
+	if m.team {
+		if len(m.slots[slot]) >= maxSideN {
+			return
+		}
+		m.slots[slot] = append(m.slots[slot], kind)
+		m.rememberTeamLocked()
+		return
+	}
+	m.slots[slot] = []string{kind}
+}
+
+func (m *Match) RemoveSeat(side, index int) {
+	if side < 0 || side > 1 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect || !m.team {
+		return
+	}
+	cur := m.slots[side]
+	if index < 0 || index >= len(cur) {
+		return
+	}
+	m.slots[side] = append(cur[:index:index], cur[index+1:]...)
+	m.rememberTeamLocked()
+}
+
+func (m *Match) SetSeat(side, index int, kind string) {
+	if side < 0 || side > 1 || !unitpkg.IsFighterKind(kind) {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect {
+		return
+	}
+	if index < 0 || index >= len(m.slots[side]) {
+		return
+	}
+	m.slots[side][index] = kind
+	m.rememberTeamLocked()
+}
+
+func (m *Match) SetSideLen(side, n int) {
+	if side < 0 || side > 1 {
+		return
+	}
+	if n < minSideN {
+		n = minSideN
+	}
+	if n > maxSideN {
+		n = maxSideN
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect || !m.team {
+		return
+	}
+	cur := append([]string{}, m.slots[side]...)
+	kinds := unitpkg.FighterKinds()
+	for len(cur) < n {
+		cur = append(cur, nextSideKind(kinds, cur))
+	}
+	m.slots[side] = cur[:n]
+	m.rememberTeamLocked()
+}
+
+func (m *Match) UseTeam() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect {
+		return
+	}
+	m.team = true
+	if m.spec.name == "" || m.spec.name == "六边形" {
+		if spec, ok := lookupField(奇美拉.Name); ok {
+			m.spec = spec
+			unitpkg.SetLiveField(m.spec.toUnitField())
+		}
+	}
+	m.slots[0] = []string{}
+	m.slots[1] = []string{}
+	m.restoreTeamLocked()
+}
+
+func (m *Match) rememberTeamLocked() {
+	if !m.team {
+		return
+	}
+	for i := 0; i < 2; i++ {
+		m.teamPick[i] = append([]string{}, m.slots[i]...)
+	}
+}
+
+func (m *Match) restoreTeamLocked() {
+	if len(m.teamPick[0]) == 0 && len(m.teamPick[1]) == 0 {
+		return
+	}
+	for i := 0; i < 2; i++ {
+		m.slots[i] = append([]string{}, m.teamPick[i]...)
+	}
+}
+
+func (m *Match) UseDuel() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.phase != PhaseSelect {
+		return
+	}
+	m.team = false
+	if m.spec.name == 奇美拉.Name {
+		if spec, ok := lookupField("六边形"); ok {
+			m.spec = spec
+			unitpkg.SetLiveField(m.spec.toUnitField())
+		}
+	}
+	kinds := unitpkg.FighterKinds()
+	for side := 0; side < 2; side++ {
+		k := ""
+		if len(m.slots[side]) > 0 && unitpkg.IsFighterKind(m.slots[side][0]) {
+			k = m.slots[side][0]
+		} else if side < len(kinds) {
+			k = kinds[side]
+		} else if len(kinds) > 0 {
+			k = kinds[0]
+		}
+		if k == "" {
+			m.slots[side] = []string{}
+			continue
+		}
+		m.slots[side] = []string{k}
+	}
+}
+
+func takeKinds(kinds []string, start, n int) []string {
+	out := make([]string, 0, n)
+	if len(kinds) == 0 || n <= 0 {
+		return out
+	}
+	for i := 0; i < n; i++ {
+		out = append(out, kinds[(start+i)%len(kinds)])
+	}
+	return out
+}
+
+func nextSideKind(kinds, cur []string) string {
+	if len(kinds) == 0 {
+		return ""
+	}
+	start := 0
+	if len(cur) > 0 {
+		last := cur[len(cur)-1]
+		for i, k := range kinds {
+			if k == last {
+				start = i + 1
+				break
+			}
+		}
+	}
+	for step := 0; step < len(kinds); step++ {
+		k := kinds[(start+step)%len(kinds)]
+		seen := false
+		for _, c := range cur {
+			if c == k {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			return k
+		}
+	}
+	return kinds[start%len(kinds)]
 }
 
 func (m *Match) Start() {
@@ -377,20 +601,34 @@ func (m *Match) Start() {
 	if m.phase != PhaseSelect && m.phase != PhaseEnded {
 		return
 	}
+	if m.team && (len(m.slots[0]) == 0 || len(m.slots[1]) == 0) {
+		return
+	}
+	m.logMute = true
 	m.resetLocked()
 	m.installFieldLocked()
+	m.lineup[0] = append([]string{}, m.slots[0]...)
+	m.lineup[1] = append([]string{}, m.slots[1]...)
+	m.writeLogHeaderLocked()
+	m.logMute = false
+	m.noteWallsBuiltLocked()
+	sep := 0.0
+	if m.team {
+		sep = teamSep
+	}
 	var spots []spawnSpot
-	for slot := 0; slot < 2; slot++ {
-		kind := m.slots[slot]
-		spec, ok := unitpkg.Lookup(kind)
-		if !ok {
-			continue
+	for side := 0; side < 2; side++ {
+		for seat, kind := range m.slots[side] {
+			spec, ok := unitpkg.Lookup(kind)
+			if !ok {
+				continue
+			}
+			p := m.placeLocked(spec.Radius, side, spots, sep)
+			ang := m.rng.Float64() * 2 * math.Pi
+			v := vec{math.Cos(ang) * spec.Speed, math.Sin(ang) * spec.Speed}
+			m.spawnFighterLocked(kind, side, seat, p, v)
+			spots = append(spots, spawnSpot{p: p, r: spec.Radius, side: side})
 		}
-		p := m.randomSpawnLocked(spec.Radius, spots)
-		ang := m.rng.Float64() * 2 * math.Pi
-		v := vec{math.Cos(ang) * spec.Speed, math.Sin(ang) * spec.Speed}
-		m.spawnFighterLocked(kind, slot, p, v)
-		spots = append(spots, spawnSpot{p: p, r: spec.Radius})
 	}
 	if m.spec.bootKind != "" {
 		m.addUnitLocked(m.spec.bootKind, vec{}, vec{}, 0, 0)
@@ -398,27 +636,99 @@ func (m *Match) Start() {
 	m.phase = PhaseRunning
 }
 
-func (m *Match) randomSpawnLocked(radius float64, others []spawnSpot) vec {
-	f := m.liveFieldLocked()
-	for try := 0; try < 128; try++ {
-		x, y, ok := f.RandomWalkable(m.rng, radius+4)
-		if !ok {
+func (m *Match) listFieldsLocked() []string {
+	names := fieldNames()
+	if m.team {
+		return names
+	}
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		if n == 奇美拉.Name {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+func (m *Match) chimeraSides() bool {
+	return m.team && m.spec.name == 奇美拉.Name
+}
+
+func (m *Match) placeLocked(radius float64, side int, others []spawnSpot, minSep float64) vec {
+	gap := minSep
+	for {
+		if p, ok := m.tryPlaceLocked(radius, side, others, gap); ok {
+			return p
+		}
+		if gap <= 0 {
 			break
 		}
-		p := vec{x, y}
-		ok = true
-		for _, o := range others {
-			if p.sub(o.p).len() < radius+o.r+8 {
-				ok = false
+		gap -= sepStep
+		if gap < 0 {
+			gap = 0
+		}
+	}
+	if m.chimeraSides() {
+		cx, cy := 奇美拉.East()
+		if side == 0 {
+			cx, cy = 奇美拉.West()
+		}
+		x, y := m.liveFieldLocked().Clamp(cx, cy, radius+4)
+		return vec{x, y}
+	}
+	x, y := m.liveFieldLocked().Clamp(120, 0, radius+4)
+	return vec{x, y}
+}
+
+func (m *Match) tryPlaceLocked(radius float64, side int, others []spawnSpot, gap float64) (vec, bool) {
+	f := m.liveFieldLocked()
+	half := unitpkg.HexRadius
+	cx, cy := 0.0, 0.0
+	regional := m.chimeraSides()
+	if regional {
+		if side == 0 {
+			cx, cy = 奇美拉.West()
+		} else {
+			cx, cy = 奇美拉.East()
+		}
+	}
+	tries := 128
+	if regional {
+		tries = 256
+	}
+	for try := 0; try < tries; try++ {
+		var x, y float64
+		if regional {
+			x = cx + (m.rng.Float64()*2-1)*half
+			y = cy + (m.rng.Float64()*2-1)*half
+			if !奇美拉.RegionContains(side, x, y, radius+4) || !f.Walkable(x, y, radius+4) {
+				continue
+			}
+		} else {
+			var ok bool
+			x, y, ok = f.RandomWalkable(m.rng, radius+4)
+			if !ok {
 				break
 			}
 		}
-		if ok {
-			return p
+		p := vec{x, y}
+		good := true
+		for _, o := range others {
+			need := radius + o.r + spawnPad
+			if o.side != side && gap > need {
+				need = gap
+			}
+			if p.sub(o.p).len() < need {
+				good = false
+				break
+			}
+		}
+		if good {
+			return p, true
 		}
 	}
-	x, y := f.Clamp(120, 0, radius+4)
-	return vec{x, y}
+	return vec{}, false
 }
 
 func (m *Match) Pause() {
@@ -432,11 +742,17 @@ func (m *Match) Pause() {
 func (m *Match) End() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.phase == PhaseRunning || m.phase == PhasePaused {
+		m.closeLogLocked("中止")
+	}
+	m.logMute = true
 	m.stopAllLocked()
+	m.logMute = false
 	m.phase = PhaseSelect
 	m.winner = ""
 	m.winnerID = 0
 	m.time = 0
+	m.lineup = [2][]string{}
 }
 
 func (m *Match) Tick() {
@@ -693,8 +1009,12 @@ func (m *Match) killLocked(u *unit) {
 	close(u.stop)
 }
 
-func (m *Match) spawnFighterLocked(kind string, slot int, p, v vec) {
-	m.addUnitLocked(kind, p, v, 0, slot)
+func (m *Match) spawnFighterLocked(kind string, slot, seat int, p, v vec) {
+	u := m.addUnitLocked(kind, p, v, 0, slot)
+	if u != nil {
+		u.seat = seat
+		m.noteBirthLocked(u)
+	}
 }
 
 func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *unit {
@@ -750,6 +1070,9 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 	m.units[id] = u
 	m.order = append(m.order, id)
 	m.actors = append(m.actors, u)
+	if spec.Role != unitpkg.RoleFighter {
+		m.noteBirthLocked(u)
+	}
 	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds}
 	go runActor(u, ctx)
 	return u
@@ -788,6 +1111,7 @@ func runActor(u *unit, ctx unitpkg.Context) {
 }
 
 func (m *Match) drainCmdsLocked() {
+	defer m.flushLeapsLocked()
 	for i := 0; i < 512; i++ {
 		select {
 		case cmd := <-m.cmds:
@@ -808,6 +1132,9 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		mul := u.cruiseMul()
 		u.setVel(vec{c.VX, c.VY}.mul(mul))
 		u.velM = mul
+		if u.held {
+			u.holdVel = u.v
+		}
 	case unitpkg.SetCruise:
 		m.applySetCruiseLocked(c)
 	case unitpkg.AddFS:
@@ -825,11 +1152,13 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if u == nil || u.stopped {
 			return
 		}
-		if c.Vision < 0 {
-			u.vision = 0
-		} else {
-			u.vision = c.Vision
+		next := c.Vision
+		if next < 0 {
+			next = 0
 		}
+		prev := u.vision
+		u.vision = next
+		m.noteSpanLocked(u, "视野", prev, next)
 	case unitpkg.SetArcSpan:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped || !u.attach {
@@ -839,18 +1168,23 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if span < 0 {
 			span = 0
 		}
+		prev := u.arcSpan
 		u.arcSpan = span
+		m.noteSpanLocked(u, "扇环", prev, span)
 	case unitpkg.SetRadius:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped || c.Radius <= 0 {
 			return
 		}
+		prev := u.radius
 		u.radius = c.Radius
+		m.noteSpanLocked(u, "半径", prev, u.radius)
 	case unitpkg.SetHP:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
 			return
 		}
+		prevHP, prevMax := u.hp, u.maxHP
 		if c.MaxHP > 0 {
 			u.maxHP = c.MaxHP
 		}
@@ -859,6 +1193,9 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			if u.hp > u.maxHP {
 				u.hp = u.maxHP
 			}
+		}
+		if !logSame(prevHP, u.hp) || !logSame(prevMax, u.maxHP) {
+			m.noteSetHPLocked(u)
 		}
 	case unitpkg.SetAimPriority:
 		u := m.units[c.UnitID]
@@ -871,7 +1208,11 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if u.aimPriority == 0 && c.From != u.id {
 			return
 		}
+		if u.aimPriority == c.Value {
+			return
+		}
 		u.aimPriority = c.Value
+		m.noteAimLocked(c.From, u, c.Value)
 	case unitpkg.Damage:
 		m.offerDamageLocked(c)
 	case unitpkg.ConfirmDamage:
@@ -881,6 +1222,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if !ok || c.UnitID != off.to {
 			return
 		}
+		m.noteBlockLocked(off)
 		delete(m.pendingDmg, c.Token)
 		delete(m.wardAbsorb, off.to)
 	case unitpkg.StackMark:
@@ -898,6 +1240,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			u.hp = u.maxHP
 		}
 		got := u.hp - before
+		m.noteHealLocked(u, got)
 		if got >= 0.5 {
 			m.fx = append(m.fx, unitpkg.FX{
 				Name: "heal", UnitID: u.id, Kind: u.kind,
@@ -952,26 +1295,32 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if !u.solid && u.role != unitpkg.RoleHelper {
 			return
 		}
-		u.p = vec{c.X, c.Y}
+		from := u.p
+		dest := vec{c.X, c.Y}
+		u.p = dest
 		m.constrainUnitLocked(u)
+		m.recordLeapLocked(u, from, dest, u.p)
 	case unitpkg.Pass:
 		u := m.units[c.UnitID]
-		if u == nil || u.stopped {
+		if u == nil || u.stopped || u.pass == c.Hold {
 			return
 		}
 		u.pass = c.Hold
+		m.noteHoldLocked(u, "穿过", c.Hold)
 	case unitpkg.Stand:
 		u := m.units[c.UnitID]
-		if u == nil || u.stopped {
+		if u == nil || u.stopped || u.stand == c.Hold {
 			return
 		}
 		u.stand = c.Hold
+		m.noteHoldLocked(u, "站住", c.Hold)
 	case unitpkg.NoFrameFreeze:
 		u := m.units[c.UnitID]
-		if u == nil || u.stopped {
+		if u == nil || u.stopped || u.noFrameFreeze == c.Hold {
 			return
 		}
 		u.noFrameFreeze = c.Hold
+		m.noteHoldLocked(u, "不停帧", c.Hold)
 	case unitpkg.NoHealthNumbers:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -986,15 +1335,22 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		u.stun = c.Hold
 		if !c.Hold {
 			u.stunUntil = 0
+			m.noteStunLocked(u, 0, true)
 		} else {
 			u.stunUntil = c.Until
+			m.noteStunLocked(u, c.Until, false)
+			m.send(u, unitpkg.Stunned{Time: m.time, Until: c.Until})
 		}
 	case unitpkg.VisionBlock:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
 			return
 		}
+		if u.visionBlock == c.Hold {
+			return
+		}
 		u.visionBlock = c.Hold
+		m.noteHoldLocked(u, "挡视线", c.Hold)
 	}
 }
 
@@ -1029,6 +1385,19 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 		markIcon:  c.MarkIcon,
 		credit:    m.creditOfLocked(c.From),
 	}
+	m.noteOfferLocked(c)
+	if from := m.units[c.From]; from != nil {
+		off := m.pendingDmg[token]
+		off.atkSpeed = from.v.len()
+		off.atkImpulse = impulseSpeeds(from)
+		m.pendingDmg[token] = off
+	}
+	{
+		off := m.pendingDmg[token]
+		off.defSpeed = u.v.len()
+		off.defImpulse = impulseSpeeds(u)
+		m.pendingDmg[token] = off
+	}
 	m.send(u, unitpkg.IncomingDamage{
 		Token:  token,
 		From:   c.From,
@@ -1053,29 +1422,21 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	if from == nil {
 		from = m.units[off.from]
 	}
-	if u.role != unitpkg.RoleFighter {
-		amt := off.amount
-		if c.Amount > 0 && c.Amount < amt {
-			amt = c.Amount
-		}
-		amt = m.scaleDamage(m.factionBearer(from), u, amt)
-		m.applyHurtLocked(from, u, amt, false, false)
-		return
-	}
-	if off.absorb || m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id] {
+	if u.role == unitpkg.RoleFighter && (off.absorb || m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id]) {
 		delete(m.wardAbsorb, u.id)
+		m.noteAbsorbLocked(off)
 		if sh := m.shellOfLocked(u.id); sh != nil {
 			m.popShellLocked(sh, off.from)
 			delete(m.wardAbsorb, u.id)
 		}
 		return
 	}
-	amt := off.amount
-	if c.Amount > 0 && c.Amount < amt {
-		amt = c.Amount
+	pre := off.amount
+	if c.Amount > 0 && c.Amount < pre {
+		pre = c.Amount
 	}
-	amt = m.scaleDamage(m.factionBearer(from), u, amt)
-	if off.markKind != "" && amt > 0 {
+	amt := m.scaleDamage(m.factionBearer(from), u, pre)
+	if u.role == unitpkg.RoleFighter && off.markKind != "" && amt > 0 {
 		delta := off.markDelta
 		if delta == 0 {
 			delta = 1
@@ -1086,6 +1447,18 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 			Delta:  delta,
 			Icon:   off.markIcon,
 		})
+	}
+	remain := u.hp
+	if amt > 0 {
+		remain = u.hp - amt
+		if remain < 0 {
+			remain = 0
+		}
+	}
+	m.noteConfirmLocked(off, amt, remain)
+	if u.role != unitpkg.RoleFighter {
+		m.applyHurtLocked(from, u, amt, false, false)
+		return
 	}
 	m.applyHurtLocked(from, u, amt, !off.noFreeze, true)
 }
@@ -1104,11 +1477,15 @@ func (m *Match) applyHurtLocked(from, u *unit, amt float64, freeze, swap bool) {
 		Amount: amt,
 	})
 	u.hp -= amt
+	if u.hp < 0 {
+		u.hp = 0
+	}
+	m.noteHurtLocked(from, u, amt)
 	if freeze {
 		m.hitStopIfNeeded(from)
 	}
 	if u.hp <= 0 {
-		u.hp = 0
+		m.noteDownLocked(u, true)
 		m.creditKillLocked(from, u)
 		m.removeLocked(u)
 	} else if swap {
@@ -1138,7 +1515,11 @@ func (m *Match) creditKillLocked(from, victim *unit) {
 		return
 	}
 	killer := from
-	if from.owner != 0 {
+	if victim.kind == "史莱姆" && victim.owner != 0 {
+		if o := m.units[victim.owner]; o != nil && !o.stopped {
+			killer = o
+		}
+	} else if from.owner != 0 {
 		if o := m.units[from.owner]; o != nil && !o.stopped {
 			killer = o
 		}
@@ -1146,6 +1527,7 @@ func (m *Match) creditKillLocked(from, victim *unit) {
 	if killer == nil || killer.stopped || killer.id == victim.id {
 		return
 	}
+	m.noteCreditLocked(killer, victim)
 	m.send(killer, unitpkg.Kill{
 		VictimID:   victim.id,
 		VictimKind: victim.kind,
@@ -1280,24 +1662,26 @@ func (m *Match) placeWallLocked(c unitpkg.PlaceWall) {
 		X: a.X, Y: a.Y, VX: b.X, VY: b.Y,
 	})
 	w := &barrier{
-		id:        m.nextID,
-		owner:     c.OwnerID,
-		slot:      c.Slot,
-		kind:      c.Kind,
-		a:         a,
-		b:         b,
-		radius:    c.Radius,
-		until:     until,
-		amount:    c.Amount,
-		hitGap:    c.HitGap,
-		withOwner: c.WithOwner,
-		hard:      c.Hard,
-		square:    c.Square || c.Hard,
+		id:          m.nextID,
+		owner:       c.OwnerID,
+		slot:        c.Slot,
+		kind:        c.Kind,
+		a:           a,
+		b:           b,
+		radius:      c.Radius,
+		until:       until,
+		amount:      c.Amount,
+		hitGap:      c.HitGap,
+		withOwner:   c.WithOwner,
+		hard:        c.Hard,
+		square:      c.Square || c.Hard,
 		visionBlock: c.VisionBlock,
-		hitAt:     map[uint64]float64{},
+		hitAt:       map[uint64]float64{},
 	}
 	w.bindPose()
+	w.prevA, w.prevB = w.a, w.b
 	m.walls = append(m.walls, w)
+	m.noteWallLocked("砌墙", w)
 }
 
 func (m *Match) expireWallsLocked() {
@@ -1308,6 +1692,7 @@ func (m *Match) expireWallsLocked() {
 			n++
 			continue
 		}
+		m.noteWallLocked("拆墙", w)
 		m.fx = append(m.fx, unitpkg.FX{
 			Name: "wall-fade", Kind: w.kind, Slot: w.slot,
 			X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
@@ -1316,14 +1701,17 @@ func (m *Match) expireWallsLocked() {
 	m.walls = m.walls[:n]
 }
 
-func (m *Match) breakWallLocked(id uint64) {
+func (m *Match) breakWallLocked(id uint64, fade bool) {
 	n := 0
 	for _, w := range m.walls {
 		if w.id == id {
-			m.fx = append(m.fx, unitpkg.FX{
-				Name: "wall-fade", Kind: w.kind, Slot: w.slot,
-				X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
-			})
+			m.noteWallLocked("拆墙", w)
+			if fade {
+				m.fx = append(m.fx, unitpkg.FX{
+					Name: "wall-fade", Kind: w.kind, Slot: w.slot,
+					X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
+				})
+			}
 			continue
 		}
 		m.walls[n] = w
@@ -1362,16 +1750,19 @@ func (m *Match) swapOwnedLocked(bodyID uint64) {
 		unitpkg.FX{Name: "swap", UnitID: body.id, Kind: body.kind, X: body.p.X, Y: body.p.Y, Slot: body.slot},
 		unitpkg.FX{Name: "swap", UnitID: other.id, Kind: body.kind, X: other.p.X, Y: other.p.Y, Slot: other.slot},
 	)
+	keepVel := body.stun
 	body.p, other.p = other.p, body.p
-	if !body.stun {
+	if !keepVel {
 		body.v, other.v = other.v, body.v
 	}
+	m.noteSwapLocked(body, other, keepVel)
 }
 
 func (m *Match) removeLocked(u *unit) {
 	if u == nil || u.stopped {
 		return
 	}
+	m.noteGoneLocked(u)
 	id := u.id
 	m.killLocked(u)
 	delete(m.units, u.id)
@@ -1453,6 +1844,7 @@ func (m *Match) nailToWallLocked(u *unit, c unitpkg.Spawn) {
 
 func (m *Match) spinWallsLocked(dt float64) {
 	for _, w := range m.walls {
+		w.prevA, w.prevB = w.a, w.b
 		moved := false
 		if w.spin != 0 {
 			w.ang += w.spin * dt
@@ -1504,6 +1896,7 @@ func (m *Match) releaseHoldLocked() {
 		if u.stun && u.stunUntil > 0 && u.stunUntil <= u.holdUntil+1e-6 {
 			u.stun = false
 			u.stunUntil = 0
+			m.noteStunLocked(u, 0, true)
 		}
 	}
 }
@@ -1519,12 +1912,15 @@ func (m *Match) holdStillLocked(id uint64, until float64) {
 	u.setVel(vec{})
 	u.stun = true
 	u.stunUntil = until
+	m.noteStunLocked(u, until, false)
+	m.send(u, unitpkg.Stunned{Time: m.time, Until: until})
 }
 
 func (m *Match) dropOwnerWallsLocked(id uint64) {
 	n := 0
 	for _, w := range m.walls {
 		if w.withOwner && w.owner == id {
+			m.noteWallLocked("拆墙", w)
 			m.fx = append(m.fx, unitpkg.FX{
 				Name: "wall-fade", Kind: w.kind, Slot: w.slot,
 				X: w.a.X, Y: w.a.Y, VX: w.b.X, VY: w.b.Y,
@@ -1543,12 +1939,25 @@ func (m *Match) setWallMotionLocked(c unitpkg.SetWallMotion) {
 		return
 	}
 	w.bindPose()
+	if c.Pin {
+		w.pivot = vec{c.X, c.Y}
+		w.base = c.Ang
+		w.ang = 0
+		w.pose()
+	}
+	same := logSame(w.spin, c.Spin) && logSame(w.vx, c.VX) && logSame(w.vy, c.VY) &&
+		logSame(w.ram, c.Ram) && logSame(w.stunR, c.StunRadius) && logSame(w.stunDur, c.StunDur) &&
+		w.passOwner == c.PassOwner
 	wasRam := w.ram > 0
 	w.spin = c.Spin
 	w.vx, w.vy = c.VX, c.VY
 	w.ram = c.Ram
 	w.stunR = c.StunRadius
 	w.stunDur = c.StunDur
+	w.passOwner = c.PassOwner
+	if !same {
+		m.noteWallMotionLocked(w)
+	}
 	if c.Ram > 0 && !wasRam {
 		w.rammed = map[uint64]struct{}{}
 	}
@@ -1610,6 +2019,7 @@ func (m *Match) ramWallLocked(w *barrier) {
 	}
 }
 
+// slamWallsLocked 用扫描重叠，避免冲撞墙单帧跨过 2*radius 判定窗口。
 func (m *Match) slamWallsLocked() {
 	for i := 0; i < len(m.walls); i++ {
 		a := m.walls[i]
@@ -1621,7 +2031,7 @@ func (m *Match) slamWallsLocked() {
 			if b.owner != a.owner || b.stunR <= 0 {
 				continue
 			}
-			if segDist(a.a, a.b, b.a, b.b) > a.radius+b.radius {
+			if !capsulesSwept(a.prevA, a.prevB, a.a, a.b, a.radius, b.prevA, b.prevB, b.a, b.b, b.radius) {
 				continue
 			}
 			m.resolveSlamLocked(a, b)
@@ -1651,8 +2061,8 @@ func (m *Match) resolveSlamLocked(a, b *barrier) {
 		}
 	}
 	owner := m.units[a.owner]
-	m.breakWallLocked(a.id)
-	m.breakWallLocked(b.id)
+	m.breakWallLocked(a.id, false)
+	m.breakWallLocked(b.id, false)
 	m.fx = append(m.fx, unitpkg.FX{
 		Name: "slam", Kind: a.kind, Slot: a.slot,
 		X: c.X, Y: c.Y, Amount: r,
@@ -1776,6 +2186,9 @@ func (m *Match) shoveWallLocked(w *barrier) {
 		if u.breakWalls && w.hard {
 			continue
 		}
+		if w.passOwner && u.id == w.owner {
+			continue
+		}
 		cc, cr := colOf(u.p, u.face, u.radius, u.semi)
 		d := distPointOBB(cc, w.a, w.b, w.radius)
 		need := cr + skin
@@ -1892,6 +2305,9 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 				if ignoreUW[uwID{u.id, w.id}] {
 					continue
 				}
+				if w.passOwner && u.id == w.owner {
+					continue
+				}
 				if u.breakWalls && w.hard {
 					continue
 				}
@@ -1992,7 +2408,7 @@ func (m *Match) resolveLocked(h ccdHit) {
 			return
 		}
 		if u.breakWalls && !w.hard {
-			m.breakWallLocked(w.id)
+			m.breakWallLocked(w.id, true)
 			return
 		}
 		cc, cr := colOf(u.p, u.face, u.radius, u.semi)
@@ -2107,6 +2523,9 @@ func (m *Match) constrainUnitLocked(u *unit) {
 		if u.breakWalls && w.hard {
 			continue
 		}
+		if w.passOwner && u.id == w.owner {
+			continue
+		}
 		if w.square {
 			m.pushOutOBB(u, w, cc, cr)
 			cc, cr = colOf(u.p, u.face, u.radius, u.semi)
@@ -2172,7 +2591,7 @@ func (m *Match) emitLocked() {
 		if u == nil || u.stopped || u.stun {
 			continue
 		}
-		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field, Walls: views}
+		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field, Walls: views, Knock: len(u.fsList) > 0}
 		vr2 := u.vision * u.vision
 		for _, o := range snaps {
 			if o.ID == u.id {
@@ -2203,23 +2622,49 @@ func (m *Match) send(u *unit, ev unitpkg.Event) {
 }
 
 func (m *Match) checkWinLocked() {
-	var fighters []*unit
+	alive := [2]int{}
 	for _, id := range m.order {
 		u := m.units[id]
-		if u != nil && !u.stopped && u.role == unitpkg.RoleFighter {
-			fighters = append(fighters, u)
+		if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
+			continue
 		}
+		if u.slot != 0 && u.slot != 1 {
+			continue
+		}
+		alive[u.slot]++
 	}
-	if len(fighters) >= 2 {
+	if alive[0] > 0 && alive[1] > 0 {
 		return
 	}
 	m.phase = PhaseEnded
-	if len(fighters) == 1 {
-		m.winner = fighters[0].kind
-		m.winnerID = fighters[0].id
-	} else {
+	m.winnerID = 0
+	switch {
+	case alive[0] > 0:
+		m.winner = strings.Join(m.lineup[0], "、")
+		if u := m.livingFighterLocked(0); u != nil {
+			m.winnerID = u.id
+		}
+		m.closeLogLocked("胜：" + m.rosterLine(0))
+	case alive[1] > 0:
+		m.winner = strings.Join(m.lineup[1], "、")
+		if u := m.livingFighterLocked(1); u != nil {
+			m.winnerID = u.id
+		}
+		m.closeLogLocked("胜：" + m.rosterLine(1))
+	default:
 		m.winner = "平局"
+		m.closeLogLocked("平局")
 	}
+}
+
+func (m *Match) livingFighterLocked(slot int) *unit {
+	for _, id := range m.order {
+		u := m.units[id]
+		if u != nil && !u.stopped && u.role == unitpkg.RoleFighter && u.slot == slot {
+			return u
+		}
+	}
+	return nil
 }
 
 func (m *Match) Loop(broadcast func([]byte), halt <-chan struct{}) {

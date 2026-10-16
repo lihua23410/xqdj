@@ -1,4 +1,4 @@
-// 谭泳辰老先生：开局空手随机游荡，场上散落只有他能捡的铃铛与苦无。
+// 谭泳辰老先生：开局空手随机游荡，场上散落铃铛与苦无。自己或同边战斗机碰到都算捡到，效果记在他身上。
 // 捡到苦无后每 2 秒丢一发直线苦无（3 伤，约 10% 暴击 10 伤）；有铃铛时累计
 // 3 次命中或任意暴击就净化（无敌 2s + 回已损失血量 20%）；累计 10 次命中或
 // 3 次暴击开 5 秒灵狐场域，场内苦无间隔 0.7s 但不再累计。
@@ -23,7 +23,7 @@ const KindMilk = "奶符"
 
 const (
 	tanRadius = 18.0
-	tanHP     = 85.0
+	tanHP     = 90.0
 	tanSpeed  = 165.0
 	tanVision = 9999.0
 	tanColor  = "#4fd8e8" // 青色
@@ -32,17 +32,18 @@ const (
 	kunaiRadius = 14.0
 
 	kunaiInterval       = 2.0
-	kunaiIntervalDomain = 0.7
+	kunaiIntervalDomain = 0.55
 	kunaiRange          = 620.0
 	kunaiDamage         = 3.0
-	kunaiCritDamage     = 10.0
+	kunaiCritDamage     = 12.0
 	kunaiCritChance     = 0.10
-	kunaiFlight         = 0.6 // 苦无飞行时间（秒），伤害在飞到落点时结算
+	kunaiFlight         = 0.5   // 苦无飞行时间（秒），伤害在飞到落点时结算
 	kunaiOvershoot      = 320.0 // 苦无飞过目标后继续飞的世界距离
 
 	bellHitsForPurify = 3
 	purifyInvuln      = 2.0
 	purifyHealFrac    = 0.20
+	purifyTeamR       = 240.0 // 净化顺手回血的队友范围
 
 	domainHits     = 10
 	domainCrits    = 3
@@ -171,7 +172,7 @@ func (t *谭泳辰老先生) onSense(ctx unit.Context, s unit.Sense) {
 	if !t.boot {
 		t.boot = true
 		if t.rng == nil {
-			t.rng = rand.New(rand.NewPCG(ctx.ID*2654435761+7, 0x9e3779b97f4a7c15))
+			t.rng = unit.NewRNG(ctx.ID)
 		}
 		t.spawnItems(ctx, s)
 		t.nextAttackAt = s.Time
@@ -222,7 +223,7 @@ func (t *谭泳辰老先生) tryPickup(ctx unit.Context, s unit.Sense) {
 		if o.Kind != KindBell && o.Kind != KindKunai {
 			continue
 		}
-		if math.Hypot(o.X-t.x, o.Y-t.y) > tanRadius+o.Radius+pickupSlack {
+		if !itemTouchedByAlly(s, *o) {
 			continue
 		}
 		switch o.Kind {
@@ -240,11 +241,32 @@ func (t *谭泳辰老先生) tryPickup(ctx unit.Context, s unit.Sense) {
 	}
 }
 
+// itemTouchedByAlly：主人自己或同边战斗机碰到才算捡到。活随从和敌方不算。
+func itemTouchedByAlly(s unit.Sense, item unit.Snapshot) bool {
+	reach := func(x, y, r float64) bool {
+		return math.Hypot(item.X-x, item.Y-y) <= r+item.Radius+pickupSlack
+	}
+	if reach(s.Self.X, s.Self.Y, s.Self.Radius) {
+		return true
+	}
+	for i := range s.Nearby {
+		p := &s.Nearby[i]
+		if p.Role != unit.RoleFighter || p.Slot != s.Self.Slot || p.ID == s.Self.ID {
+			continue
+		}
+		if reach(p.X, p.Y, p.Radius) {
+			return true
+		}
+	}
+	return false
+}
+
 // inDomain：自己是否站在己方灵狐场域里。
 func (t *谭泳辰老先生) inDomain(s unit.Sense) bool {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind == KindDomain && o.OwnerID == s.Self.ID {
+		// 队友（同 Slot）的灵狐场域也算，团队共享攻速。
+		if o.Kind == KindDomain && o.Slot == s.Self.Slot {
 			if math.Hypot(o.X-t.x, o.Y-t.y) <= o.Radius {
 				return true
 			}
@@ -310,9 +332,7 @@ func (t *谭泳辰老先生) resolvePending(ctx unit.Context, s unit.Sense) {
 			}
 			ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: amt}
 			ctx.Out <- unit.FX{Name: "kunai-hit", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: o.X, Y: o.Y, Amount: critFlag}
-			if !p.inDomain {
 				t.accumulate(ctx, s, p.crit)
-			}
 			break
 		}
 	}
@@ -351,10 +371,29 @@ func (t *谭泳辰老先生) purify(ctx unit.Context, s unit.Sense) {
 	if heal > 0 {
 		ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: heal}
 	}
+	// 净化也顺手照顾身边队友（同 Slot），各回自己已损血量的同样比例。
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.ID == s.Self.ID || o.Slot != s.Self.Slot {
+			continue
+		}
+		if o.Role != unit.RoleFighter && !o.Mortal {
+			continue
+		}
+		if math.Hypot(o.X-t.x, o.Y-t.y) > purifyTeamR {
+			continue
+		}
+		om := o.MaxHP - o.HP
+		if om <= 0 {
+			continue
+		}
+		ctx.Out <- unit.Heal{UnitID: o.ID, Amount: om * purifyHealFrac}
+		ctx.Out <- unit.FX{Name: "purify", Kind: ctx.Kind, Slot: o.Slot, X: o.X, Y: o.Y, UnitID: o.ID}
+	}
 	ctx.Out <- unit.FX{Name: "purify", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: t.x, Y: t.y, Amount: purifyInvuln}
 }
 
-// 静物：场上的铃铛 / 苦无，只等主人来捡，不实心、不吃伤害。
+// 静物：场上的铃铛 / 苦无，不实心、不吃伤害；主人或同边战斗机碰到由主人收走。
 type 静物 struct {
 	owner uint64
 	slot  int
@@ -400,6 +439,9 @@ func (m *奶符) Handle(ctx unit.Context, ev unit.Event) {
 		o := &s.Nearby[i]
 		if o.Nonsolid {
 			continue
+		}
+		if o.Slot != m.slot {
+			continue // 只回己方队伍（含自己）
 		}
 		if o.Role != unit.RoleFighter && !o.Mortal {
 			continue

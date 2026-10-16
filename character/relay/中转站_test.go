@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"xqdj/internal/unit"
+	_ "xqdj/map/hex"
 )
 
 func TestFirstLeaveHasNoShot(t *testing.T) {
@@ -159,8 +160,8 @@ func TestTriangleCanPassBackToEarlierHand(t *testing.T) {
 	resetPass()
 	out := make(chan unit.Cmd, 8)
 	n := bootedNode(out)
-	self := nodeSnap(4, 0, 0) // C
-	sender := nodeSnap(8, 30, 0) // B, just passed
+	self := nodeSnap(4, 0, 0)       // C
+	sender := nodeSnap(8, 30, 0)    // B, just passed
 	earlier := nodeSnap(3, -10, 40) // A
 	shot := aimed(20, 0, 0, 8, self.ID, nil)
 	n.Handle(ctx(out), unit.Sense{
@@ -286,8 +287,14 @@ func TestShotIgnoresFriendAndWall(t *testing.T) {
 	friend := unit.Snapshot{ID: 8, Role: unit.RoleFighter, Slot: 0, Radius: 18}
 	b.Handle(c, unit.Collision{Time: 1, Other: friend})
 	b.Handle(c, unit.WallHit{Time: 1})
-	if len(drain(out)) != 0 {
-		t.Fatal("friend and wall should not end the shot")
+	cmds := drain(out)
+	if !lastDespawn(cmds) {
+		t.Fatal("同边战斗机该打掉这发弹")
+	}
+	for _, cmd := range cmds {
+		if _, ok := cmd.(unit.Damage); ok {
+			t.Fatal("同边不该出伤")
+		}
 	}
 }
 
@@ -335,18 +342,18 @@ func TestCatchRelaysAtCap(t *testing.T) {
 	}
 }
 
-func TestShotLeavesPast640(t *testing.T) {
+func TestShotLeavesOutline(t *testing.T) {
 	resetPass()
 	out := make(chan unit.Cmd, 2)
 	b := &中转弹{slot: 0}
 	c := ctx(out)
-	b.Handle(c, unit.Sense{Self: unit.Snapshot{X: 640, Y: 0}})
+	b.Handle(c, unit.Sense{Self: unit.Snapshot{X: 100, Y: 0}})
 	if len(drain(out)) != 0 {
-		t.Fatal("640 stays")
+		t.Fatal("inside stays")
 	}
-	b.Handle(c, unit.Sense{Self: unit.Snapshot{X: 0, Y: -640.1}})
+	b.Handle(c, unit.Sense{Self: unit.Snapshot{X: 0, Y: -640}})
 	if _, ok := drain(out)[0].(unit.Despawn); !ok {
-		t.Fatal("past 640 despawns")
+		t.Fatal("outside despawns")
 	}
 }
 

@@ -268,10 +268,10 @@ func (a *囚徒) tickDrop(ctx unit.Context, s unit.Sense) {
 
 func (a *囚徒) planDrop(s unit.Sense) {
 	kinds := []string{KindCage, KindGallows, KindChair}
-	rng := a.rng
-	if rng == nil {
-		rng = rand.New(rand.NewPCG(uint64(s.Time*1e6)+s.Self.ID, 1))
+	if a.rng == nil {
+		a.rng = unit.NewRNG(s.Self.ID)
 	}
+	rng := a.rng
 	rng.Shuffle(3, func(i, j int) { kinds[i], kinds[j] = kinds[j], kinds[i] })
 	copy(a.kinds[:], kinds)
 	ex, ey := 0.0, 0.0
@@ -284,19 +284,14 @@ func (a *囚徒) planDrop(s unit.Sense) {
 }
 
 func (a *囚徒) randSpot(rng *rand.Rand, avoid ...vec) vec {
-	reach := unit.LiveField().Extent
-	if reach < unit.MinExtent {
-		reach = unit.HexRadius
-	}
-	reach -= cageFit
-	if reach < 20 {
-		reach = 20
-	}
+	f := unit.LiveField()
 	for n := 0; n < 80; n++ {
-		ang := rng.Float64() * 2 * math.Pi
-		rad := math.Sqrt(rng.Float64()) * reach
-		p := clampFit(math.Cos(ang)*rad, math.Sin(ang)*rad)
-		ok := true
+		x, y, ok := f.RandomWalkable(rng, cageFit)
+		if !ok {
+			break
+		}
+		p := vec{x, y}
+		ok = true
 		for _, o := range avoid {
 			if math.Hypot(p.x-o.x, p.y-o.y) < spotGap {
 				ok = false

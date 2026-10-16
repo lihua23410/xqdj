@@ -1,66 +1,148 @@
-.ball.look-integrated,
-.ball.look-integrated-shot {
+.ball.look-integrated {
   background: radial-gradient(circle at 50% 50%, #3dd6c6 0 62%, #f0a050 62% 100%);
   box-shadow: 0 0 12px #f0a050;
 }
-.ghost.integrated-ghost {
+.ghost.trail.integrated-ghost {
   background: radial-gradient(circle at 50% 50%, #3dd6c6 0 62%, #f0a050 62% 100%);
+  opacity: 0.22;
+  box-shadow: none;
 }
-.guide.integrated-ring {
-  position: absolute;
-  height: auto;
-  border: 1px dashed #f0a050;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  box-sizing: border-box;
-  pointer-events: none;
-  opacity: 0.7;
+
+.ball.projectile.look-integrated-shot {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+  opacity: 1;
 }
-.guide.integrated-ring.alert {
-  border-style: solid;
-  border-width: 2px;
-  background: color-mix(in srgb, #f0a050 16%, transparent);
-  opacity: 0.95;
-}
-.guide.integrated-flee {
-  position: absolute;
-  height: auto;
-  border: 1px dashed #3dd6c6;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  box-sizing: border-box;
-  pointer-events: none;
-  opacity: 0.7;
-}
-.guide.integrated-flee.alert {
-  border-style: solid;
-  border-width: 2px;
-  background: color-mix(in srgb, #3dd6c6 16%, transparent);
-  opacity: 0.95;
-}
-.guide.integrated-mark {
-  position: absolute;
-  border-radius: 50%;
-  border: 2px solid #ff2a2a;
-  transform: translate(-50%, -50%);
-  box-sizing: border-box;
-  pointer-events: none;
-}
-.guide.integrated-mark::before,
-.guide.integrated-mark::after {
-  content: "";
+.integrated-shot-shape {
   position: absolute;
   left: 50%;
   top: 50%;
-  background: #ff2a2a;
+  width: 0;
+  height: 0;
+  transform: rotate(var(--shot-ang, 0rad));
+  pointer-events: none;
 }
-.guide.integrated-mark::before {
+.integrated-shot-shape .nose {
+  position: absolute;
+  width: calc(var(--shot-r, 6px) * 5.4);
+  height: calc(var(--shot-r, 6px) * 0.95);
+  left: calc(var(--shot-r, 6px) * -0.85);
+  top: calc(var(--shot-r, 6px) * -0.475);
+  clip-path: polygon(100% 50%, 0 0, 0 100%);
+  background: linear-gradient(90deg, #e8893a 0%, #f0a050 16%, #3dd6c6 100%);
+  opacity: 0.62;
+}
+.integrated-trails {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 2px;
-  transform: translate(-50%, -50%);
-}
-.guide.integrated-mark::after {
-  width: 2px;
   height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.guide.integrated-ring,
+.guide.integrated-flee {
+  height: auto;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: #f0a050;
   transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  pointer-events: none;
+  opacity: 1;
+}
+.guide.integrated-flee {
+  color: #3dd6c6;
+}
+.guide.integrated-ring > .ticks,
+.guide.integrated-flee > .ticks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.ticks circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: butt;
+}
+.ticks .minor {
+  stroke-width: 2.2;
+  opacity: 0.22;
+}
+.ticks .major {
+  stroke-width: 6;
+  opacity: 0.4;
+}
+.guide.integrated-ring > .ticks .minor {
+  animation: tick-minor-cw 7.2s linear infinite;
+}
+.guide.integrated-ring > .ticks .major {
+  animation: tick-major-ccw 14s linear infinite;
+}
+.guide.integrated-flee > .ticks .minor {
+  animation: tick-minor-ccw 5.6s linear infinite;
+}
+.guide.integrated-flee > .ticks .major {
+  animation: tick-major-cw 11s linear infinite;
+}
+@keyframes tick-minor-cw {
+  to { stroke-dashoffset: -615.75; }
+}
+@keyframes tick-minor-ccw {
+  to { stroke-dashoffset: 615.75; }
+}
+@keyframes tick-major-cw {
+  to { stroke-dashoffset: -603.19; }
+}
+@keyframes tick-major-ccw {
+  to { stroke-dashoffset: 603.19; }
+}
+.guide.integrated-ring.alert > .ticks .minor,
+.guide.integrated-flee.alert > .ticks .minor {
+  stroke-width: 11;
+  opacity: 0.55;
+}
+.guide.integrated-ring.alert > .ticks .major,
+.guide.integrated-flee.alert > .ticks .major {
+  stroke-width: 18;
+  opacity: 0.72;
+}
+.guide.integrated-ring.flash,
+.guide.integrated-flee.flash {
+  animation: integrated-cross 0.32s ease-out;
+}
+@keyframes integrated-cross {
+  0% { filter: brightness(2.15); opacity: 1; }
+  100% { filter: brightness(1); opacity: 0.95; }
+}
+
+.guide.integrated-mark {
+  height: auto;
+  border: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 45deg,
+    #3dd6c6 0deg 135deg,
+    #f0a050 135deg 270deg,
+    transparent 270deg 360deg
+  );
+  -webkit-mask-image:
+    radial-gradient(circle, transparent 68%, #000 70%, #000 88%, transparent 90%),
+    conic-gradient(from 45deg, #000 0 var(--arc, 270deg), transparent 0);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    radial-gradient(circle, transparent 68%, #000 70%, #000 88%, transparent 90%),
+    conic-gradient(from 45deg, #000 0 var(--arc, 270deg), transparent 0);
+  mask-composite: intersect;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  pointer-events: none;
+  opacity: 0.95;
 }

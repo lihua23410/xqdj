@@ -6,7 +6,7 @@
     window.radarBeam[fx.unitId] = {
       dx: fx.vx || 0,
       dy: fx.vy || 0,
-      len: fx.amount || 560,
+      len: fx.amount || 0,
     };
   });
 })();

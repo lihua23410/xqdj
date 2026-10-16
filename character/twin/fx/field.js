@@ -1,23 +1,69 @@
 window.lookFX = window.lookFX || {};
 window.twinAttract = window.twinAttract || {};
+window.twinChant = window.twinChant || {};
 
 (function () {
   const attractR = 80;
   const idleR = 72;
   const curveCount = 4;
+  const chantPhrases = ["【九纲】", "【偏光】", "【乌与声明】", "【表里之间】"];
 
   window.lookFX.pull = {
-    guide: ringGuide("pull"),
+    guide(u, ctx) {
+      ringGuide("pull")(u, ctx);
+      // tick 的 ctx 没有 ensureGuide；偈语必须走 guide（与场环同路）。
+      paintChantAt(u && u.id, u && u.x, u && u.y, ctx);
+    },
     tick(el) {
       el?.querySelector(":scope > .field-ring")?.remove();
     },
   };
   window.lookFX.push = {
-    guide: ringGuide("push"),
+    guide(u, ctx) {
+      ringGuide("push")(u, ctx);
+      paintChantAt(u && u.id, u && u.x, u && u.y, ctx);
+    },
     tick(el) {
       el?.querySelector(":scope > .field-ring")?.remove();
     },
   };
+
+  // 半圆有 clip-path，字挂在 #guides，不进球节点。
+  function paintChantAt(unitId, x, y, ctx) {
+    if (unitId == null || !ctx || !window.arena) return;
+    const idx = window.twinChant[unitId];
+    const id = `guide-twin-chant-${unitId}`;
+    if (idx == null || idx < 0) {
+      document.getElementById(id)?.remove();
+      return;
+    }
+    let g;
+    if (typeof ctx.ensureGuide === "function") {
+      g = ctx.ensureGuide(id, "twin-chant");
+      if (ctx.seenGuides) ctx.seenGuides.add(id);
+    } else {
+      // registerShot 同帧补画：guides 已跑过，ensureGuide 不可用。
+      const root = document.getElementById("guides");
+      if (!root) return;
+      g = document.getElementById(id);
+      if (!g) {
+        g = document.createElement("div");
+        g.id = id;
+        root.appendChild(g);
+      }
+    }
+    g.className = "guide twin-chant";
+    g.textContent = chantPhrases[idx | 0] || "";
+    const scale = ctx.scale || 1;
+    const [sx, sy] = window.arena.screenPos(x || 0, y || 0, scale, ctx.cx || 0, ctx.cy || 0);
+    g.style.left = `${sx}px`;
+    g.style.top = `${sy - Math.max(22, 28 * scale)}px`;
+    g.style.removeProperty("--ang");
+    g.style.setProperty("width", "auto", "important");
+    g.style.setProperty("height", "auto", "important");
+    g.style.setProperty("border-top", "1px solid #b44cffaa", "important");
+    g.style.setProperty("transform", "translate(-50%, -100%)", "important");
+  }
 
   function ringGuide(mode) {
     return function (u, ctx) {
@@ -131,5 +177,18 @@ window.twinAttract = window.twinAttract || {};
     if (!fx || fx.unitId == null) return;
     if ((fx.amount || 0) > 0) window.twinAttract[fx.unitId] = true;
     else delete window.twinAttract[fx.unitId];
+  });
+
+  arena.registerShot("twin-chant", (fx, ctx) => {
+    if (!fx || fx.unitId == null) return;
+    const amt = Number(fx.amount);
+    if (amt < 0) {
+      delete window.twinChant[fx.unitId];
+      document.getElementById(`guide-twin-chant-${fx.unitId}`)?.remove();
+      return;
+    }
+    window.twinChant[fx.unitId] = amt | 0;
+    // playEffects 在 renderGuides 之后，同帧补画，否则要等下一拍 guide。
+    paintChantAt(fx.unitId, fx.x, fx.y, ctx || {});
   });
 })();

@@ -57,26 +57,31 @@ func TestConnectedMazeFields(t *testing.T) {
 	}
 }
 
-func TestSpreadCentersNotClustered(t *testing.T) {
+func TestHubAndTrackLayout(t *testing.T) {
 	f := unit.HexField()
-	minPair := math.Inf(1)
 	for seed := uint64(0); seed < 16; seed++ {
 		rng := rand.New(rand.NewPCG(seed+1, seed+99))
 		m, ok := buildMaze(f, rng)
 		if !ok {
 			t.Fatalf("seed %d build fail", seed)
 		}
-		for i := 0; i < len(m.rings); i++ {
-			for j := i + 1; j < len(m.rings); j++ {
-				d := math.Hypot(m.rings[i].x-m.rings[j].x, m.rings[i].y-m.rings[j].y)
-				if d < minPair {
-					minPair = d
-				}
+		if len(m.rings) != ringCount || m.guideR <= 0 {
+			t.Fatalf("seed %d bad maze n=%d guideR=%v", seed, len(m.rings), m.guideR)
+		}
+		ext := f.Extent
+		if m.guideR > ext*guideFrac+1e-6 || m.guideR < ext*guideFracMin-1e-6 {
+			t.Fatalf("seed %d guideR %v out of range", seed, m.guideR)
+		}
+		// 心环近场心
+		if math.Hypot(m.rings[0].x, m.rings[0].y) > ext*0.25 {
+			t.Fatalf("seed %d hub too far: %v,%v", seed, m.rings[0].x, m.rings[0].y)
+		}
+		for i := 1; i < len(m.rings); i++ {
+			d := math.Hypot(m.rings[i].x, m.rings[i].y)
+			if math.Abs(d-m.guideR) > 1e-3 {
+				t.Fatalf("seed %d track %d not on guide: d=%v R=%v", seed, i, d, m.guideR)
 			}
 		}
-	}
-	if minPair < 40 {
-		t.Fatalf("centers too clustered: %v", minPair)
 	}
 }
 
@@ -142,5 +147,91 @@ func TestBumpRadialKeepsSpin(t *testing.T) {
 	a.onBump(unit.Collision{Time: 1, NX: 1, NY: 0, Other: unit.Snapshot{Role: unit.RoleFighter}})
 	if a.spin != 1 {
 		t.Fatalf("want keep 1 on radial, got %v", a.spin)
+	}
+}
+
+func TestDriftStaysInLeashAndWalkable(t *testing.T) {
+	f := unit.HexField()
+	rng := rand.New(rand.NewPCG(7, 11))
+	m, ok := buildMaze(f, rng)
+	if !ok {
+		t.Fatal("build maze")
+	}
+	drifts := initDrifts(m, rng, 0)
+	hubAx, hubAy := drifts[0].ax, drifts[0].ay
+	now := 0.0
+	dt := 1.0 / 60
+	for step := 0; step < 60*20; step++ {
+		now += dt
+		driftCenters(m.rings, drifts, f, rng, now, dt)
+		// 心环锚点钉死
+		if math.Hypot(drifts[0].ax-hubAx, drifts[0].ay-hubAy) > 1e-6 {
+			t.Fatalf("hub anchor moved")
+		}
+		for i, r := range m.rings {
+			d := math.Hypot(r.x-drifts[i].ax, r.y-drifts[i].ay)
+			if d > driftLeash+1e-3 {
+				t.Fatalf("ring %d outside leash: %v", i, d)
+			}
+			if !f.Walkable(r.x, r.y, centerPad) {
+				t.Fatalf("ring %d center not walkable at %v,%v", i, r.x, r.y)
+			}
+			if drifts[i].track {
+				ad := math.Hypot(drifts[i].ax-m.rings[0].x, drifts[i].ay-m.rings[0].y)
+				if math.Abs(ad-m.guideR) > 1e-3 {
+					t.Fatalf("track %d anchor left guide: %v vs %v", i, ad, m.guideR)
+				}
+			}
+		}
+	}
+}
+
+func TestDriftRecomputesJunctions(t *testing.T) {
+	f := unit.HexField()
+	rings := []ring{
+		{x: 0, y: 0, r: 100},
+		{x: 120, y: 0, r: 100},
+	}
+	junc := fieldJunctions(f, rings)
+	if len(junc) == 0 {
+		t.Fatal("expected junctions before drift")
+	}
+	rings[1].x = 400
+	junc = fieldJunctions(f, rings)
+	if len(junc) != 0 {
+		t.Fatalf("want no junctions after separate, got %d", len(junc))
+	}
+}
+
+func TestZoneSampleInsideAndRim(t *testing.T) {
+	// 环内：采样点就是敌人位置
+	px, py := zoneSample(0, 0, 100, 30, 40, 30, 40, 50)
+	if px != 30 || py != 40 {
+		t.Fatalf("inside sample %v %v", px, py)
+	}
+	// 环外蹭边：投影到圆周
+	px, py = zoneSample(0, 0, 100, 200, 0, 200, 0, 200)
+	if math.Abs(px-100) > 1e-6 || math.Abs(py) > 1e-6 {
+		t.Fatalf("rim sample %v %v", px, py)
+	}
+}
+
+func TestTryJunctionUsesPositionNotIndex(t *testing.T) {
+	rng := rand.New(rand.NewPCG(1, 2))
+	a := &迷走{
+		ring:     0,
+		spin:     1,
+		rng:      rng,
+		hasLastJ: true,
+		lastJX:   60,
+		lastJY:   80,
+		maze: maze{
+			rings: []ring{{0, 0, 100}, {120, 0, 100}},
+			junc:  []junction{{x: 60, y: 80, a: 0, b: 1}},
+		},
+	}
+	s := unit.Sense{Time: 10}
+	if _, _, ok := a.tryJunction(s, 60, 80); ok {
+		t.Fatal("same position should be suppressed")
 	}
 }

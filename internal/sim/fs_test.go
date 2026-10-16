@@ -289,6 +289,28 @@ func TestFSSetDirectionDoesNotChangeVelocity(t *testing.T) {
 	}
 }
 
+func TestStunNotifiesAndSenseReportsKnock(t *testing.T) {
+	m := startFSMatch(t)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u := mustWaller(t, m)
+	got := tapEvents(u)
+	m.applyCmdLocked(unitpkg.Stun{UnitID: u.id, Hold: true, Until: m.time + 1})
+	stunned := eventsOf[unitpkg.Stunned](got)
+	if len(stunned) != 1 || stunned[0].Until != m.time+1 {
+		t.Fatalf("stunned=%v", stunned)
+	}
+	m.applyCmdLocked(unitpkg.AddFS{
+		UnitID: u.id, DX: 1, DY: 0, BaseSpeed: 200, Token: 3, ExpiresAt: m.time + 1,
+	})
+	u.stun = false
+	m.emitLocked()
+	senses := eventsOf[unitpkg.Sense](got)
+	if len(senses) == 0 || !senses[len(senses)-1].Knock {
+		t.Fatalf("knock sense=%v", senses)
+	}
+}
+
 func TestStunUntilRestoresSense(t *testing.T) {
 	m := startFSMatch(t)
 	m.mu.Lock()

@@ -141,6 +141,69 @@ func sweptPointVsCapsule(p, vel vec, dt float64, a, b vec, R float64) (float64, 
 	return bestT, bestN, true
 }
 
+func lerpVec(a, b vec, t float64) vec {
+	return a.add(b.sub(a).mul(t))
+}
+
+func sameDisplace(from0, from1, to0, to1 vec) (vec, bool) {
+	d0 := to0.sub(from0)
+	d1 := to1.sub(from1)
+	return d0, d0.sub(d1).len2() < 1e-8
+}
+
+// capsulesSwept 两段胶囊从旧位姿扫到新位姿是否曾重叠。平移用端点 vs 胶囊 CCD；
+// 带旋转时按相对路程采样，避免单帧跨过 2*radius 窗口。
+func capsulesSwept(a0, a1, an0, an1 vec, ra float64, b0, b1, bn0, bn1 vec, rb float64) bool {
+	R := ra + rb
+	if R < 0 {
+		R = 0
+	}
+	if segDist(a0, a1, b0, b1) <= R || segDist(an0, an1, bn0, bn1) <= R {
+		return true
+	}
+	da, aOK := sameDisplace(a0, a1, an0, an1)
+	db, bOK := sameDisplace(b0, b1, bn0, bn1)
+	if aOK && bOK {
+		rel := da.sub(db)
+		if _, _, ok := sweptPointVsCapsule(a0, rel, 1, b0, b1, R); ok {
+			return true
+		}
+		if _, _, ok := sweptPointVsCapsule(a1, rel, 1, b0, b1, R); ok {
+			return true
+		}
+		inv := rel.mul(-1)
+		if _, _, ok := sweptPointVsCapsule(b0, inv, 1, a0, a1, R); ok {
+			return true
+		}
+		if _, _, ok := sweptPointVsCapsule(b1, inv, 1, a0, a1, R); ok {
+			return true
+		}
+		return false
+	}
+	travel := math.Max(an0.sub(a0).sub(bn0.sub(b0)).len(), an1.sub(a1).sub(bn1.sub(b1)).len())
+	if travel < 1e-9 {
+		return false
+	}
+	step := R * 0.5
+	if step < 0.5 {
+		step = 0.5
+	}
+	n := int(math.Ceil(travel / step))
+	if n < 1 {
+		n = 1
+	}
+	if n > 256 {
+		n = 256
+	}
+	for i := 1; i < n; i++ {
+		t := float64(i) / float64(n)
+		if segDist(lerpVec(a0, an0, t), lerpVec(a1, an1, t), lerpVec(b0, bn0, t), lerpVec(b1, bn1, t)) <= R {
+			return true
+		}
+	}
+	return false
+}
+
 func semiExtent(face vec, radius float64, n vec) float64 {
 	if face.len2() < 1e-12 {
 		return radius

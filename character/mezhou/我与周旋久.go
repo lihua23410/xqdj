@@ -20,13 +20,13 @@ const KindVoidShot = "虚空弹"
 
 // 状态。前三个是互撞掷出的循环状态，后三个是死亡派生。
 const (
-	modeNone = iota // 无事发生
-	modeMistake     // 误认
-	modePsycho      // 失败（精神病）
-	modeVoid        // 虚空（无事发生里周旋久先死）
-	modeHoly        // 神圣（误认里我挨到致命伤）
-	modeSuicide     // 自杀（误认里周旋久先死）
-	modeMonster     // 怪物（精神病里我挨到致命伤）
+	modeNone    = iota // 无事发生
+	modeMistake        // 误认
+	modePsycho         // 失败（精神病）
+	modeVoid           // 虚空（无事发生里周旋久先死）
+	modeHoly           // 神圣（误认里我挨到致命伤）
+	modeSuicide        // 自杀（误认里周旋久先死）
+	modeMonster        // 怪物（精神病里我挨到致命伤）
 )
 
 const (
@@ -106,25 +106,25 @@ func init() {
 		return &周旋久{owner: info.OwnerID, slot: info.Slot}
 	})
 	p.Register(unit.Spec{
-		Kind:    KindVoidShot,
-		Role:    unit.RoleProjectile,
-		Radius:  voidShotR,
-		MaxHP:   voidShotHP,
-		Speed:   voidSpeed,
-		Vision:  voidShotLife * voidSpeed,
-		Look:    unit.Look{Color: "#c9a6ff", Trail: true, FX: []string{"mezhou-void"}},
+		Kind:   KindVoidShot,
+		Role:   unit.RoleProjectile,
+		Radius: voidShotR,
+		MaxHP:  voidShotHP,
+		Speed:  voidSpeed,
+		Vision: voidShotLife * voidSpeed,
+		Look:   unit.Look{Color: "#c9a6ff", Trail: true, FX: []string{"mezhou-void"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &虚空弹{owner: info.OwnerID, slot: info.Slot}
 	})
 }
 
 type 我 struct {
-	slot  int
-	mode  int
-	boot  bool
-	rng   *rand.Rand
-	hp    float64
-	x, y  float64
+	slot   int
+	mode   int
+	boot   bool
+	rng    *rand.Rand
+	hp     float64
+	x, y   float64
 	hx, hy float64
 
 	zhouID     uint64
@@ -217,7 +217,7 @@ func (t *我) onSense(ctx unit.Context, s unit.Sense) {
 		t.boot = true
 		t.spawnGrace = s.Time + 0.6
 		if t.rng == nil {
-			t.rng = rand.New(rand.NewPCG(rand.Uint64()^ctx.ID, rand.Uint64()))
+			t.rng = unit.NewRNG(ctx.ID)
 		}
 		ctx.Out <- unit.Spawn{
 			Kind: KindZhou, X: s.Self.X + 55, Y: s.Self.Y,

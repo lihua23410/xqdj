@@ -27,7 +27,6 @@ function kindColor(kind) {
 }
 
 function paintKind(el, kind) {
-  applyLookFX(el, kind);
   el.style.setProperty("--kind", kindColor(kind));
 }
 
@@ -161,6 +160,8 @@ function runLookGuides(scale, cx, cy, seen) {
     scale,
     cx,
     cy,
+    time: state.time || 0,
+    effects: state.effects || [],
     units: state.units || [],
     ensureGuide,
     placeSeg,
@@ -400,7 +401,7 @@ function playEffects(effects, scale, cx, cy) {
   for (const fx of effects || []) {
     const [x, y] = screenPos(fx.x, fx.y, scale, cx, cy);
     const kind = fx.kind;
-    const ctx = { x, y, kind, scale, cx, cy };
+    const ctx = { x, y, kind, scale, cx, cy, time: state.time || 0 };
     if (fx.name === "heal") {
       const n = Math.round(fx.amount || 0);
       const el = spawnFx("fx-dmg heal", x, y - 12, kind, dmgPop(n));
@@ -450,12 +451,18 @@ const banner = document.getElementById("banner");
 const kinds0 = document.getElementById("kinds-0");
 const kinds1 = document.getElementById("kinds-1");
 const fieldsEl = document.getElementById("fields");
+const teamPage = document.body.dataset.page === "team";
 
-let state = { phase: "select", slots: ["", ""], kinds: [], units: [] };
+let state = { phase: "select", slots: [[], []], kinds: [], units: [] };
 let hexR = 280;
+let follow = null;
+let followHeld = false;
+const hiddenBody = new Set(["无下限术士", "分身者(百战)", "蛆"]);
+let hudKey = "";
 
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
 const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
+ws.onopen = () => send({ type: "mode", team: teamPage });
 
 function send(obj) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -463,60 +470,221 @@ function send(obj) {
   }
 }
 
+function sideList(slot) {
+  const s = state.slots && state.slots[slot];
+  if (Array.isArray(s)) return s;
+  if (typeof s === "string" && s) return [s];
+  return [];
+}
+
+function lineup(slot) {
+  const r = state.roster && state.roster[slot];
+  if (r && r.length) return r;
+  return sideList(slot);
+}
+
+let pendingFrame = null;
+let frameScheduled = false;
+let pendingCopy = null;
 ws.onmessage = (ev) => {
-  state = JSON.parse(ev.data);
-  hexR = state.hexRadius || 280;
-  render();
+  let msg;
+  try { msg = JSON.parse(ev.data); } catch { return; }
+  if (msg && msg.type === "log") {
+    takeLog(msg);
+    return;
+  }
+  pendingFrame = msg;
+  if (frameScheduled) return;
+  frameScheduled = true;
+  requestAnimationFrame(() => {
+    frameScheduled = false;
+    const raw = pendingFrame;
+    pendingFrame = null;
+    if (raw == null) return;
+    state = raw;
+    hexR = state.hexRadius || 280;
+    render();
+  });
 };
 
-document.getElementById("btn-start").onclick = () => send({ type: "start" });
+function rosterStatus(slot) {
+  const edge = slot === 0 ? "左" : "右";
+  return lineup(slot).map((kind, index) => {
+    const f = (state.units || []).find(
+      (u) => u.role === "fighter" && u.slot === slot && u.seat === index,
+    );
+    const name = `${edge}${index + 1} ${kind}`;
+    if (!f || !(f.hp > 0)) return `${name} 倒下`;
+    return `${name} ${Math.round(f.hp)}`;
+  }).join("\n");
+}
+
+function copyLog(which) {
+  pendingCopy = which;
+  send({ type: "log" });
+}
+function takeLog(msg) {
+  const which = pendingCopy;
+  pendingCopy = null;
+  if (!which) return;
+  const text = which === "trace" ? (msg.trace || "") : (msg.recap || "");
+  const box = document.getElementById("log-box");
+  const done = () => {
+    if (box) box.classList.add("hidden");
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => showLogBox(text));
+    return;
+  }
+  showLogBox(text);
+}
+function showLogBox(text) {
+  const box = document.getElementById("log-box");
+  if (!box) return;
+  box.textContent = text;
+  box.classList.remove("hidden");
+  const range = document.createRange();
+  range.selectNodeContents(box);
+  const sel = window.getSelection();
+  if (!sel) return;
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+function renderLogChrome() {
+  const ready = !!state.logReady;
+  const showBanner = ready && state.phase === "ended";
+  const showLobby = ready && state.phase === "select";
+  for (const el of document.querySelectorAll("[data-log='banner']")) {
+    el.classList.toggle("hidden", !showBanner);
+  }
+  for (const el of document.querySelectorAll("[data-log='lobby']")) {
+    el.classList.toggle("hidden", !showLobby);
+  }
+  if (!ready) {
+    const box = document.getElementById("log-box");
+    if (box) box.classList.add("hidden");
+  }
+}
+for (const btn of document.querySelectorAll("[data-copy]")) {
+  btn.addEventListener("click", () => copyLog(btn.dataset.copy));
+}
+
+document.getElementById("btn-start").onclick = () => {
+  send({ type: "start" });
+};
 document.getElementById("btn-pause").onclick = () => {
   if (state.phase === "paused") send({ type: "start" });
   else send({ type: "pause" });
 };
 document.getElementById("btn-end").onclick = () => send({ type: "end" });
+for (const id of ["side-0", "side-1"]) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("click", onFighterBar);
+}
+{
+  const wrap = document.querySelector(".stage-wrap");
+  if (wrap) {
+    wrap.addEventListener("pointerdown", onMapPointerDown);
+    wrap.addEventListener("pointermove", onMapPointerMove);
+    wrap.addEventListener("pointerup", onMapPointerUp);
+    wrap.addEventListener("pointercancel", onMapPointerUp);
+  }
+}
 
 let lobbyKey = "";
+
+function paintFields(fields) {
+  if (!fieldsEl) return;
+  fieldsEl.innerHTML = "";
+  for (const name of fields) {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.type = "button";
+    if ((state.field || "") === name) b.classList.add("active");
+    b.onclick = () => send({ type: "field", field: name });
+    fieldsEl.appendChild(b);
+  }
+}
 
 function renderLobby() {
   const kinds = state.kinds || [];
   const fields = state.fields || [];
-  const key = `${(state.slots || []).join("\0")}\n${kinds.join("\0")}\n${state.field || ""}\n${fields.join("\0")}`;
+  const key = `${JSON.stringify(state.slots || [])}\n${kinds.join("\0")}\n${state.field || ""}\n${fields.join("\0")}`;
   if (key === lobbyKey) {
     return;
   }
   lobbyKey = key;
-  if (fieldsEl) {
-    fieldsEl.innerHTML = "";
-    for (const name of fields) {
-      const b = document.createElement("button");
-      b.textContent = name;
-      b.type = "button";
-      if ((state.field || "") === name) b.classList.add("active");
-      b.onclick = () => send({ type: "field", field: name });
-      fieldsEl.appendChild(b);
-    }
-  }
+  paintFields(fields);
+  paintKindGrids(kinds);
+  if (teamPage) paintRosters();
+  updateStartEnabled();
+}
+
+function paintKindGrids(kinds) {
   for (const [el, slot] of [
     [kinds0, 0],
     [kinds1, 1],
   ]) {
+    if (!el) continue;
     el.innerHTML = "";
+    const names = sideList(slot);
+    const current = names[0] || "";
+    const full = teamPage && names.length >= 3;
     for (const kind of kinds) {
       const b = document.createElement("button");
       b.textContent = kind;
       b.type = "button";
       b.dataset.slot = String(slot);
       paintKind(b, kind);
-      if (state.slots && state.slots[slot] === kind) b.classList.add("active");
-      b.onclick = () => send({ type: "select", slot, kind });
+      if (!teamPage && current === kind) b.classList.add("active");
+      if (full) b.disabled = true;
+      b.onclick = () => {
+        if (teamPage && sideList(slot).length >= 3) return;
+        send({ type: "select", slot, kind });
+      };
       el.appendChild(b);
     }
     const slotRoot = el.closest(".slot");
     if (slotRoot) {
-      paintKind(slotRoot, state.slots[slot]);
+      const accent = teamPage ? names[names.length - 1] || "" : current;
+      paintKind(slotRoot, accent);
     }
   }
+}
+
+function paintRosters() {
+  for (const slot of [0, 1]) {
+    const host = document.getElementById(`roster-list-${slot}`);
+    if (!host) continue;
+    host.innerHTML = "";
+    const names = sideList(slot);
+    const head = host.previousElementSibling;
+    if (head && head.tagName === "H2") {
+      head.textContent = slot === 0 ? `左边 ${names.length}/3` : `右边 ${names.length}/3`;
+    }
+    if (!names.length) {
+      const empty = document.createElement("p");
+      empty.className = "roster-empty";
+      empty.textContent = "点击角色加入";
+      host.appendChild(empty);
+      continue;
+    }
+    names.forEach((kind, index) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = kind;
+      paintKind(b, kind);
+      b.onclick = () => send({ type: "select", slot, index, kind: "" });
+      host.appendChild(b);
+    });
+  }
+}
+
+function updateStartEnabled() {
+  const btn = document.getElementById("btn-start");
+  if (!btn) return;
+  const ready = !teamPage || (sideList(0).length > 0 && sideList(1).length > 0);
+  btn.disabled = !ready;
 }
 
 function placeSeg(el, x1, y1, x2, y2, kind) {
@@ -527,6 +695,111 @@ function placeSeg(el, x1, y1, x2, y2, kind) {
   el.style.top = `${(y1 + y2) / 2}px`;
   el.style.setProperty("--ang", `${Math.atan2(dy, dx)}rad`);
   el.style.setProperty("--kind", kindColor(kind));
+}
+
+function distToSeg(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const l2 = dx * dx + dy * dy;
+  if (l2 < 1e-12) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / l2;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t));
+}
+
+function segSegDist(p1x, p1y, q1x, q1y, p2x, p2y, q2x, q2y) {
+  const ux = q1x - p1x;
+  const uy = q1y - p1y;
+  const vx = q2x - p2x;
+  const vy = q2y - p2y;
+  const wx = p1x - p2x;
+  const wy = p1y - p2y;
+  const a = ux * ux + uy * uy;
+  const b = ux * vx + uy * vy;
+  const c = vx * vx + vy * vy;
+  const d = ux * wx + uy * wy;
+  const e = vx * wx + vy * wy;
+  const D = a * c - b * b;
+  let sN = D;
+  let sD = D;
+  let tN = D;
+  let tD = D;
+  if (D < 1e-12) {
+    sN = 0;
+    sD = 1;
+    tN = e;
+    tD = c;
+  } else {
+    sN = b * e - c * d;
+    tN = a * e - b * d;
+    if (sN < 0) {
+      sN = 0;
+      tN = e;
+      tD = c;
+    } else if (sN > sD) {
+      sN = sD;
+      tN = e + b;
+      tD = c;
+    }
+  }
+  if (tN < 0) {
+    tN = 0;
+    if (-d < 0) sN = 0;
+    else if (-d > a) sN = sD;
+    else {
+      sN = -d;
+      sD = a;
+    }
+  } else if (tN > tD) {
+    tN = tD;
+    if (-d + b < 0) sN = 0;
+    else if (-d + b > a) sN = sD;
+    else {
+      sN = -d + b;
+      sD = a;
+    }
+  }
+  const sc = Math.abs(sN) > 1e-12 ? sN / sD : 0;
+  const tc = Math.abs(tN) > 1e-12 ? tN / tD : 0;
+  return Math.hypot(p1x + ux * sc - (p2x + vx * tc), p1y + uy * sc - (p2y + vy * tc));
+}
+
+function sightBlocked(self, o, units, walls) {
+  for (const w of walls || []) {
+    if (!w.visionBlock) continue;
+    if (segSegDist(self.x, self.y, o.x, o.y, w.x1, w.y1, w.x2, w.y2) <= (w.radius || 0)) {
+      return true;
+    }
+  }
+  for (const b of units || []) {
+    if (!b.visionBlock || b.id === self.id || b.id === o.id) continue;
+    if (distToSeg(b.x, b.y, self.x, self.y, o.x, o.y) <= (b.radius || 0)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// 和 unit.Seek 同一口径：异边、瞄准优先度 > 0，数字越小越先，相同则最近；挡视线跳过。
+function seekTarget(self, units, walls) {
+  let best = null;
+  let bestPri = 255;
+  let bestD2 = Infinity;
+  for (const o of units || []) {
+    if (!o || o.id === self.id) continue;
+    const pri = o.aimPriority || 0;
+    if (o.slot === self.slot || pri <= 0) continue;
+    if (sightBlocked(self, o, units, walls)) continue;
+    const dx = o.x - self.x;
+    const dy = o.y - self.y;
+    const d2 = dx * dx + dy * dy;
+    if (best && (pri > bestPri || (pri === bestPri && d2 >= bestD2))) continue;
+    best = o;
+    bestPri = pri;
+    bestD2 = d2;
+  }
+  return best;
 }
 
 function ensureGuide(id, cls) {
@@ -543,17 +816,15 @@ function ensureGuide(id, cls) {
 function renderGuides(fighters, scale, cx, cy) {
   if (!guidesEl) return;
   const seen = new Set();
+  const units = state.units || [];
+  const walls = state.walls || [];
   const wallers = (fighters || []).filter((u) => (lookOf(u.kind).wallGuide || 0) > 0);
-  const drawn = new Set();
   for (const w of wallers) {
-    const enemy = (fighters || []).find((u) => u.id !== w.id);
+    const enemy = seekTarget(w, units, walls);
     if (!enemy) continue;
-    const pair = w.id < enemy.id ? `${w.id}-${enemy.id}` : `${enemy.id}-${w.id}`;
-    if (drawn.has(pair)) continue;
-    drawn.add(pair);
     const [ax, ay] = screenPos(w.x, w.y, scale, cx, cy);
     const [bx, by] = screenPos(enemy.x, enemy.y, scale, cx, cy);
-    const link = ensureGuide(`guide-link-${pair}`, "link");
+    const link = ensureGuide(`guide-link-${w.id}`, "link");
     placeSeg(link, ax, ay, bx, by, w.kind);
     seen.add(link.id);
 
@@ -568,7 +839,7 @@ function renderGuides(fighters, scale, cx, cy) {
     const my = (w.y + enemy.y) / 2;
     const [g1x, g1y] = screenPos(mx + px * half, my + py * half, scale, cx, cy);
     const [g2x, g2y] = screenPos(mx - px * half, my - py * half, scale, cx, cy);
-    const hint = ensureGuide(`guide-wall-${pair}`, "hint");
+    const hint = ensureGuide(`guide-wall-${w.id}`, "hint");
     placeSeg(hint, g1x, g1y, g2x, g2y, w.kind);
     seen.add(hint.id);
   }
@@ -616,42 +887,274 @@ function renderWalls(scale, cx, cy) {
   }
 }
 
+function fighterCard(slot, index) {
+  const root = document.createElement("div");
+  root.className = "fighter";
+  root.id = `fighter-${slot}-${index}`;
+  root.innerHTML =
+    '<div class="name-row"><span class="name"></span><span class="faction-hud"></span><span class="status-hud"></span></div>' +
+    '<span class="hp-num"></span><div class="hp"><i></i></div>';
+  return root;
+}
+
+function renderHud(fighters) {
+  const names = [lineup(0), lineup(1)];
+  const key = JSON.stringify(names);
+  if (key !== hudKey) {
+    hudKey = key;
+    for (const slot of [0, 1]) {
+      const host = document.getElementById(`side-${slot}`);
+      if (!host) continue;
+      host.innerHTML = "";
+      names[slot].forEach((kind, index) => {
+        const card = fighterCard(slot, index);
+        host.appendChild(card);
+        paintKind(card, kind);
+      });
+    }
+  }
+  for (const slot of [0, 1]) {
+    names[slot].forEach((kind, index) => {
+      const root = document.getElementById(`fighter-${slot}-${index}`);
+      if (!root) return;
+      const f = fighters.find((u) => u.slot === slot && u.seat === index);
+      const name = root.querySelector(".name");
+      const num = root.querySelector(".hp-num");
+      const bar = root.querySelector("i");
+      const hudFac = root.querySelector(".faction-hud");
+      const hudMarks = root.querySelector(".status-hud");
+      if (!f) {
+        name.textContent = kind;
+        num.textContent = "0 / 100";
+        bar.style.width = "0%";
+        paintKind(root, kind);
+        fillFactionHud(hudFac, null);
+        fillMarksHud(hudMarks, null);
+        return;
+      }
+      name.textContent = f.kind;
+      const max = f.maxHp > 0 ? f.maxHp : 100;
+      num.textContent = `${Math.round(f.hp)} / ${Math.round(max)}`;
+      bar.style.width = `${Math.max(0, (f.hp / max) * 100)}%`;
+      paintKind(root, f.kind);
+      fillFactionHud(hudFac, f);
+      fillMarksHud(hudMarks, f);
+    });
+  }
+}
+
+function livingFighter(slot, seat) {
+  return (state.units || []).find(
+    (u) => u.role === "fighter" && u.slot === slot && u.seat === seat && u.hp > 0,
+  );
+}
+
+function firstLiving(slot) {
+  const seats = (state.units || [])
+    .filter((u) => u.role === "fighter" && u.slot === slot && u.hp > 0)
+    .map((u) => u.seat)
+    .sort((a, b) => a - b);
+  return seats.length ? { slot, seat: seats[0] } : null;
+}
+
+function nextLiving(slot, seat) {
+  const same = (state.units || [])
+    .filter((u) => u.role === "fighter" && u.slot === slot && u.hp > 0 && u.seat !== seat)
+    .map((u) => u.seat)
+    .sort((a, b) => a - b);
+  const after = same.find((s) => s > seat);
+  if (after != null) return { slot, seat: after };
+  if (same.length) return { slot, seat: same[0] };
+  return firstLiving(slot === 0 ? 1 : 0);
+}
+
+function cameraPoint(f) {
+  if (!f) return null;
+  if (!hiddenBody.has(f.kind)) return { x: f.x, y: f.y };
+  const mins = (state.units || []).filter(
+    (u) => u.role === "minion" && u.ownerId === f.id && u.hp > 0,
+  );
+  if (!mins.length) return { x: f.x, y: f.y };
+  let best = -Infinity;
+  for (const m of mins) if (m.hp > best) best = m.hp;
+  const tied = mins.filter((m) => m.hp >= best - 1e-6);
+  let x = 0;
+  let y = 0;
+  for (const m of tied) {
+    x += m.x;
+    y += m.y;
+  }
+  return { x: x / tied.length, y: y / tied.length };
+}
+
+function syncFollow() {
+  const phase = state.phase;
+  if (phase === "select") {
+    follow = null;
+    followHeld = false;
+    return null;
+  }
+  if (follow) {
+    const cur = livingFighter(follow.slot, follow.seat);
+    if (!cur) {
+      follow = nextLiving(follow.slot, follow.seat);
+    }
+  }
+  if (!follow) return null;
+  return cameraPoint(livingFighter(follow.slot, follow.seat));
+}
+
+let mapDrag = null;
+
+function isLargeField() {
+  return (hexR || 0) > 320;
+}
+
+function mapWrap() {
+  return hex.parentElement && hex.parentElement.parentElement;
+}
+
+function layoutLargeMap() {
+  const large = isLargeField();
+  const size = Math.max(2 * hexR, 1);
+  if (!large) {
+    hex.style.width = "";
+    hex.style.height = "";
+    hex.style.transform = "";
+    if (overEl) {
+      overEl.style.width = "";
+      overEl.style.height = "";
+      overEl.style.transform = "";
+    }
+    return false;
+  }
+  // 奇美拉凹外形：JS 写成 2×最远点的正方形。凸的大场皮由 CSS 定宽高。
+  if (state.field === "奇美拉") {
+    hex.style.width = `${size}px`;
+    hex.style.height = `${size}px`;
+    if (overEl) {
+      overEl.style.width = `${size}px`;
+      overEl.style.height = `${size}px`;
+    }
+  } else {
+    hex.style.width = "";
+    hex.style.height = "";
+    if (overEl) {
+      overEl.style.width = "";
+      overEl.style.height = "";
+    }
+  }
+  hex.style.transform = "";
+  if (overEl) overEl.style.transform = "";
+  const stage = hex.parentElement;
+  if (stage) stage.style.overflow = "visible";
+  return true;
+}
+
+function panLargeMapTo(worldX, worldY) {
+  if (mapDrag) return;
+  const rect = hex.getBoundingClientRect();
+  const docX = rect.left + window.scrollX + rect.width / 2 + worldX;
+  const docY = rect.top + window.scrollY + rect.height / 2 - worldY;
+  window.scrollTo(docX - window.innerWidth / 2, docY - window.innerHeight / 2);
+}
+
+function onMapPointerDown(e) {
+  if (!isLargeField() || e.button !== 0) return;
+  const wrap = mapWrap();
+  if (!wrap) return;
+  e.preventDefault();
+  mapDrag = {
+    id: e.pointerId,
+    x: e.clientX,
+    y: e.clientY,
+    left: window.scrollX,
+    top: window.scrollY,
+  };
+  follow = null;
+  followHeld = true;
+  wrap.classList.add("dragging");
+  wrap.setPointerCapture(e.pointerId);
+}
+
+function onMapPointerMove(e) {
+  if (!mapDrag || e.pointerId !== mapDrag.id) return;
+  window.scrollTo(
+    mapDrag.left - (e.clientX - mapDrag.x),
+    mapDrag.top - (e.clientY - mapDrag.y),
+  );
+}
+
+function onMapPointerUp(e) {
+  if (!mapDrag || e.pointerId !== mapDrag.id) return;
+  mapDrag = null;
+  const wrap = mapWrap();
+  if (wrap) wrap.classList.remove("dragging");
+}
+
+function applyCamera(cam) {
+  if (layoutLargeMap()) {
+    if (cam && !mapDrag) panLargeMapTo(cam.x, cam.y);
+    else if (!followHeld && !mapDrag) panLargeMapTo(0, 0);
+    return 1;
+  }
+  const w = hex.clientWidth || 1;
+  const h = hex.clientHeight || 1;
+  const scale = w / (2 * hexR);
+  let tx = 0;
+  let ty = 0;
+  if (cam) {
+    tx = -cam.x * scale;
+    ty = cam.y * scale;
+  }
+  const tf = cam ? `translate(${tx}px, ${ty}px)` : "";
+  hex.style.transformOrigin = "50% 50%";
+  hex.style.transform = tf;
+  if (overEl) {
+    overEl.style.transformOrigin = "50% 50%";
+    overEl.style.transform = tf;
+  }
+  const stage = hex.parentElement;
+  if (stage) stage.style.overflow = cam ? "hidden" : "";
+  return scale;
+}
+
+function onFighterBar(ev) {
+  const bar = ev.target.closest(".hp");
+  const card = ev.target.closest(".fighter");
+  if (!bar || !card) return;
+  const m = /^fighter-(\d+)-(\d+)$/.exec(card.id);
+  if (!m) return;
+  const slot = Number(m[1]);
+  const seat = Number(m[2]);
+  if (follow && follow.slot === slot && follow.seat === seat) {
+    follow = null;
+    followHeld = false;
+    panLargeMapTo(0, 0);
+    return;
+  }
+  follow = { slot, seat };
+  followHeld = false;
+}
+
 function renderArena() {
   // 场皮外形/尺寸由各 map 私产 CSS 按 [data-field] 自绘，引擎不按 fieldShape 分支。
   if (state.field) hex.dataset.field = state.field;
   else delete hex.dataset.field;
-  const w = hex.clientWidth;
-  const h = hex.clientHeight;
-  const scale = w / (2 * hexR);
+  const cam = syncFollow();
+  const scale = applyCamera(cam);
+  const w = hex.clientWidth || 1;
+  const h = hex.clientHeight || 1;
   const cx = w / 2;
   const cy = h / 2;
+  hex.classList.toggle(
+    "flooded",
+    (state.units || []).some((u) => u.kind === "钓鱼佬场鱼塘"),
+  );
   hex.classList.toggle("hitstop", (state.hitStop || 0) > 0);
 
   const fighters = (state.units || []).filter((u) => u.role === "fighter");
-  for (const slot of [0, 1]) {
-    const f = fighters.find((u) => u.slot === slot);
-    const root = document.getElementById(`fighter-${slot}`);
-    const name = root.querySelector(".name");
-    const num = root.querySelector(".hp-num");
-    const bar = root.querySelector("i");
-    const hudFac = root.querySelector(".faction-hud");
-    const hudMarks = root.querySelector(".status-hud");
-    if (!f) {
-      name.textContent = state.slots[slot] || "";
-      num.textContent = "0 / 100";
-      bar.style.width = "0%";
-      paintKind(root, state.slots[slot]);
-      fillFactionHud(hudFac, null);
-      fillMarksHud(hudMarks, null);
-      continue;
-    }
-    name.textContent = f.kind;
-    num.textContent = `${Math.round(f.hp)} / ${Math.round(f.maxHp)}`;
-    bar.style.width = `${Math.max(0, (f.hp / f.maxHp) * 100)}%`;
-    paintKind(root, f.kind);
-    fillFactionHud(hudFac, f);
-    fillMarksHud(hudMarks, f);
-  }
+  renderHud(fighters);
 
   const pauseBtn = document.getElementById("btn-pause");
   pauseBtn.textContent = state.phase === "paused" ? "继续" : "暂停";
@@ -828,6 +1331,7 @@ function renderArena() {
         if (!seen.has(id)) child.remove();
         continue;
       }
+      if (child.classList.contains("integrated-trails")) continue;
       const id = child.id.slice(2);
       if (!seen.has(id)) child.remove();
     }
@@ -835,28 +1339,48 @@ function renderArena() {
 
   if (state.phase === "ended") {
     banner.classList.remove("hidden");
-    banner.textContent = state.winner === "平局" ? "平局" : `胜者：${state.winner}`;
+    const bannerText = document.getElementById("banner-text");
+    const line = state.winner === "平局" ? "平局" : `胜者：${state.winner}`;
+    if (bannerText) bannerText.textContent = line;
+    const left = document.getElementById("banner-left");
+    const right = document.getElementById("banner-right");
+    if (left) left.textContent = rosterStatus(0);
+    if (right) right.textContent = rosterStatus(1);
   } else {
     banner.classList.add("hidden");
   }
 }
 
+let wasLobby = true;
+
+function releaseLobby() {
+  for (const id of ["roster-list-0", "roster-list-1", "kinds-0", "kinds-1"]) {
+    const el = document.getElementById(id);
+    if (el) el.replaceChildren();
+  }
+}
+
 function render() {
-  ensurePacks();
   const inLobby = state.phase === "select";
+  if (inLobby && !wasLobby) {
+    location.reload();
+    return;
+  }
+  ensurePacks();
   lobby.classList.toggle("hidden", !inLobby);
   arenaEl.classList.toggle("hidden", inLobby);
   if (state.phase === "ended" || inLobby) window.youthBuff = {};
   if (inLobby) window.youthDoses = {};
   if (inLobby) {
-    prevHP.clear();
-    if (fxRoot) fxRoot.innerHTML = "";
-    if (wallsEl) wallsEl.innerHTML = "";
-    if (guidesEl) guidesEl.innerHTML = "";
-    if (overEl) overEl.innerHTML = "";
+    wasLobby = true;
     renderLobby();
   } else {
-    lobbyKey = "";
+    wasLobby = false;
+    if (lobbyKey !== "") {
+      lobbyKey = "";
+      releaseLobby();
+    }
     renderArena();
   }
+  renderLogChrome();
 }

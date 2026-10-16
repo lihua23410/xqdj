@@ -38,7 +38,7 @@ func TestSquareHalfMatchesOutline(t *testing.T) {
 
 func TestPickToxicDistinct(t *testing.T) {
 	a := &机关房{}
-	a.ensureRNG(1, 0)
+	a.ensureRNG(1)
 	for i := 0; i < 40; i++ {
 		a.pickToxic()
 		if a.toxic[0] == a.toxic[1] {

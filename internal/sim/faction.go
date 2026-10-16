@@ -18,8 +18,12 @@ func (m *Match) markFactionLocked(c unitpkg.MarkFaction) {
 	prev := u.faction
 	u.faction = f
 	u.factionCycle = c.Cycle
-	u.factionAmpOut = c.AmpOut
-	u.factionAmpIn = c.AmpIn
+	if c.AmpOut != 0 {
+		u.factionAmpOut = c.AmpOut
+	}
+	if c.AmpIn != 0 {
+		u.factionAmpIn = c.AmpIn
+	}
 	u.factionCollect = c.Collect
 	if len(c.Barrage) > 0 {
 		u.factionBarrage = append([]string(nil), c.Barrage...)
@@ -33,6 +37,7 @@ func (m *Match) markFactionLocked(c unitpkg.MarkFaction) {
 	u.noteFaction(f)
 	m.maybeFactionCollectLocked(u)
 	if prev != f {
+		m.noteFactionNameLocked(u, f)
 		m.fx = append(m.fx, unitpkg.FX{
 			Name: "faction", UnitID: u.id, Kind: f,
 			X: u.p.X, Y: u.p.Y, Slot: u.slot,
@@ -52,6 +57,7 @@ func (m *Match) cycleFactionLocked(u *unit) {
 	u.faction = next
 	u.factionNext = m.time + 0.2
 	u.noteFaction(next)
+	m.noteFactionNameLocked(u, next)
 	m.maybeFactionCollectLocked(u)
 	m.fx = append(m.fx, unitpkg.FX{
 		Name: "faction", UnitID: u.id, Kind: next,

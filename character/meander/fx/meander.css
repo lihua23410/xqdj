@@ -8,7 +8,6 @@
 
 .ball.look-meander-ring,
 .ball.look-meander-lit {
-  background: transparent !important;
   box-shadow: none !important;
   box-sizing: border-box;
   z-index: 0;
@@ -16,11 +15,14 @@
 }
 
 .ball.look-meander-ring {
+  background: transparent !important;
   border: 2px solid #3d5c66;
   opacity: 0.72;
 }
 
 .ball.look-meander-lit {
+  /* 亮盘：环上描边 + 环内铺色 */
+  background: color-mix(in srgb, #1a6f82 28%, transparent) !important;
   border: 2.5px solid #1a6f82;
   opacity: 0.95;
 }

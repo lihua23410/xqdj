@@ -183,6 +183,7 @@
       syncEruptDecor(el);
       // 钩子未挂时，从 effects 补播 warn / lob
       const effects = (typeof state !== "undefined" && state && state.effects) || [];
+      const [craterX, craterY] = arena.screenPos(u.x, u.y, ctx.scale, ctx.cx, ctx.cy);
       for (const fx of effects) {
         if (!fx || !ctx) continue;
         if (fx.name === "warn") {
@@ -190,7 +191,7 @@
           placeWarn(fx, { ...ctx, x, y });
         } else if (fx.name === "lob") {
           const [x, y] = arena.screenPos(fx.x, fx.y, ctx.scale, ctx.cx, ctx.cy);
-          startLob(fx, { ...ctx, x, y });
+          startLob(fx, { ...ctx, x, y, cx: craterX, cy: craterY });
         }
       }
     },

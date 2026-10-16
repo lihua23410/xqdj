@@ -138,15 +138,15 @@ func dodgeChance(selfSp, atkSp float64) float64 {
 	return p
 }
 
-var miuDodgeRoll = rand.Float64
-var miuStarRoll = rand.Float64
-
-func tryMiuDodge(ctx unit.Context, d unit.IncomingDamage, seen map[uint64]float64, x, y float64, slot int) bool {
+func tryMiuDodge(ctx unit.Context, d unit.IncomingDamage, seen map[uint64]float64, x, y float64, slot int, rng *rand.Rand) bool {
+	if rng == nil {
+		rng = unit.NewRNG(ctx.ID)
+	}
 	atk := 0.0
 	if seen != nil {
 		atk = seen[d.From]
 	}
-	if miuDodgeRoll() >= dodgeChance(d.Speed, atk) {
+	if rng.Float64() >= dodgeChance(d.Speed, atk) {
 		return false
 	}
 	unit.BlockHit(ctx, d)
@@ -251,12 +251,20 @@ type R缪 struct {
 	// 天杀星缪：开局 5% 彩蛋。不换位，本体死了就结束；每 5s 斩一个缪。
 	starMiu     bool
 	starReadyAt float64
+	rng         *rand.Rand
+}
+
+func (r *R缪) ensureRNG(id uint64) *rand.Rand {
+	if r.rng == nil {
+		r.rng = unit.NewRNG(id)
+	}
+	return r.rng
 }
 
 func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 	// 本体受击：若这一发会致死且场上还有缪，先保命（换身份，伤害打在替身缪上）
 	if d, ok := ev.(unit.IncomingDamage); ok {
-		if tryMiuDodge(ctx, d, r.seenSp, r.x, r.y, 0) {
+		if tryMiuDodge(ctx, d, r.seenSp, r.x, r.y, 0, r.ensureRNG(ctx.ID)) {
 			return
 		}
 		if r.starMiu {
@@ -292,8 +300,9 @@ func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 		r.speed = miuBaseSpeed
 		r.spawnMinions(ctx, s)
 		r.meleeReadyAt = s.Time
-		r.fireReadyAt = s.Time + miuFireCD + rand.Float64()*2 - 1
-		if miuStarRoll() < starMiuChance {
+		rng := r.ensureRNG(ctx.ID)
+		r.fireReadyAt = s.Time + miuFireCD + rng.Float64()*2 - 1
+		if rng.Float64() < starMiuChance {
 			r.grantStarMiu(ctx, s.Time)
 		}
 		return // 缪下一帧才出生，本帧跳过同步
@@ -363,7 +372,7 @@ func (r *R缪) tickStarMiu(ctx unit.Context, s unit.Sense) {
 	if s.Time+1e-9 < r.starReadyAt {
 		return
 	}
-	v := pickStarVictim(s)
+	v := pickStarVictim(s, r.ensureRNG(ctx.ID))
 	if v == nil {
 		return
 	}
@@ -376,7 +385,7 @@ func (r *R缪) tickStarMiu(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-func pickStarVictim(s unit.Sense) *unit.Snapshot {
+func pickStarVictim(s unit.Sense, rng *rand.Rand) *unit.Snapshot {
 	var idx []int
 	for i := range s.Nearby {
 		if s.Nearby[i].Kind == KindMiu {
@@ -386,7 +395,10 @@ func pickStarVictim(s unit.Sense) *unit.Snapshot {
 	if len(idx) == 0 {
 		return nil
 	}
-	pick := s.Nearby[idx[rand.IntN(len(idx))]]
+	if rng == nil {
+		rng = unit.NewRNG(0)
+	}
+	pick := s.Nearby[idx[rng.IntN(len(idx))]]
 	return &pick
 }
 
@@ -438,7 +450,7 @@ func (r *R缪) moveAndMelee(ctx unit.Context, s unit.Sense) {
 		}
 	}
 
-	tryMiuFire(ctx, s, targets, &r.fireReadyAt, &r.fireNextAt, &r.fireQueue)
+	tryMiuFire(ctx, s, targets, &r.fireReadyAt, &r.fireNextAt, &r.fireQueue, r.ensureRNG(ctx.ID))
 
 	// 索敌移动：锁一次目标直线走
 	if r.lockedTargetID != 0 {
@@ -635,12 +647,20 @@ type 缪 struct {
 	prevMiuIDs map[uint64]bool
 	arc        unit.AttachState
 	seenSp     map[uint64]float64
+	rng        *rand.Rand
+}
+
+func (m *缪) ensureRNG(id uint64) *rand.Rand {
+	if m.rng == nil {
+		m.rng = unit.NewRNG(id)
+	}
+	return m.rng
 }
 
 func (m *缪) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
-		if tryMiuDodge(ctx, e, m.seenSp, m.x, m.y, m.slot) {
+		if tryMiuDodge(ctx, e, m.seenSp, m.x, m.y, m.slot, m.ensureRNG(ctx.ID)) {
 			return
 		}
 		noteMiuHit(ctx.ID, e.From, KindMiu)
@@ -669,8 +689,9 @@ func (m *缪) tick(ctx unit.Context, s unit.Sense) {
 		m.booted = true
 		m.speed = miuBaseSpeed
 		m.meleeReadyAt = s.Time
-		m.fireReadyAt = s.Time + miuFireCD + rand.Float64()*2 - 1
-		m.thrustReadyAt = s.Time + miuThrustCD + rand.Float64()*2 - 1
+		rng := m.ensureRNG(ctx.ID)
+		m.fireReadyAt = s.Time + miuFireCD + rng.Float64()*2 - 1
+		m.thrustReadyAt = s.Time + miuThrustCD + rng.Float64()*2 - 1
 	}
 
 	claimMiuKill(ctx, s, &m.prevMiuIDs, &m.killBonus, m.vx, m.vy, s.Self.HP, s.Self.MaxHP)
@@ -701,7 +722,7 @@ func (m *缪) tick(ctx unit.Context, s unit.Sense) {
 	targets := m.findTargets(s)
 
 	m.tryMelee(ctx, s, targets)
-	tryMiuFire(ctx, s, targets, &m.fireReadyAt, &m.fireNextAt, &m.fireQueue)
+	tryMiuFire(ctx, s, targets, &m.fireReadyAt, &m.fireNextAt, &m.fireQueue, m.ensureRNG(ctx.ID))
 	m.tryThrust(ctx, s, targets)
 	m.moveToward(ctx, s, targets)
 }
@@ -718,8 +739,8 @@ func (m *缪) findTargets(s unit.Sense) []unit.Snapshot {
 			out = append(out, *o)
 			continue
 		}
-		// 本体（同 slot 的 R.缪）也是克隆人之一，互殴
-		if o.Kind == KindRMiu && o.Slot == m.slot {
+		// 只互殴自己的本体。同边另一只 R.缪不是这只缪的身体。
+		if o.Kind == KindRMiu && o.ID == m.ownerID {
 			out = append(out, *o)
 			continue
 		}
@@ -806,26 +827,32 @@ func (m *缪) speedBonus(t *unit.Snapshot) float64 {
 	return 0
 }
 
-func tryMiuFire(ctx unit.Context, s unit.Sense, targets []unit.Snapshot, readyAt, nextAt *float64, queue *int) {
+func tryMiuFire(ctx unit.Context, s unit.Sense, targets []unit.Snapshot, readyAt, nextAt *float64, queue *int, rng *rand.Rand) {
+	if rng == nil {
+		rng = unit.NewRNG(ctx.ID)
+	}
 	if *queue > 0 && s.Time+1e-9 >= *nextAt {
 		*queue--
-		fireMiuBullet(ctx, s, targets)
+		fireMiuBullet(ctx, s, targets, rng)
 		*nextAt = s.Time + miuFireGap
 	}
 	if *queue > 0 || s.Time+1e-9 < *readyAt || len(targets) == 0 {
 		return
 	}
-	fireMiuBullet(ctx, s, targets)
+	fireMiuBullet(ctx, s, targets, rng)
 	*queue = miuFireCount - 1
 	*nextAt = s.Time + miuFireGap
 	*readyAt = s.Time + miuFireCD
 }
 
-func fireMiuBullet(ctx unit.Context, s unit.Sense, targets []unit.Snapshot) {
+func fireMiuBullet(ctx unit.Context, s unit.Sense, targets []unit.Snapshot, rng *rand.Rand) {
 	if len(targets) == 0 {
 		return
 	}
-	t := targets[rand.IntN(len(targets))]
+	if rng == nil {
+		rng = unit.NewRNG(ctx.ID)
+	}
+	t := targets[rng.IntN(len(targets))]
 	dx := t.X - s.Self.X
 	dy := t.Y - s.Self.Y
 	n := math.Hypot(dx, dy)
@@ -854,7 +881,7 @@ func (m *缪) tryThrust(ctx unit.Context, s unit.Sense, targets []unit.Snapshot)
 	if s.Time+1e-9 < m.thrustReadyAt || len(targets) == 0 {
 		return
 	}
-	t := targets[rand.IntN(len(targets))]
+	t := targets[m.ensureRNG(ctx.ID).IntN(len(targets))]
 	dx := t.X - s.Self.X
 	dy := t.Y - s.Self.Y
 	n := math.Hypot(dx, dy)
@@ -979,16 +1006,16 @@ func claimMiuKill(ctx unit.Context, s unit.Sense, prev *map[uint64]bool, bonus *
 				victimBonus := miuBonus[id]
 				miuMu.Unlock()
 
-			*bonus += killBonusPer + victimBonus
-			speed := miuMoveSpeed(*bonus, hp, maxHP)
-			snapMoveSpeed(ctx, speed, vx, vy)
+				*bonus += killBonusPer + victimBonus
+				speed := miuMoveSpeed(*bonus, hp, maxHP)
+				snapMoveSpeed(ctx, speed, vx, vy)
 
-			// 击杀回血：恢复自身已损血量的一半（引擎自动夹上限并弹 +n 特效）
-			if maxHP > hp {
-				ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: (maxHP - hp) * miuHealRatio}
-			}
+				// 击杀回血：恢复自身已损血量的一半（引擎自动夹上限并弹 +n 特效）
+				if maxHP > hp {
+					ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: (maxHP - hp) * miuHealRatio}
+				}
 
-			ctx.Out <- unit.FX{
+				ctx.Out <- unit.FX{
 					Name: "miu-powerup", Kind: ctx.Kind,
 					X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot,
 					Amount: *bonus,
@@ -1005,6 +1032,7 @@ func claimMiuKill(ctx unit.Context, s unit.Sense, prev *map[uint64]bool, bonus *
 
 type 缪弹 struct {
 	owner     uint64 // 发射此弹的缪 ID
+	body      uint64 // 这只缪的本体。同边别的 R.缪不算。
 	slot      int
 	spawnTime float64
 	booted    bool
@@ -1014,10 +1042,7 @@ type 缪弹 struct {
 func (b *缪弹) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.Collision:
-		if e.Other.Kind == KindMiu && e.Other.ID == b.owner {
-			return
-		}
-		if e.Other.Kind != KindMiu && e.Other.Kind != KindRMiu && !unit.Hittable(e.Other, b.slot) {
+		if !b.wantHit(e.Other) {
 			return
 		}
 		b.hit(ctx, e.Other)
@@ -1033,9 +1058,10 @@ func (b *缪弹) onSense(ctx unit.Context, s unit.Sense) {
 		b.spawnTime = s.Time
 		b.px, b.py = x, y
 	}
+	b.noteBody(s)
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if (o.Kind != KindMiu && o.Kind != KindRMiu) || o.Slot != b.slot || o.ID == b.owner {
+		if o.Slot != b.slot || o.ID == b.owner || !b.wantHit(*o) {
 			continue
 		}
 		if shotHits(b.px, b.py, x, y, s.Self.Radius, o.X, o.Y, o.Radius) {
@@ -1047,6 +1073,32 @@ func (b *缪弹) onSense(ctx unit.Context, s unit.Sense) {
 	if s.Time > b.spawnTime+miuShotLifetime {
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
+}
+
+func (b *缪弹) noteBody(s unit.Sense) {
+	if b.body != 0 {
+		return
+	}
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.ID == b.owner && o.Kind == KindMiu {
+			b.body = o.OwnerID
+			return
+		}
+	}
+}
+
+func (b *缪弹) wantHit(o unit.Snapshot) bool {
+	if o.Kind == KindMiu && o.ID == b.owner {
+		return false
+	}
+	if o.Kind == KindRMiu && o.Slot == b.slot {
+		return b.body != 0 && o.ID == b.body
+	}
+	if o.Kind == KindMiu && o.Slot == b.slot {
+		return true
+	}
+	return unit.Hittable(o, b.slot)
 }
 
 func shotHits(x0, y0, x1, y1, sr, tx, ty, tr float64) bool {

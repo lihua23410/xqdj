@@ -141,7 +141,9 @@ func (a *老牧师) onSense(ctx unit.Context, s unit.Sense) {
 	a.sx, a.sy, a.slot = s.Self.X, s.Self.Y, s.Self.Slot
 	if !a.started {
 		a.started = true
-		a.rng = rand.New(rand.NewPCG(s.Self.ID|1, 0x6F617374))
+		if a.rng == nil {
+			a.rng = unit.NewRNG(s.Self.ID)
+		}
 		ctx.Out <- unit.NoFrameFreeze{UnitID: ctx.ID, Hold: true}
 		a.phrase = 0
 		a.rings[0] = newRing(0)
@@ -329,7 +331,7 @@ func (a *老牧师) ensureOmega(i int) {
 		return
 	}
 	if a.rng == nil {
-		a.rng = rand.New(rand.NewPCG(1, 1))
+		a.rng = unit.NewRNG(0)
 	}
 	span := ringTurnMax - ringTurnMin
 	turn := ringTurnMin + a.rng.Float64()*span

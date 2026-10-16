@@ -25,9 +25,9 @@ const (
 	eruptFirst = 4.0
 	eruptEvery = 10.0
 	windSec    = 1.0
-	lobFlight = 0.55 // 从场心抛到落点的飞行秒数
+	lobFlight  = 0.55 // 从场心抛到落点的飞行秒数
 	// 圆心距：小摊互不重叠、也不压火山口
-	puddleGap = puddleR*2 + 8 // 52
+	puddleGap = puddleR*2 + 8         // 52
 	craterGap = craterR + puddleR + 8 // 78
 	eruptN    = 3
 
@@ -80,6 +80,7 @@ type lob struct {
 
 type 火山 struct {
 	booted    bool
+	ox, oy    float64
 	rng       *rand.Rand
 	nextErupt float64
 	winding   bool
@@ -97,6 +98,7 @@ func (a *火山) Handle(ctx unit.Context, ev unit.Event) {
 	if !ok {
 		return
 	}
+	a.ox, a.oy = s.Self.X, s.Self.Y
 	if !a.booted {
 		a.boot(ctx, s)
 	}
@@ -108,21 +110,21 @@ func (a *火山) Handle(ctx unit.Context, ev unit.Event) {
 
 func (a *火山) boot(ctx unit.Context, s unit.Sense) {
 	a.booted = true
-	a.ensureRNG(ctx.ID, s.Time)
+	a.ensureRNG(ctx.ID)
 	a.hitAt = map[uint64]float64{}
 	a.slowTok = map[uint64]uint64{}
 }
 
-func (a *火山) ensureRNG(id uint64, t float64) {
+func (a *火山) ensureRNG(id uint64) {
 	if a.rng != nil {
 		return
 	}
-	a.rng = rand.New(rand.NewPCG(id, uint64(t*1e6)+1))
+	a.rng = unit.NewRNG(id)
 }
 
 func (a *火山) tickErupt(ctx unit.Context, s unit.Sense) {
 	if !a.winding && s.Time+1e-9 >= a.nextErupt {
-		a.planSpots()
+		a.planSpots(s.Self.X, s.Self.Y)
 		a.winding = true
 		a.windUntil = s.Time + windSec
 	}
@@ -132,7 +134,7 @@ func (a *火山) tickErupt(ctx unit.Context, s unit.Sense) {
 	// 预警全程每帧推喷发/落点预兆，和刑具 drop 一样靠客户端续命。
 	ctx.Out <- unit.FX{
 		Name: "erupt", Kind: KindVolcano, UnitID: ctx.ID,
-		X: 0, Y: 0, Amount: craterR,
+		X: s.Self.X, Y: s.Self.Y, Amount: craterR,
 	}
 	for i := 0; i < eruptN; i++ {
 		ctx.Out <- unit.FX{
@@ -183,25 +185,30 @@ func (a *火山) flushLobs(ctx unit.Context, s unit.Sense) {
 	a.lobs = keep
 }
 
-func (a *火山) planSpots() {
+func (a *火山) planSpots(ox, oy float64) {
 	used := make([][2]float64, 0, eruptN)
 	for i := 0; i < eruptN; i++ {
-		x, y := a.randSpot(used)
+		x, y := a.randSpot(ox, oy, used)
 		used = append(used, [2]float64{x, y})
 		a.spots[i].x, a.spots[i].y = x, y
 	}
 }
 
-func (a *火山) randSpot(used [][2]float64) (float64, float64) {
-	a.ensureRNG(1, 0)
-	f := unit.LiveField()
+func volcanoLocal() unit.Field {
+	return unit.Field{Shape: unit.ShapeHex, Extent: unit.HexRadius}
+}
+
+func (a *火山) randSpot(ox, oy float64, used [][2]float64) (float64, float64) {
+	a.ensureRNG(1)
+	f := volcanoLocal()
 	rng := a.rng
 	for n := 0; n < 120; n++ {
 		x, y, ok := f.RandomWalkable(rng, puddleR)
 		if !ok {
 			break
 		}
-		if !a.lavaClear(x, y, used) {
+		x, y = x+ox, y+oy
+		if !a.lavaClear(x, y, ox, oy, used) {
 			continue
 		}
 		return x, y
@@ -209,22 +216,24 @@ func (a *火山) randSpot(used [][2]float64) (float64, float64) {
 	// 兜底：在圆环上找空位，仍避开口子与已有摊
 	for n := 0; n < 48; n++ {
 		ang := rng.Float64() * 2 * math.Pi
-		rad := craterGap + rng.Float64()*(f.Extent*0.55)
+		rad := craterGap + rng.Float64()*(unit.HexRadius*0.55)
 		x, y := f.Clamp(math.Cos(ang)*rad, math.Sin(ang)*rad, puddleR)
-		if a.lavaClear(x, y, used) {
+		x, y = x+ox, y+oy
+		if a.lavaClear(x, y, ox, oy, used) {
 			return x, y
 		}
 	}
 	x, y, ok := f.RandomWalkable(rng, puddleR)
 	if ok {
-		return x, y
+		return x + ox, y + oy
 	}
-	return f.Clamp(0, craterGap+20, puddleR)
+	x, y = f.Clamp(0, craterGap+20, puddleR)
+	return x + ox, y + oy
 }
 
 // lavaClear：不与火山口、本轮已定点、在飞/在场的小摊重叠。
-func (a *火山) lavaClear(x, y float64, used [][2]float64) bool {
-	if math.Hypot(x, y) < craterGap {
+func (a *火山) lavaClear(x, y, ox, oy float64, used [][2]float64) bool {
+	if math.Hypot(x-ox, y-oy) < craterGap {
 		return false
 	}
 	for _, p := range used {
@@ -338,7 +347,7 @@ func (a *火山) tickLava(ctx unit.Context, s unit.Sense) {
 }
 
 func (a *火山) covers(x, y, r float64) bool {
-	if math.Hypot(x, y) <= craterR+r {
+	if math.Hypot(x-a.ox, y-a.oy) <= craterR+r {
 		return true
 	}
 	for _, p := range a.puddles {

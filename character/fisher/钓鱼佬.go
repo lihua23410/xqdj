@@ -39,6 +39,9 @@ const (
 	maxBounce  = 3
 )
 
+// debugBootDomain 调试：进场直接开领域（第二次空军后的盖满鱼塘 + 飞着钓）。测完改 false。
+var debugBootDomain = false
+
 //go:embed fx fish.png
 var assets embed.FS
 
@@ -146,7 +149,7 @@ func (a *钓鱼佬) ensureRNG(id uint64) {
 	if a.rng != nil {
 		return
 	}
-	a.rng = rand.New(rand.NewPCG(rand.Uint64()^id, rand.Uint64()))
+	a.rng = unit.NewRNG(id)
 }
 
 func (a *钓鱼佬) onHit(ctx unit.Context, d unit.IncomingDamage) {
@@ -178,7 +181,11 @@ func (a *钓鱼佬) onSense(ctx unit.Context, s unit.Sense) {
 	a.ensureRNG(ctx.ID)
 	if !a.booted {
 		a.booted = true
-		a.plantPonds(ctx)
+		if debugBootDomain {
+			a.openDomain(ctx)
+		} else {
+			a.plantPonds(ctx)
+		}
 	}
 	if a.ram && a.ramUntil > 0 && s.Time+1e-9 >= a.ramUntil {
 		a.endRam(ctx)
@@ -410,6 +417,15 @@ func (a *钓鱼佬) setWalk(ctx unit.Context, vx, vy float64) {
 	}
 }
 
+func (a *钓鱼佬) openDomain(ctx unit.Context) {
+	a.misses = 2
+	ctx.Out <- unit.Spawn{
+		Kind: KindFlood, X: 0, Y: 0,
+		OwnerID: ctx.ID, Slot: a.slot,
+	}
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: a.walkSpeed()}
+}
+
 func (a *钓鱼佬) plantPonds(ctx unit.Context) {
 	used := make([][2]float64, 0, pondN)
 	for i := 0; i < pondN; i++ {
@@ -486,10 +502,16 @@ func (a *钓鱼佬) emitHUD(ctx unit.Context, s unit.Sense) {
 func overlappingPond(s unit.Sense) *unit.Snapshot {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind != KindPond && o.Kind != KindFlood {
+		if o.OwnerID != s.Self.ID {
 			continue
 		}
-		if o.OwnerID != s.Self.ID {
+		if o.Kind == KindFlood {
+			if s.Field.OutlineContains(s.Self.X, s.Self.Y, 0) {
+				return o
+			}
+			continue
+		}
+		if o.Kind != KindPond {
 			continue
 		}
 		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) <= o.Radius+s.Self.Radius {

@@ -84,6 +84,53 @@ func TestEnemyTouchAdvancesPhase(t *testing.T) {
 	}
 }
 
+func TestMinionTouchAdvancesPhase(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	w := bootedWolf()
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	moon := moonSnap(1)
+	fighter := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 200, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
+	minion := unit.Snapshot{ID: 3, Role: unit.RoleMinion, Mortal: true, Slot: 1, X: 8, Y: 0, Radius: 14, AimPriority: unit.DefaultMortalAim}
+	w.Handle(ctx, unit.Sense{Time: 1, Self: selfAt(120, 0), Nearby: []unit.Snapshot{moon, fighter, minion}})
+	if got := lastPhase(drain(out)); got != 1 {
+		t.Fatalf("minion touch with fighter on field phase=%v", got)
+	}
+
+	w.Handle(ctx, unit.Sense{Time: 1.1, Self: selfAt(120, 0), Nearby: []unit.Snapshot{moon, fighter, minion}})
+	if cmds := drain(out); hasPhase(cmds) {
+		t.Fatalf("minion stay should not advance: %v", cmds)
+	}
+}
+
+func TestFighterAndMinionEachCount(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	w := bootedWolf()
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	moon := moonSnap(1)
+	fighter := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 8, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
+	minion := unit.Snapshot{ID: 3, Role: unit.RoleMinion, Mortal: true, Slot: 1, X: 200, Y: 0, Radius: 14, AimPriority: unit.DefaultMortalAim}
+	w.Handle(ctx, unit.Sense{Time: 1, Self: selfAt(120, 0), Nearby: []unit.Snapshot{moon, fighter, minion}})
+	if got := lastPhase(drain(out)); got != 1 {
+		t.Fatalf("fighter enter phase=%v", got)
+	}
+	minion.X = 8
+	w.Handle(ctx, unit.Sense{Time: 1.1, Self: selfAt(120, 0), Nearby: []unit.Snapshot{moon, fighter, minion}})
+	if got := lastPhase(drain(out)); got != 2 {
+		t.Fatalf("minion enter while fighter inside phase=%v", got)
+	}
+}
+
+func TestCloneDoesNotAdvancePhase(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	w := bootedWolf()
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	clone := unit.Snapshot{ID: 3, Role: unit.RoleClone, Slot: 1, X: 8, Y: 0, Radius: 18}
+	w.Handle(ctx, unit.Sense{Time: 1, Self: selfAt(120, 0), Nearby: []unit.Snapshot{moonSnap(1), clone}})
+	if cmds := drain(out); hasPhase(cmds) {
+		t.Fatalf("clone should not count: %v", cmds)
+	}
+}
+
 func TestFullMoonStartsLockThenDash(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	w := bootedWolf()

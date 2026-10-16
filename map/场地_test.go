@@ -5,17 +5,32 @@ import (
 
 	"xqdj/internal/unit"
 	"xqdj/map/chamber"
+	奇美拉 "xqdj/map/chimera"
 	"xqdj/map/circle"
 	"xqdj/map/hex"
 	八边形 "xqdj/map/octagon"
 	"xqdj/map/volcano"
+	大六边形 "xqdj/map/widehex"
 )
 
 func TestNamesOrder(t *testing.T) {
 	got := unit.FieldNames()
-	// 目录名排序：chamber, circle, hex, octagon, volcano
-	if len(got) < 5 || got[0] != 机关房.Name || got[1] != 圆.Name || got[2] != 六边形.Name || got[3] != 八边形.Name || got[4] != 火山.Name {
+	want := map[string]bool{
+		机关房.Name:  true,
+		圆.Name:    true,
+		六边形.Name:  true,
+		八边形.Name:  true,
+		火山.Name:   true,
+		大六边形.Name: true,
+		奇美拉.Name:  true,
+	}
+	if len(got) != len(want) {
 		t.Fatalf("names=%v", got)
+	}
+	for _, n := range got {
+		if !want[n] {
+			t.Fatalf("unexpected %s in %v", n, got)
+		}
 	}
 }
 
@@ -49,5 +64,12 @@ func TestChamberSquareBoot(t *testing.T) {
 	f, ok := unit.LookupField(机关房.Name)
 	if !ok || f.Shape != unit.ShapeSquare || f.BootKind != 机关房.KindChamber {
 		t.Fatalf("chamber=%+v ok=%v", f, ok)
+	}
+}
+
+func TestWideHexHasBootKind(t *testing.T) {
+	f, ok := unit.LookupField(大六边形.Name)
+	if !ok || f.BootKind != 大六边形.KindWidehex {
+		t.Fatalf("widehex=%+v ok=%v", f, ok)
 	}
 }

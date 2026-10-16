@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>团队赛</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body data-page="team">
+  <section id="lobby" class="panel">
+    <h1>团队赛</h1>
+    <p class="sub">选场地 · 点角色加入名单 · 点名单移出 · 每边最多 3 只 · <a href="/">1v1</a></p>
+    <div class="fields" id="fields"></div>
+    <div class="team-pick">
+      <aside class="roster" data-slot="0">
+        <h2>左边</h2>
+        <div class="roster-list" id="roster-list-0"></div>
+      </aside>
+      <div class="slots">
+        <div class="slot" data-slot="0">
+          <h2>左槽</h2>
+          <div class="kinds" id="kinds-0"></div>
+        </div>
+        <div class="slot" data-slot="1">
+          <h2>右槽</h2>
+          <div class="kinds" id="kinds-1"></div>
+        </div>
+      </div>
+      <aside class="roster" data-slot="1">
+        <h2>右边</h2>
+        <div class="roster-list" id="roster-list-1"></div>
+      </aside>
+    </div>
+    <button id="btn-start" type="button">开始</button>
+    <div id="log-lobby" class="log-actions hidden" data-log="lobby">
+      <button type="button" data-copy="recap">复制战报</button>
+      <button type="button" data-copy="trace">复制排查</button>
+    </div>
+  </section>
+
+  <section id="arena" class="panel hidden">
+    <header class="hud">
+      <div class="side" id="side-0" data-slot="0"></div>
+      <div class="controls">
+        <button id="btn-pause" type="button">暂停</button>
+        <button id="btn-end" type="button">结束</button>
+      </div>
+      <div class="side" id="side-1" data-slot="1"></div>
+    </header>
+    <div class="stage-wrap">
+      <div class="stage">
+        <div id="hex" class="hex">
+          <div id="guides"></div>
+          <div id="walls"></div>
+          <div id="fx"></div>
+          <div id="units"></div>
+        </div>
+        <div id="over" class="over"></div>
+      </div>
+    </div>
+    <div id="banner" class="banner hidden">
+      <div class="banner-sides">
+        <div id="banner-left"></div>
+        <div id="banner-right"></div>
+      </div>
+      <div id="banner-text"></div>
+      <div id="log-banner" class="log-actions hidden" data-log="banner">
+        <button type="button" data-copy="recap">复制战报</button>
+        <button type="button" data-copy="trace">复制排查</button>
+      </div>
+    </div>
+  </section>
+
+  <pre id="log-box" class="log-box hidden"></pre>
+
+  <script src="/lib/gsap.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

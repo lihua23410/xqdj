@@ -95,6 +95,7 @@ type 盾士 struct {
 	booted    bool
 	x, y      float64
 	slot      int
+	rng       *rand.Rand
 }
 
 func (s *盾士) Handle(ctx unit.Context, ev unit.Event) {
@@ -164,12 +165,15 @@ func (s *盾士) burst(ctx unit.Context, kind string, n int) {
 		Name: "shatter", Kind: kind,
 		X: s.x, Y: s.y, Slot: s.slot,
 	}
-	base := rand.Float64() * 2 * math.Pi
+	if s.rng == nil {
+		s.rng = unit.NewRNG(ctx.ID)
+	}
+	base := s.rng.Float64() * 2 * math.Pi
 	gap := wardenRadius + shardRadius + 1.5
 	for i := 0; i < n; i++ {
 		ang := base + float64(i)*2*math.Pi/float64(n)
 		ux, uy := math.Cos(ang), math.Sin(ang)
-		sp := shardMinSpeed + rand.Float64()*(shardMaxSpeed-shardMinSpeed)
+		sp := shardMinSpeed + s.rng.Float64()*(shardMaxSpeed-shardMinSpeed)
 		ctx.Out <- unit.Spawn{
 			Kind:    kind,
 			X:       s.x + ux*gap,

@@ -275,6 +275,7 @@ func (m *Match) expireStunLocked() {
 		if m.time+1e-9 >= u.stunUntil {
 			u.stun = false
 			u.stunUntil = 0
+			m.noteStunLocked(u, 0, true)
 		}
 	}
 }
@@ -294,8 +295,28 @@ func (m *Match) applyAddFSLocked(c unitpkg.AddFS) {
 	if u == nil || u.stopped {
 		return
 	}
-	u.upsertImpulse(c.Token, vec{c.DX, c.DY}, c.BaseSpeed, c.OnWall, c.ExpiresAt)
+	speed := c.BaseSpeed
+	if speed < 0 {
+		speed = 0
+	}
+	prev, had := u.impulseSpeed(c.Token)
+	u.upsertImpulse(c.Token, vec{c.DX, c.DY}, speed, c.OnWall, c.ExpiresAt)
 	u.applyImpulseOrClamp()
+	if !had || !logSame(prev, speed) {
+		m.notePushLocked(u, "瞬时", speed, false)
+	}
+}
+
+func (u *unit) impulseSpeed(token uint64) (float64, bool) {
+	if u == nil {
+		return 0, false
+	}
+	for _, fs := range u.fsList {
+		if fs.token == token {
+			return fs.baseSpeed, true
+		}
+	}
+	return 0, false
 }
 
 func (m *Match) applyRemoveFSLocked(c unitpkg.RemoveFS) {
@@ -303,8 +324,12 @@ func (m *Match) applyRemoveFSLocked(c unitpkg.RemoveFS) {
 	if u == nil || u.stopped {
 		return
 	}
+	prev, had := u.impulseSpeed(c.Token)
 	u.removeImpulse(c.Token)
 	u.applyImpulseOrClamp()
+	if had {
+		m.notePushLocked(u, "瞬时", prev, true)
+	}
 }
 
 func (m *Match) applyAddFSComponentLocked(c unitpkg.AddFSComponent) {
@@ -318,6 +343,8 @@ func (m *Match) applyAddFSComponentLocked(c unitpkg.AddFSComponent) {
 	if u.cruiseFS.components == nil {
 		u.cruiseFS.components = make(map[uint64]fsComp)
 	}
+	prevCruise := u.cruise
+	old, had := u.cruiseFS.components[c.Token]
 	u.cruiseFS.components[c.Token] = fsComp{
 		zone:      c.Zone,
 		value:     c.Value,
@@ -326,6 +353,10 @@ func (m *Match) applyAddFSComponentLocked(c unitpkg.AddFSComponent) {
 	u.syncCruise()
 	u.bakeCruiseMul(u.cruiseMul())
 	u.applyImpulseOrClamp()
+	if !had || old.zone != c.Zone || !logSame(old.value, c.Value) {
+		m.notePushLocked(u, "分量", c.Value, false)
+	}
+	m.noteSpanLocked(u, "巡航", prevCruise, u.cruise)
 }
 
 func (m *Match) applyRemoveFSComponentLocked(c unitpkg.RemoveFSComponent) {
@@ -333,10 +364,17 @@ func (m *Match) applyRemoveFSComponentLocked(c unitpkg.RemoveFSComponent) {
 	if u == nil || u.stopped || u.cruiseFS == nil {
 		return
 	}
+	old, had := u.cruiseFS.components[c.Token]
+	if !had {
+		return
+	}
+	prevCruise := u.cruise
 	delete(u.cruiseFS.components, c.Token)
 	u.syncCruise()
 	u.bakeCruiseMul(u.cruiseMul())
 	u.applyImpulseOrClamp()
+	m.notePushLocked(u, "分量", old.value, true)
+	m.noteSpanLocked(u, "巡航", prevCruise, u.cruise)
 }
 
 func (m *Match) applySetFSDirectionLocked(c unitpkg.SetFSDirection) {
@@ -360,10 +398,13 @@ func (m *Match) applySetCruiseLocked(c unitpkg.SetCruise) {
 	if speed < 0 {
 		speed = 0
 	}
+	prev := u.cruise
 	if u.cruiseFS != nil {
 		u.cruiseFS.baseSpeed = speed
 		u.syncCruise()
+		m.noteSpanLocked(u, "巡航", prev, u.cruise)
 		return
 	}
 	u.cruise = speed
+	m.noteSpanLocked(u, "巡航", prev, u.cruise)
 }

@@ -183,10 +183,10 @@ func (a *电椅) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 func (a *电椅) burst(ctx unit.Context, s unit.Sense) {
-	rng := a.rng
-	if rng == nil {
-		rng = rand.New(rand.NewPCG(uint64(s.Time*1e6)+s.Self.ID, 3))
+	if a.rng == nil {
+		a.rng = unit.NewRNG(s.Self.ID)
 	}
+	rng := a.rng
 	a.strike(ctx, s, genBolts(s.Self.X, s.Self.Y, rng))
 }
 

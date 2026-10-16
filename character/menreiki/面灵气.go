@@ -131,7 +131,7 @@ type 面灵气 struct {
 	spun       [3]float64
 	shotOnce   [3]bool
 	hitSpun    [3]float64
-	paid       bool
+	seenWas    map[uint64][]string
 	regenReady float64
 	paleOn     bool
 	stunID     uint64
@@ -140,8 +140,9 @@ type 面灵气 struct {
 	fsSeq      uint32
 	frozen     bool
 	shareUntil float64
+	shareTo    uint64
 	breakN     int
-	prevEHP    float64
+	prevHP     map[uint64]float64
 	x, y       float64
 	vx, vy     float64
 	slot       int
@@ -150,6 +151,7 @@ type 面灵气 struct {
 	lastFac    string
 	steerReady float64
 	steerWait  bool
+	rng        *rand.Rand
 }
 
 func (m *面灵气) Handle(ctx unit.Context, ev unit.Event) {
@@ -214,8 +216,7 @@ func (m *面灵气) tickHook(ctx unit.Context, s unit.Sense) {
 	}
 	if want != m.hook {
 		if want == 3 {
-			m.paid = false
-			if e := enemyOf(s); e != nil {
+			for _, e := range enemyFighters(s) {
 				ctx.Out <- unit.ClearFactionSeen{UnitID: e.ID}
 			}
 		}
@@ -229,29 +230,30 @@ func (m *面灵气) tickHook(ctx unit.Context, s unit.Sense) {
 	}
 }
 
+func (m *面灵气) ensureRNG(id uint64) *rand.Rand {
+	if m.rng == nil {
+		m.rng = unit.NewRNG(id)
+	}
+	return m.rng
+}
+
 func (m *面灵气) grant(ctx unit.Context, s unit.Sense) {
-	if m.marked {
-		if e := enemyOf(s); e != nil {
-			m.enemyID = e.ID
+	if !m.marked {
+		selfF := unit.PickFaction(m.ensureRNG(ctx.ID).IntN(4))
+		ctx.Out <- unit.MarkFaction{
+			UnitID:  ctx.ID,
+			Faction: selfF,
+			AmpOut:  ampOut12,
+			AmpIn:   ampIn12,
 		}
-		return
+		m.marked = true
 	}
-	selfF := unit.PickFaction(rand.IntN(4))
-	ctx.Out <- unit.MarkFaction{
-		UnitID:  ctx.ID,
-		Faction: selfF,
-		AmpOut:  ampOut12,
-		AmpIn:   ampIn12,
-	}
-	m.marked = true
-	e := enemyOf(s)
-	if e == nil {
-		return
-	}
-	m.enemyID = e.ID
-	ctx.Out <- unit.MarkFaction{
-		UnitID:  e.ID,
-		Faction: unit.PickFaction(rand.IntN(4)),
+	cycle := m.hook >= 2
+	for _, e := range enemyFighters(s) {
+		if e.Faction != "" {
+			continue
+		}
+		m.stampEnemy(ctx, e, cycle)
 	}
 }
 
@@ -259,7 +261,7 @@ func (m *面灵气) restamp(ctx unit.Context, s unit.Sense, cycle bool) {
 	out, in := amps(m.hook)
 	selfF := s.Self.Faction
 	if selfF == "" {
-		selfF = unit.PickFaction(rand.IntN(4))
+		selfF = unit.PickFaction(m.ensureRNG(ctx.ID).IntN(4))
 	}
 	ctx.Out <- unit.MarkFaction{
 		UnitID:  ctx.ID,
@@ -268,13 +270,15 @@ func (m *面灵气) restamp(ctx unit.Context, s unit.Sense, cycle bool) {
 		AmpOut:  out,
 		AmpIn:   in,
 	}
-	e := enemyOf(s)
-	if e == nil {
-		return
+	for _, e := range enemyFighters(s) {
+		m.stampEnemy(ctx, e, cycle)
 	}
+}
+
+func (m *面灵气) stampEnemy(ctx unit.Context, e *unit.Snapshot, cycle bool) {
 	ef := e.Faction
 	if ef == "" {
-		ef = unit.PickFaction(rand.IntN(4))
+		ef = unit.PickFaction(m.ensureRNG(ctx.ID).IntN(4))
 	}
 	ctx.Out <- unit.MarkFaction{
 		UnitID:  e.ID,
@@ -504,25 +508,52 @@ func (m *面灵气) collect(ctx unit.Context, s unit.Sense) {
 	if m.hook < 2 {
 		return
 	}
-	e := enemyOf(s)
-	if e == nil {
-		return
+	if m.seenWas == nil {
+		m.seenWas = map[uint64][]string{}
 	}
-	if len(e.Seen) < len(unit.AllFactions()) {
-		return
-	}
-	if m.hook < 3 && m.paid {
-		return
-	}
-	m.paid = m.hook < 3
-	m.pay(ctx, s, e)
-	if m.hook >= 3 {
-		ctx.Out <- unit.ClearFactionSeen{UnitID: e.ID}
+	for _, e := range enemyFighters(s) {
+		prev := m.seenWas[e.ID]
+		fac := completingColor(prev, *e)
+		m.seenWas[e.ID] = append([]string(nil), e.Seen...)
+		if fac == "" {
+			continue
+		}
+		m.pay(ctx, s, e, fac)
+		if m.hook >= 3 {
+			ctx.Out <- unit.ClearFactionSeen{UnitID: e.ID}
+		}
 	}
 }
 
-func (m *面灵气) pay(ctx unit.Context, s unit.Sense, e *unit.Snapshot) {
-	switch e.Faction {
+func completingColor(prev []string, e unit.Snapshot) string {
+	need := len(unit.AllFactions())
+	if len(e.Seen) < need || len(prev) >= need {
+		return ""
+	}
+	have := map[string]bool{}
+	for _, f := range prev {
+		have[f] = true
+	}
+	var added []string
+	for _, f := range e.Seen {
+		if !have[f] {
+			added = append(added, f)
+		}
+	}
+	if len(added) == 1 {
+		return added[0]
+	}
+	if unit.ValidFaction(e.Faction) {
+		return e.Faction
+	}
+	if len(added) > 0 {
+		return added[len(added)-1]
+	}
+	return ""
+}
+
+func (m *面灵气) pay(ctx unit.Context, s unit.Sense, e *unit.Snapshot, fac string) {
+	switch fac {
 	case unit.FactionRed:
 		strike(ctx, *e, maskDmg(s.Self.Faction))
 	case unit.FactionCyan:
@@ -536,7 +567,7 @@ func (m *面灵气) pay(ctx unit.Context, s unit.Sense, e *unit.Snapshot) {
 		}
 	case unit.FactionPurple:
 		m.shareUntil = s.Time + shareSecs
-		m.enemyID = e.ID
+		m.shareTo = e.ID
 		ctx.Out <- unit.FX{
 			Name: "share", Kind: ctx.Kind, UnitID: ctx.ID,
 			X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot,
@@ -623,6 +654,17 @@ func enemyOf(s unit.Sense) *unit.Snapshot {
 	return unit.Seek(s)
 }
 
+func enemyFighters(s unit.Sense) []*unit.Snapshot {
+	var out []*unit.Snapshot
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Role == unit.RoleFighter && o.Slot != s.Self.Slot {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
 func hitTarget(other unit.Snapshot, slot int) bool {
 	return unit.Hittable(other, slot)
 }
@@ -648,28 +690,32 @@ func (m *面灵气) shareHit(ctx unit.Context, d unit.IncomingDamage) {
 	if m.shareUntil <= 0 || d.Time+1e-9 >= m.shareUntil {
 		return
 	}
-	if m.enemyID == 0 || d.Amount <= 0 || d.From == ctx.ID {
+	if m.shareTo == 0 || d.Amount <= 0 || d.From == ctx.ID {
 		return
 	}
 	extra := m.breakN
-	ctx.Out <- unit.Damage{From: ctx.ID, To: m.enemyID, Amount: d.Amount*shareMul + float64(extra)}
+	ctx.Out <- unit.Damage{From: ctx.ID, To: m.shareTo, Amount: d.Amount*shareMul + float64(extra)}
 	if extra > 0 {
-		ctx.Out <- unit.ClearMarks{UnitID: m.enemyID, Kind: breakKind}
+		ctx.Out <- unit.ClearMarks{UnitID: m.shareTo, Kind: breakKind}
 		m.breakN = 0
 	}
 }
 
 func (m *面灵气) watchBreak(ctx unit.Context, s unit.Sense) {
-	e := enemyOf(s)
-	if e == nil {
-		return
+	if m.prevHP == nil {
+		m.prevHP = map[uint64]float64{}
 	}
-	n := markStacks(*e, breakKind)
-	if n > 0 && m.prevEHP > 0 && e.HP < m.prevEHP-0.5 {
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.ID, Amount: float64(n)}
-		ctx.Out <- unit.ClearMarks{UnitID: e.ID, Kind: breakKind}
-		n = 0
+	m.breakN = 0
+	for _, e := range enemyFighters(s) {
+		n := markStacks(*e, breakKind)
+		if n > 0 && m.prevHP[e.ID] > 0 && e.HP < m.prevHP[e.ID]-0.5 {
+			ctx.Out <- unit.Damage{From: ctx.ID, To: e.ID, Amount: float64(n)}
+			ctx.Out <- unit.ClearMarks{UnitID: e.ID, Kind: breakKind}
+			n = 0
+		}
+		m.prevHP[e.ID] = e.HP
+		if e.ID == m.shareTo {
+			m.breakN = n
+		}
 	}
-	m.prevEHP = e.HP
-	m.breakN = n
 }

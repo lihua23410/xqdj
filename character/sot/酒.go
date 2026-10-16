@@ -46,7 +46,9 @@ func (w *酒) onSense(ctx unit.Context, s unit.Sense) {
 	w.x, w.y = s.Self.X, s.Self.Y
 	if !w.booted {
 		w.booted = true
-		w.rng = rand.New(rand.NewPCG(ctx.ID, ctx.ID))
+		if w.rng == nil {
+			w.rng = unit.NewRNG(ctx.ID)
+		}
 	}
 	ax := (w.rng.Float64()*2 - 1) * wineWind
 	ctx.Out <- unit.Force{UnitID: ctx.ID, AX: ax, AY: -wineG}
@@ -62,6 +64,11 @@ func (w *酒) onSense(ctx unit.Context, s unit.Sense) {
 
 func (w *酒) onHit(ctx unit.Context, other unit.Snapshot) {
 	if other.Slot == w.slot {
+		// 同边另一只战斗机把坛子打掉，不留酒场、不出伤。自己和自己的活随从仍穿过。
+		if other.Role == unit.RoleFighter && other.ID != w.owner {
+			w.dead = true
+			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+		}
 		return
 	}
 	if unit.Hittable(other, w.slot) {

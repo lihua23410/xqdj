@@ -176,11 +176,76 @@ func TestOverlappingWallsSlam(t *testing.T) {
 	if len(m.walls) != 0 {
 		t.Fatalf("walls=%d", len(m.walls))
 	}
+	sawSlam := false
+	for _, fx := range m.fx {
+		if fx.Name == "wall-fade" {
+			t.Fatal("slam played wall-fade")
+		}
+		if fx.Name == "slam" {
+			sawSlam = true
+		}
+	}
+	if !sawSlam {
+		t.Fatal("missing slam")
+	}
 	if owner.held || owner.stun || math.Abs(owner.v.X-40) > 1e-9 {
 		t.Fatalf("owner held=%v stun=%v vel=%v", owner.held, owner.stun, owner.v)
 	}
 	if enemy.held {
 		t.Fatal("far enemy was stunned")
+	}
+}
+
+func TestSlamSweptCatchesTunnel(t *testing.T) {
+	m := newWallMatch(t)
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	owner := fighterByKind(m, character.KindWaller)
+	m.placeWallLocked(unitpkg.PlaceWall{
+		OwnerID: owner.id, Slot: owner.slot, Kind: owner.kind,
+		X1: -40, Y1: 0, X2: 40, Y2: 0, Radius: 6, Life: -1,
+	})
+	m.placeWallLocked(unitpkg.PlaceWall{
+		OwnerID: owner.id, Slot: owner.slot, Kind: owner.kind,
+		X1: -40, Y1: 20, X2: 40, Y2: 20, Radius: 6, Life: -1,
+	})
+	if d := segDist(m.walls[0].a, m.walls[0].b, m.walls[1].a, m.walls[1].b); d <= 12 {
+		t.Fatalf("start dist=%v already overlapping", d)
+	}
+	step := 50 / DT
+	m.setWallMotionLocked(unitpkg.SetWallMotion{
+		WallID: m.walls[0].id, VY: step, StunRadius: 24, StunDur: 1,
+	})
+	m.setWallMotionLocked(unitpkg.SetWallMotion{
+		WallID: m.walls[1].id, VY: -step, StunRadius: 24, StunDur: 1,
+	})
+	m.spinWallsLocked(DT)
+	if len(m.walls) != 0 {
+		d := segDist(m.walls[0].a, m.walls[0].b, m.walls[1].a, m.walls[1].b)
+		t.Fatalf("tunneled walls=%d endDist=%v", len(m.walls), d)
+	}
+}
+
+func TestPassOwnerDoesNotBounceSelf(t *testing.T) {
+	m := newWallMatch(t)
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	owner := fighterByKind(m, character.KindWaller)
+	enemy := fighterByKind(m, character.KindRanged)
+	owner.p = vec{0, 0}
+	owner.setVel(vec{400, 0})
+	enemy.p = vec{0, 240}
+	enemy.setVel(vec{})
+	m.placeWallLocked(unitpkg.PlaceWall{
+		OwnerID: owner.id, Slot: owner.slot, Kind: owner.kind,
+		X1: 30, Y1: -40, X2: 30, Y2: 40, Radius: 6, Life: -1,
+	})
+	m.walls[0].passOwner = true
+	m.physicsLocked(DT)
+	if math.Abs(owner.v.X-400) > 1e-6 || owner.p.X < 6 {
+		t.Fatalf("owner vel=%v pos=%v", owner.v, owner.p)
 	}
 }
 

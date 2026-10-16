@@ -20,6 +20,10 @@ func (m *Match) stackMarkLocked(c unitpkg.StackMark) {
 	if u.marks == nil {
 		u.marks = map[string]*stackMark{}
 	}
+	prev := 0
+	if cur := u.marks[c.Kind]; cur != nil {
+		prev = cur.stacks
+	}
 	cur := u.marks[c.Kind]
 	if cur == nil {
 		if c.Delta < 0 {
@@ -35,6 +39,11 @@ func (m *Match) stackMarkLocked(c unitpkg.StackMark) {
 	if cur.stacks <= 0 {
 		delete(u.marks, c.Kind)
 	}
+	next := 0
+	if cur := u.marks[c.Kind]; cur != nil {
+		next = cur.stacks
+	}
+	m.noteMarkLocked(u, c.Kind, prev, next)
 }
 
 func (m *Match) clearMarksLocked(c unitpkg.ClearMarks) {
@@ -43,10 +52,28 @@ func (m *Match) clearMarksLocked(c unitpkg.ClearMarks) {
 		return
 	}
 	if c.Kind == "" {
+		if len(u.marks) == 0 {
+			return
+		}
+		keys := make([]string, 0, len(u.marks))
+		for k, mk := range u.marks {
+			if mk != nil && mk.stacks > 0 {
+				keys = append(keys, k)
+			}
+		}
+		sort.Strings(keys)
 		u.marks = nil
+		for _, k := range keys {
+			m.noteMarkLocked(u, k, 1, 0)
+		}
 		return
 	}
+	prev := 0
+	if cur := u.marks[c.Kind]; cur != nil {
+		prev = cur.stacks
+	}
 	delete(u.marks, c.Kind)
+	m.noteMarkLocked(u, c.Kind, prev, 0)
 }
 
 func (u *unit) markList() []unitpkg.Mark {
