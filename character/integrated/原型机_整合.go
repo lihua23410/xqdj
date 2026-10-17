@@ -76,6 +76,7 @@ type 原型机_整合 struct {
 	inside      map[uint64]bool
 	fleeInside  map[uint64]bool
 	tracking    bool
+	roundHold   map[uint64]unit.DetourHold
 }
 
 func (a *原型机_整合) Handle(ctx unit.Context, ev unit.Event) {
@@ -318,22 +319,34 @@ func (a *原型机_整合) steer(ctx unit.Context, s unit.Sense) {
 	if target == nil {
 		return
 	}
+	if a.roundHold == nil {
+		a.roundHold = map[uint64]unit.DetourHold{}
+	}
+	seen := map[uint64]bool{}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if o.OwnerID != ctx.ID || o.Kind != KindIntegratedRound {
 			continue
 		}
+		seen[o.ID] = true
 		sp := math.Hypot(o.VX, o.VY)
 		if sp < 1e-6 {
 			continue
 		}
-		dx, dy := target.X-o.X, target.Y-o.Y
+		wx, wy, hold := unit.Detour(o.X, o.Y, o.Radius, target.X, target.Y, s.Walls, a.roundHold[o.ID], s.Time)
+		a.roundHold[o.ID] = hold
+		dx, dy := wx-o.X, wy-o.Y
 		tn := math.Hypot(dx, dy)
 		if tn < 1e-6 {
 			continue
 		}
 		ux, uy := turnToward(o.VX/sp, o.VY/sp, dx/tn, dy/tn, turnStep)
 		ctx.Out <- unit.SetVelocity{UnitID: o.ID, VX: ux * sp, VY: uy * sp}
+	}
+	for id := range a.roundHold {
+		if !seen[id] {
+			delete(a.roundHold, id)
+		}
 	}
 }
 

@@ -30,6 +30,7 @@ type 老鼠 struct {
 	targetKind string
 	hasTarget  bool
 	nextPick   float64
+	hold       unit.DetourHold
 }
 
 func newRat(info unit.SpawnInfo) *老鼠 {
@@ -181,13 +182,16 @@ func (r *老鼠) hover(ctx unit.Context, s unit.Sense, o *unit.Snapshot, speed, 
 	r.steer(ctx, s, o.X-dx/d*want, o.Y-dy/d*want, speed)
 }
 
-// steer 朝一个点走，快到了就减速，免得在目标点上来回蹭；再叠一层对自己人的排斥，
-// 这样即使没有碰撞体积，也不会互相穿过去或者被本体压在身下。
+// steer 朝一个点走。直线被墙挡住就改朝端点外侧绕，减速仍按真正的目标算，
+// 免得在墙角提前刹停。再叠一层对自己人的排斥。
 func (r *老鼠) steer(ctx unit.Context, s unit.Sense, tx, ty, speed float64) {
+	wx, wy, hold := unit.Detour(s.Self.X, s.Self.Y, s.Self.Radius, tx, ty, s.Walls, r.hold, s.Time)
+	r.hold = hold
 	vx, vy := 0.0, 0.0
-	dx, dy := tx-s.Self.X, ty-s.Self.Y
+	dx, dy := wx-s.Self.X, wy-s.Self.Y
+	gd := math.Hypot(tx-s.Self.X, ty-s.Self.Y)
 	if d := math.Hypot(dx, dy); d > 1e-6 {
-		sp := math.Min(speed, d*6)
+		sp := math.Min(speed, gd*6)
 		if sp < 20 {
 			sp = 0
 		}

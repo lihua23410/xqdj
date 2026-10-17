@@ -88,8 +88,8 @@ func TestAuraWaitsThenTicks(t *testing.T) {
 	nearby := append(flies, enemy)
 	ctx := unit.Context{ID: 1, Kind: KindMaggot, Out: out}
 	a.Handle(ctx, unit.Sense{
-		Time: 0,
-		Self: unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
+		Time:   0,
+		Self:   unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
 		Nearby: nearby,
 	})
 	cmds := drain(out)
@@ -97,8 +97,8 @@ func TestAuraWaitsThenTicks(t *testing.T) {
 		t.Fatalf("aura should wait first gap: %v", cmds)
 	}
 	a.Handle(ctx, unit.Sense{
-		Time: 0.5,
-		Self: unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
+		Time:   0.5,
+		Self:   unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
 		Nearby: nearby,
 	})
 	cmds = drain(out)
@@ -106,8 +106,8 @@ func TestAuraWaitsThenTicks(t *testing.T) {
 		t.Fatalf("aura should still be waiting at 0.5s: %v", cmds)
 	}
 	a.Handle(ctx, unit.Sense{
-		Time: auraGap,
-		Self: unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
+		Time:   auraGap,
+		Self:   unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
 		Nearby: nearby,
 	})
 	cmds = drain(out)
@@ -132,8 +132,8 @@ func TestFlyPairLaysEggAfterOverlap(t *testing.T) {
 		{ID: 11, Kind: KindFly, OwnerID: 1, Slot: 0, X: 10, Y: 0, Radius: flyRadius, Mortal: true},
 	}
 	a.Handle(ctx, unit.Sense{
-		Time: 0,
-		Self: unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
+		Time:   0,
+		Self:   unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
 		Nearby: nearby,
 	})
 	_ = drain(out)
@@ -141,8 +141,8 @@ func TestFlyPairLaysEggAfterOverlap(t *testing.T) {
 		t.Fatalf("overlap should start when dist<=24")
 	}
 	a.Handle(ctx, unit.Sense{
-		Time: overlapNeed,
-		Self: unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
+		Time:   overlapNeed,
+		Self:   unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
 		Nearby: nearby,
 	})
 	cmds := drain(out)
@@ -206,4 +206,34 @@ func hasDamageTo(cmds []unit.Cmd, to uint64) bool {
 		}
 	}
 	return false
+}
+
+func TestFlyPairDetoursAroundWall(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	a := &蛆{
+		booted: true, awaitSpawn: false, orphanFrom: -1,
+		breedUntil: map[uint64]float64{}, overlapFrom: map[flyPair]float64{},
+		flyPassing: map[uint64]bool{},
+	}
+	ctx := unit.Context{ID: 1, Kind: KindMaggot, Out: out}
+	wall := unit.WallView{ID: 9, X1: 30, Y1: -40, X2: 30, Y2: 20, Radius: 6}
+	a.Handle(ctx, unit.Sense{
+		Time: 1,
+		Self: unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
+		Nearby: []unit.Snapshot{
+			{ID: 10, Kind: KindFly, OwnerID: 1, Slot: 0, X: 0, Y: 0, Radius: flyRadius, Mortal: true},
+			{ID: 11, Kind: KindFly, OwnerID: 1, Slot: 0, X: 70, Y: 10, Radius: flyRadius, Mortal: true},
+		},
+		Walls: []unit.WallView{wall},
+	})
+	var v *unit.SetVelocity
+	for _, c := range drain(out) {
+		if s, ok := c.(unit.SetVelocity); ok && s.UnitID == 10 {
+			cp := s
+			v = &cp
+		}
+	}
+	if v == nil || v.VY <= v.VX {
+		t.Fatalf("配对直线被墙挡住时该朝上端绕，不该直顶: %+v", v)
+	}
 }

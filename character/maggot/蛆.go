@@ -139,7 +139,8 @@ type 蛆 struct {
 	overlapFrom map[flyPair]float64
 	flyPassing  map[uint64]bool
 	flyWasCD    map[uint64]bool // 上一拍是否在繁殖冷却，用于切白眼与飘字
-	stenchOn    bool            // 场上己方苍蝇 ≥3 时的全屏臭气
+	flyHold     map[uint64]unit.DetourHold
+	stenchOn    bool // 场上己方苍蝇 ≥3 时的全屏臭气
 	rng         *rand.Rand
 }
 
@@ -502,6 +503,11 @@ func (a *蛆) tickFlies(ctx unit.Context, s unit.Sense) {
 			delete(a.flyWasCD, id)
 		}
 	}
+	for id := range a.flyHold {
+		if _, ok := live[id]; !ok {
+			delete(a.flyHold, id)
+		}
+	}
 	for p := range a.overlapFrom {
 		if _, ok := live[p.a]; !ok {
 			delete(a.overlapFrom, p)
@@ -569,8 +575,8 @@ func (a *蛆) tickFlies(ctx unit.Context, s unit.Sense) {
 		activePairs[pair] = struct{}{}
 		a.setFlyPass(ctx, fa.id, true)
 		a.setFlyPass(ctx, fb.id, true)
-		pull(ctx, fa.id, fa.x, fa.y, fb.x, fb.y)
-		pull(ctx, fb.id, fb.x, fb.y, fa.x, fa.y)
+		a.pull(ctx, s, fa.id, fa.x, fa.y, fb.x, fb.y)
+		a.pull(ctx, s, fb.id, fb.x, fb.y, fa.x, fa.y)
 
 		dist := math.Hypot(fa.x-fb.x, fa.y-fb.y)
 		if dist > overlapR {
@@ -638,8 +644,13 @@ func (a *蛆) pulseFlyEye(ctx unit.Context, s unit.Sense, id uint64, x, y float6
 	}
 }
 
-func pull(ctx unit.Context, id uint64, x, y, tx, ty float64) {
-	dx, dy := tx-x, ty-y
+func (a *蛆) pull(ctx unit.Context, s unit.Sense, id uint64, x, y, tx, ty float64) {
+	if a.flyHold == nil {
+		a.flyHold = map[uint64]unit.DetourHold{}
+	}
+	wx, wy, hold := unit.Detour(x, y, flyRadius, tx, ty, s.Walls, a.flyHold[id], s.Time)
+	a.flyHold[id] = hold
+	dx, dy := wx-x, wy-y
 	dist := math.Hypot(dx, dy)
 	if dist < 1e-6 {
 		return

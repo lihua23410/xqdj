@@ -182,6 +182,25 @@ func TestBootPullIgnoresDistanceOnce(t *testing.T) {
 	}
 }
 
+func TestBootPullDetoursAroundWall(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	h := &半{owner: 1, slot: 0, red: true}
+	ctx := unit.Context{ID: 2, Kind: KindRed, Out: out}
+	wall := unit.WallView{ID: 9, X1: 50, Y1: -80, X2: 50, Y2: 40, Radius: 6}
+	h.Handle(ctx, unit.Sense{
+		Time: bootGrace,
+		Self: unit.Snapshot{ID: 2, Kind: KindRed, Slot: 0, X: 0, Y: 0, Radius: twinRadius},
+		Nearby: []unit.Snapshot{{
+			ID: 3, Kind: KindBlue, Slot: 0, X: 200, Y: 30, Radius: twinRadius,
+		}},
+		Walls: []unit.WallView{wall},
+	})
+	v := lastVel(drain(out), 2)
+	if v == nil || v.VY <= v.VX {
+		t.Fatalf("开局互吸被墙挡住时该朝上端绕: %+v", v)
+	}
+}
+
 func TestAttractPullsWhenInBand(t *testing.T) {
 	_, h, out := halfSense(2, true, 0, 0, 50, 0, bootGrace)
 	cmds := drain(out)
@@ -289,6 +308,67 @@ func TestAttractEndsIntoCooldown(t *testing.T) {
 	if lastVel(cmds, 2) == nil {
 		t.Fatalf("missing SetVelocity after cooldown: %v", cmds)
 	}
+}
+
+func TestOpeningShotIgnoresVisionWall(t *testing.T) {
+	ctx, h, out := senseBehindVisionWall(t)
+	drain(out)
+	if h.hasEnemy || !h.hasAim {
+		t.Fatalf("wall should hide Seek but leave an aim: hasEnemy=%v hasAim=%v", h.hasEnemy, h.hasAim)
+	}
+	h.Handle(ctx, unit.Collision{
+		Time:  bootGrace + 0.2,
+		Other: unit.Snapshot{ID: 3, Kind: KindBlue, Slot: 0, X: 36, Y: 0},
+	})
+	cmds := drain(out)
+	sp, ok := purpleSpawn(cmds)
+	if !ok || sp.VX <= 0 {
+		t.Fatalf("opening collision should still fire toward the enemy: %v", cmds)
+	}
+	if !h.opened {
+		t.Fatal("opening shot should be spent")
+	}
+}
+
+func TestLaterShotStillNeedsSight(t *testing.T) {
+	ctx, h, out := senseBehindVisionWall(t)
+	drain(out)
+	h.opened = true
+	h.Handle(ctx, unit.Collision{
+		Time:  bootGrace + 1,
+		Other: unit.Snapshot{ID: 3, Kind: KindBlue, Slot: 0, X: 36, Y: 0},
+	})
+	if _, ok := purpleSpawn(drain(out)); ok {
+		t.Fatal("after the opening shot, a vision wall should still block 紫弹")
+	}
+}
+
+func senseBehindVisionWall(t *testing.T) (unit.Context, *半, chan unit.Cmd) {
+	t.Helper()
+	out := make(chan unit.Cmd, 32)
+	h := &半{owner: 1, slot: 0, red: true}
+	ctx := unit.Context{ID: 2, Kind: KindRed, Out: out}
+	h.Handle(ctx, unit.Sense{
+		Time: bootGrace,
+		Self: unit.Snapshot{ID: 2, Kind: KindRed, Slot: 0, X: 0, Y: 0, Radius: twinRadius},
+		Nearby: []unit.Snapshot{
+			{ID: 3, Kind: KindBlue, Slot: 0, X: 40, Y: 0, Radius: twinRadius},
+			{ID: 8, Slot: 1, X: 200, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim},
+		},
+		Walls: []unit.WallView{{
+			ID: 9, X1: 100, Y1: -80, X2: 100, Y2: 80, Radius: 6, VisionBlock: true,
+		}},
+	})
+	return ctx, h, out
+}
+
+func purpleSpawn(cmds []unit.Cmd) (unit.Spawn, bool) {
+	for _, c := range cmds {
+		if s, ok := c.(unit.Spawn); ok && s.Kind == purpleKind {
+			return s, true
+		}
+	}
+	return unit.Spawn{}, false
 }
 
 func TestPurpleStopsOnAllyFighter(t *testing.T) {

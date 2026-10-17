@@ -43,7 +43,8 @@ const (
 	attractMax = 80.0
 	attractCD  = 7.0
 
-	// 开局 grace 内不做距离互吸；两球交替念偈。grace 结束后无视距离互吸一次，撞出紫弹。
+	// 开局 grace 内不做距离互吸；两球交替念偈。grace 结束后无视距离互吸一次。
+	// 第一次半圆相撞必出紫弹，挡视线的墙挡不住这一发；之后再撞仍要索敌到人。
 	bootGrace = 3.0
 	chantGap  = bootGrace / 4
 )
@@ -212,6 +213,11 @@ type 半 struct {
 	enemyX         float64
 	enemyY         float64
 	hasEnemy       bool
+	aimX           float64
+	aimY           float64
+	hasAim         bool // 无视挡视线时的索敌，只给第一次相撞兜底
+	opened         bool // 第一次半圆相撞的紫弹已经打出
+	hold           unit.DetourHold
 }
 
 func (h *半) Handle(ctx unit.Context, ev unit.Event) {
@@ -247,8 +253,8 @@ func (h *半) Handle(ctx unit.Context, ev unit.Event) {
 		}
 		// 半圆贴上后圆心距常略大于 36，仍落在互吸带里；不在碰撞时收束会一直改速度、冷却起不来。
 		h.endAttract(ctx, e.Time, h.selfX, h.selfY)
-		if h.red {
-			h.tryShot(ctx, e)
+		if h.red && h.tryShot(ctx, e, !h.opened) {
+			h.opened = true
 		}
 	}
 }
@@ -274,7 +280,7 @@ func (h *半) tickAttract(ctx unit.Context, s unit.Sense) {
 		h.attracting = true
 		h.bootPulling = true
 		pulseAttract(ctx, s, 1)
-		pullHalf(ctx, ctx.ID, s.Self.X, s.Self.Y, sib.X, sib.Y)
+		h.pullToward(ctx, s, sib.X, sib.Y)
 		return
 	}
 
@@ -287,7 +293,7 @@ func (h *半) tickAttract(ctx unit.Context, s unit.Sense) {
 		}
 		// 每拍重发，避免包脚本晚于首帧 FX 时观众侧永远进不了互吸态。
 		pulseAttract(ctx, s, 1)
-		pullHalf(ctx, ctx.ID, s.Self.X, s.Self.Y, sib.X, sib.Y)
+		h.pullToward(ctx, s, sib.X, sib.Y)
 		return
 	}
 	if !inBand || s.Time < h.attractReadyAt {
@@ -295,7 +301,7 @@ func (h *半) tickAttract(ctx unit.Context, s unit.Sense) {
 	}
 	h.attracting = true
 	pulseAttract(ctx, s, 1)
-	pullHalf(ctx, ctx.ID, s.Self.X, s.Self.Y, sib.X, sib.Y)
+	h.pullToward(ctx, s, sib.X, sib.Y)
 }
 
 func (h *半) pulseChant(ctx unit.Context, s unit.Sense) {
@@ -368,14 +374,16 @@ func findSibling(s unit.Sense, red bool, slot int) (unit.Snapshot, bool) {
 	return unit.Snapshot{}, false
 }
 
-func pullHalf(ctx unit.Context, id uint64, x, y, tx, ty float64) {
-	dx, dy := tx-x, ty-y
+func (h *半) pullToward(ctx unit.Context, s unit.Sense, tx, ty float64) {
+	wx, wy, hold := unit.Detour(s.Self.X, s.Self.Y, s.Self.Radius, tx, ty, s.Walls, h.hold, s.Time)
+	h.hold = hold
+	dx, dy := wx-s.Self.X, wy-s.Self.Y
 	n := math.Hypot(dx, dy)
 	if n < 1e-6 {
 		return
 	}
 	ctx.Out <- unit.SetVelocity{
-		UnitID: id,
+		UnitID: ctx.ID,
 		VX:     dx / n * twinSpeed,
 		VY:     dy / n * twinSpeed,
 	}
@@ -388,19 +396,53 @@ func (h *半) remember(s unit.Sense) {
 		h.enemyX, h.enemyY = o.X, o.Y
 		h.hasEnemy = true
 	}
+	h.aimX, h.aimY, h.hasAim = aimIgnoringWalls(s)
 }
 
-func (h *半) tryShot(ctx unit.Context, e unit.Collision) {
-	if !h.hasEnemy || e.Time < h.shotReadyAt {
-		return
+// aimIgnoringWalls 按 Seek 的优先度与距离挑人，但不看挡视线。
+// 第一次相撞时墙正压在连线上，Seek 会空，这一发仍要有方向。
+func aimIgnoringWalls(s unit.Sense) (x, y float64, ok bool) {
+	var best *unit.Snapshot
+	bestPri := uint8(255)
+	bestD2 := math.MaxFloat64
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if !unit.Aimable(*o, s.Self.Slot) {
+			continue
+		}
+		dx, dy := o.X-s.Self.X, o.Y-s.Self.Y
+		d2 := dx*dx + dy*dy
+		if best != nil && (o.AimPriority > bestPri || (o.AimPriority == bestPri && d2 >= bestD2)) {
+			continue
+		}
+		best = o
+		bestPri = o.AimPriority
+		bestD2 = d2
+	}
+	if best == nil {
+		return 0, 0, false
+	}
+	return best.X, best.Y, true
+}
+
+func (h *半) tryShot(ctx unit.Context, e unit.Collision, opening bool) bool {
+	if e.Time < h.shotReadyAt {
+		return false
+	}
+	ex, ey := h.enemyX, h.enemyY
+	if !h.hasEnemy {
+		if !opening || !h.hasAim {
+			return false
+		}
+		ex, ey = h.aimX, h.aimY
 	}
 	mx := (h.selfX + e.Other.X) / 2
 	my := (h.selfY + e.Other.Y) / 2
-	dx := h.enemyX - mx
-	dy := h.enemyY - my
+	dx := ex - mx
+	dy := ey - my
 	n := math.Hypot(dx, dy)
 	if n < 1e-6 {
-		return
+		return false
 	}
 	ux, uy := dx/n, dy/n
 	ctx.Out <- unit.Spawn{
@@ -413,6 +455,7 @@ func (h *半) tryShot(ctx unit.Context, e unit.Collision) {
 		X: mx, Y: my, VX: ux * purpleSpeed, VY: uy * purpleSpeed, Slot: h.slot,
 	}
 	h.shotReadyAt = e.Time + purpleCD
+	return true
 }
 
 func passHurt(ctx unit.Context, ev unit.Event, owner uint64) bool {

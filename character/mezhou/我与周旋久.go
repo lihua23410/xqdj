@@ -143,6 +143,7 @@ type 我 struct {
 	nextHowlAt  float64
 	suicideAt   float64
 	dead        bool
+	hold        unit.DetourHold
 }
 
 func (t *我) Handle(ctx unit.Context, ev unit.Event) {
@@ -361,9 +362,8 @@ func (t *我) tickPsycho(ctx unit.Context, s unit.Sense) {
 	if n < 1e-6 {
 		return
 	}
+	t.drive(ctx, s, target.X, target.Y, zhouSpeed*2.2)
 	ux, uy := dx/n, dy/n
-	sp := zhouSpeed * 2.2
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * sp, VY: uy * sp}
 	if n <= knifeReach+target.Radius && s.Time+1e-9 >= t.nextKnifeAt {
 		ctx.Out <- unit.Damage{From: ctx.ID, To: target.ID, Amount: knifeDamage}
 		ctx.Out <- unit.FX{
@@ -450,12 +450,9 @@ func (t *我) tickSuicide(ctx unit.Context, s unit.Sense) {
 }
 
 func (t *我) tickMonster(ctx unit.Context, s unit.Sense) {
-	// 追着敌人走，嚎叫才够得着。
+	// 追着敌人走，嚎叫才够得着。直线被墙挡住就绕墙端。
 	if target, ok := t.pickTarget(s); ok {
-		dx, dy := target.X-t.x, target.Y-t.y
-		if n := math.Hypot(dx, dy); n > 1e-6 {
-			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * monsterSpeed, VY: dy / n * monsterSpeed}
-		}
+		t.drive(ctx, s, target.X, target.Y, monsterSpeed)
 	}
 	if t.nextHowlAt == 0 {
 		t.nextHowlAt = s.Time + howlPeriod
@@ -476,6 +473,18 @@ func (t *我) tickMonster(ctx unit.Context, s unit.Sense) {
 			ctx.Out <- unit.Stun{UnitID: o.ID, Hold: true, Until: s.Time + howlStun}
 		}
 	}
+}
+
+// drive 朝一个点走。直线被墙挡住就改朝墙端外侧，出伤距离仍按真正的目标算。
+func (t *我) drive(ctx unit.Context, s unit.Sense, tx, ty, speed float64) {
+	wx, wy, hold := unit.Detour(t.x, t.y, s.Self.Radius, tx, ty, s.Walls, t.hold, s.Time)
+	t.hold = hold
+	dx, dy := wx-t.x, wy-t.y
+	n := math.Hypot(dx, dy)
+	if n < 1e-6 {
+		return
+	}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * speed, VY: dy / n * speed}
 }
 
 func (t *我) emitMode(ctx unit.Context) {

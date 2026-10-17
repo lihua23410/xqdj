@@ -153,6 +153,7 @@
       <div class="tabs" id="tabs"></div>
       <div class="spacer"></div>
       <button type="button" id="btn-next">生成下一轮</button>
+      <button type="button" class="ghost" id="btn-random">随机初始对阵</button>
       <button type="button" class="ghost" id="btn-reset">恢复初始对阵</button>
     </div>
     <p class="note" id="warn" hidden></p>
@@ -173,7 +174,7 @@
       </table>
     </div>
     <h2>积分榜</h2>
-    <p class="hint">对手分是已赛对手的积分和，轮空不加对手分。唯一冠军只看积分严格最高，不靠对手分拆并列。</p>
+    <p class="hint">分 = 胜 + 平 × 0.5 + 轮空。对手分是已赛对手的积分和，轮空本身不加对手分。唯一冠军只看积分严格最高，不靠对手分拆并列。</p>
     <div class="table-wrap">
       <table>
         <thead>
@@ -184,6 +185,7 @@
             <th class="right">胜</th>
             <th class="right">负</th>
             <th class="right">平</th>
+            <th class="right">轮空</th>
             <th class="right">分</th>
             <th class="right">对手分</th>
             <th class="right">已赛</th>
@@ -253,6 +255,26 @@
     function pendingCount(round) {
       return round.filter((m) => !m.result).length;
     }
+    function shuffle(list) {
+      const a = list.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+    function randomInitial() {
+      const order = shuffle(TEAMS.map((t) => t.slug));
+      const matches = [];
+      for (let i = 0; i < order.length - 1; i += 2) {
+        matches.push({ left: order[i], right: order[i + 1], result: "" });
+      }
+      return {
+        rounds: [matches],
+        byes: [order[order.length - 1]],
+        view: 0,
+      };
+    }
     function sameInit() {
       if (state.rounds.length !== 1 || state.byes.length !== 1 || state.byes[0] !== INITIAL.byes[0]) return false;
       return state.rounds[0].every((m, i) =>
@@ -272,16 +294,19 @@
       ).join("");
       return `<select data-act="bye">${opts}</select>`;
     }
-    function assignTeam(matches, matchIndex, side, slug) {
+    function assignTeam(matches, matchIndex, side, slug, bye) {
       const next = matches.map((m) => ({ ...m }));
       const current = next[matchIndex][side];
-      if (current === slug) return matches;
+      if (current === slug) return { matches, bye };
+      let found = false;
       for (let i = 0; i < next.length; i++) {
-        if (next[i].left === slug) { next[i] = { ...next[i], left: current }; break; }
-        if (next[i].right === slug) { next[i] = { ...next[i], right: current }; break; }
+        if (next[i].left === slug) { next[i] = { ...next[i], left: current }; found = true; break; }
+        if (next[i].right === slug) { next[i] = { ...next[i], right: current }; found = true; break; }
       }
       next[matchIndex] = { ...next[matchIndex], [side]: slug };
-      return next;
+      // 选中的是轮空队伍时，被换下来的人去轮空，避免同一人既比赛又拿轮空分。
+      const nextBye = !found && bye === slug ? current : bye;
+      return { matches: next, bye: nextBye };
     }
     function setBye(matches, oldBye, newBye) {
       if (oldBye === newBye) return { matches, bye: oldBye };
@@ -302,11 +327,15 @@
     function standings(rounds, byes) {
       const rows = {};
       for (const t of TEAMS) {
-        rows[t.slug] = { slug: t.slug, wins: 0, losses: 0, draws: 0, points: 0, sos: 0, played: 0, opponents: [] };
+        rows[t.slug] = { slug: t.slug, wins: 0, losses: 0, draws: 0, byes: 0, points: 0, sos: 0, played: 0, opponents: [] };
       }
-      for (const round of rounds) {
+      for (let r = 0; r < rounds.length; r++) {
+        const round = rounds[r];
+        const inMatch = new Set();
         for (const match of round) {
-          if (!match.result) continue;
+          inMatch.add(match.left);
+          inMatch.add(match.right);
+          if (!match.result || !rows[match.left] || !rows[match.right]) continue;
           const a = rows[match.left];
           const b = rows[match.right];
           a.played += 1; b.played += 1;
@@ -316,11 +345,10 @@
           else if (match.result === "right") { b.wins += 1; b.points += 1; a.losses += 1; }
           else { a.draws += 1; b.draws += 1; a.points += 0.5; b.points += 0.5; }
         }
-      }
-      for (const slug of byes) {
-        if (!slug || !rows[slug]) continue;
-        rows[slug].points += 1;
-        rows[slug].played += 1;
+        const bye = byes[r];
+        if (!bye || !rows[bye] || inMatch.has(bye)) continue;
+        rows[bye].byes += 1;
+        rows[bye].points += 1;
       }
       for (const row of Object.values(rows)) {
         row.sos = row.opponents.reduce((sum, slug) => sum + rows[slug].points, 0);
@@ -487,6 +515,7 @@
           <td class="right">${row.wins}</td>
           <td class="right">${row.losses}</td>
           <td class="right">${row.draws}</td>
+          <td class="right">${row.byes}</td>
           <td class="right">${fmtPoints(row.points)}</td>
           <td class="right">${fmtPoints(row.sos)}</td>
           <td class="right">${row.played}</td>
@@ -513,7 +542,8 @@
       const view = Math.min(state.view, state.rounds.length - 1);
       const i = Number(el.dataset.i);
       if (el.dataset.act === "team") {
-        patchView(assignTeam(state.rounds[view], i, el.dataset.side, el.value), state.byes[view]);
+        const next = assignTeam(state.rounds[view], i, el.dataset.side, el.value, state.byes[view]);
+        patchView(next.matches, next.bye);
       } else if (el.dataset.act === "result") {
         const round = state.rounds[view].map((m, j) => j === i ? { ...m, result: el.value } : m);
         patchView(round, state.byes[view]);
@@ -534,6 +564,11 @@
         [...state.byes, bye],
         state.rounds.length,
       );
+    });
+    document.getElementById("btn-random").addEventListener("click", () => {
+      state = randomInitial();
+      save();
+      render();
     });
     document.getElementById("btn-reset").addEventListener("click", () => {
       state = structuredClone(INITIAL);
