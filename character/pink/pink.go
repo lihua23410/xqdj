@@ -62,7 +62,7 @@ const (
 	crowdRadius = 14.0
 	crowdHP     = 6.0
 	crowdSpeed  = 155.0
-	crowdSpawn  = 4.0
+	crowdSpawn  = 3.5
 	crowdMax    = 6
 
 	itemRadius = 12.0
@@ -118,7 +118,7 @@ const (
 	rocketShots = 5
 	rocketSpeed = 430.0
 	rocketDmg   = 20.0
-	rocketR     = 82.0
+	rocketR     = 120.0
 
 	fireRadius = 108.0
 	fireLife   = 5.0

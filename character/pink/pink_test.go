@@ -31,6 +31,9 @@ func TestRequestedWeaponDamageValues(t *testing.T) {
 	if rocketCD != 6 || rocketShots != 5 {
 		t.Fatalf("rocket config=%v/%d, want 6/5", rocketCD, rocketShots)
 	}
+	if rocketR != 120 || crowdSpawn != 3.5 {
+		t.Fatalf("rocket radius/crowd spawn=%v/%v, want 120/3.5", rocketR, crowdSpawn)
+	}
 	if gatlingMag != 60 {
 		t.Fatalf("gatling magazine=%d, want 60", gatlingMag)
 	}
@@ -232,6 +235,7 @@ func TestRocketExplosionDamagesEachTargetOnce(t *testing.T) {
 		lastNear: []unit.Snapshot{
 			{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 8, Y: 0, Radius: 18},
 			{ID: 3, Role: unit.RoleFighter, Slot: 1, X: 120, Y: 0, Radius: 18},
+			{ID: 4, Role: unit.RoleFighter, Slot: 1, X: 180, Y: 0, Radius: 18},
 		},
 	}
 	impact := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 0, Y: 0, Radius: 18}
@@ -240,7 +244,10 @@ func TestRocketExplosionDamagesEachTargetOnce(t *testing.T) {
 	if total, hits := damageTotal(cmds, 2); hits != 1 || total != rocketDmg {
 		t.Fatalf("impact target hits=%d total=%v, want one %v hit", hits, total, rocketDmg)
 	}
-	if total, hits := damageTotal(cmds, 3); hits != 0 || total != 0 {
+	if total, hits := damageTotal(cmds, 3); hits != 1 || total != rocketDmg {
+		t.Fatalf("expanded-radius target hits=%d total=%v, want one %v hit", hits, total, rocketDmg)
+	}
+	if total, hits := damageTotal(cmds, 4); hits != 0 || total != 0 {
 		t.Fatalf("out-of-radius target hits=%d total=%v, want none", hits, total)
 	}
 	if !hasDespawn(cmds, 9) {
