@@ -13,8 +13,11 @@ func TestRequestedWeaponDamageValues(t *testing.T) {
 	if bottleImpactDamage != 5 {
 		t.Fatalf("bottle impact damage=%v, want 5", bottleImpactDamage)
 	}
-	if shotgunDmg != 5 {
-		t.Fatalf("shotgun pellet damage=%v, want 5", shotgunDmg)
+	if shotgunDmg != 6 {
+		t.Fatalf("shotgun pellet damage=%v, want 6", shotgunDmg)
+	}
+	if rocketDmg != 28 {
+		t.Fatalf("rocket damage=%v, want 28", rocketDmg)
 	}
 	if gatlingDmg != 4 {
 		t.Fatalf("gatling damage=%v, want 4", gatlingDmg)

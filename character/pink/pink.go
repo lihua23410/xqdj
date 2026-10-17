@@ -93,7 +93,7 @@ const (
 	shotgunPellets = 6
 	shotgunUses    = 7
 	shotgunSpeed   = 620.0
-	shotgunDmg     = 5.0
+	shotgunDmg     = 6.0
 	shotgunLife    = 0.34
 
 	rifleCD    = 2.0
@@ -117,7 +117,7 @@ const (
 	rocketCD    = 6.0
 	rocketShots = 5
 	rocketSpeed = 430.0
-	rocketDmg   = 20.0
+	rocketDmg   = 28.0
 	rocketR     = 120.0
 
 	fireRadius = 108.0

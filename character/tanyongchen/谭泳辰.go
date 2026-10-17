@@ -1,6 +1,6 @@
 // 谭泳辰老先生：开局空手随机游荡，场上散落铃铛与苦无。自己或同边战斗机碰到都算捡到，效果记在他身上。
 // 捡到苦无后每 2 秒丢一发直线苦无（3 伤，约 10% 暴击 10 伤）；有铃铛时累计
-// 3 次命中或任意暴击就净化（无敌 2s + 回已损失血量 20%）；累计 10 次命中或
+// 3 次命中或任意暴击就净化（无敌 1.5s + 回已损失血量 20%）；累计 10 次命中或
 // 3 次暴击开 5 秒灵狐场域，场内苦无间隔 0.7s 但不再累计。
 package 谭泳辰
 
@@ -37,11 +37,11 @@ const (
 	kunaiDamage         = 3.0
 	kunaiCritDamage     = 12.0
 	kunaiCritChance     = 0.10
-	kunaiFlight         = 0.5   // 苦无飞行时间（秒），伤害在飞到落点时结算
+	kunaiFlight         = 0.55  // 苦无飞行时间（秒），伤害在飞到落点时结算
 	kunaiOvershoot      = 320.0 // 苦无飞过目标后继续飞的世界距离
 
 	bellHitsForPurify = 3
-	purifyInvuln      = 2.0
+	purifyInvuln      = 1.5
 	purifyHealFrac    = 0.20
 	purifyTeamR       = 240.0 // 净化顺手回血的队友范围
 
@@ -447,7 +447,7 @@ func (t *谭泳辰老先生) accumulate(ctx unit.Context, s unit.Sense, crit boo
 	}
 }
 
-// purify：白色净化，无敌 2 秒并回复已损失生命的 20%。
+// purify：白色净化，无敌 1.5 秒并回复已损失生命的 20%。
 func (t *谭泳辰老先生) purify(ctx unit.Context, s unit.Sense) {
 	t.invulnUntil = s.Time + purifyInvuln
 	missing := t.maxHP - t.hp

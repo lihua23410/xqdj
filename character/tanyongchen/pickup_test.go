@@ -103,3 +103,14 @@ func TestMinionDoesNotPick(t *testing.T) {
 		t.Fatal("活随从碰到不该收走苦无")
 	}
 }
+func TestPurifyUsesUpdatedTiming(t *testing.T) {
+	if kunaiFlight != 0.55 || purifyInvuln != 1.5 {
+		t.Fatalf("kunai flight/purify invuln=%v/%v, want 0.55/1.5", kunaiFlight, purifyInvuln)
+	}
+	out := make(chan unit.Cmd, 8)
+	a := &谭泳辰老先生{maxHP: tanHP, hp: 30, slot: 0}
+	a.purify(unit.Context{ID: 1, Kind: KindTan, Out: out}, unit.Sense{Time: 10, Self: tanSelf(0, 0)})
+	if a.invulnUntil != 11.5 {
+		t.Fatalf("purify invuln until=%v, want 11.5", a.invulnUntil)
+	}
+}
