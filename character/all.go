@@ -25,6 +25,7 @@ import (
 	"xqdj/character/menreiki"
 	"xqdj/character/mezhou"
 	"xqdj/character/pastor"
+	"xqdj/character/pink"
 	"xqdj/character/piper"
 	"xqdj/character/prisoner"
 	"xqdj/character/radar"
@@ -119,6 +120,22 @@ const (
 	KindZhou            = 我与周旋久.KindZhou
 	KindGlyph           = 老牧师.KindGlyph
 	KindPastor          = 老牧师.KindPastor
+	KindBottle          = pink.KindBottle
+	KindBottleShot      = pink.KindBottleShot
+	KindCrowd           = pink.KindCrowd
+	KindFire            = pink.KindFire
+	KindFuel            = pink.KindFuel
+	KindGatling         = pink.KindGatling
+	KindGatlingShot     = pink.KindGatlingShot
+	KindPink            = pink.KindPink
+	KindPistol          = pink.KindPistol
+	KindPistolShot      = pink.KindPistolShot
+	KindRifle           = pink.KindRifle
+	KindRifleShot       = pink.KindRifleShot
+	KindRocket          = pink.KindRocket
+	KindRocketShot      = pink.KindRocketShot
+	KindShotgun         = pink.KindShotgun
+	KindShotgunShot     = pink.KindShotgunShot
 	KindPiper           = 吹笛人.KindPiper
 	KindRat             = 吹笛人.KindRat
 	KindCage            = 囚徒.KindCage

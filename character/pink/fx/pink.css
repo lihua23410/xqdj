@@ -1,0 +1,480 @@
+/* Pink：三张脸覆盖球体，武器按形态和装备切换。 */
+
+.ball.look-pink {
+  overflow: visible;
+  background: radial-gradient(circle at 38% 28%, #fff4fa 0%, #ff9bcb 42%, #d8327c 100%);
+  box-shadow:
+    inset 0 0 0 2px #fff0f7,
+    0 0 12px #ff6fae99,
+    0 0 26px #ff3c8b55;
+}
+
+.pink-face {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 168%;
+  height: 182%;
+  object-fit: fill;
+  transform: translate(-50%, -50%) rotate(-1.2deg);
+  transform-origin: 50% 50%;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 6;
+  filter:
+    drop-shadow(0 0 3px #ffffffcc)
+    drop-shadow(0 0 9px var(--form-color, #ff8fbe));
+  animation: pink-face-breathe 1.15s ease-in-out infinite;
+}
+.ball.look-pink.pink-laugh .pink-face {
+  animation-duration: 0.62s;
+}
+.ball.look-pink.pink-manic .pink-face {
+  animation: pink-face-manic 0.18s steps(2) infinite;
+  filter:
+    drop-shadow(0 0 4px #fff)
+    drop-shadow(0 0 13px #ff286f)
+    drop-shadow(0 0 24px #ff286f88);
+}
+@keyframes pink-face-breathe {
+  0%, 100% { transform: translate(-50%, -50%) rotate(-1.2deg) scale(1); }
+  50% { transform: translate(-50%, -50%) rotate(-0.3deg) scale(1.035); }
+}
+@keyframes pink-face-manic {
+  0% { transform: translate(-50%, -50%) rotate(-2.4deg) scale(1.02); }
+  100% { transform: translate(-50%, -50%) rotate(1.6deg) scale(1.06); }
+}
+
+.pink-form-badge,
+.pink-weapon-badge,
+.pink-reload {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  color: #fff;
+  background: #27101ddd;
+  border: 1px solid var(--form-color, #ff8fbe);
+  box-shadow: 0 0 8px var(--form-color, #ff8fbe);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 8;
+  font: 700 10px/14px "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+.pink-form-badge {
+  top: -20px;
+  padding: 1px 6px;
+  transform: translate(-50%, -100%);
+  color: var(--form-color, #ffd4e7);
+}
+.pink-weapon-badge {
+  bottom: -13px;
+  padding: 0 6px;
+  transform: translate(-50%, 100%);
+  font-size: 9px;
+  line-height: 13px;
+}
+
+.pink-reload {
+  bottom: -31px;
+  display: grid;
+  grid-template-columns: auto 46px;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  transform: translate(-50%, 100%);
+  border-color: #ffe28a;
+  box-shadow: 0 0 9px #ffe28a;
+}
+.pink-reload span {
+  font-size: 9px;
+  color: #ffe28a;
+}
+.pink-reload b {
+  display: block;
+  width: 46px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #140b10;
+}
+.pink-reload i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #ff72ae, #ffe28a);
+  box-shadow: 0 0 7px #ffe28a;
+  transition: width 0.08s linear;
+}
+
+.pink-rig {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform: rotate(var(--face, 0deg));
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 7;
+}
+
+.pink-weapon {
+  position: absolute;
+  display: block;
+  height: auto;
+  object-fit: contain;
+  transform-origin: 0 50%;
+  pointer-events: none;
+  image-rendering: pixelated;
+  filter:
+    drop-shadow(0 0 3px #ff6fae)
+    drop-shadow(0 0 8px #280b17);
+  animation: pink-weapon-bob 0.72s ease-in-out infinite;
+}
+@keyframes pink-weapon-bob {
+  0%, 100% { margin-top: 0; }
+  50% { margin-top: -2px; }
+}
+
+.pink-weapon.w-axe {
+  width: 76px;
+  left: -20px;
+  top: -64px;
+  transform: rotate(-120deg) scaleX(-1);
+  transform-origin: 60% 55%;
+  display: block;
+  visibility: visible;
+  opacity: 1;
+}
+.pink-weapon.w-saw {
+  width: 98px;
+  left: 7px;
+  top: -13px;
+}
+.pink-weapon.w-bottle {
+  width: 17px;
+  left: 13px;
+  top: -29px;
+  transform: rotate(-8deg);
+}
+.pink-weapon.w-pistol {
+  width: 68px;
+  left: 10px;
+  top: -10px;
+}
+.pink-weapon.w-shotgun {
+  width: 82px;
+  left: 10px;
+  top: -10px;
+}
+.pink-weapon.w-rifle {
+  width: 88px;
+  left: 10px;
+  top: -10px;
+}
+.pink-weapon.w-fuel {
+  width: 27px;
+  left: 14px;
+  top: -25px;
+  transform: rotate(9deg);
+}
+.pink-weapon.w-gatling {
+  width: 96px;
+  left: 8px;
+  top: -13px;
+}
+.pink-weapon.w-rocket {
+  width: 108px;
+  left: 8px;
+  top: -16px;
+}
+
+/* 人群：白色小人贴图盖住小球。 */
+.ball.look-pink-crowd {
+  overflow: visible;
+  background: #f8f8f8;
+  box-shadow: 0 0 9px #fff8, 0 0 20px #ffffff55;
+}
+.pink-crowd-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 190%;
+  height: 210%;
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 3;
+  filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 9px #ff9bcb66);
+  animation: pink-crowd-walk 0.6s steps(2) infinite;
+}
+@keyframes pink-crowd-walk {
+  0%, 100% { transform: translate(-50%, -50%) rotate(-3deg); }
+  50% { transform: translate(-50%, -50%) rotate(3deg); }
+}
+
+/* 掉落装备。 */
+.ball.look-pink-item {
+  overflow: visible;
+  background: radial-gradient(circle, #fff4fa, #ff80b8 52%, transparent 72%);
+  box-shadow: 0 0 11px #ff75ad, 0 0 24px #ff75ad88;
+  border: 1px solid #fff0f7;
+}
+.pink-item-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 235%;
+  height: 235%;
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 3;
+  filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 9px #ff4f9a);
+  animation: pink-item-float 0.9s ease-in-out infinite;
+}
+.ball.look-pink-item.item-large .pink-item-img {
+  width: 350%;
+  height: 235%;
+}
+@keyframes pink-item-float {
+  0%, 100% { transform: translate(-50%, -50%) rotate(-5deg) scale(0.98); }
+  50% { transform: translate(-50%, -58%) rotate(4deg) scale(1.08); }
+}
+
+/* 子弹与瓶子。 */
+.ball.look-pink-shot,
+.ball.look-pink-bottle-shot,
+.ball.look-pink-rocket {
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+.pink-shot-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 36px;
+  height: auto;
+  object-fit: contain;
+  transform: translate(-50%, -50%) rotate(var(--travel, 0deg));
+  transform-origin: center;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 4;
+  filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 9px #ff4f9a);
+}
+.pink-rocket-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 58px;
+  height: auto;
+  object-fit: contain;
+  transform: translate(-50%, -50%) rotate(var(--travel, 0deg));
+  transform-origin: center;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 4;
+  filter: drop-shadow(0 0 5px #fff) drop-shadow(0 0 12px #ff2d83);
+}
+.pink-bottle-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: auto;
+  object-fit: contain;
+  transform: translate(-50%, -50%) rotate(24deg);
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 4;
+  filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 9px #ff9f45);
+}
+
+/* 火焰区域：四张火舌围绕区域旋转翻腾。 */
+.ball.look-pink-fire {
+  overflow: visible;
+  background:
+    radial-gradient(circle, #fff6b066 0%, #ff713d55 44%, #ff2d8355 66%, transparent 73%);
+  border: 2px solid #ff944dcc;
+  box-shadow:
+    0 0 20px #ff713d,
+    inset 0 0 28px #ff2d8377;
+  animation: pink-fire-field 0.48s ease-in-out infinite;
+}
+.pink-flame-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 92%;
+  height: 92%;
+  object-fit: contain;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 8px #ff713d) drop-shadow(0 0 16px #ff2d83);
+  animation: pink-flame-flicker 0.54s ease-in-out infinite alternate;
+}
+.pink-flame-img.f1 {
+  width: 68%;
+  height: 68%;
+  animation-duration: 0.38s;
+  animation-delay: -0.14s;
+  transform: translate(-61%, -42%);
+}
+.pink-flame-img.f2 {
+  width: 76%;
+  height: 76%;
+  animation-duration: 0.46s;
+  animation-delay: -0.23s;
+  transform: translate(-38%, -55%);
+}
+.pink-flame-img.f3 {
+  width: 58%;
+  height: 58%;
+  animation-duration: 0.31s;
+  animation-delay: -0.09s;
+  transform: translate(-50%, -63%);
+}
+@keyframes pink-fire-field {
+  0%, 100% { box-shadow: 0 0 18px #ff713d, inset 0 0 24px #ff2d8366; }
+  50% { box-shadow: 0 0 30px #ff944d, inset 0 0 38px #ff2d83aa; }
+}
+@keyframes pink-flame-flicker {
+  0% { opacity: 0.55; transform: translate(-50%, -50%) rotate(-9deg) scale(0.9); }
+  100% { opacity: 1; transform: translate(-50%, -50%) rotate(10deg) scale(1.13); }
+}
+
+/* 一次性图片特效。 */
+.pink-shot-image {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 34;
+  transform: translate(-50%, -50%);
+}
+.pink-shot-image img {
+  position: absolute;
+  left: calc(var(--size, 60px) / -2);
+  top: calc(var(--size, 60px) / -2);
+  width: var(--size, 60px);
+  height: var(--size, 60px);
+  object-fit: contain;
+  image-rendering: pixelated;
+  transform: rotate(var(--ang, 0rad));
+  filter: drop-shadow(0 0 7px #fff) drop-shadow(0 0 17px #ff3c8b);
+  animation: pink-image-pop 0.38s ease-out forwards;
+}
+.pink-saw-thrust img {
+  filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 20px #ffb21e) drop-shadow(0 0 38px #9c4a00);
+  animation: pink-saw-thrust 0.3s cubic-bezier(0.1, 0.75, 0.2, 1) forwards;
+}
+.pink-saw-spark img {
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 22px #ffbd28);
+  animation: pink-saw-spark 0.36s ease-out forwards;
+}
+@keyframes pink-saw-thrust {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scaleX(0.24) scaleY(0.7); }
+  24% { opacity: 1; transform: rotate(var(--ang, 0rad)) scaleX(1.08) scaleY(1); }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scaleX(1.34) scaleY(1.08); }
+}
+@keyframes pink-saw-spark {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(0.2); }
+  22% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(1.55); }
+}
+
+
+/* 火箭筒独立高爆层：火球、冲击波、黑烟和高速碎片，不带血腥效果。 */
+.pink-rocket-blast img {
+  filter:
+    drop-shadow(0 0 12px #fff)
+    drop-shadow(0 0 34px #ff7418)
+    drop-shadow(0 0 70px #3b1204);
+  animation: pink-rocket-blast 0.78s cubic-bezier(0.08, 0.7, 0.18, 1) forwards;
+}
+.pink-rocket-fire img {
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 18px #ff9f2d) drop-shadow(0 0 45px #b42a00);
+  animation: pink-rocket-fire 0.66s ease-out forwards;
+}
+@keyframes pink-rocket-blast {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(0.06); }
+  12% { opacity: 1; transform: rotate(var(--ang, 0rad)) scale(0.72); }
+  36% { opacity: 1; transform: rotate(var(--ang, 0rad)) scale(1.14); filter: brightness(2.1); }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(1.42); filter: brightness(0.75); }
+}
+@keyframes pink-rocket-fire {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(0.2); }
+  20% { opacity: 0.95; }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(1.65); }
+}
+
+.pink-blood-mist,
+/* 血腥效果只由斧头和电锯命中触发。 */
+.pink-blood-drop,
+.pink-blood-burst,
+.pink-blood-rain,
+.pink-blood-slash {
+  z-index: 36;
+}
+.pink-blood-mist img {
+  mix-blend-mode: multiply;
+  filter: blur(1.5px) drop-shadow(0 0 9px #7d0018);
+  animation: pink-blood-mist 0.78s ease-out forwards;
+}
+.pink-blood-drop img {
+  filter: drop-shadow(0 0 5px #6d0014) drop-shadow(0 0 12px #c10025);
+  animation: pink-blood-drop 0.64s cubic-bezier(0.15, 0.78, 0.25, 1) forwards;
+}
+.pink-blood-burst img {
+  filter: drop-shadow(0 0 8px #5c000f) drop-shadow(0 0 18px #d1002a);
+  animation: pink-blood-burst 0.48s ease-out forwards;
+}
+.pink-blood-rain img {
+  opacity: 0.85;
+  filter: drop-shadow(0 0 4px #7d0018);
+  animation: pink-blood-rain 0.72s ease-out forwards;
+}
+.pink-blood-slash img {
+  filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 16px #a80022) drop-shadow(0 0 30px #7d0018);
+  animation: pink-blood-slash 0.46s cubic-bezier(0.1, 0.75, 0.2, 1) forwards;
+}
+@keyframes pink-blood-mist {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(0.38); }
+  24% { opacity: 0.82; }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(1.35); }
+}
+@keyframes pink-blood-drop {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(0.2) translateX(-8px); }
+  26% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(1.2) translateX(18px); }
+}
+@keyframes pink-blood-burst {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(0.18); }
+  18% { opacity: 1; transform: rotate(var(--ang, 0rad)) scale(0.92); }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(1.45); }
+}
+@keyframes pink-blood-rain {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(0.35); }
+  20% { opacity: 0.9; }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(1.28); }
+}
+@keyframes pink-blood-slash {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scaleX(0.28) scaleY(0.72); }
+  18% { opacity: 1; transform: rotate(var(--ang, 0rad)) scaleX(1.04) scaleY(1); }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scaleX(1.2) scaleY(1.08); }
+}
+@keyframes pink-image-pop {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(0.25); }
+  22% { opacity: 1; transform: rotate(var(--ang, 0rad)) scale(1.08); }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(1.35); }
+}
+
