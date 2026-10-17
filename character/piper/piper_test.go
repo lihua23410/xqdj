@@ -251,6 +251,20 @@ func TestRatKeepsClosingWhenShortOfSteal(t *testing.T) {
 	}
 }
 
+func TestRatDetoursAroundWall(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	r := newRat(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	ctx := unit.Context{ID: 20, Kind: KindRat, Out: out}
+	self := unit.Snapshot{ID: 20, Kind: KindRat, Role: unit.RoleMinion, Slot: 0, Radius: ratRadius, Vision: vision}
+	bullet := unit.Snapshot{ID: 7, Kind: "原型机_远程子弹", Role: unit.RoleProjectile, Slot: 1, X: 200, Y: 30, Radius: 6}
+	wall := unit.WallView{ID: 9, X1: 50, Y1: -80, X2: 50, Y2: 40, Radius: 6}
+	r.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{piperAt(0, -200), bullet}, Walls: []unit.WallView{wall}})
+	v := lastVel(drain(out))
+	if v == nil || v.VY <= v.VX {
+		t.Fatalf("墙挡在正前方时该朝上端绕，不该直顶: %+v", v)
+	}
+}
+
 func TestRatIgnoresFighterAndMortal(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	r := newRat(unit.SpawnInfo{OwnerID: 1, Slot: 0})

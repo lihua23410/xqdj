@@ -279,6 +279,41 @@ func TestSteerOneDegree(t *testing.T) {
 	}
 }
 
+func TestSteerDetoursAroundWall(t *testing.T) {
+	a := fighter()
+	a.opened = true
+	a.trackID = 2
+	a.trackUntil = 100
+	ctx, out := newCtx()
+	bullet := unit.Snapshot{
+		ID: 8, Kind: KindIntegratedRound, OwnerID: 1, Slot: 0,
+		X: 0, Y: 0, VX: roundSpeed, VY: 0, Radius: roundRadius,
+	}
+	target := aim(2, 200, 30, 15)
+	wall := unit.WallView{ID: 9, X1: 50, Y1: -80, X2: 50, Y2: 40, Radius: 6}
+	vx, vy := bullet.VX, bullet.VY
+	var ang float64
+	for i := 0; i < 25; i++ {
+		bullet.VX, bullet.VY = vx, vy
+		a.Handle(ctx, unit.Sense{
+			Time:   0.02 * float64(i+1),
+			Self:   unit.Snapshot{ID: 1, Slot: 0, Radius: bodyRadius, HP: 100},
+			Nearby: []unit.Snapshot{target, bullet},
+			Walls:  []unit.WallView{wall},
+		})
+		v := velocity(drain(out), 8)
+		if v == nil {
+			t.Fatal("no steer")
+		}
+		vx, vy = v.VX, v.VY
+		ang = math.Atan2(vy, vx)
+	}
+	// 直瞄 (200,30) 最多偏到约 8°。绕上端会一路转到远大于这个角度。
+	if ang < 20*math.Pi/180 {
+		t.Fatalf("ang=%v want to climb toward the wall end", ang)
+	}
+}
+
 func TestRoundHitsAndSecondWall(t *testing.T) {
 	b := &整合弹{owner: 1, slot: 0}
 	ctx, out := newCtx()
@@ -310,8 +345,8 @@ func newCtx() (unit.Context, chan unit.Cmd) {
 
 func sense(t, vx, vy float64, nearby []unit.Snapshot) unit.Sense {
 	return unit.Sense{
-		Time: t,
-		Self: unit.Snapshot{ID: 1, Slot: 0, VX: vx, VY: vy, Radius: bodyRadius, HP: 100, AimPriority: 15},
+		Time:   t,
+		Self:   unit.Snapshot{ID: 1, Slot: 0, VX: vx, VY: vy, Radius: bodyRadius, HP: 100, AimPriority: 15},
 		Nearby: nearby,
 	}
 }

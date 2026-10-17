@@ -154,9 +154,10 @@ type 盾斧 struct {
 	hx, hy    float64               // 面朝方向（单位向量），hitFan/rotate 都按它算
 	x, y      float64               // 自己的位置，front() 判定正面要用
 	seen      map[uint64][2]float64 // 见过的单位位置：盾只挡见过的来源，目标脱离视野后还能记住最后位置
-	lastNear  []unit.Snapshot      // 最近一帧感知：突刺碰撞事件不带感知，群扫靠它
+	lastNear  []unit.Snapshot       // 最近一帧感知：突刺碰撞事件不带感知，群扫靠它
 	slot      int
 	booted    bool
+	detour    unit.DetourHold
 }
 
 func (a *盾斧) Handle(ctx unit.Context, ev unit.Event) {
@@ -401,7 +402,7 @@ func (a *盾斧) tickSlash(ctx unit.Context, s unit.Sense) {
 		a.until = s.Time + thrustLife
 		a.hold(ctx, false)
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
-		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: a.thrustDir[0] * thrustSp, VY: a.thrustDir[1] * thrustSp}
+		a.writeThrust(ctx, s)
 		return
 	}
 	a.endCombo(ctx, s.Time)
@@ -409,7 +410,7 @@ func (a *盾斧) tickSlash(ctx unit.Context, s unit.Sense) {
 
 func (a *盾斧) tickThrust(ctx unit.Context, s unit.Sense) {
 	a.aimThrust(s)
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: a.thrustDir[0] * thrustSp, VY: a.thrustDir[1] * thrustSp}
+	a.writeThrust(ctx, s)
 	if s.Time+1e-9 >= a.until {
 		a.endCombo(ctx, s.Time)
 	}
@@ -423,12 +424,12 @@ func (a *盾斧) beginChouThrust(ctx unit.Context, s unit.Sense) {
 	a.until = s.Time + chouThrustLife
 	a.hold(ctx, false)
 	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: a.thrustDir[0] * thrustSp, VY: a.thrustDir[1] * thrustSp}
+	a.writeThrust(ctx, s)
 }
 
 func (a *盾斧) tickChouThrust(ctx unit.Context, s unit.Sense) {
 	a.aimThrust(s)
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: a.thrustDir[0] * thrustSp, VY: a.thrustDir[1] * thrustSp}
+	a.writeThrust(ctx, s)
 	if s.Time+1e-9 >= a.until {
 		a.beginChouSpin(ctx, s.Time)
 	}
@@ -464,6 +465,28 @@ func (a *盾斧) aimThrust(s unit.Sense) {
 	}
 	a.thrustDir = [2]float64{dx / n, dy / n}
 	a.hx, a.hy = a.thrustDir[0], a.thrustDir[1]
+}
+
+// writeThrust 面朝仍锁着人。直线被墙挡住时，这一拍的速度改朝墙端外侧，免得顶在墙上直到超时。
+func (a *盾斧) writeThrust(ctx unit.Context, s unit.Sense) {
+	vx, vy := a.thrustVelocity(s)
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
+}
+
+func (a *盾斧) thrustVelocity(s unit.Sense) (float64, float64) {
+	tx, ty, ok := a.lockPos(s)
+	if !ok {
+		tx = s.Self.X + a.thrustDir[0]
+		ty = s.Self.Y + a.thrustDir[1]
+	}
+	wx, wy, hold := unit.Detour(s.Self.X, s.Self.Y, s.Self.Radius, tx, ty, s.Walls, a.detour, s.Time)
+	a.detour = hold
+	dx, dy := wx-s.Self.X, wy-s.Self.Y
+	n := math.Hypot(dx, dy)
+	if n < 1e-6 {
+		return a.thrustDir[0] * thrustSp, a.thrustDir[1] * thrustSp
+	}
+	return dx / n * thrustSp, dy / n * thrustSp
 }
 
 func (a *盾斧) lockPos(s unit.Sense) (x, y float64, ok bool) {

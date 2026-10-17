@@ -173,6 +173,32 @@ func TestThrustAimsWhenSlashEndsNotAtSeek(t *testing.T) {
 	}
 }
 
+func TestThrustDetoursAroundWall(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	a := &盾斧{
+		form: formSword, booted: true, step: stepThrust, until: 5,
+		lockID: 2, thrustDir: [2]float64{1, 0},
+	}
+	ctx := unit.Context{ID: 1, Kind: KindAxe, Out: out}
+	wall := unit.WallView{ID: 9, X1: 50, Y1: -80, X2: 50, Y2: 40, Radius: 6}
+	a.Handle(ctx, unit.Sense{
+		Time:   0.1,
+		Self:   me(0, 0),
+		Nearby: []unit.Snapshot{foeAt(200, 30)},
+		Walls:  []unit.WallView{wall},
+	})
+	var v *unit.SetVelocity
+	for _, c := range drain(out) {
+		if s, ok := c.(unit.SetVelocity); ok && s.UnitID == 1 {
+			cp := s
+			v = &cp
+		}
+	}
+	if v == nil || v.VY <= v.VX {
+		t.Fatalf("突刺被墙挡住时该朝上端绕，不该直顶: %+v", v)
+	}
+}
+
 func TestFrontShieldHalvesDamage(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	a := &盾斧{form: formShield, hx: 0, hy: 1, x: 0, y: 0, seen: map[uint64][2]float64{9: {0, 80}}}
