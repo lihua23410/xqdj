@@ -7,6 +7,7 @@ package 反重力猫咪
 import (
 	"embed"
 	"math"
+	"math/rand/v2"
 
 	"xqdj/internal/unit"
 )
@@ -34,9 +35,17 @@ const (
 	bulletTang  = 0.28 // 相对当地圆轨道速率。故意不够，所以会掉下去
 	bulletIn    = 0.50
 	bulletColor = "#d9d4ff"
-	dmgPerSpeed = 0.05
+	dmgPerSpeed = 0.035
 	dmgMin      = 1.0
-	dmgMax      = 16.0
+	dmgMax      = 12.0
+
+	gravityFieldPeriod   = 10.0
+	gravityFieldDuration = 3.0
+	gravityFieldRadius   = 420.0
+	gravityFieldMinSpeed = 220.0
+	orbitBulletMinR      = 72.0
+	orbitBulletMaxR      = 160.0
+	orbitBulletSpin      = 1.8
 )
 
 // gravG 让半径 orbitR 上的圆轨道速率等于 hajimiSpeed。
@@ -67,8 +76,22 @@ func init() {
 }
 
 type 哈基米 struct {
-	booted bool
-	next   float64
+	booted     bool
+	next       float64
+	rng        *rand.Rand
+	nextField  float64
+	fieldUntil float64
+	fieldX     float64
+	fieldY     float64
+	fieldSeen  map[uint64]bool
+	fieldLast  float64
+	orbiters   map[uint64]*orbitBullet
+}
+
+type orbitBullet struct {
+	angle   float64
+	radius  float64
+	angular float64
 }
 
 func (a *哈基米) Handle(ctx unit.Context, ev unit.Event) {
@@ -86,6 +109,7 @@ func (a *哈基米) onSense(ctx unit.Context, s unit.Sense) {
 	if !a.booted {
 		a.booted = true
 		a.next = s.Time + 0.35
+		a.nextField = s.Time + gravityFieldPeriod
 		vx, vy := orbitalVelocity(x, y, 1)
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
 		ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: math.Hypot(vx, vy)}
@@ -100,6 +124,161 @@ func (a *哈基米) onSense(ctx unit.Context, s unit.Sense) {
 		a.next = s.Time + fireGap
 		a.fire(ctx, s)
 	}
+	if a.nextField <= 0 {
+		a.nextField = s.Time + gravityFieldPeriod
+	}
+	if s.Time+1e-9 >= a.nextField {
+		a.nextField = s.Time + gravityFieldPeriod
+		a.startGravityField(ctx, s)
+	}
+	if a.fieldUntil > 0 {
+		if s.Time+1e-9 < a.fieldUntil {
+			a.applyGravityField(ctx, s)
+		} else {
+			a.releaseOrbiters(ctx, s)
+			a.fieldUntil = 0
+			a.fieldSeen = nil
+			a.orbiters = nil
+		}
+	}
+}
+
+func (a *哈基米) startGravityField(ctx unit.Context, s unit.Sense) {
+	if a.rng == nil {
+		a.rng = unit.NewRNG(ctx.ID)
+	}
+	a.fieldUntil = s.Time + gravityFieldDuration
+	a.fieldX, a.fieldY = s.Self.X, s.Self.Y
+	a.fieldSeen = make(map[uint64]bool)
+	a.fieldLast = s.Time
+	a.orbiters = make(map[uint64]*orbitBullet)
+	ctx.Out <- unit.FX{
+		Name: "gravity-field", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
+		X: a.fieldX, Y: a.fieldY, VX: gravityFieldDuration, Amount: gravityFieldRadius,
+	}
+}
+
+func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
+	if a.rng == nil {
+		a.rng = unit.NewRNG(ctx.ID)
+	}
+	if a.orbiters == nil {
+		a.orbiters = make(map[uint64]*orbitBullet)
+	}
+	dt := s.Time - a.fieldLast
+	if dt <= 0 || dt > 0.2 {
+		dt = 1.0 / 60.0
+	}
+	a.fieldLast = s.Time
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Role != unit.RoleProjectile && o.Role != unit.RoleClone {
+			continue
+		}
+		if math.Hypot(o.X-a.fieldX, o.Y-a.fieldY) > gravityFieldRadius+o.Radius {
+			continue
+		}
+		if o.Role == unit.RoleProjectile && o.Kind == KindHajimiBullet && o.OwnerID == ctx.ID {
+			a.orbitOwnBullet(ctx, s, o, dt)
+			continue
+		}
+		if a.fieldSeen[o.ID] {
+			continue
+		}
+		a.fieldSeen[o.ID] = true
+		if o.Role == unit.RoleProjectile && o.Slot != s.Self.Slot {
+			ctx.Out <- unit.Spawn{
+				Kind: KindHajimiBullet, X: o.X, Y: o.Y, VX: o.VX, VY: o.VY,
+				OwnerID: ctx.ID, Slot: s.Self.Slot,
+			}
+			ctx.Out <- unit.Despawn{UnitID: o.ID}
+			ctx.Out <- unit.FX{
+				Name: "gravity-convert", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
+				X: o.X, Y: o.Y, VX: o.VX, VY: o.VY,
+			}
+			continue
+		}
+		speed := math.Hypot(o.VX, o.VY)
+		if speed < 1e-6 {
+			speed = gravityFieldMinSpeed
+		}
+		angle := a.rng.Float64() * 2 * math.Pi
+		ctx.Out <- unit.SetVelocity{
+			UnitID: o.ID, VX: math.Cos(angle) * speed, VY: math.Sin(angle) * speed,
+		}
+		ctx.Out <- unit.FX{
+			Name: "gravity-twist", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
+			X: o.X, Y: o.Y, VX: math.Cos(angle), VY: math.Sin(angle), Amount: speed,
+		}
+	}
+}
+
+func (a *哈基米) orbitOwnBullet(ctx unit.Context, s unit.Sense, o *unit.Snapshot, dt float64) {
+	orb := a.orbiters[o.ID]
+	if orb == nil {
+		radius := math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y)
+		if radius < orbitBulletMinR {
+			radius = orbitBulletMinR
+		} else if radius > orbitBulletMaxR {
+			radius = orbitBulletMaxR
+		}
+		angle := math.Atan2(o.Y-s.Self.Y, o.X-s.Self.X)
+		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) < 1e-6 {
+			angle = a.rng.Float64() * 2 * math.Pi
+		}
+		spin := orbitBulletSpin
+		if a.rng.IntN(2) == 0 {
+			spin = -spin
+		}
+		orb = &orbitBullet{angle: angle, radius: radius, angular: spin}
+		a.orbiters[o.ID] = orb
+		ctx.Out <- unit.FX{
+			Name: "gravity-capture", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
+			X: o.X, Y: o.Y, VX: o.VX, VY: o.VY,
+		}
+	}
+	orb.angle += orb.angular * dt
+	tx := s.Self.X + math.Cos(orb.angle)*orb.radius
+	ty := s.Self.Y + math.Sin(orb.angle)*orb.radius
+	if s.Field.Shape != "" {
+		tx, ty = s.Field.Clamp(tx, ty, o.Radius)
+	}
+	ctx.Out <- unit.Teleport{UnitID: o.ID, X: tx, Y: ty}
+	tangent := orb.angle + math.Copysign(math.Pi/2, orb.angular)
+	speed := circSpeed(orb.radius)
+	ctx.Out <- unit.SetVelocity{
+		UnitID: o.ID, VX: math.Cos(tangent) * speed, VY: math.Sin(tangent) * speed,
+	}
+}
+
+func (a *哈基米) releaseOrbiters(ctx unit.Context, s unit.Sense) {
+	for id, orb := range a.orbiters {
+		speed := gravityReleaseSpeed(orb.radius)
+		ctx.Out <- unit.SetVelocity{
+			UnitID: id, VX: math.Cos(orb.angle) * speed, VY: math.Sin(orb.angle) * speed,
+		}
+		x := s.Self.X + math.Cos(orb.angle)*orb.radius
+		y := s.Self.Y + math.Sin(orb.angle)*orb.radius
+		ctx.Out <- unit.FX{
+			Name: "gravity-release", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
+			X: x, Y: y, VX: math.Cos(orb.angle), VY: math.Sin(orb.angle), Amount: speed,
+		}
+	}
+}
+
+// gravityReleaseSpeed 把轨道半径上的重力势能转成释放速度：v = sqrt(2*g(r)*r)。
+func gravityReleaseSpeed(r float64) float64 {
+	if r < 1 {
+		r = 1
+	}
+	v := math.Sqrt(2 * gravMag(r) * r)
+	if v < gravityFieldMinSpeed {
+		return gravityFieldMinSpeed
+	}
+	if v > 420 {
+		return 420
+	}
+	return v
 }
 
 func (a *哈基米) fire(ctx unit.Context, s unit.Sense) {

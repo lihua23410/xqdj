@@ -107,3 +107,60 @@
   from { transform: scale(0.4); opacity: 0.95; }
   to { transform: scale(1.6); opacity: 0; }
 }
+
+/* 10 秒反重力脉冲：覆盖超大范围的双层旋转力场。 */
+.fx-hajimi-field, .fx-hajimi-field-ring {
+  width: var(--r, 840px);
+  height: var(--r, 840px);
+  border-radius: 50%;
+  pointer-events: none;
+  box-sizing: border-box;
+  mix-blend-mode: screen;
+}
+.fx-hajimi-field {
+  border: 4px solid rgba(190, 175, 255, 0.9);
+  background:
+    radial-gradient(circle, rgba(255,255,255,0.16) 0 8%, rgba(139,123,232,0.2) 34%, rgba(79,216,232,0.12) 58%, transparent 72%),
+    conic-gradient(from 0deg, transparent 0 12%, rgba(185,166,255,0.26) 16% 22%, transparent 28% 47%, rgba(79,216,232,0.2) 52% 58%, transparent 64% 100%);
+  box-shadow: 0 0 28px #b9a6ff, inset 0 0 80px #8b7be8aa, inset 0 0 180px #4fd8e855;
+  animation: hajimi-field var(--duration, 3s) ease-out forwards;
+}
+.fx-hajimi-field-ring {
+  border: 5px dashed rgba(79,216,232,0.9);
+  box-shadow: 0 0 34px #4fd8e8, inset 0 0 70px #b9a6ff88;
+  animation: hajimi-field-ring var(--duration, 3s) ease-out var(--delay, 0s) forwards;
+}
+@keyframes hajimi-field {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.12) rotate(-24deg); }
+  8% { opacity: 0.95; }
+  45% { opacity: 0.55; transform: translate(-50%, -50%) scale(1) rotate(8deg); }
+  86% { opacity: 0.32; transform: translate(-50%, -50%) scale(1.03) rotate(20deg); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.08) rotate(24deg); }
+}
+@keyframes hajimi-field-ring {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.08) rotate(0deg); }
+  9% { opacity: 0.9; }
+  58% { opacity: 0.48; transform: translate(-50%, -50%) scale(1) rotate(-20deg); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.18) rotate(-40deg); }
+}
+
+.fx-hajimi-twist {
+  width: 58px;
+  height: 58px;
+  transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
+  pointer-events: none;
+}
+.fx-hajimi-twist::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px dashed #d9d4ff;
+  box-shadow: 0 0 16px #8b7be8, inset 0 0 14px #4fd8e8;
+  animation: hajimi-twist 0.5s ease-out forwards;
+}
+@keyframes hajimi-twist {
+  0% { opacity: 0; transform: scale(0.2) rotate(0deg); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.5) rotate(180deg); }
+}
