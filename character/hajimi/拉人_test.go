@@ -35,6 +35,35 @@ func TestBootPutsCatOnOrbit(t *testing.T) {
 	}
 }
 
+func TestCatGainsALittleAlongItsFlight(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	cat := &哈基米{booted: true, next: 100, nextField: 100}
+	ctx := unit.Context{ID: 1, Kind: KindHajimi, Out: out}
+	self := unit.Snapshot{ID: 1, X: orbitR, Y: 0, VX: 0, VY: hajimiSpeed}
+	cat.Handle(ctx, unit.Sense{Time: 1, Self: self})
+	var force *unit.Force
+	for _, c := range drain(out) {
+		f, ok := c.(unit.Force)
+		if ok && f.UnitID == 1 {
+			cp := f
+			force = &cp
+		}
+	}
+	if force == nil || force.AX >= 0 {
+		t.Fatalf("引力仍该指向场心: %+v", force)
+	}
+	if force.AY <= 0 {
+		t.Fatalf("顺飞行方向该多补一点: %+v", force)
+	}
+}
+
+func TestCatStillGainsOnAWiderOrbit(t *testing.T) {
+	ax, ay := catPull(220, 0, 0, circSpeed(220))
+	if ay <= 0 || ax >= 0 {
+		t.Fatalf("更外的轨道上仍该顺飞行补一点: ax=%v ay=%v", ax, ay)
+	}
+}
+
 func TestBulletFallsAndVanishes(t *testing.T) {
 	out := make(chan unit.Cmd, 4)
 	b := &落体弹{owner: 1, slot: 0, speed: 100}
@@ -72,7 +101,8 @@ func TestGravityFieldConvertsEnemyProjectilesForThreeSeconds(t *testing.T) {
 	clone := unit.Snapshot{ID: 4, Role: unit.RoleClone, Slot: 1, X: 80, Y: 20, Radius: 18}
 	ally := unit.Snapshot{ID: 5, Role: unit.RoleProjectile, Slot: 0, X: 90, Y: 10, VX: 120, VY: 0, Radius: 5}
 	catBullet := unit.Snapshot{ID: 8, Kind: KindHajimiBullet, Role: unit.RoleProjectile, OwnerID: 1, Slot: 0, X: 260, Y: 0, VX: 100, VY: 0, Radius: 5}
-	cat.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{enemy, outside, clone, ally, catBullet}})
+	arc := unit.Snapshot{ID: 9, Kind: "地慧星弧", Role: unit.RoleProjectile, Slot: 1, X: 110, Y: 0, Radius: 20, ArcSpan: unit.Deg(60)}
+	cat.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{enemy, outside, clone, ally, catBullet, arc}})
 	cmds := drain(out)
 	if _, ok := teleportOf(cmds, 8); !ok {
 		t.Fatal("own bullet should be captured into an orbit")
@@ -109,10 +139,16 @@ func TestGravityFieldConvertsEnemyProjectilesForThreeSeconds(t *testing.T) {
 	if hasDespawn(cmds, 3) {
 		t.Fatal("out-of-range projectile should not be converted")
 	}
+	if hasDespawn(cmds, 9) {
+		t.Fatal("melee arc should not be cleared")
+	}
+	if _, ok := velocityOf(cmds, 9); ok {
+		t.Fatal("melee arc should not be twisted")
+	}
 	late := unit.Snapshot{ID: 6, Role: unit.RoleProjectile, Slot: 1, X: 120, Y: 10, Radius: 5}
 	cat.Handle(ctx, unit.Sense{Time: 12.9, Self: self, Nearby: []unit.Snapshot{late}})
-	if !hasDespawn(drain(out), 6) {
-		t.Fatal("projectile entering during the three-second field should be converted")
+	if hasDespawn(drain(out), 6) {
+		t.Fatal("projectile entering after the field opens should not be cleared")
 	}
 	expired := unit.Snapshot{ID: 7, Role: unit.RoleProjectile, Slot: 1, X: 120, Y: 10, Radius: 5}
 	cat.Handle(ctx, unit.Sense{Time: 13.1, Self: self, Nearby: []unit.Snapshot{expired}})
@@ -131,8 +167,8 @@ func TestGravityFieldConvertsEnemyProjectilesForThreeSeconds(t *testing.T) {
 	if cat.orbiters != nil {
 		t.Fatal("orbit list should clear after release")
 	}
-	if cat.nextField != 20 {
-		t.Fatalf("next field=%v, want 20", cat.nextField)
+	if cat.nextField != 10+gravityFieldPeriod {
+		t.Fatalf("next field=%v, want %v", cat.nextField, 10+gravityFieldPeriod)
 	}
 }
 
@@ -178,8 +214,8 @@ func TestFasterBulletHitsHarder(t *testing.T) {
 	if fast <= slow {
 		t.Fatalf("更快的子弹该更疼: 慢 %v 快 %v", slow, fast)
 	}
-	if fast != 8.4 {
-		t.Fatalf("240px/s bullet damage=%v, want 8.4", fast)
+	if fast != 6 {
+		t.Fatalf("240px/s bullet damage=%v, want 6", fast)
 	}
 	if got := bulletDamage(1000); got != dmgMax {
 		t.Fatalf("max bullet damage=%v, want %v", got, dmgMax)

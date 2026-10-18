@@ -9,7 +9,7 @@ import (
 	unitpkg "xqdj/internal/unit"
 )
 
-func TestStationHoldsAndDropsWhenSlowed(t *testing.T) {
+func TestCatClimbsOutOfTheCenter(t *testing.T) {
 	m := NewMatchSeeded(61)
 	m.SetSlot(0, character.KindHajimi)
 	m.SetSlot(1, character.KindDummy)
@@ -43,19 +43,15 @@ func TestStationHoldsAndDropsWhenSlowed(t *testing.T) {
 	cat.cruise = 178
 	m.mu.Unlock()
 
-	runArcher(m, 0.8)
-	r0 := radiusOf(m, cat)
-	m.mu.Lock()
-	cat.setVel(cat.v.mul(0.45))
-	cat.cruise = cat.v.len()
-	m.mu.Unlock()
-	runArcher(m, 0.7)
-	r1 := radiusOf(m, cat)
-	if r0 < 90 {
-		t.Fatalf("没减速时不该掉出轨道，半径 %v", r0)
+	maxR := 0.0
+	for i := 0; i < 32; i++ {
+		runArcher(m, 0.25)
+		if r := radiusOf(m, cat); r > maxR {
+			maxR = r
+		}
 	}
-	if r1 > r0-12 {
-		t.Fatalf("减速后轨道该往下掉: %v → %v", r0, r1)
+	if maxR < 165 || maxR > 260 {
+		t.Fatalf("猫该慢慢离开场心，最远到 %v", maxR)
 	}
 }
 

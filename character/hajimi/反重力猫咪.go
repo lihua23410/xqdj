@@ -1,7 +1,6 @@
 // 反重力猫咪：场心是质点，猫和子弹吃同一股引力。
-// 切向速度够快，猫就像空间站，边掉边飞，停在轨道上。
-// 子弹的切向速度不够，于是往场心掉，越掉越快。伤害按当时的速率算。
-// 子弹碰到场心就消失。猫被减速以后，轨道也会往下掉。
+// 子弹切向速度不够，往场心掉，越掉越快，碰到场心消失。伤害按速率算。
+// 猫每次受到这股引力，都顺飞行方向再补一点点能量，轨道不设上限。比当地逃逸还快就不再补。
 package 反重力猫咪
 
 import (
@@ -30,16 +29,17 @@ const (
 	orbitR      = 140.0
 	gravSoft    = 48.0 // 场心附近把力收住，避免速率没有上限
 	swallow     = 16.0 // 子弹离场心比这近，算撞上，消失
-	fireGap     = 0.9
+	fireGap     = 1.1
 	bulletR     = 5.0
 	bulletTang  = 0.28 // 相对当地圆轨道速率。故意不够，所以会掉下去
 	bulletIn    = 0.50
 	bulletColor = "#d9d4ff"
-	dmgPerSpeed = 0.035
+	dmgPerSpeed = 0.025
 	dmgMin      = 1.0
-	dmgMax      = 12.0
+	dmgMax      = 8.0
+	antiGain    = 0.04 // 受到引力时，顺速度再补的比例。只补一点点势能
 
-	gravityFieldPeriod   = 10.0
+	gravityFieldPeriod   = 15.0
 	gravityFieldDuration = 3.0
 	gravityFieldRadius   = 420.0
 	gravityFieldMinSpeed = 220.0
@@ -84,6 +84,7 @@ type 哈基米 struct {
 	fieldX     float64
 	fieldY     float64
 	fieldSeen  map[uint64]bool
+	fieldSweep bool
 	fieldLast  float64
 	orbiters   map[uint64]*orbitBullet
 }
@@ -118,7 +119,7 @@ func (a *哈基米) onSense(ctx unit.Context, s unit.Sense) {
 		// 速率被谁改掉就留在那个值上，巡航不把它拉回空间站速度，轨道才会往下掉。
 		ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: math.Hypot(s.Self.VX, s.Self.VY)}
 	}
-	ax, ay := gravAccel(x, y)
+	ax, ay := catPull(x, y, s.Self.VX, s.Self.VY)
 	ctx.Out <- unit.Force{UnitID: ctx.ID, AX: ax, AY: ay}
 	if s.Time >= a.next {
 		a.next = s.Time + fireGap
@@ -150,6 +151,7 @@ func (a *哈基米) startGravityField(ctx unit.Context, s unit.Sense) {
 	a.fieldUntil = s.Time + gravityFieldDuration
 	a.fieldX, a.fieldY = s.Self.X, s.Self.Y
 	a.fieldSeen = make(map[uint64]bool)
+	a.fieldSweep = true
 	a.fieldLast = s.Time
 	a.orbiters = make(map[uint64]*orbitBullet)
 	ctx.Out <- unit.FX{
@@ -175,6 +177,10 @@ func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
 		if o.Role != unit.RoleProjectile && o.Role != unit.RoleClone {
 			continue
 		}
+		// 近战弧跟着人走，不是飞过来的子弹。吹笛人的老鼠偷东西也是这么排除的。
+		if o.ArcSpan != 0 {
+			continue
+		}
 		if math.Hypot(o.X-a.fieldX, o.Y-a.fieldY) > gravityFieldRadius+o.Radius {
 			continue
 		}
@@ -182,11 +188,11 @@ func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
 			a.orbitOwnBullet(ctx, s, o, dt)
 			continue
 		}
-		if a.fieldSeen[o.ID] {
-			continue
-		}
-		a.fieldSeen[o.ID] = true
 		if o.Role == unit.RoleProjectile && o.Slot != s.Self.Slot {
+			// 敌方子弹只在力场打开的这一拍收掉。
+			if !a.fieldSweep {
+				continue
+			}
 			ctx.Out <- unit.Spawn{
 				Kind: KindHajimiBullet, X: o.X, Y: o.Y, VX: o.VX, VY: o.VY,
 				OwnerID: ctx.ID, Slot: s.Self.Slot,
@@ -198,6 +204,10 @@ func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
 			}
 			continue
 		}
+		if a.fieldSeen[o.ID] {
+			continue
+		}
+		a.fieldSeen[o.ID] = true
 		speed := math.Hypot(o.VX, o.VY)
 		if speed < 1e-6 {
 			speed = gravityFieldMinSpeed
@@ -211,6 +221,7 @@ func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
 			X: o.X, Y: o.Y, VX: math.Cos(angle), VY: math.Sin(angle), Amount: speed,
 		}
 	}
+	a.fieldSweep = false
 }
 
 func (a *哈基米) orbitOwnBullet(ctx unit.Context, s unit.Sense, o *unit.Snapshot, dt float64) {
@@ -387,4 +398,29 @@ func gravAccel(x, y float64) (float64, float64) {
 	}
 	a := gravMag(r)
 	return -x / r * a, -y / r * a
+}
+
+// catPull 是猫受到的引力，再顺着当前速度补一点点。
+// 不看半径停手。比当地逃逸还快就只留引力，避免速率没有上限。
+func catPull(x, y, vx, vy float64) (float64, float64) {
+	ax, ay := gravAccel(x, y)
+	if escaped(x, y, vx, vy) {
+		return ax, ay
+	}
+	sp := math.Hypot(vx, vy)
+	mag := gravMag(math.Hypot(x, y)) * antiGain
+	if sp > 20 {
+		return ax + vx/sp*mag, ay + vy/sp*mag
+	}
+	r := math.Hypot(x, y)
+	if r < 1 {
+		return ax, ay
+	}
+	return ax + x/r*mag, ay + y/r*mag
+}
+
+func escaped(x, y, vx, vy float64) bool {
+	r2 := x*x + y*y
+	need := 2 * gravG / math.Sqrt(r2+gravSoft*gravSoft)
+	return vx*vx+vy*vy >= need
 }
