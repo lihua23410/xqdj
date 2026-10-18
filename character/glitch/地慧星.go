@@ -256,7 +256,7 @@ func (g *地慧星) onIncoming(ctx unit.Context, d unit.IncomingDamage) {
 			return
 		}
 		if g.rng == nil {
-			g.rng = unit.NewRNG(ctx.ID)
+			g.rng = unit.NewRNG(ctx.Stream)
 		}
 		nx, ny, ok := unit.LiveField().RandomWalkable(g.rng, glitchCagePad)
 		if !ok {
@@ -298,16 +298,16 @@ func (a *地慧星弧) Handle(ctx unit.Context, ev unit.Event) {
 			MarkIcon:  glitchMarkIcon,
 		}
 		if a.rng == nil {
-			a.rng = unit.NewRNG(ctx.ID)
+			a.rng = unit.NewRNG(ctx.Stream)
 		}
 		if a.booted && a.rng.Float64() < glitchGhostOdds {
-			ctx.Out <- unit.Spawn{
+			ctx.Out <- ctx.Born(unit.Spawn{
 				Kind:    KindGlitchGhost,
 				X:       a.x,
 				Y:       a.y,
 				OwnerID: a.owner,
 				Slot:    a.slot,
-			}
+			})
 		}
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
@@ -341,7 +341,7 @@ func (g *地慧星) maybeSlash(ctx unit.Context, s unit.Sense) {
 	g.slashHolding = true
 	g.slashHoldUntil = s.Time + glitchSlashWindup
 	g.lockSlashPose(ctx)
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindGlitchSlash,
 		X:       g.slashLockX,
 		Y:       g.slashLockY,
@@ -349,7 +349,7 @@ func (g *地慧星) maybeSlash(ctx unit.Context, s unit.Sense) {
 		VY:      g.slashUY,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
-	}
+	})
 	ctx.Out <- unit.FX{
 		Name:   "iai",
 		Kind:   ctx.Kind,
@@ -450,13 +450,13 @@ func (g *地慧星) clampCruise(ctx unit.Context) {
 }
 
 func (g *地慧星) dropGhost(ctx unit.Context, x, y float64) {
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindGlitchGhost,
 		X:       x,
 		Y:       y,
 		OwnerID: ctx.ID,
 		Slot:    g.slot,
-	}
+	})
 }
 
 func (g *地慧星) fireDodgeShot(ctx unit.Context, x, y float64) {
@@ -468,7 +468,7 @@ func (g *地慧星) fireDodgeShot(ctx unit.Context, x, y float64) {
 	}
 	ux, uy := dx/n, dy/n
 	gap := glitchRadius + glitchShotRadius + 1.5
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindGlitchShot,
 		X:       x + ux*gap,
 		Y:       y + uy*gap,
@@ -476,7 +476,7 @@ func (g *地慧星) fireDodgeShot(ctx unit.Context, x, y float64) {
 		VY:      uy * glitchShotSpeed,
 		OwnerID: ctx.ID,
 		Slot:    g.slot,
-	}
+	})
 }
 
 func markStacks(u unit.Snapshot, kind string) int {

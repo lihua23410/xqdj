@@ -218,13 +218,13 @@ func (t *我) onSense(ctx unit.Context, s unit.Sense) {
 		t.boot = true
 		t.spawnGrace = s.Time + 0.6
 		if t.rng == nil {
-			t.rng = unit.NewRNG(ctx.ID)
+			t.rng = unit.NewRNG(ctx.Stream)
 		}
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindZhou, X: s.Self.X + 55, Y: s.Self.Y,
 			VX: -zhouSpeed * 0.6, VY: zhouSpeed * 0.8,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
-		}
+		})
 		t.emitMode(ctx)
 	}
 	t.noteZhou(ctx, s)
@@ -406,10 +406,10 @@ func (t *我) tickVoid(ctx unit.Context, s unit.Sense) {
 	t.nextVoidAt = s.Time + voidGap
 	ang := t.rng.Float64() * 2 * math.Pi
 	ux, uy := math.Cos(ang), math.Sin(ang)
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindVoidShot, X: t.x + ux*meRadius, Y: t.y + uy*meRadius,
 		VX: ux * voidSpeed, VY: uy * voidSpeed, OwnerID: ctx.ID, Slot: t.slot,
-	}
+	})
 	ctx.Out <- unit.FX{Name: "void", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: t.x, Y: t.y, VX: ux, VY: uy}
 }
 

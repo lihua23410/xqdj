@@ -24,6 +24,7 @@ const (
 
 type unit struct {
 	id              uint64
+	stream          uint64
 	kind            string
 	role            string
 	slot            int
@@ -161,6 +162,7 @@ type Match struct {
 	rng        *rand.Rand
 	seed       uint64
 	pinned     bool
+	rootN      uint64
 	recap      strings.Builder
 	trace      strings.Builder
 	logReady   bool
@@ -896,6 +898,7 @@ func (m *Match) resetLocked() {
 	m.dmgSeq = 0
 	m.pendingDmg = make(map[uint64]dmgOffer)
 	m.wardAbsorb = make(map[uint64]bool)
+	m.rootN = 0
 	unitpkg.SetLiveField(m.spec.toUnitField())
 }
 
@@ -1027,12 +1030,21 @@ func (m *Match) spawnFighterLocked(kind string, slot, seat int, p, v vec) {
 	}
 }
 
+func (m *Match) rootStream() uint64 {
+	m.rootN++
+	return unitpkg.DeriveStream(m.seed, m.rootN, unitpkg.StreamRoot)
+}
+
 func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *unit {
+	return m.addUnitStreamLocked(kind, p, v, owner, slot, m.rootStream())
+}
+
+func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot int, stream uint64) *unit {
 	spec, ok := unitpkg.Lookup(kind)
 	if !ok {
 		return nil
 	}
-	actor := unitpkg.NewActor(kind, unitpkg.SpawnInfo{OwnerID: owner, Slot: slot})
+	actor := unitpkg.NewActor(kind, unitpkg.SpawnInfo{OwnerID: owner, Slot: slot, Stream: stream})
 	if actor == nil {
 		return nil
 	}
@@ -1083,7 +1095,8 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 	if spec.Role != unitpkg.RoleFighter {
 		m.noteBirthLocked(u)
 	}
-	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds}
+	u.stream = stream
+	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds, Stream: stream}.WithBirths()
 	go runActor(u, ctx)
 	return u
 }
@@ -1271,7 +1284,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if !ok || spec.Fighter {
 			return
 		}
-		u := m.addUnitLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot)
+		u := m.addUnitStreamLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot, c.Stream)
 		m.nailToWallLocked(u, c)
 	case unitpkg.Despawn:
 		u := m.units[c.UnitID]

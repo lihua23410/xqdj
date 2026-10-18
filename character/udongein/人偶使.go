@@ -418,7 +418,7 @@ func (a *人偶使) lockUntilAt(now float64, sk uint8) {
 
 func (a *人偶使) ensureRNG(ctx unit.Context) {
 	if a.rng == nil {
-		a.rng = unit.NewRNG(ctx.ID)
+		a.rng = unit.NewRNG(ctx.Stream)
 	}
 }
 

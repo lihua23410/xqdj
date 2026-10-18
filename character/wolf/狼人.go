@@ -161,18 +161,18 @@ func (w *狼人) bootMoon(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	w.booted = true
-	rng := unit.NewRNG(ctx.ID)
+	rng := unit.NewRNG(ctx.Stream)
 	x, y, ok := s.Field.RandomWalkable(rng, moonRadius)
 	if !ok {
 		x, y = unit.LiveField().Clamp(0, 80, moonRadius)
 	}
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindMoon,
 		X:       x,
 		Y:       y,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
-	}
+	})
 	w.emitPhase(ctx)
 }
 

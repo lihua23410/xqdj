@@ -139,7 +139,7 @@ func (s *盾士) maybeRefresh(ctx unit.Context, sense unit.Sense) {
 }
 
 func (s *盾士) putShield(ctx unit.Context, sense unit.Sense) {
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    kindShield,
 		X:       sense.Self.X,
 		Y:       sense.Self.Y,
@@ -147,7 +147,7 @@ func (s *盾士) putShield(ctx unit.Context, sense unit.Sense) {
 		VY:      sense.Self.VY,
 		OwnerID: ctx.ID,
 		Slot:    sense.Self.Slot,
-	}
+	})
 	s.armed = true
 }
 
@@ -166,7 +166,7 @@ func (s *盾士) burst(ctx unit.Context, kind string, n int) {
 		X: s.x, Y: s.y, Slot: s.slot,
 	}
 	if s.rng == nil {
-		s.rng = unit.NewRNG(ctx.ID)
+		s.rng = unit.NewRNG(ctx.Stream)
 	}
 	base := s.rng.Float64() * 2 * math.Pi
 	gap := wardenRadius + shardRadius + 1.5
@@ -174,7 +174,7 @@ func (s *盾士) burst(ctx unit.Context, kind string, n int) {
 		ang := base + float64(i)*2*math.Pi/float64(n)
 		ux, uy := math.Cos(ang), math.Sin(ang)
 		sp := shardMinSpeed + s.rng.Float64()*(shardMaxSpeed-shardMinSpeed)
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    kind,
 			X:       s.x + ux*gap,
 			Y:       s.y + uy*gap,
@@ -182,7 +182,7 @@ func (s *盾士) burst(ctx unit.Context, kind string, n int) {
 			VY:      uy * sp,
 			OwnerID: ctx.ID,
 			Slot:    s.slot,
-		}
+		})
 	}
 }
 

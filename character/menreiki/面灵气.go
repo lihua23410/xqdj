@@ -239,7 +239,7 @@ func (m *面灵气) ensureRNG(id uint64) *rand.Rand {
 
 func (m *面灵气) grant(ctx unit.Context, s unit.Sense) {
 	if !m.marked {
-		selfF := unit.PickFaction(m.ensureRNG(ctx.ID).IntN(4))
+		selfF := unit.PickFaction(m.ensureRNG(ctx.Stream).IntN(4))
 		ctx.Out <- unit.MarkFaction{
 			UnitID:  ctx.ID,
 			Faction: selfF,
@@ -261,7 +261,7 @@ func (m *面灵气) restamp(ctx unit.Context, s unit.Sense, cycle bool) {
 	out, in := amps(m.hook)
 	selfF := s.Self.Faction
 	if selfF == "" {
-		selfF = unit.PickFaction(m.ensureRNG(ctx.ID).IntN(4))
+		selfF = unit.PickFaction(m.ensureRNG(ctx.Stream).IntN(4))
 	}
 	ctx.Out <- unit.MarkFaction{
 		UnitID:  ctx.ID,
@@ -278,7 +278,7 @@ func (m *面灵气) restamp(ctx unit.Context, s unit.Sense, cycle bool) {
 func (m *面灵气) stampEnemy(ctx unit.Context, e *unit.Snapshot, cycle bool) {
 	ef := e.Faction
 	if ef == "" {
-		ef = unit.PickFaction(m.ensureRNG(ctx.ID).IntN(4))
+		ef = unit.PickFaction(m.ensureRNG(ctx.Stream).IntN(4))
 	}
 	ctx.Out <- unit.MarkFaction{
 		UnitID:  e.ID,
@@ -355,7 +355,7 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 			}
 		}
 		if cur == nil {
-			ctx.Out <- unit.Spawn{
+			ctx.Out <- ctx.Born(unit.Spawn{
 				Kind:    kind,
 				X:       x,
 				Y:       y,
@@ -363,7 +363,7 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 				VY:      vy,
 				OwnerID: ctx.ID,
 				Slot:    s.Self.Slot,
-			}
+			})
 			continue
 		}
 		ctx.Out <- unit.Teleport{UnitID: cur.ID, X: x, Y: y}
@@ -422,7 +422,7 @@ func (m *面灵气) fireShot(ctx unit.Context, s unit.Sense, x, y, nx, ny float6
 	if s.Self.Faction == unit.FactionRed {
 		gap = maskRadiusRed + shotRadius + 1.5
 	}
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindMenreikiShot,
 		X:       x + ux*gap,
 		Y:       y + uy*gap,
@@ -430,7 +430,7 @@ func (m *面灵气) fireShot(ctx unit.Context, s unit.Sense, x, y, nx, ny float6
 		VY:      uy * shotSpeed,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
-	}
+	})
 	ctx.Out <- unit.FX{
 		Name: "shot", Kind: ctx.Kind,
 		X: x, Y: y, VX: ux * shotSpeed, VY: uy * shotSpeed,

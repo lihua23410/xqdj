@@ -105,14 +105,14 @@ func (r *收割者) onWall(ctx unit.Context, w unit.WallHit) {
 		return
 	}
 	nx, ny := w.NX/n, w.NY/n
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:     KindSickle,
 		X:        w.X + nx*reaperRadius,
 		Y:        w.Y + ny*reaperRadius,
 		OwnerID:  ctx.ID,
 		Slot:     r.slot,
 		HardNail: w.Kind.Hard(),
-	}
+	})
 }
 
 func (r *收割者) maybeReap(ctx unit.Context, s unit.Sense) {
@@ -161,14 +161,14 @@ func (k *镰刀) onSense(ctx unit.Context, s unit.Sense) {
 			if k.drew {
 				vx = harvestCarry
 			}
-			ctx.Out <- unit.Spawn{
+			ctx.Out <- ctx.Born(unit.Spawn{
 				Kind:    KindReap,
 				X:       s.Self.X,
 				Y:       s.Self.Y,
 				VX:      vx,
 				OwnerID: k.owner,
 				Slot:    k.slot,
-			}
+			})
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return
 		}

@@ -93,7 +93,7 @@ func (a *酒翁) onSense(ctx unit.Context, s unit.Sense) {
 		a.booted = true
 		a.first = true
 		if a.rng == nil {
-			a.rng = unit.NewRNG(ctx.ID)
+			a.rng = unit.NewRNG(ctx.Stream)
 		}
 		a.nextSmash = s.Time + smashFirst
 		a.nextFill = s.Time + fillGap
@@ -161,10 +161,10 @@ func (a *酒翁) spawnWine(ctx unit.Context, s unit.Sense, x float64) {
 	vx := (a.rng.Float64()*2 - 1) * wineToss
 	vy := -wineDrop
 	vx, vy = clipOutward(px, py, vx, vy)
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindSotWine, OwnerID: ctx.ID, Slot: a.slot,
 		X: px, Y: py, VX: vx, VY: vy,
-	}
+	})
 	ctx.Out <- unit.FX{Name: "sot-drop", Kind: ctx.Kind, X: px, Y: py, Slot: a.slot}
 }
 

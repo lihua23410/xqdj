@@ -106,7 +106,7 @@ func (a *迷走) Handle(ctx unit.Context, ev unit.Event) {
 	case unit.Sense:
 		a.slot = e.Self.Slot
 		a.x, a.y = e.Self.X, e.Self.Y
-		a.ensureRNG(ctx.ID)
+		a.ensureRNG(ctx.Stream)
 		if !a.booted {
 			a.boot(ctx, e)
 			return
@@ -184,15 +184,15 @@ func (a *迷走) boot(ctx unit.Context, s unit.Sense) {
 	a.lastT = s.Time
 
 	for _, r := range m.rings {
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindRing, X: r.x, Y: r.y,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
-		}
+		})
 	}
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindLit, X: m.rings[0].x, Y: m.rings[0].y,
 		OwnerID: ctx.ID, Slot: s.Self.Slot,
-	}
+	})
 
 	a.ring = nearestRing(m.rings, s.Self.X, s.Self.Y)
 	if a.rng.Float64() < 0.5 {

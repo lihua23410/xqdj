@@ -145,7 +145,7 @@ func (a *哈基米) onSense(ctx unit.Context, s unit.Sense) {
 
 func (a *哈基米) startGravityField(ctx unit.Context, s unit.Sense) {
 	if a.rng == nil {
-		a.rng = unit.NewRNG(ctx.ID)
+		a.rng = unit.NewRNG(ctx.Stream)
 	}
 	a.fieldUntil = s.Time + gravityFieldDuration
 	a.fieldX, a.fieldY = s.Self.X, s.Self.Y
@@ -160,7 +160,7 @@ func (a *哈基米) startGravityField(ctx unit.Context, s unit.Sense) {
 
 func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
 	if a.rng == nil {
-		a.rng = unit.NewRNG(ctx.ID)
+		a.rng = unit.NewRNG(ctx.Stream)
 	}
 	if a.orbiters == nil {
 		a.orbiters = make(map[uint64]*orbitBullet)
@@ -191,10 +191,10 @@ func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
 		}
 		a.fieldSeen[o.ID] = true
 		if o.Role == unit.RoleProjectile && o.Slot != s.Self.Slot {
-			ctx.Out <- unit.Spawn{
+			ctx.Out <- ctx.Born(unit.Spawn{
 				Kind: KindHajimiBullet, X: o.X, Y: o.Y, VX: o.VX, VY: o.VY,
 				OwnerID: ctx.ID, Slot: s.Self.Slot,
-			}
+			})
 			ctx.Out <- unit.Despawn{UnitID: o.ID}
 			ctx.Out <- unit.FX{
 				Name: "gravity-convert", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
@@ -304,12 +304,12 @@ func (a *哈基米) fire(ctx unit.Context, s unit.Sense) {
 	}
 	ux, uy := vx/n, vy/n
 	d := hajimiRadius + bulletR + 6
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindHajimiBullet,
 		X:    x + ux*d, Y: y + uy*d,
 		VX: vx, VY: vy,
 		OwnerID: ctx.ID, Slot: s.Self.Slot,
-	}
+	})
 	ctx.Out <- unit.FX{
 		Name: "hajimi-fire", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
 		X: s.Self.X, Y: s.Self.Y, VX: vx, VY: vy,

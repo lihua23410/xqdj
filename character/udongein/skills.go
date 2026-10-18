@@ -185,10 +185,10 @@ func (a *人偶使) castSpell62(ctx unit.Context, s unit.Sense, enemy unit.Snaps
 	ux, uy := faceOf(a, s, enemy)
 	pushBomb(bombSpec{kind: bombBounce, dmg: float64(a.spellLevel(SkillN62)+5) * 1.4, tx: enemy.X, ty: enemy.Y})
 	gap := s.Self.Radius + bombR + 2
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindNingyushiBomb, X: s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
 		VX: ux * bounceSp, VY: uy * bounceSp, OwnerID: ctx.ID, Slot: s.Self.Slot,
-	}
+	})
 	return true
 }
 
@@ -204,10 +204,10 @@ func (a *人偶使) castDemon(ctx unit.Context, s unit.Sense, enemy unit.Snapsho
 	ux, uy := dx/n, dy/n
 	pushBomb(bombSpec{kind: bombSeek, dmg: demonDmg, tx: enemy.X, ty: enemy.Y, explode: demonR})
 	gap := s.Self.Radius + bombR + 2
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindNingyushiBomb, X: s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
 		VX: ux * demonSp, VY: uy * demonSp, OwnerID: ctx.ID, Slot: s.Self.Slot,
-	}
+	})
 	return true
 }
 
@@ -224,10 +224,10 @@ func (a *人偶使) castHourai(ctx unit.Context, s unit.Sense, enemy unit.Snapsh
 	perpX, perpY := -uy, ux
 	for i := 0; i < houraiBeams; i++ {
 		off := (float64(i) - 1.5) * 14
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindNingyushiBeam, X: s.Self.X + perpX*off, Y: s.Self.Y + perpY*off,
 			VX: ux, VY: uy, OwnerID: ctx.ID, Slot: s.Self.Slot,
-		}
+		})
 	}
 	return true
 }
@@ -396,10 +396,10 @@ func (a *人偶使) tickChain(ctx unit.Context, s unit.Sense) {
 	for i := 1; i < len(a.job.paths); i++ {
 		x1, y1 := a.job.paths[i-1][0], a.job.paths[i-1][1]
 		x2, y2 := a.job.paths[i][0], a.job.paths[i][1]
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindNingyushiBeam, X: x1, Y: y1, VX: x2 - x1, VY: y2 - y1,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
-		}
+		})
 		if hit {
 			continue
 		}

@@ -99,7 +99,7 @@ func (d *分身者) unleash(ctx unit.Context, s unit.Sense) {
 		cs, sn := math.Cos(ang), math.Sin(ang)
 		ox, oy := (px*cs+qx*sn)*cloneGap, (py*cs+qy*sn)*cloneGap
 		rvx, rvy := rotate2(vx, vy, ang)
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    cloneKind,
 			X:       s.Self.X + ox,
 			Y:       s.Self.Y + oy,
@@ -107,7 +107,7 @@ func (d *分身者) unleash(ctx unit.Context, s unit.Sense) {
 			VY:      rvy,
 			OwnerID: ctx.ID,
 			Slot:    s.Self.Slot,
-		}
+		})
 	}
 }
 

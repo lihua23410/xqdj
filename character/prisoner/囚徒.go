@@ -169,10 +169,10 @@ func (a *囚徒) plant(ctx unit.Context, nx, ny float64) {
 	a.spin = 0
 	a.matchSpin = false
 	ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindHook}
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindHook, X: a.hx, Y: a.hy,
 		OwnerID: ctx.ID, Slot: a.slot,
-	}
+	})
 }
 
 func (a *囚徒) constrain(ctx unit.Context, s unit.Sense) {
@@ -239,6 +239,9 @@ func (a *囚徒) tickShock(ctx unit.Context, s unit.Sense) {
 }
 
 func (a *囚徒) tickDrop(ctx unit.Context, s unit.Sense) {
+	if a.rng == nil {
+		a.rng = unit.NewRNG(ctx.Stream)
+	}
 	if !a.winding && s.Time+1e-9 >= a.nextDrop {
 		a.planDrop(s)
 		a.winding = true
@@ -259,18 +262,15 @@ func (a *囚徒) tickDrop(ctx unit.Context, s unit.Sense) {
 	a.winding = false
 	a.nextDrop += dropEvery
 	for i := 0; i < 3; i++ {
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: a.kinds[i], X: a.spots[i].x, Y: a.spots[i].y,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
-		}
+		})
 	}
 }
 
 func (a *囚徒) planDrop(s unit.Sense) {
 	kinds := []string{KindCage, KindGallows, KindChair}
-	if a.rng == nil {
-		a.rng = unit.NewRNG(s.Self.ID)
-	}
 	rng := a.rng
 	rng.Shuffle(3, func(i, j int) { kinds[i], kinds[j] = kinds[j], kinds[i] })
 	copy(a.kinds[:], kinds)

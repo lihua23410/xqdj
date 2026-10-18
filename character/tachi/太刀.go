@@ -30,8 +30,8 @@ const (
 	sheatheWindow = 0.6
 
 	// 居合：原地瞬间拔刀斩，不突进。
-	iaidoReach = 125.0
-	iaidoHalf  = 42.0 // 前方扇区半张角（度），整片约 84 度
+	iaidoReach  = 125.0
+	iaidoHalf   = 42.0 // 前方扇区半张角（度），整片约 84 度
 	iaidoInvuln = 0.20
 
 	// 常态基础挥砍：武器挥舞扫到敌人出伤，不升级刃色。
@@ -41,17 +41,17 @@ const (
 	// 平A伤害跟刃色联动：无 1 / 白 1.5 / 黄 2 / 红 3（见 swingDamage）。
 
 	// 登龙 + 解放斩（红刃居合命中派生）。
-	helmSpeed  = 620.0
-	helmTime   = 0.55
-	helmMain   = 16.0
-	burstHits  = 6
-	burstDmg   = 4.0
-	burstGap   = 0.14
-	burstTail  = 0.10
-	spinSpeed  = 480.0
-	spinTime   = 0.22
-	spinReach  = 125.0
-	spinHalf   = 90.0 // 大回旋 180 度：半张角 90 度
+	helmSpeed = 620.0
+	helmTime  = 0.55
+	helmMain  = 16.0
+	burstHits = 6
+	burstDmg  = 4.0
+	burstGap  = 0.14
+	burstTail = 0.10
+	spinSpeed = 480.0
+	spinTime  = 0.22
+	spinReach = 125.0
+	spinHalf  = 90.0 // 大回旋 180 度：半张角 90 度
 	// 大回旋每下伤害按刃色：无 5 / 白 6 / 黄 7 / 红 9（见 spinDamage）。
 
 	// 见切：间隔小于 0.6 秒的两次及以上攻击触发。

@@ -25,7 +25,7 @@ func (s *squareOutline) Contains(x, y, radius float64) bool {
 }
 
 func (s *squareOutline) SampleEdge(t, inset float64) (x, y, nx, ny float64) {
-	side := int(t * 4) % 4
+	side := int(t*4) % 4
 	frac := t*4 - math.Floor(t*4)
 	r := s.half - inset
 	if r < 0 {

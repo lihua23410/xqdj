@@ -184,7 +184,7 @@ func (a *电椅) Handle(ctx unit.Context, ev unit.Event) {
 
 func (a *电椅) burst(ctx unit.Context, s unit.Sense) {
 	if a.rng == nil {
-		a.rng = unit.NewRNG(s.Self.ID)
+		a.rng = unit.NewRNG(ctx.Stream)
 	}
 	rng := a.rng
 	a.strike(ctx, s, genBolts(s.Self.X, s.Self.Y, rng))

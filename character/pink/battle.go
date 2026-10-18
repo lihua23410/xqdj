@@ -72,9 +72,9 @@ func (b *bottleShot) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 func (b *bottleShot) ignite(ctx unit.Context, x, y float64) {
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindFire, X: x, Y: y, OwnerID: b.owner, Slot: b.slot,
-	}
+	})
 	ctx.Out <- unit.FX{
 		Name: "fire", Kind: KindPink, UnitID: b.owner, Slot: b.slot,
 		X: x, Y: y,

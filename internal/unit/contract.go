@@ -251,6 +251,8 @@ type Spawn struct {
 	VY      float64
 	OwnerID uint64
 	Slot    int
+	// Stream 出生时已经定下的流号。同一父母的第 n 个孩子永远是这个数。
+	Stream uint64
 	// HardNail 钉在硬墙上。墙在转的话，这个点跟着墙走。
 	HardNail bool
 }
@@ -385,9 +387,28 @@ type VisionBlock struct {
 }
 
 type Context struct {
-	ID   uint64
-	Kind string
-	Out  chan<- Cmd
+	ID     uint64
+	Kind   string
+	Out    chan<- Cmd
+	Stream uint64 // 这只单位的随机流。同一颗比赛种子、同一条出生链，流号相同
+	born   *uint64
+}
+
+// WithBirths 让这只单位在自己的协程里给孩子编号。编号在发出出生时就定下，不跟别的单位抢。
+func (ctx Context) WithBirths() Context {
+	n := uint64(0)
+	ctx.born = &n
+	return ctx
+}
+
+// Born 给这次出生盖上流号。同一父母的第 n 个孩子，流号只由父母流号和 n 决定。
+func (ctx Context) Born(s Spawn) Spawn {
+	if ctx.born == nil {
+		return s
+	}
+	*ctx.born++
+	s.Stream = DeriveStream(ctx.Stream, *ctx.born, StreamChild)
+	return s
 }
 
 type Event any
@@ -399,4 +420,5 @@ type Actor interface {
 type SpawnInfo struct {
 	OwnerID uint64
 	Slot    int
+	Stream  uint64
 }

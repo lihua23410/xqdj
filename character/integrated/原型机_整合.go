@@ -88,7 +88,7 @@ func (a *原型机_整合) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	if a.rng == nil {
-		a.rng = unit.NewRNG(ctx.ID)
+		a.rng = unit.NewRNG(ctx.Stream)
 	}
 	if a.inside == nil {
 		a.inside = map[uint64]bool{}
@@ -369,7 +369,7 @@ func (a *原型机_整合) shoot(ctx unit.Context, s unit.Sense) {
 	c, sn := math.Cos(ang), math.Sin(ang)
 	ux, uy = ux*c-uy*sn, ux*sn+uy*c
 	gap := s.Self.Radius + roundRadius + 1.5
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindIntegratedRound,
 		X:       s.Self.X + ux*gap,
 		Y:       s.Self.Y + uy*gap,
@@ -377,7 +377,7 @@ func (a *原型机_整合) shoot(ctx unit.Context, s unit.Sense) {
 		VY:      uy * roundSpeed,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
-	}
+	})
 	a.fireReadyAt = s.Time + fireInterval
 	ctx.Out <- unit.FX{
 		Name:   "shot",

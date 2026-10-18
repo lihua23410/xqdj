@@ -47,7 +47,7 @@ func (w *酒) onSense(ctx unit.Context, s unit.Sense) {
 	if !w.booted {
 		w.booted = true
 		if w.rng == nil {
-			w.rng = unit.NewRNG(ctx.ID)
+			w.rng = unit.NewRNG(ctx.Stream)
 		}
 	}
 	ax := (w.rng.Float64()*2 - 1) * wineWind
@@ -96,10 +96,10 @@ func (w *酒) shatter(ctx unit.Context, x, y float64) {
 		return
 	}
 	w.dead = true
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindSotStain, OwnerID: w.owner, Slot: w.slot,
 		X: x, Y: y,
-	}
+	})
 	ctx.Out <- unit.FX{Name: "sot-shatter", Kind: KindSot, X: x, Y: y, Slot: w.slot}
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }

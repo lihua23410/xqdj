@@ -298,7 +298,7 @@ func (h *钉与锤) tryFireNail(ctx unit.Context, s unit.Sense) {
 	ux, uy := dx/n, dy/n
 	gap := s.Self.Radius + nailRadius + 1.5
 	h.swingAround(ctx, s, ux, uy)
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindNail,
 		X:       s.Self.X + ux*gap,
 		Y:       s.Self.Y + uy*gap,
@@ -306,7 +306,7 @@ func (h *钉与锤) tryFireNail(ctx unit.Context, s unit.Sense) {
 		VY:      uy * nailSpeed,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
-	}
+	})
 	h.nailReadyAt = s.Time + nailCD
 	ctx.Out <- unit.FX{
 		Name: "nail-spawn", Kind: ctx.Kind,
@@ -327,13 +327,13 @@ func (h *钉与锤) tryRitual(ctx unit.Context, s unit.Sense) bool {
 		a := ritualAng(i)
 		pushNail(nailJob{orbit: true, ang: a})
 		x, y := clampInHex(enemy.X+math.Cos(a)*ritualOrbit, enemy.Y+math.Sin(a)*ritualOrbit, nailRadius)
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindNail,
 			X:       x,
 			Y:       y,
 			OwnerID: ctx.ID,
 			Slot:    s.Self.Slot,
-		}
+		})
 	}
 	h.ritualReadyAt = s.Time + ritualCD
 	return true
@@ -360,13 +360,13 @@ func (h *钉与锤) trySpawnDolls(ctx unit.Context, s unit.Sense) {
 	}
 	h.pendingDollHP = dollHP
 	for _, pos := range dollPositions {
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindDoll,
 			X:       pos[0],
 			Y:       pos[1],
 			OwnerID: ctx.ID,
 			Slot:    h.enemySlot,
-		}
+		})
 		ctx.Out <- unit.FX{
 			Name: "doll-spawn", Kind: ctx.Kind,
 			X: pos[0], Y: pos[1], Slot: s.Self.Slot,

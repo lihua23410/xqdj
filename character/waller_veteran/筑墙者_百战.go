@@ -159,7 +159,7 @@ func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
 
 func (a *百战) place(ctx unit.Context, s unit.Sense, walls []unit.WallView) bool {
 	if a.rng == nil {
-		a.rng = unit.NewRNG(ctx.ID)
+		a.rng = unit.NewRNG(ctx.Stream)
 	}
 	var x, y, ang float64
 	var ok bool

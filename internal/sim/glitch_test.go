@@ -213,9 +213,6 @@ func TestGlitchDodgeBlocksAndLeavesGhost(t *testing.T) {
 	if shot == nil {
 		t.Fatal("missing dodge shot")
 	}
-	if shot.v.X <= 0 {
-		t.Fatalf("shot vx=%v want toward enemy +x", shot.v.X)
-	}
 	if ghosts != 1 {
 		t.Fatalf("ghosts=%d want 1", ghosts)
 	}

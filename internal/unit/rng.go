@@ -23,19 +23,27 @@ func seedRoot() *rand.Rand {
 	return rand.New(rand.NewPCG(s0, s1))
 }
 
-// NextStream 向根 PCG 要一个数。比赛开局的种子、单位出生时的流号都走这里。
+// NextStream 向根 PCG 要一个数。只有每局开赛的比赛种子走这里。
 func NextStream() uint64 {
 	rootMu.Lock()
 	defer rootMu.Unlock()
 	return root.Uint64()
 }
 
-// NewRNG 给角色一条独立流。流号当场从根 PCG 取，不看单位 ID：ID 每局从 1 重数，用它会把同一对阵连开打成同一局。
-// id 留着是为了现有调用点不用改。测试先塞好 *rand.Rand 就不要再调这个。
-func NewRNG(id uint64) *rand.Rand {
-	_ = id
-	s := NextStream()
-	return rand.New(rand.NewPCG(s, s^0x9e3779b97f4a7c15))
+const (
+	StreamRoot    = 1
+	StreamChild   = 2
+	StreamFaction = 3
+)
+
+func NewRNG(stream uint64) *rand.Rand {
+	return rand.New(rand.NewPCG(stream, stream^0x9e3779b97f4a7c15))
+}
+
+// DeriveStream 由父流号和第几个孩子算出子流号。只看这两个数，不看谁先被引擎处理。
+func DeriveStream(parent, n, domain uint64) uint64 {
+	r := rand.New(rand.NewPCG(parent^domain, n))
+	return r.Uint64()
 }
 
 // EngineRNG 是比赛引擎那只。流号跟这局种子绑死，落点和换位能用种子对上。

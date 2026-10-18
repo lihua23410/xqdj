@@ -239,7 +239,7 @@ func (h *勇者) Handle(ctx unit.Context, ev unit.Event) {
 
 func (h *勇者) onSense(ctx unit.Context, s unit.Sense) {
 	if h.rng == nil {
-		h.rng = unit.NewRNG(ctx.ID)
+		h.rng = unit.NewRNG(ctx.Stream)
 	}
 	h.x, h.y = s.Self.X, s.Self.Y
 	h.r = s.Self.Radius
@@ -282,7 +282,7 @@ func (h *勇者) scatterRelics(ctx unit.Context, s unit.Sense) {
 		if !ok {
 			x, y = s.Field.Clamp(h.x*-0.5, h.y*0.5, relicRadius+6)
 		}
-		ctx.Out <- unit.Spawn{Kind: kind, X: x, Y: y, OwnerID: ctx.ID, Slot: h.slot}
+		ctx.Out <- ctx.Born(unit.Spawn{Kind: kind, X: x, Y: y, OwnerID: ctx.ID, Slot: h.slot})
 	}
 }
 
@@ -316,7 +316,7 @@ func (h *勇者) pickup(ctx unit.Context, s unit.Sense) {
 		*flag = true
 		ctx.Out <- unit.Despawn{UnitID: o.ID}
 		if follower != "" {
-			ctx.Out <- unit.Spawn{Kind: follower, X: o.X, Y: o.Y, OwnerID: ctx.ID, Slot: h.slot}
+			ctx.Out <- ctx.Born(unit.Spawn{Kind: follower, X: o.X, Y: o.Y, OwnerID: ctx.ID, Slot: h.slot})
 		}
 		ctx.Out <- unit.FX{
 			Name: "relic", Kind: ctx.Kind, UnitID: ctx.ID, Slot: h.slot,
@@ -488,11 +488,11 @@ func (h *勇者) tickMage(ctx unit.Context, s unit.Sense) {
 		dx, dy, n = 1, 0, 1
 	}
 	ux, uy := dx/n, dy/n
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindMageShot, OwnerID: ctx.ID, Slot: h.slot,
 		X: fx + ux*(friendRadius+mageShotRadius+2), Y: fy + uy*(friendRadius+mageShotRadius+2),
 		VX: ux * mageShotSpeed, VY: uy * mageShotSpeed,
-	}
+	})
 }
 
 func (h *勇者) tickSaint(ctx unit.Context, s unit.Sense) {
@@ -544,11 +544,11 @@ func (h *勇者) tickSlimes(ctx unit.Context, s unit.Sense) {
 	// Slot 设成敌人的槽：这样它只敌视勇者，敌人也碰不到它。
 	// 不追人：给一个随机初速，之后就像靶子那样直线飞、撞墙弹开。
 	ang := h.rng.Float64() * 2 * math.Pi
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindSlime, OwnerID: ctx.ID, Slot: enemy.Slot,
 		X: x, Y: y,
 		VX: math.Cos(ang) * slimeSpeed, VY: math.Sin(ang) * slimeSpeed,
-	}
+	})
 }
 
 // gainExp 经验够就升级：按当时的最大生命值回 20% → 上限 +10 → 攻击 +1，可无限叠。

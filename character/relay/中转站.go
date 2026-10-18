@@ -90,13 +90,13 @@ func (a *中转站) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 func (a *中转站) leave(ctx unit.Context, s unit.Sense) {
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindRelayNode,
 		X:       s.Self.X,
 		Y:       s.Self.Y,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
-	}
+	})
 }
 
 func (a *中转站) relay(ctx unit.Context, s unit.Sense) {
@@ -167,7 +167,7 @@ func pass(ctx unit.Context, s unit.Sense, owner uint64, slot int, sender uint64,
 	vx, vy := ux*shotSpeed, uy*shotSpeed
 	addLive(slot)
 	queuePass(passInfo{sender: s.Self.ID, target: target.ID, x: x, y: y, vx: vx, vy: vy, track: tr, slot: slot})
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindRelayShot,
 		X:       x,
 		Y:       y,
@@ -175,7 +175,7 @@ func pass(ctx unit.Context, s unit.Sense, owner uint64, slot int, sender uint64,
 		VY:      vy,
 		OwnerID: target.ID,
 		Slot:    slot,
-	}
+	})
 }
 
 func choose(self unit.Snapshot, nearby []unit.Snapshot, owner, sender uint64, tr *hopTrack) *unit.Snapshot {

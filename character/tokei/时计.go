@@ -103,11 +103,11 @@ type moment struct {
 }
 
 type 时计 struct {
-	moments []moment   // 档栈，末尾是最近的档（回拨弹栈顶）
+	moments []moment     // 档栈，末尾是最近的档（回拨弹栈顶）
 	carved  map[int]bool // 本场已成功落下的钟点；用掉/被偷也不释放
-	hand    int        // 已提交的表针读数（小时）
-	stopped bool       // 走到 12:00 后停针
-	nextAt  float64    // 下一次推针的绝对时刻
+	hand    int          // 已提交的表针读数（小时）
+	stopped bool         // 走到 12:00 后停针
+	nextAt  float64      // 下一次推针的绝对时刻
 	booted  bool
 
 	pending  float64 // 本拍已确认、Sense 还没带回来的伤，用来算致命
@@ -197,10 +197,10 @@ func (a *时计) save(ctx unit.Context, s unit.Sense) {
 			marks: append([]unit.Mark(nil), s.Self.Marks...),
 		}
 		a.moments = append(a.moments, m)
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindTokeiMoment, X: m.x, Y: m.y,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
-		}
+		})
 	}
 	if a.hand >= handCap {
 		a.stopped = true

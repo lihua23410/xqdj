@@ -250,7 +250,7 @@ func TestCardPickNotAlwaysFirst(t *testing.T) {
 		a.deck = []uint8{}
 		a.hx, a.hy = 1, 0
 		out := make(chan unit.Cmd, 32)
-		ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+		ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out, Stream: uint64(i + 1)}
 		a.Handle(ctx, unit.Sense{Time: 0, Self: meVX(0, 0, 40, 0), Nearby: []unit.Snapshot{foe(60, 0)}})
 		_ = drain(out)
 		if len(a.hand) != 1 {

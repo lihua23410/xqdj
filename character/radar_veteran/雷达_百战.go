@@ -167,7 +167,7 @@ func (a *百战) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	if a.rng == nil {
-		a.rng = unit.NewRNG(ctx.ID)
+		a.rng = unit.NewRNG(ctx.Stream)
 	}
 	started := a.phase
 	if started == phaseRaise {
@@ -322,10 +322,10 @@ func (a *百战) pickBig() bool {
 func (a *百战) hangRound(ctx unit.Context, s unit.Sense, x, y float64) {
 	if a.pickBig() {
 		a.noteLaunch(s, true, 0, 0)
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindBarrage, X: x, Y: y,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
-		}
+		})
 		return
 	}
 	a.hangSmall(ctx, s, x, y)
@@ -340,10 +340,10 @@ func (a *百战) hangSmall(ctx unit.Context, s unit.Sense, mx, my float64) {
 		x, y := scatterNear(mx, my, smallScatter, a.rng)
 		pushArmWait(arm)
 		a.noteLaunch(s, false, arm, float64(i-1)*10)
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindSmallBarrage, X: x, Y: y,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
-		}
+		})
 	}
 }
 

@@ -109,8 +109,8 @@ func (a *大六边形) boot(ctx unit.Context, s unit.Sense) {
 	a.inside = map[uint64]uint64{}
 	a.cool = map[uint64]float64{}
 	x1, y1, x2, y2 := poseAt(s.Time)
-	ctx.Out <- unit.Spawn{Kind: KindVortex, X: x1, Y: y1, OwnerID: ctx.ID, Slot: s.Self.Slot}
-	ctx.Out <- unit.Spawn{Kind: KindVortex, X: x2, Y: y2, OwnerID: ctx.ID, Slot: s.Self.Slot}
+	ctx.Out <- ctx.Born(unit.Spawn{Kind: KindVortex, X: x1, Y: y1, OwnerID: ctx.ID, Slot: s.Self.Slot})
+	ctx.Out <- ctx.Born(unit.Spawn{Kind: KindVortex, X: x2, Y: y2, OwnerID: ctx.ID, Slot: s.Self.Slot})
 	ctx.Out <- unit.PlaceWall{
 		OwnerID: ctx.ID, Slot: s.Self.Slot, Kind: KindWidehex,
 		X1: -barHalf, Y1: 0, X2: barHalf, Y2: 0,

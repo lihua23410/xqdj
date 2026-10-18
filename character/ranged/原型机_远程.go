@@ -85,7 +85,7 @@ func (r *原型机_远程) shoot(ctx unit.Context, s unit.Sense) {
 	}
 	ux, uy := dx/n, dy/n
 	gap := s.Self.Radius + bulletRadius + 1.5
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    kindBullet,
 		X:       s.Self.X + ux*gap,
 		Y:       s.Self.Y + uy*gap,
@@ -93,7 +93,7 @@ func (r *原型机_远程) shoot(ctx unit.Context, s unit.Sense) {
 		VY:      uy * bulletMuzzle,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
-	}
+	})
 	r.fireReadyAt = s.Time + rangedFireInterval
 	sp := math.Hypot(s.Self.VX, s.Self.VY)
 	if sp < 1e-6 {

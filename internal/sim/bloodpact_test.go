@@ -134,7 +134,7 @@ func setPactHP(m *Match, u *unit, hp float64) {
 // 熔断只熄召蝙蝠/饿扑/收线，不熄免费咬合，正好单独量它。
 func TestBloodBiteRespectsCooldown(t *testing.T) {
 	m, pact, victim := startPact(t, 41, character.KindDummy)
-	setPactHP(m, pact, 9) // 熔断区里，蝙蝠和扑都熄，只剩咬
+	setPactHP(m, pact, 9)         // 熔断区里，蝙蝠和扑都熄，只剩咬
 	lockBoth(m, pact, victim, 34) // 圆心距 34 ≤ 外径 26 + 对方半径 18
 	noSeek(m, victim)
 	seen := tickUntil(m, 1.0)
@@ -174,7 +174,7 @@ func TestBloodLineFormsAndFeedsShallow(t *testing.T) {
 
 // 血线 >320 绷断：溅血、巡航 −30 蔫置三秒、期间不能重连、到点还回巡航。
 // 说明：现在距离冲过警戒线 240 时血契会无视 CD 立刻警戒收线自救
-//（收线的本职就是续线），静态超距断线只在烧不动血时发生：
+// （收线的本职就是续线），静态超距断线只在烧不动血时发生：
 // 先把血契压进熔断（HP 5，耗血技能全熄），再摆远，看线绷断。
 func TestBloodLineSnapsAndWilts(t *testing.T) {
 	m, pact, victim := startPact(t, 43, character.KindDummy)
@@ -316,7 +316,7 @@ func TestBloodLineOnMinions(t *testing.T) {
 }
 
 // 多线：战斗机和敌方活随从同时各建一条线；断掉随从那条不蔫置
-//（还有线在，契约没全崩），战斗机线照常回流。
+// （还有线在，契约没全崩），战斗机线照常回流。
 func TestBloodMultiLinePartialSnap(t *testing.T) {
 	m, pact, victim := startPact(t, 48, character.KindDummy)
 	lockBoth(m, pact, victim, 34)

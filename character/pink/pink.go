@@ -279,7 +279,7 @@ func (p *pink) onCrowdKill(ctx unit.Context, e unit.Kill) {
 		x, y = pos.X, pos.Y
 	}
 	kind := p.randomDrop()
-	ctx.Out <- unit.Spawn{Kind: kind, X: x, Y: y, OwnerID: ctx.ID, Slot: p.slot}
+	ctx.Out <- ctx.Born(unit.Spawn{Kind: kind, X: x, Y: y, OwnerID: ctx.ID, Slot: p.slot})
 	ctx.Out <- unit.FX{
 		Name: "drop", Kind: KindPink, UnitID: ctx.ID, Slot: p.slot,
 		X: x, Y: y, Amount: float64(weaponOf(kind)),
@@ -314,7 +314,7 @@ func (p *pink) tick(ctx unit.Context, s unit.Sense) {
 	if !p.booted {
 		p.booted = true
 		if p.rng == nil {
-			p.rng = unit.NewRNG(ctx.ID)
+			p.rng = unit.NewRNG(ctx.Stream)
 		}
 		p.nextCrowdAt = s.Time
 		p.nextAttackAt = s.Time
@@ -355,10 +355,10 @@ func (p *pink) tickCrowd(ctx unit.Context, s unit.Sense) {
 	p.nextCrowdAt = s.Time + crowdSpawn
 	ang := p.rng.Float64() * 2 * math.Pi
 	// 人群放到敌方槽：pink 能打，对手不能替 pink 打。
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindCrowd, OwnerID: ctx.ID, Slot: 1 - p.slot, X: x, Y: y,
 		VX: math.Cos(ang) * crowdSpeed, VY: math.Sin(ang) * crowdSpeed,
-	}
+	})
 	ctx.Out <- unit.FX{
 		Name: "crowd-spawn", Kind: KindPink, UnitID: ctx.ID, Slot: p.slot,
 		X: x, Y: y,
@@ -634,10 +634,10 @@ func (p *pink) fireProjectile(ctx unit.Context, kind string, target unit.Snapsho
 	}
 	ux, uy := dx/n, dy/n
 	gap := pinkRadius + radius + 2
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: kind, X: p.x + ux*gap, Y: p.y + uy*gap,
 		VX: ux * speed, VY: uy * speed, OwnerID: ctx.ID, Slot: p.slot,
-	}
+	})
 	ctx.Out <- unit.FX{
 		Name: "shoot", Kind: KindPink, UnitID: ctx.ID, Slot: p.slot,
 		X: p.x, Y: p.y, VX: ux, VY: uy,
@@ -646,10 +646,10 @@ func (p *pink) fireProjectile(ctx unit.Context, kind string, target unit.Snapsho
 
 func (p *pink) spawnBullet(ctx unit.Context, kind string, angle, speed float64) {
 	ux, uy := math.Cos(angle), math.Sin(angle)
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: kind, X: p.x + ux*(pinkRadius+8), Y: p.y + uy*(pinkRadius+8),
 		VX: ux * speed, VY: uy * speed, OwnerID: ctx.ID, Slot: p.slot,
-	}
+	})
 }
 
 func (p *pink) spend(ctx unit.Context, cooldown, now float64) {

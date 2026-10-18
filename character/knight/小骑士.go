@@ -159,7 +159,7 @@ func (k *小骑士) tryRam(ctx unit.Context, sense unit.Sense) {
 		X: tx, Y: ty, VX: vx, VY: vy, Slot: sense.Self.Slot,
 	}
 	if k.rng == nil {
-		k.rng = unit.NewRNG(ctx.ID)
+		k.rng = unit.NewRNG(ctx.Stream)
 	}
 	if k.rng.Float64() < 0.5 {
 		k.readyAt = sense.Time + knightChainGap

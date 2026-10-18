@@ -241,12 +241,12 @@ func (a *狙击者) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	gap := s.Self.Radius + shotRadius + 1.5
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindGodfatherShot,
 		X:    s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
 		VX: ux * shotSpeed, VY: uy * shotSpeed,
 		OwnerID: a.owner, Slot: a.slot,
-	}
+	})
 	a.shots--
 	if a.shots <= 0 {
 		a.leave.begin(ctx, s.Time)
@@ -316,10 +316,10 @@ func (a *贩卖者) Handle(ctx unit.Context, ev unit.Event) {
 		a.leave.begin(ctx, s.Time)
 		return
 	}
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindDrug, X: s.Self.X, Y: s.Self.Y,
 		OwnerID: a.owner, Slot: a.slot,
-	}
+	})
 	a.left--
 	if a.left <= 0 {
 		a.leave.begin(ctx, s.Time)

@@ -185,7 +185,7 @@ func (a *教父青年) boot(ctx unit.Context, s unit.Sense) {
 	a.nextDose = doseEvery
 	a.prevHP = s.Self.HP
 	if a.rng == nil {
-		a.rng = unit.NewRNG(s.Self.ID)
+		a.rng = unit.NewRNG(ctx.Stream)
 	}
 	a.tellDoses(ctx, s)
 	ctx.Out <- unit.FX{Name: "buff", Kind: KindYouth, UnitID: ctx.ID, Amount: 0, Slot: s.Self.Slot}
@@ -388,12 +388,12 @@ func (a *教父青年) fire(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	gap := s.Self.Radius + shotRadius + 1.5
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: a.shotKind,
 		X:    s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
 		VX: ux * shotSpeed, VY: uy * shotSpeed,
 		OwnerID: ctx.ID, Slot: s.Self.Slot,
-	}
+	})
 	a.shotsLeft--
 	if a.shotsLeft > 0 {
 		a.nextShot = s.Time + shotGap

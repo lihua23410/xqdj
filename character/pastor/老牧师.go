@@ -142,7 +142,7 @@ func (a *老牧师) onSense(ctx unit.Context, s unit.Sense) {
 	if !a.started {
 		a.started = true
 		if a.rng == nil {
-			a.rng = unit.NewRNG(s.Self.ID)
+			a.rng = unit.NewRNG(ctx.Stream)
 		}
 		ctx.Out <- unit.NoFrameFreeze{UnitID: ctx.ID, Hold: true}
 		a.phrase = 0
@@ -265,14 +265,14 @@ func (a *老牧师) spawnRing(ctx unit.Context, s unit.Sense, ri int) {
 			continue
 		}
 		x, y := glyphXY(s.Self.X, s.Self.Y, ri, si, n, a.rings[ri].spin)
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindGlyph,
 			X:       x,
 			Y:       y,
 			VX:      float64(sl.code),
 			OwnerID: ctx.ID,
 			Slot:    s.Self.Slot,
-		}
+		})
 	}
 }
 

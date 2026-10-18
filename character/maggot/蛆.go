@@ -169,7 +169,7 @@ func (a *蛆) onSense(ctx unit.Context, s unit.Sense) {
 		a.flyPassing = map[uint64]bool{}
 		a.flyWasCD = map[uint64]bool{}
 		if a.rng == nil {
-			a.rng = unit.NewRNG(ctx.ID)
+			a.rng = unit.NewRNG(ctx.Stream)
 		}
 		ctx.Out <- unit.NoHealthNumbers{UnitID: ctx.ID, Hold: true}
 		ctx.Out <- unit.NoFrameFreeze{UnitID: ctx.ID, Hold: true}
@@ -226,7 +226,7 @@ func spawnBootBabies(ctx unit.Context, s unit.Sense) {
 	for i := 0; i < bootBabies; i++ {
 		ang := float64(i) * 2 * math.Pi / float64(bootBabies)
 		dx, dy := math.Cos(ang), math.Sin(ang)
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindBaby,
 			X:       s.Self.X + dx*babySpread,
 			Y:       s.Self.Y + dy*babySpread,
@@ -234,7 +234,7 @@ func spawnBootBabies(ctx unit.Context, s unit.Sense) {
 			VY:      dx * babyCruise,
 			OwnerID: ctx.ID,
 			Slot:    s.Self.Slot,
-		}
+		})
 	}
 }
 
@@ -363,10 +363,10 @@ func (a *蛆) tickGrowth(ctx unit.Context, s unit.Sense) {
 			continue
 		}
 		a.pendingHP = append(a.pendingHP, inheritReq{x: o.X, y: o.Y, hp: o.HP})
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindFly, X: o.X, Y: o.Y, VX: o.VX, VY: o.VY,
 			OwnerID: ctx.ID, Slot: a.slot,
-		}
+		})
 		ctx.Out <- unit.Despawn{UnitID: o.ID}
 		delete(a.babyReady, o.ID)
 		a.awaitSpawn = true
@@ -384,7 +384,7 @@ func (a *蛆) tickHatch(ctx unit.Context, s unit.Sense) {
 			continue
 		}
 		ang := float64(o.ID%628) / 100
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindBaby,
 			X:       o.X,
 			Y:       o.Y,
@@ -392,7 +392,7 @@ func (a *蛆) tickHatch(ctx unit.Context, s unit.Sense) {
 			VY:      math.Sin(ang) * babyCruise,
 			OwnerID: ctx.ID,
 			Slot:    a.slot,
-		}
+		})
 		ctx.Out <- unit.Despawn{UnitID: o.ID}
 		delete(a.eggReady, o.ID)
 		a.awaitSpawn = true
@@ -592,10 +592,10 @@ func (a *蛆) tickFlies(ctx unit.Context, s unit.Sense) {
 			continue
 		}
 		mx, my := (fa.x+fb.x)/2, (fa.y+fb.y)/2
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindEgg, X: mx, Y: my,
 			OwnerID: ctx.ID, Slot: a.slot,
-		}
+		})
 		a.awaitSpawn = true
 		ctx.Out <- unit.FX{Name: "fly-egg", Kind: KindEgg, X: mx, Y: my, Slot: a.slot}
 		a.breedUntil[fa.id] = s.Time + breedCD

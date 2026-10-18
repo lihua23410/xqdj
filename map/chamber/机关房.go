@@ -87,7 +87,7 @@ func (a *机关房) Handle(ctx unit.Context, ev unit.Event) {
 
 func (a *机关房) boot(ctx unit.Context, s unit.Sense) {
 	a.booted = true
-	a.ensureRNG(ctx.ID)
+	a.ensureRNG(ctx.Stream)
 	a.hitAt = map[uint64]float64{}
 	a.slowTok = map[uint64]uint64{}
 }

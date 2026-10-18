@@ -214,10 +214,10 @@ func (a *吹笛人) spill(ctx unit.Context, v ratView) {
 	if !a.hasEnemy {
 		return
 	}
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: v.mark, X: v.x, Y: v.y,
 		OwnerID: a.enemyID, Slot: a.enemySlot,
-	}
+	})
 	ctx.Out <- unit.FX{Name: "spill", Kind: ctx.Kind, X: v.x, Y: v.y, Slot: a.slot}
 }
 
@@ -241,11 +241,11 @@ func (a *吹笛人) pipe(ctx unit.Context, s unit.Sense, rats int) {
 	ctx.Out <- unit.FX{Name: "pipe", Kind: ctx.Kind, UnitID: ctx.ID, X: s.Self.X, Y: s.Self.Y, Slot: a.slot}
 	ang := float64(rats%6) * math.Pi / 3
 	ux, uy := math.Cos(ang), math.Sin(ang)
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindRat, OwnerID: ctx.ID, Slot: a.slot,
 		X: s.Self.X + ux*ratSpawnGap, Y: s.Self.Y + uy*ratSpawnGap,
 		VX: ux * ratChase, VY: uy * ratChase,
-	}
+	})
 }
 
 // spreadPlague 老鼠倒下：给倒下处一小圈内的敌方单位叠一层瘟疫，并立刻按叠完后的层数跳一口。

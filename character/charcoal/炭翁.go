@@ -142,11 +142,11 @@ func (a *炭翁) onSense(ctx unit.Context, s unit.Sense) {
 	if died {
 		if a.brain.hasForeign() {
 			if _, loaded := orphans.LoadOrStore(ctx.ID, a.brain); !loaded {
-				ctx.Out <- unit.Spawn{
+				ctx.Out <- ctx.Born(unit.Spawn{
 					Kind: KindCharcoalEmber,
 					X:    s.Self.X, Y: s.Self.Y,
 					Slot: int(ctx.ID),
-				}
+				})
 			}
 		}
 		a.brain.emitFX(ctx, s)

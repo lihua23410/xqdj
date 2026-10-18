@@ -34,7 +34,7 @@ func TestMoonSpawnVariesAcrossBoots(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		out := make(chan unit.Cmd, 16)
 		w := &狼人{}
-		w.Handle(unit.Context{ID: 1, Kind: KindWolf, Out: out}, unit.Sense{
+		w.Handle(unit.Context{ID: 1, Kind: KindWolf, Out: out, Stream: uint64(i + 1)}, unit.Sense{
 			Time: 0, Field: f, Self: selfAt(80, 0),
 		})
 		sp := mustSpawn(t, drain(out))

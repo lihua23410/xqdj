@@ -187,7 +187,7 @@ func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
 		a.booted = true
 		a.phase = phaseBoot
 		if a.rng == nil {
-			a.rng = unit.NewRNG(ctx.ID)
+			a.rng = unit.NewRNG(ctx.Stream)
 		}
 		ctx.Out <- unit.NoHealthNumbers{UnitID: ctx.ID, Hold: true}
 		unit.SetAim(ctx, ctx.ID, 0)
@@ -195,7 +195,7 @@ func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	if a.rng == nil {
-		a.rng = unit.NewRNG(ctx.ID)
+		a.rng = unit.NewRNG(ctx.Stream)
 	}
 
 	a.refreshAim(s)
@@ -523,7 +523,7 @@ func spawnShadows(ctx unit.Context, s unit.Sense) {
 	for i := 0; i < shadowCount; i++ {
 		ang := float64(i) * 2 * math.Pi / float64(shadowCount)
 		dx, dy := math.Cos(ang), math.Sin(ang)
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindShadow,
 			X:       s.Self.X + dx*shadowSpread,
 			Y:       s.Self.Y + dy*shadowSpread,
@@ -531,6 +531,6 @@ func spawnShadows(ctx unit.Context, s unit.Sense) {
 			VY:      dx * shadowCruise,
 			OwnerID: ctx.ID,
 			Slot:    s.Self.Slot,
-		}
+		})
 	}
 }

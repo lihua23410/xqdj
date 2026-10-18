@@ -166,7 +166,7 @@ func (a *教父) Handle(ctx unit.Context, ev unit.Event) {
 	if !a.booted {
 		a.booted = true
 		if a.rng == nil {
-			a.rng = unit.NewRNG(s.Self.ID)
+			a.rng = unit.NewRNG(ctx.Stream)
 		}
 	}
 	a.tickSpawn(ctx, s)
@@ -221,10 +221,10 @@ func (a *教父) spawnOne(ctx unit.Context, s unit.Sense) {
 	}
 	a.pending = append(a.pending, k)
 	x, y, vx, vy := edgeKick(a.rng, minionRadius)
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: k, X: x, Y: y, VX: vx, VY: vy,
 		OwnerID: ctx.ID, Slot: s.Self.Slot,
-	}
+	})
 }
 
 func (a *教父) tryPickup(ctx unit.Context, s unit.Sense) {

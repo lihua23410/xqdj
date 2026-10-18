@@ -90,7 +90,7 @@ func spawnDollAt(ctx unit.Context, s unit.Sense, destX, destY float64, spec doll
 		sx, sy = destX, destY
 	}
 	pushDoll(spec)
-	ctx.Out <- unit.Spawn{Kind: KindNingyushiDoll, X: sx, Y: sy, OwnerID: ctx.ID, Slot: s.Self.Slot}
+	ctx.Out <- ctx.Born(unit.Spawn{Kind: KindNingyushiDoll, X: sx, Y: sy, OwnerID: ctx.ID, Slot: s.Self.Slot})
 }
 
 func pushDoll(s dollSpec) {
@@ -428,10 +428,10 @@ func (d *人偶) tickShoot(ctx unit.Context, s unit.Sense) {
 	if e != nil {
 		ux, uy = toward(s.Self, *e)
 	}
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindNingyushiShot, X: s.Self.X + ux*(dollRadius+2), Y: s.Self.Y + uy*(dollRadius+2),
 		VX: ux * shotSpeed, VY: uy * shotSpeed, OwnerID: d.owner, Slot: d.slot,
-	}
+	})
 	d.left--
 	d.next = s.Time + placeLife/float64(placeShots)
 }

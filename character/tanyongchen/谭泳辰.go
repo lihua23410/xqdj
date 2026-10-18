@@ -175,7 +175,7 @@ func (t *谭泳辰老先生) onSense(ctx unit.Context, s unit.Sense) {
 	if !t.boot {
 		t.boot = true
 		if t.rng == nil {
-			t.rng = unit.NewRNG(ctx.ID)
+			t.rng = unit.NewRNG(ctx.Stream)
 		}
 		t.spawnItems(ctx, s)
 		t.nextAttackAt = s.Time
@@ -203,7 +203,7 @@ func (t *谭泳辰老先生) spawnItems(ctx unit.Context, s unit.Sense) {
 		if !ok {
 			x, y = f.Clamp(s.Self.X, s.Self.Y, 40)
 		}
-		ctx.Out <- unit.Spawn{Kind: kind, X: x, Y: y, OwnerID: ctx.ID, Slot: s.Self.Slot}
+		ctx.Out <- ctx.Born(unit.Spawn{Kind: kind, X: x, Y: y, OwnerID: ctx.ID, Slot: s.Self.Slot})
 	}
 }
 
@@ -214,7 +214,7 @@ func (t *谭泳辰老先生) spawnMilk(ctx unit.Context) {
 	if !ok {
 		x, y = f.Clamp(t.x, t.y, 40)
 	}
-	ctx.Out <- unit.Spawn{Kind: KindMilk, X: x, Y: y, OwnerID: ctx.ID, Slot: t.slot}
+	ctx.Out <- ctx.Born(unit.Spawn{Kind: KindMilk, X: x, Y: y, OwnerID: ctx.ID, Slot: t.slot})
 }
 
 func (t *谭泳辰老先生) tryPickup(ctx unit.Context, s unit.Sense) {
@@ -442,7 +442,7 @@ func (t *谭泳辰老先生) accumulate(ctx unit.Context, s unit.Sense, crit boo
 	if t.hits >= domainHits || t.crits >= domainCrits {
 		t.hits = 0
 		t.crits = 0
-		ctx.Out <- unit.Spawn{Kind: KindDomain, X: t.x, Y: t.y, OwnerID: ctx.ID, Slot: t.slot}
+		ctx.Out <- ctx.Born(unit.Spawn{Kind: KindDomain, X: t.x, Y: t.y, OwnerID: ctx.ID, Slot: t.slot})
 		ctx.Out <- unit.FX{Name: "domain", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: t.x, Y: t.y, Amount: domainRadius}
 	}
 }

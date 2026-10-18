@@ -92,7 +92,8 @@ func (m *Match) maybeFactionCollectLocked(u *unit) {
 			ang := base + step*float64(i)
 			ux, uy := math.Cos(ang), math.Sin(ang)
 			gap := u.radius + spec.Radius + 1.5
-			m.addUnitLocked(kind, vec{u.p.X + ux*gap, u.p.Y + uy*gap}, vec{ux * spec.Speed, uy * spec.Speed}, u.id, u.slot)
+			st := unitpkg.DeriveStream(u.stream, uint64(i+1), unitpkg.StreamFaction)
+			m.addUnitStreamLocked(kind, vec{u.p.X + ux*gap, u.p.Y + uy*gap}, vec{ux * spec.Speed, uy * spec.Speed}, u.id, u.slot, st)
 		}
 	}
 	if hasBlast {

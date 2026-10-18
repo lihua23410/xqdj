@@ -140,7 +140,7 @@ func dodgeChance(selfSp, atkSp float64) float64 {
 
 func tryMiuDodge(ctx unit.Context, d unit.IncomingDamage, seen map[uint64]float64, x, y float64, slot int, rng *rand.Rand) bool {
 	if rng == nil {
-		rng = unit.NewRNG(ctx.ID)
+		rng = unit.NewRNG(ctx.Stream)
 	}
 	atk := 0.0
 	if seen != nil {
@@ -264,7 +264,7 @@ func (r *R缪) ensureRNG(id uint64) *rand.Rand {
 func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 	// 本体受击：若这一发会致死且场上还有缪，先保命（换身份，伤害打在替身缪上）
 	if d, ok := ev.(unit.IncomingDamage); ok {
-		if tryMiuDodge(ctx, d, r.seenSp, r.x, r.y, 0, r.ensureRNG(ctx.ID)) {
+		if tryMiuDodge(ctx, d, r.seenSp, r.x, r.y, 0, r.ensureRNG(ctx.Stream)) {
 			return
 		}
 		if r.starMiu {
@@ -300,7 +300,7 @@ func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 		r.speed = miuBaseSpeed
 		r.spawnMinions(ctx, s)
 		r.meleeReadyAt = s.Time
-		rng := r.ensureRNG(ctx.ID)
+		rng := r.ensureRNG(ctx.Stream)
 		r.fireReadyAt = s.Time + miuFireCD + rng.Float64()*2 - 1
 		if rng.Float64() < starMiuChance {
 			r.grantStarMiu(ctx, s.Time)
@@ -342,13 +342,13 @@ func (r *R缪) spawnMinions(ctx unit.Context, s unit.Sense) {
 	for i := 0; i < miuSpawnCount; i++ {
 		ang := float64(i) * 2 * math.Pi / miuSpawnCount
 		dist := miuRadius + rMiuRadius + 20
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindMiu,
 			X:       s.Self.X + math.Cos(ang)*dist,
 			Y:       s.Self.Y + math.Sin(ang)*dist,
 			OwnerID: ctx.ID,
 			Slot:    s.Self.Slot,
-		}
+		})
 	}
 }
 
@@ -372,7 +372,7 @@ func (r *R缪) tickStarMiu(ctx unit.Context, s unit.Sense) {
 	if s.Time+1e-9 < r.starReadyAt {
 		return
 	}
-	v := pickStarVictim(s, r.ensureRNG(ctx.ID))
+	v := pickStarVictim(s, r.ensureRNG(ctx.Stream))
 	if v == nil {
 		return
 	}
@@ -450,7 +450,7 @@ func (r *R缪) moveAndMelee(ctx unit.Context, s unit.Sense) {
 		}
 	}
 
-	tryMiuFire(ctx, s, targets, &r.fireReadyAt, &r.fireNextAt, &r.fireQueue, r.ensureRNG(ctx.ID))
+	tryMiuFire(ctx, s, targets, &r.fireReadyAt, &r.fireNextAt, &r.fireQueue, r.ensureRNG(ctx.Stream))
 
 	// 索敌移动：锁一次目标直线走
 	if r.lockedTargetID != 0 {
@@ -660,7 +660,7 @@ func (m *缪) ensureRNG(id uint64) *rand.Rand {
 func (m *缪) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
-		if tryMiuDodge(ctx, e, m.seenSp, m.x, m.y, m.slot, m.ensureRNG(ctx.ID)) {
+		if tryMiuDodge(ctx, e, m.seenSp, m.x, m.y, m.slot, m.ensureRNG(ctx.Stream)) {
 			return
 		}
 		noteMiuHit(ctx.ID, e.From, KindMiu)
@@ -689,7 +689,7 @@ func (m *缪) tick(ctx unit.Context, s unit.Sense) {
 		m.booted = true
 		m.speed = miuBaseSpeed
 		m.meleeReadyAt = s.Time
-		rng := m.ensureRNG(ctx.ID)
+		rng := m.ensureRNG(ctx.Stream)
 		m.fireReadyAt = s.Time + miuFireCD + rng.Float64()*2 - 1
 		m.thrustReadyAt = s.Time + miuThrustCD + rng.Float64()*2 - 1
 	}
@@ -722,7 +722,7 @@ func (m *缪) tick(ctx unit.Context, s unit.Sense) {
 	targets := m.findTargets(s)
 
 	m.tryMelee(ctx, s, targets)
-	tryMiuFire(ctx, s, targets, &m.fireReadyAt, &m.fireNextAt, &m.fireQueue, m.ensureRNG(ctx.ID))
+	tryMiuFire(ctx, s, targets, &m.fireReadyAt, &m.fireNextAt, &m.fireQueue, m.ensureRNG(ctx.Stream))
 	m.tryThrust(ctx, s, targets)
 	m.moveToward(ctx, s, targets)
 }
@@ -829,7 +829,7 @@ func (m *缪) speedBonus(t *unit.Snapshot) float64 {
 
 func tryMiuFire(ctx unit.Context, s unit.Sense, targets []unit.Snapshot, readyAt, nextAt *float64, queue *int, rng *rand.Rand) {
 	if rng == nil {
-		rng = unit.NewRNG(ctx.ID)
+		rng = unit.NewRNG(ctx.Stream)
 	}
 	if *queue > 0 && s.Time+1e-9 >= *nextAt {
 		*queue--
@@ -850,7 +850,7 @@ func fireMiuBullet(ctx unit.Context, s unit.Sense, targets []unit.Snapshot, rng 
 		return
 	}
 	if rng == nil {
-		rng = unit.NewRNG(ctx.ID)
+		rng = unit.NewRNG(ctx.Stream)
 	}
 	t := targets[rng.IntN(len(targets))]
 	dx := t.X - s.Self.X
@@ -861,7 +861,7 @@ func fireMiuBullet(ctx unit.Context, s unit.Sense, targets []unit.Snapshot, rng 
 	}
 	ux, uy := dx/n, dy/n
 	gap := s.Self.Radius + miuShotRadius + 1.5
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindMiuShot,
 		X:       s.Self.X + ux*gap,
 		Y:       s.Self.Y + uy*gap,
@@ -869,7 +869,7 @@ func fireMiuBullet(ctx unit.Context, s unit.Sense, targets []unit.Snapshot, rng 
 		VY:      uy * miuShotSpeed,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
-	}
+	})
 	ctx.Out <- unit.FX{
 		Name: "miu-shot", Kind: ctx.Kind,
 		X: s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
@@ -881,7 +881,7 @@ func (m *缪) tryThrust(ctx unit.Context, s unit.Sense, targets []unit.Snapshot)
 	if s.Time+1e-9 < m.thrustReadyAt || len(targets) == 0 {
 		return
 	}
-	t := targets[m.ensureRNG(ctx.ID).IntN(len(targets))]
+	t := targets[m.ensureRNG(ctx.Stream).IntN(len(targets))]
 	dx := t.X - s.Self.X
 	dy := t.Y - s.Self.Y
 	n := math.Hypot(dx, dy)

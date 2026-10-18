@@ -71,6 +71,7 @@ func newFish(info unit.SpawnInfo) *鱼 {
 }
 
 func (f *鱼) Handle(ctx unit.Context, ev unit.Event) {
+	f.ensureRNG(ctx.Stream)
 	switch e := ev.(type) {
 	case unit.Sense:
 		f.onSense(ctx, e)
@@ -162,8 +163,7 @@ func (f *鱼) goInert() {
 		return
 	}
 	f.spent = true
-	if f.drag < 1 {
-		f.ensureRNG(f.owner)
+	if f.drag < 1 && f.rng != nil {
 		f.drag = 50 + f.rng.Float64()*260
 	}
 }
@@ -195,12 +195,12 @@ func (f *鱼) coast(ctx unit.Context, s unit.Sense, dt float64) {
 		f.ux, f.uy = s.Self.VX/n, s.Self.VY/n
 	}
 	if f.drag < 1 {
-		f.ensureRNG(ctx.ID)
+		f.ensureRNG(ctx.Stream)
 		f.drag = 50 + f.rng.Float64()*260
 	}
 	j := 1.0
 	if !f.steady {
-		f.ensureRNG(ctx.ID)
+		f.ensureRNG(ctx.Stream)
 		j = 0.55 + f.rng.Float64()*0.9
 	}
 	f.speed -= f.drag * j * dt

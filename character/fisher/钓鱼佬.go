@@ -126,6 +126,7 @@ type 钓鱼佬 struct {
 }
 
 func (a *钓鱼佬) Handle(ctx unit.Context, ev unit.Event) {
+	a.ensureRNG(ctx.Stream)
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
 		a.onHit(ctx, e)
@@ -141,7 +142,9 @@ func (a *钓鱼佬) roll() float64 {
 	if a.draw != nil {
 		return a.draw()
 	}
-	a.ensureRNG(0)
+	if a.rng == nil {
+		return 0
+	}
 	return a.rng.Float64()
 }
 
@@ -178,7 +181,7 @@ func (a *钓鱼佬) onSense(ctx unit.Context, s unit.Sense) {
 	a.x, a.y = s.Self.X, s.Self.Y
 	a.vx, a.vy = s.Self.VX, s.Self.VY
 	a.slot = s.Self.Slot
-	a.ensureRNG(ctx.ID)
+	a.ensureRNG(ctx.Stream)
 	if !a.booted {
 		a.booted = true
 		if debugBootDomain {
@@ -263,10 +266,10 @@ func (a *钓鱼佬) finish(ctx unit.Context, s unit.Sense) {
 	if len(got) == 0 {
 		if a.misses == 2 {
 			ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindPond}
-			ctx.Out <- unit.Spawn{
+			ctx.Out <- ctx.Born(unit.Spawn{
 				Kind: KindFlood, X: 0, Y: 0,
 				OwnerID: ctx.ID, Slot: a.slot,
-			}
+			})
 		} else if a.misses < 2 && a.pondID != 0 {
 			ctx.Out <- unit.Despawn{UnitID: a.pondID}
 		}
@@ -351,11 +354,11 @@ func (a *钓鱼佬) launch(ctx unit.Context, x, y, ux, uy, weight float64, i, n 
 		ux, uy = ux*cs-uy*sn, ux*sn+uy*cs
 	}
 	gap := fisherRadius + r + 2
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: kind, OwnerID: ctx.ID, Slot: a.slot,
 		X: x + ux*gap, Y: y + uy*gap,
 		VX: ux * sp, VY: uy * sp,
-	}
+	})
 }
 
 func (a *钓鱼佬) beginRam(ctx unit.Context, s unit.Sense, y float64) {
@@ -419,10 +422,10 @@ func (a *钓鱼佬) setWalk(ctx unit.Context, vx, vy float64) {
 
 func (a *钓鱼佬) openDomain(ctx unit.Context) {
 	a.misses = 2
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindFlood, X: 0, Y: 0,
 		OwnerID: ctx.ID, Slot: a.slot,
-	}
+	})
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: a.walkSpeed()}
 }
 
@@ -431,10 +434,10 @@ func (a *钓鱼佬) plantPonds(ctx unit.Context) {
 	for i := 0; i < pondN; i++ {
 		x, y := a.placePond(used)
 		used = append(used, [2]float64{x, y})
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindPond, X: x, Y: y,
 			OwnerID: ctx.ID, Slot: a.slot,
-		}
+		})
 	}
 }
 

@@ -174,11 +174,11 @@ func split(ctx unit.Context, s unit.Sense) {
 		vx, vy = twinSpeed, 0
 	}
 	px, py := vx/sp, vy/sp
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindRed, X: s.Self.X, Y: s.Self.Y, VX: vx, VY: vy,
 		OwnerID: ctx.ID, Slot: s.Self.Slot,
-	}
-	ctx.Out <- unit.Spawn{
+	})
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindBlue,
 		X:       s.Self.X - px*twinGap,
 		Y:       s.Self.Y - py*twinGap,
@@ -186,7 +186,7 @@ func split(ctx unit.Context, s unit.Sense) {
 		VY:      -vy,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
-	}
+	})
 	ctx.Out <- unit.FX{
 		Name: "split", Kind: KindRed,
 		X: s.Self.X, Y: s.Self.Y, VX: vx, VY: vy, Slot: s.Self.Slot,
@@ -445,11 +445,11 @@ func (h *半) tryShot(ctx unit.Context, e unit.Collision, opening bool) bool {
 		return false
 	}
 	ux, uy := dx/n, dy/n
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: purpleKind, X: mx, Y: my,
 		VX: ux * purpleSpeed, VY: uy * purpleSpeed,
 		OwnerID: ctx.ID, Slot: h.slot,
-	}
+	})
 	ctx.Out <- unit.FX{
 		Name: "void-shot", UnitID: ctx.ID, Kind: purpleKind,
 		X: mx, Y: my, VX: ux * purpleSpeed, VY: uy * purpleSpeed, Slot: h.slot,

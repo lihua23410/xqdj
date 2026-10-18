@@ -117,7 +117,7 @@ func RearmAttach(s Sense, owner uint64, kind string, cd float64, st *AttachState
 }
 
 func SpawnAttach(ctx Context, s Sense, kind string) {
-	ctx.Out <- Spawn{
+	ctx.Out <- ctx.Born(Spawn{
 		Kind:    kind,
 		X:       s.Self.X,
 		Y:       s.Self.Y,
@@ -125,5 +125,5 @@ func SpawnAttach(ctx Context, s Sense, kind string) {
 		VY:      s.Self.VY,
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
-	}
+	})
 }

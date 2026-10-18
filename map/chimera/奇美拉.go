@@ -52,7 +52,7 @@ func (a *奇美拉) Handle(ctx unit.Context, ev unit.Event) {
 	_, ny := North()
 	_, sy := South()
 	wx, _ := West()
-	ctx.Out <- unit.Spawn{Kind: 火山.KindVolcano, X: 0, Y: ny}
-	ctx.Out <- unit.Spawn{Kind: 机关房.KindChamber, X: 0, Y: sy}
-	ctx.Out <- unit.Spawn{Kind: 八边形.KindOctagon, X: wx, Y: 0}
+	ctx.Out <- ctx.Born(unit.Spawn{Kind: 火山.KindVolcano, X: 0, Y: ny})
+	ctx.Out <- ctx.Born(unit.Spawn{Kind: 机关房.KindChamber, X: 0, Y: sy})
+	ctx.Out <- ctx.Born(unit.Spawn{Kind: 八边形.KindOctagon, X: wx, Y: 0})
 }

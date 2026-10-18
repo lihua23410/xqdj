@@ -256,7 +256,7 @@ func TestLeadPoseCarriesSpeed(t *testing.T) {
 	ctx := unit.Context{ID: 7, Kind: KindVeteran, Out: out}
 	a.Handle(ctx, unit.Sense{
 		Time: 1, Field: unit.HexField(),
-		Self: unit.Snapshot{ID: 7, X: 10, Y: 20, VX: 0, VY: 155, Radius: vetRadius},
+		Self:  unit.Snapshot{ID: 7, X: 10, Y: 20, VX: 0, VY: 155, Radius: vetRadius},
 		Walls: []unit.WallView{seg(1, 0, 0)},
 	})
 	got := drain(out)
@@ -269,7 +269,7 @@ func TestLeadPoseCarriesSpeed(t *testing.T) {
 	}
 	a.Handle(ctx, unit.Sense{
 		Time: 1.1, Field: unit.HexField(),
-		Self: unit.Snapshot{ID: 7, X: 10, Y: 22, Radius: vetRadius},
+		Self:  unit.Snapshot{ID: 7, X: 10, Y: 22, Radius: vetRadius},
 		Walls: []unit.WallView{seg(1, 0, 0)},
 	})
 	mason = fxNamed(drain(out), "mason")

@@ -498,7 +498,7 @@ func (b *血契) tryCallBats(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	if b.rng == nil {
-		b.rng = unit.NewRNG(ctx.ID)
+		b.rng = unit.NewRNG(ctx.Stream)
 	}
 	b.batAt = s.Time + batCD
 	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: s.Self.HP - batCost}
@@ -513,11 +513,11 @@ func (b *血契) tryCallBats(ctx unit.Context, s unit.Sense) {
 			if circleBlocked(s, x, y, batRadius) {
 				continue
 			}
-			ctx.Out <- unit.Spawn{
+			ctx.Out <- ctx.Born(unit.Spawn{
 				Kind: KindBloodBat, OwnerID: ctx.ID, Slot: b.slot,
 				X: x, Y: y,
 				VX: ux * batSpeed, VY: uy * batSpeed,
-			}
+			})
 			break
 		}
 	}

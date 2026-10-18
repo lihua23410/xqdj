@@ -286,13 +286,13 @@ func (a *弓箭) shoot(ctx unit.Context, s unit.Sense, target *unit.Snapshot, ki
 func (a *弓箭) spawnArrow(ctx unit.Context, s unit.Sense, ux, uy, off float64, kind string) {
 	px, py := -uy, ux // 垂直于射击方向
 	d := archerRadius + arrowR + arrowGap
-	ctx.Out <- unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: kind,
 		X:    s.Self.X + ux*d + px*off,
 		Y:    s.Self.Y + uy*d + py*off,
 		VX:   ux * arrowSpeed, VY: uy * arrowSpeed,
 		OwnerID: ctx.ID, Slot: s.Self.Slot,
-	}
+	})
 }
 
 // fireVolley 四支贴排同射：垂直射击方向展开，箭心间隔 8（-12/-4/+4/+12）。

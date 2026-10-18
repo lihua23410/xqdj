@@ -110,7 +110,7 @@ func (a *火山) Handle(ctx unit.Context, ev unit.Event) {
 
 func (a *火山) boot(ctx unit.Context, s unit.Sense) {
 	a.booted = true
-	a.ensureRNG(ctx.ID)
+	a.ensureRNG(ctx.Stream)
 	a.hitAt = map[uint64]float64{}
 	a.slowTok = map[uint64]uint64{}
 }
@@ -170,10 +170,10 @@ func (a *火山) flushLobs(ctx unit.Context, s unit.Sense) {
 			keep = append(keep, L)
 			continue
 		}
-		ctx.Out <- unit.Spawn{
+		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindLava, X: L.x, Y: L.y,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
-		}
+		})
 		ctx.Out <- unit.FX{
 			Name: "land", Kind: KindVolcano, UnitID: ctx.ID,
 			X: L.x, Y: L.y, Amount: puddleR,

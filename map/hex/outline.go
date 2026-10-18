@@ -69,7 +69,7 @@ func hexSemiExtent(faceX, faceY, radius, nx, ny float64) float64 {
 		return radius
 	}
 	// |perp(face)·n| * radius
-	return radius * math.Abs(-fy*nx + fx*ny)
+	return radius * math.Abs(-fy*nx+fx*ny)
 }
 
 func (h *hexOutline) Sweep(px, py, vx, vy, faceX, faceY, radius, dt float64, semi bool) (t, nx, ny float64, hit bool) {
