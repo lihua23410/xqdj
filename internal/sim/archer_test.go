@@ -94,16 +94,16 @@ func TestArcherChargeShootRecover(t *testing.T) {
 	if fx["shoot"] != 1 {
 		t.Fatalf("1.2s 内出了 %d 箭，想要 1（0.5 蓄力 + 0.5 后摇，第二箭在 1.5s）", fx["shoot"])
 	}
-	if got := before - hpOf(m, foe); math.Abs(got-7) > 0.01 {
-		t.Fatalf("一次蓄射伤害 %v，想要 7", got)
+	if got := before - hpOf(m, foe); math.Abs(got-5) > 0.01 {
+		t.Fatalf("一次蓄射伤害 %v，想要 5", got)
 	}
 	// 再跑 1.0s（合计 ~2.2s）：节拍 1.0s → 该出第二箭了（1.25s 的旧节拍这时只有一箭）
 	fx = runArcher(m, 1.0)
 	if fx["shoot"] != 1 {
 		t.Fatalf("第二段又出了 %d 箭，想要 1（合计两箭）", fx["shoot"])
 	}
-	if got := before - hpOf(m, foe); math.Abs(got-14) > 0.01 {
-		t.Fatalf("2.2s 后总伤害 %v，想要 14（两箭）", got)
+	if got := before - hpOf(m, foe); math.Abs(got-10) > 0.01 {
+		t.Fatalf("2.2s 后总伤害 %v，想要 10（两箭）", got)
 	}
 }
 

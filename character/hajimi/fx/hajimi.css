@@ -1,0 +1,109 @@
+/* 反重力哈基米皮肤：渐变球体 + 猫耳 + 倾斜场箭头（参考 Gemini 拟人的蓝紫虹彩）。
+   注意：CSS 只认这一种注释；上一版误用了 //，会把紧跟的规则一起吞掉。 */
+
+/* 本体：引擎的 .ball 是 background: var(--kind) 平涂，这里覆盖成渐变——
+   蓝紫底 + 左上白高光 + 右下青色反光 + 右上粉色反光。
+   --kind 仍留给辉光/拖尾用（.ball 的 box-shadow: currentColor）。 */
+.ball.look-hajimi {
+  background:
+    radial-gradient(circle at 32% 26%, rgba(240, 236, 255, 0.95) 0 7%, transparent 36%),
+    radial-gradient(circle at 72% 80%, rgba(110, 231, 240, 0.85) 0 8%, transparent 48%),
+    radial-gradient(circle at 78% 22%, rgba(255, 154, 213, 0.8) 0 8%, transparent 44%),
+    radial-gradient(circle at 34% 30%, #c3b4ff 0%, #8b7be8 52%, #4b3fa0 100%);
+}
+
+/* 猫耳：纯 CSS 画在球体上（不需要 JS 钩子），不跟速度转。 */
+.look-hajimi::before,
+.look-hajimi::after {
+  content: "";
+  position: absolute;
+  top: -12%;
+  width: 26%;
+  height: 34%;
+  background: linear-gradient(180deg, #e8e2ff, #8b7be8);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+.look-hajimi::before { left: 8%; transform: rotate(-14deg); }
+.look-hajimi::after { right: 8%; transform: rotate(14deg); }
+
+/* 三体之间的细线，只表示谁在互相拉。 */
+.guide.hajimi-link {
+  border-top: 1px solid rgba(236, 230, 255, 0.5);
+}
+
+/* 两颗星：四角星盖在小球上。 */
+.ball.look-hajimi-star {
+  background:
+    radial-gradient(circle at 40% 34%, #fff 0 10%, #efeaff 42%, #8b7be8 100%);
+  box-shadow: 0 0 12px #c9b8ff;
+}
+.ball.look-hajimi-star::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 190%;
+  height: 190%;
+  margin: -95% 0 0 -95%;
+  background: conic-gradient(#f85649, #4592f7, #3ac36f, #eac137, #f85649);
+  -webkit-mask: url(gemini.svg) center / contain no-repeat;
+  mask: url(gemini.svg) center / contain no-repeat;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.85));
+}
+
+/* 反重力弹：Gemini 图标 = 四色风车**被裁成四角星**（这是从他给的 SVG 里读出来的结构：
+   clipPath(星形) 里塞一张四色 JPEG；那个 radial-gradient 矩形在 viewBox 外，根本没画）。
+   四色与方位是从那张 472x461 原图逐像素聚类量的：红顶(53%,24%) / 蓝右(75%,41%)
+   / 绿下(55%,60%) / 黄左(41%,40%)，正好对上星星的四个臂。
+   星形用 fx/gemini.svg 的 mask（d 从原始 SVG 的 clipPath 里直接抽的，viewBox 0 0 192 192）。
+   弹的物理半径只有 5px（球体 10px），所以画在 ::before 上放大到 220%，慢慢自转；
+   用 margin 做居中、不用 transform，免得和旋转动画抢 transform。
+
+   ⚠️ 不要把这颗球设成 transparent/none：一旦 mask 那条链（svg 取不到、浏览器不支持）
+   失败，弹就会"存在但完全看不见"，看起来就是"场上没有子弹"。球体留着当兜底。 */
+.ball.look-hajimi-bullet {
+  /* 保留默认球体（背景 + 辉光）当兜底，星星只是盖在上面 */
+  box-shadow: 0 0 10px var(--kind);
+}
+.ball.look-hajimi-bullet::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220%;
+  height: 220%;
+  margin: -110% 0 0 -110%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.95) 0 7%, rgba(255, 255, 255, 0.3) 20%, transparent 40%),
+    conic-gradient(from 0deg at 50% 50%,
+      #f85649 0deg 82deg,
+      #4592f7 98deg 172deg,
+      #3ac36f 188deg 262deg,
+      #eac137 278deg 352deg,
+      #f85649 360deg);
+  -webkit-mask: url(gemini.svg) center / contain no-repeat;
+  mask: url(gemini.svg) center / contain no-repeat;
+  filter: blur(0.5px) drop-shadow(0 0 3px rgba(180, 160, 255, 0.6));
+  animation: hajimi-star 2.4s linear infinite;
+}
+
+@keyframes hajimi-star {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 出弹的小闪。 */
+.fx-hajimi-fire {
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 50%;
+  border: 2px solid #d9d4ff;
+  animation: hajimi-fire 0.3s ease-out forwards;
+}
+
+@keyframes hajimi-fire {
+  from { transform: scale(0.4); opacity: 0.95; }
+  to { transform: scale(1.6); opacity: 0; }
+}

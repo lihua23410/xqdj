@@ -15,6 +15,7 @@ import (
 	"xqdj/character/glitch"
 	"xqdj/character/godfather"
 	"xqdj/character/godfather_youth"
+	"xqdj/character/hajimi"
 	"xqdj/character/hammer"
 	"xqdj/character/hero"
 	"xqdj/character/integrated"
@@ -83,6 +84,8 @@ const (
 	KindYouth           = 教父青年.KindYouth
 	KindYouthBuffShot   = 教父青年.KindYouthBuffShot
 	KindYouthShot       = 教父青年.KindYouthShot
+	KindHajimi          = 反重力猫咪.KindHajimi
+	KindHajimiBullet    = 反重力猫咪.KindHajimiBullet
 	KindDoll            = 钉与锤.KindDoll
 	KindHammer          = 钉与锤.KindHammer
 	KindHammerArc       = 钉与锤.KindHammerArc
