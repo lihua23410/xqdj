@@ -1,15 +1,285 @@
+/* 非因果观众层。只挂 look-noncausal / look-residual / look-lock 和本包的 .fx / .guide。
+   不改通用 .ball，不改选人页。残影本体用背景 alpha，旁白和 T† 是不透明的子节点。 */
+
 .ball.look-noncausal {
   background: radial-gradient(circle at 40% 38%, #f4fdff 0%, #8fd0ea 46%, #3d7f99 100%) !important;
   box-shadow: 0 0 10px rgba(140, 220, 255, 0.55);
 }
 
+/* 残影淡显 30%，落在 25%–35%。虚线边框保持可读，不跟本体一起变淡。 */
 .ball.look-residual {
-  background: rgba(223, 246, 255, 0.28) !important;
+  background: rgba(223, 246, 255, 0.3) !important;
   border: 1px dashed rgba(170, 220, 240, 0.95);
   box-shadow: none !important;
 }
 
+.ball.look-residual.is-torn {
+  background:
+    linear-gradient(118deg, transparent 42%, rgba(255, 255, 255, 0.9) 48%, transparent 54%),
+    rgba(223, 246, 255, 0.3) !important;
+}
+
+.ball.look-residual > .nc-caption,
+.nc-hud > .nc-caption {
+  color: #f4fdff;
+  font-size: 12px;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px #041018;
+}
+
+.ball.look-residual > .nc-caption {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 22px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ball.look-residual > .nc-doom {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 1px 2px #041018;
+}
+
+.ball.look-residual > .nc-doom.is-due {
+  color: #ffb4b4;
+}
+
+.ball.look-residual > .nc-ghost-hp {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 4px);
+  width: 36px;
+  height: 3px;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ball.look-residual > .nc-ghost-hp > i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: #e7f8ff;
+}
+
+.nc-hud {
+  position: absolute;
+  z-index: 5;
+  width: 210px;
+  padding: 8px 10px 10px;
+  background: rgba(8, 18, 28, 0.88);
+  border: 1px solid rgba(143, 208, 234, 0.45);
+  border-radius: 8px;
+  pointer-events: auto;
+  color: #f4fdff;
+}
+
+.nc-hud > .nc-caption {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.nc-bins {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 72px;
+}
+
+.nc-bin {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+}
+
+.nc-bin > i {
+  display: block;
+  width: 100%;
+  height: 8%;
+  border-radius: 2px 2px 0 0;
+  background: rgba(143, 208, 234, 0.85);
+  transform-origin: center bottom;
+  animation: nc-pulse 1.8s ease-in-out infinite;
+}
+
+.nc-bin > em {
+  margin-top: 3px;
+  font-style: normal;
+  font-size: 10px;
+  color: #b7d4e2;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 整排一起呼吸。抽中的柱同帧改 class，不逐格扫描。 */
+@keyframes nc-pulse {
+  0%,
+  100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
+.nc-bin.is-drawn > i {
+  animation: none;
+  opacity: 1;
+  filter: brightness(1.8);
+  background: #fff;
+}
+
+.nc-bin.is-drawn > em {
+  color: #fff;
+}
+
+.nc-meta {
+  margin-top: 4px;
+  font-size: 10px;
+  color: #9ec3d4;
+  font-variant-numeric: tabular-nums;
+}
+
+.nc-skip {
+  margin-top: 6px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.nc-hud:not(.is-rewinding) > .nc-skip {
+  display: none;
+}
+
+.nc-rewind {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.nc-rewind path {
+  fill: none;
+  stroke: rgba(210, 236, 255, 0.55);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nc-rewind circle {
+  fill: rgba(255, 255, 255, 0.9);
+}
+
 .ball.look-lock {
   background: #f7f3c8 !important;
-  box-shadow: 0 0 8px rgba(255, 244, 180, 0.85);
+  box-shadow: 0 0 8px rgba(255, 244, 180, 0.45);
+}
+
+.ball.look-lock:has(> .nc-core) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ball.look-lock > .nc-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(100% * var(--lock-thick, 1));
+  height: calc(100% * var(--lock-thick, 1));
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #f7f3c8;
+  box-shadow: 0 0 6px rgba(255, 244, 180, 0.45);
+  pointer-events: none;
+}
+
+.guide.nc-lock {
+  opacity: 0.55;
+  border-top-width: 1px;
+  border-top-style: dashed;
+  filter: none;
+}
+
+.fx.nc-packet {
+  width: 28px;
+  height: 14px;
+  border-radius: 40%;
+  border: 2px solid currentColor;
+  background: transparent;
+  animation: nc-packet 0.16s linear forwards;
+}
+
+.fx.nc-packet.is-merged {
+  border-style: double;
+}
+
+@keyframes nc-packet {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scaleX(1.35);
+  }
+}
+
+.fx.nc-sever {
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  background: rgba(8, 16, 24, 0.82);
+  color: #f4fdff;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  animation: nc-sever 0.7s ease-out forwards;
+}
+
+@keyframes nc-sever {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -70%);
+  }
+}
+
+.fx.nc-tear {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    currentColor 46%,
+    transparent 50%,
+    currentColor 54%,
+    transparent 62%
+  );
+  animation: nc-tear 0.4s ease-out forwards;
+}
+
+@keyframes nc-tear {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}
+
+.fx.nc-down,
+.fx.nc-doom {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px dashed currentColor;
+  animation: nc-tear 0.45s ease-out forwards;
 }

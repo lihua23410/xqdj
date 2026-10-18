@@ -117,7 +117,8 @@ func init() {
 		Speed:   missileSpeed,
 		Vision:  bodyVision,
 		Fighter: false,
-		Look:    unit.Look{Color: lockColor, Trail: true, FX: []string{"lock"}},
+		// Trail 关掉：粗细由 fx 里的 .nc-core 按柱位缩放，不再叠一条通用拖影。
+		Look: unit.Look{Color: lockColor, FX: []string{"lock"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &锁影弹{owner: info.OwnerID}
 	})
