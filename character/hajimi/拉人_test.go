@@ -136,6 +136,36 @@ func TestGravityFieldConvertsEnemyProjectilesForThreeSeconds(t *testing.T) {
 	}
 }
 
+func TestGravityFieldDoesNotConvertAttachArcs(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	cat := &哈基米{booted: true, next: 100, nextField: 10, rng: unit.NewRNG(1)}
+	ctx := unit.Context{ID: 1, Kind: KindHajimi, Out: out}
+	self := unit.Snapshot{ID: 1, Slot: 0, X: orbitR, Y: 0, VX: 0, VY: hajimiSpeed}
+	arc := unit.Snapshot{
+		ID: 11, Role: unit.RoleProjectile, Slot: 1,
+		X: 40, Y: 0, VX: 165, VY: 0, Radius: 20,
+		ArcSpan: unit.Deg(60), ArcInner: 18,
+	}
+	free := unit.Snapshot{ID: 12, Role: unit.RoleProjectile, Slot: 1, X: 80, Y: 0, VX: 200, VY: 0, Radius: 6}
+	cat.Handle(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{arc, free}})
+	cmds := drain(out)
+	if hasDespawn(cmds, 11) || hasConvertedSpawn(cmds, arc.X, arc.Y, 1) {
+		t.Fatal("attach fan arc should not be despawned or converted")
+	}
+	if _, ok := velocityOf(cmds, 11); ok {
+		t.Fatal("attach fan arc should not be twisted")
+	}
+	if !hasDespawn(cmds, 12) || !hasConvertedSpawn(cmds, free.X, free.Y, 1) {
+		t.Fatal("free enemy projectile should still be converted")
+	}
+	rearmed := arc
+	rearmed.ID = 13
+	cat.Handle(ctx, unit.Sense{Time: 10.2, Self: self, Nearby: []unit.Snapshot{rearmed}})
+	if later := drain(out); hasDespawn(later, 13) || hasConvertedSpawn(later, rearmed.X, rearmed.Y, 1) {
+		t.Fatal("arc rearmed during the field should not be converted")
+	}
+}
+
 func hasDespawn(cmds []unit.Cmd, id uint64) bool {
 	for _, cmd := range cmds {
 		if d, ok := cmd.(unit.Despawn); ok && d.UnitID == id {

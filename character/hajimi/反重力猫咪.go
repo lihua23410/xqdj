@@ -185,6 +185,11 @@ func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
 		if a.fieldSeen[o.ID] {
 			continue
 		}
+		// 贴身扇环挂在主人身上，ArcSpan 非 0。吞掉后主人会再挂，
+		// 场开着的这几秒就会在身上不停吐落体弹。自由飞行的敌弹仍照常吞。
+		if o.Role == unit.RoleProjectile && o.Slot != s.Self.Slot && o.ArcSpan != 0 {
+			continue
+		}
 		a.fieldSeen[o.ID] = true
 		if o.Role == unit.RoleProjectile && o.Slot != s.Self.Slot {
 			ctx.Out <- unit.Spawn{
