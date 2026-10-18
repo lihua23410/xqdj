@@ -39,7 +39,7 @@ const (
 	dmgMax      = 8.0
 	antiGain    = 0.04 // 受到引力时，顺速度再补的比例。只补一点点势能
 
-	gravityFieldPeriod   = 15.0
+	gravityFieldPeriod   = 20.0
 	gravityFieldDuration = 3.0
 	gravityFieldRadius   = 420.0
 	gravityFieldMinSpeed = 220.0
@@ -84,7 +84,6 @@ type 哈基米 struct {
 	fieldX     float64
 	fieldY     float64
 	fieldSeen  map[uint64]bool
-	fieldSweep bool
 	fieldLast  float64
 	orbiters   map[uint64]*orbitBullet
 }
@@ -151,7 +150,6 @@ func (a *哈基米) startGravityField(ctx unit.Context, s unit.Sense) {
 	a.fieldUntil = s.Time + gravityFieldDuration
 	a.fieldX, a.fieldY = s.Self.X, s.Self.Y
 	a.fieldSeen = make(map[uint64]bool)
-	a.fieldSweep = true
 	a.fieldLast = s.Time
 	a.orbiters = make(map[uint64]*orbitBullet)
 	ctx.Out <- unit.FX{
@@ -188,11 +186,11 @@ func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
 			a.orbitOwnBullet(ctx, s, o, dt)
 			continue
 		}
+		if a.fieldSeen[o.ID] {
+			continue
+		}
+		a.fieldSeen[o.ID] = true
 		if o.Role == unit.RoleProjectile && o.Slot != s.Self.Slot {
-			// 敌方子弹只在力场打开的这一拍收掉。
-			if !a.fieldSweep {
-				continue
-			}
 			ctx.Out <- unit.Spawn{
 				Kind: KindHajimiBullet, X: o.X, Y: o.Y, VX: o.VX, VY: o.VY,
 				OwnerID: ctx.ID, Slot: s.Self.Slot,
@@ -204,10 +202,6 @@ func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
 			}
 			continue
 		}
-		if a.fieldSeen[o.ID] {
-			continue
-		}
-		a.fieldSeen[o.ID] = true
 		speed := math.Hypot(o.VX, o.VY)
 		if speed < 1e-6 {
 			speed = gravityFieldMinSpeed
@@ -221,7 +215,6 @@ func (a *哈基米) applyGravityField(ctx unit.Context, s unit.Sense) {
 			X: o.X, Y: o.Y, VX: math.Cos(angle), VY: math.Sin(angle), Amount: speed,
 		}
 	}
-	a.fieldSweep = false
 }
 
 func (a *哈基米) orbitOwnBullet(ctx unit.Context, s unit.Sense, o *unit.Snapshot, dt float64) {

@@ -147,8 +147,8 @@ func TestGravityFieldConvertsEnemyProjectilesForThreeSeconds(t *testing.T) {
 	}
 	late := unit.Snapshot{ID: 6, Role: unit.RoleProjectile, Slot: 1, X: 120, Y: 10, Radius: 5}
 	cat.Handle(ctx, unit.Sense{Time: 12.9, Self: self, Nearby: []unit.Snapshot{late}})
-	if hasDespawn(drain(out), 6) {
-		t.Fatal("projectile entering after the field opens should not be cleared")
+	if !hasDespawn(drain(out), 6) {
+		t.Fatal("projectile entering during the three-second field should be converted")
 	}
 	expired := unit.Snapshot{ID: 7, Role: unit.RoleProjectile, Slot: 1, X: 120, Y: 10, Radius: 5}
 	cat.Handle(ctx, unit.Sense{Time: 13.1, Self: self, Nearby: []unit.Snapshot{expired}})
