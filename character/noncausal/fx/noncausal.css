@@ -1,0 +1,15 @@
+.ball.look-noncausal {
+  background: radial-gradient(circle at 40% 38%, #f4fdff 0%, #8fd0ea 46%, #3d7f99 100%) !important;
+  box-shadow: 0 0 10px rgba(140, 220, 255, 0.55);
+}
+
+.ball.look-residual {
+  background: rgba(223, 246, 255, 0.28) !important;
+  border: 1px dashed rgba(170, 220, 240, 0.95);
+  box-shadow: none !important;
+}
+
+.ball.look-lock {
+  background: #f7f3c8 !important;
+  box-shadow: 0 0 8px rgba(255, 244, 180, 0.85);
+}
