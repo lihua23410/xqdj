@@ -160,6 +160,7 @@ type Match struct {
 	seq        uint64
 	rng        *rand.Rand
 	seed       uint64
+	pinned     bool
 	recap      strings.Builder
 	trace      strings.Builder
 	logReady   bool
@@ -196,10 +197,14 @@ type dmgOffer struct {
 }
 
 func NewMatch() *Match {
-	return NewMatchSeeded(uint64(time.Now().UnixNano()))
+	return newMatch(0, false)
 }
 
 func NewMatchSeeded(seed uint64) *Match {
+	return newMatch(seed, true)
+}
+
+func newMatch(seed uint64, pinned bool) *Match {
 	kinds := unitpkg.FighterKinds()
 	var slots [2][]string
 	if len(kinds) >= 2 {
@@ -213,8 +218,9 @@ func NewMatchSeeded(seed uint64) *Match {
 		units:      make(map[uint64]*unit),
 		cmds:       make(chan unitpkg.Cmd, 512),
 		spec:       spec,
-		rng:        rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)),
+		rng:        unitpkg.EngineRNG(seed),
 		seed:       seed,
+		pinned:     pinned,
 		logNames:   map[uint64]string{},
 		pendingDmg: make(map[uint64]dmgOffer),
 		wardAbsorb: make(map[uint64]bool),
@@ -604,6 +610,10 @@ func (m *Match) Start() {
 	if m.team && (len(m.slots[0]) == 0 || len(m.slots[1]) == 0) {
 		return
 	}
+	if !m.pinned {
+		m.seed = unitpkg.NextStream()
+	}
+	m.rng = unitpkg.EngineRNG(m.seed)
 	m.logMute = true
 	m.resetLocked()
 	m.installFieldLocked()
