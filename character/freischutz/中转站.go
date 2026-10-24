@@ -63,10 +63,16 @@ func init() {
 		Speed: shotSpeed, Vision: nodeVision, Fighter: false, PassWalls: true,
 		Look: unit.Look{Color: shotColor, Glow: true, FX: []string{"freischutz-shot"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &弹{
+		b := &弹{
 			owner: info.OwnerID, slot: info.Slot, damage: shotDamage,
 			used: map[uint64]bool{}, rng: unit.NewRNG(info.Stream),
 		}
+		// 碰撞发生在第一拍感知之前。伤害必须在出生时就写上，不能等感知再领。
+		if dmg, ok := takeRepriseStream(info.Stream); ok {
+			b.damage = dmg
+			b.spent = true
+		}
+		return b
 	})
 }
 
@@ -341,9 +347,7 @@ func (b *弹) reprise(ctx unit.Context, s unit.Sense) {
 		sp = shotSpeed
 	}
 	ux, uy := dx/dist, dy/dist
-	queueReprise(node.X, node.Y, b.damage)
-	addLive(b.slot)
-	ctx.Out <- ctx.Born(unit.Spawn{
+	born := ctx.Born(unit.Spawn{
 		Kind:    KindFreiShot,
 		X:       node.X,
 		Y:       node.Y,
@@ -352,6 +356,9 @@ func (b *弹) reprise(ctx unit.Context, s unit.Sense) {
 		OwnerID: b.owner,
 		Slot:    b.slot,
 	})
+	queueReprise(born.Stream, node.X, node.Y, b.damage)
+	addLive(b.slot)
+	ctx.Out <- born
 }
 
 func nearestPerson(nearby []unit.Snapshot, slot int, x, y float64) *unit.Snapshot {
@@ -531,16 +538,34 @@ func setLive(slot, n int) {
 }
 
 type reprise struct {
+	stream uint64
 	x, y   float64
 	damage float64
 }
 
 var reprises []reprise
 
-func queueReprise(x, y, damage float64) {
+func queueReprise(stream uint64, x, y, damage float64) {
 	liveMu.Lock()
-	reprises = append(reprises, reprise{x: x, y: y, damage: damage})
+	reprises = append(reprises, reprise{stream: stream, x: x, y: y, damage: damage})
 	liveMu.Unlock()
+}
+
+func takeRepriseStream(stream uint64) (float64, bool) {
+	if stream == 0 {
+		return 0, false
+	}
+	liveMu.Lock()
+	defer liveMu.Unlock()
+	for i, r := range reprises {
+		if r.stream != stream {
+			continue
+		}
+		dmg := r.damage
+		reprises = append(reprises[:i], reprises[i+1:]...)
+		return dmg, true
+	}
+	return 0, false
 }
 
 func takeReprise(x, y, speed float64) (float64, bool) {
