@@ -110,6 +110,28 @@ func TestMissReprisesOnceFromANode(t *testing.T) {
 	}
 }
 
+func TestRepriseDamageIsReadyAtBirth(t *testing.T) {
+	resetLive()
+	out := make(chan unit.Cmd, 4)
+	parent := unit.Context{ID: 1, Kind: KindFrei, Out: out, Stream: 9}.WithBirths()
+	b := &弹{owner: 1, slot: 0, damage: 8, used: map[uint64]bool{}, seen: true, rng: unit.NewRNG(1)}
+	node := nodeAt(4, 10, 0)
+	person := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 10, Y: 80, Radius: 18}
+	b.Handle(parent, unit.Sense{
+		Self:   unit.Snapshot{X: 0, Y: -640, VX: 0, VY: 1040, Radius: shotRadius},
+		Nearby: []unit.Snapshot{node, person},
+	})
+	sp := shotOf(drain(out))
+	if sp == nil || sp.Stream == 0 {
+		t.Fatalf("spawn=%+v", sp)
+	}
+	born := unit.NewActor(KindFreiShot, unit.SpawnInfo{OwnerID: 1, Slot: 0, Stream: sp.Stream})
+	shot, ok := born.(*弹)
+	if !ok || shot.damage != 8 || !shot.spent {
+		t.Fatalf("birth damage=%v spent=%v ok=%v", shot.damage, shot.spent, ok)
+	}
+}
+
 func TestHitPersonDoesNotReprise(t *testing.T) {
 	resetLive()
 	out := make(chan unit.Cmd, 4)
