@@ -1,0 +1,75 @@
+.ball.look-freischutz {
+  overflow: visible;
+  background: radial-gradient(
+    circle at 50% 50%,
+    #d7e6ff 0 14%,
+    #1d4e9c 15% 46%,
+    #0e2a5c 100%
+  );
+  box-shadow: 0 0 12px #1d4e9c, inset 0 0 0 2px #163e86;
+}
+
+.frei-gun {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 260%;
+  height: auto;
+  pointer-events: none;
+  z-index: 3;
+  image-rendering: pixelated;
+}
+
+.ball.look-freischutz.aiming .frei-gun {
+  filter: drop-shadow(0 0 4px #e8c878);
+}
+
+.ball.look-freischutz-node {
+  opacity: 0.55;
+  background: radial-gradient(
+    circle at 50% 50%,
+    #c5d9ff 0 20%,
+    #071833 21% 100%
+  );
+  box-shadow: inset 0 0 0 1px #1d4e9c;
+}
+
+.ball.look-freischutz-shot,
+.ball.look-freischutz-shot.projectile,
+.ball.look-freischutz-shot.glow {
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+
+.frei-shot-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26px;
+  height: auto;
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 4;
+  filter: drop-shadow(0 0 3px #8ec5ff);
+}
+
+.guide.frei-trace {
+  border: none;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.guide.frei-trace svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}

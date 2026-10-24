@@ -13,6 +13,7 @@ import (
 	"xqdj/character/dummy"
 	"xqdj/character/engine"
 	"xqdj/character/fisher"
+	"xqdj/character/freischutz"
 	"xqdj/character/glitch"
 	"xqdj/character/godfather"
 	"xqdj/character/godfather_youth"
@@ -76,6 +77,9 @@ const (
 	KindFisher          = 钓鱼佬.KindFisher
 	KindFlood           = 钓鱼佬.KindFlood
 	KindPond            = 钓鱼佬.KindPond
+	KindFrei            = Freischutz.KindFrei
+	KindFreiNode        = Freischutz.KindFreiNode
+	KindFreiShot        = Freischutz.KindFreiShot
 	KindGlitch          = 地慧星.KindGlitch
 	KindGlitchArc       = 地慧星.KindGlitchArc
 	KindGlitchGhost     = 地慧星.KindGlitchGhost
