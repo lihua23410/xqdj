@@ -29,6 +29,7 @@ import (
 	"xqdj/character/mezhou"
 	"xqdj/character/orca"
 	"xqdj/character/pastor"
+	"xqdj/character/patrol"
 	"xqdj/character/pink"
 	"xqdj/character/piper"
 	"xqdj/character/prisoner"
@@ -137,6 +138,8 @@ const (
 	KindRice            = 大肥鱼.KindRice
 	KindGlyph           = 老牧师.KindGlyph
 	KindPastor          = 老牧师.KindPastor
+	KindPatrol          = 巡回.KindPatrol
+	KindPatrolMarker    = 巡回.KindPatrolMarker
 	KindBottle          = pink.KindBottle
 	KindBottleShot      = pink.KindBottleShot
 	KindCrowd           = pink.KindCrowd
