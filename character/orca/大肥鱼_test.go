@@ -121,24 +121,51 @@ func TestWhaleHalvesDamage(t *testing.T) {
 }
 
 func TestEatOwnBowlStartsDive(t *testing.T) {
-	out := make(chan unit.Cmd, 16)
-	a := &大肥鱼{}
 	bowl := unit.Snapshot{ID: 9, Kind: KindRice, OwnerID: 1, X: 20, Y: 0, Radius: bowlRadius, HP: 1}
+	field := unit.HexField()
+	a := &大肥鱼{}
+	out := make(chan unit.Cmd, 16)
 	a.Handle(ctx(out), unit.Sense{
-		Time:   1,
-		Self:   selfAt(0, 0),
-		Nearby: []unit.Snapshot{bowl},
-		Field:  unit.HexField(),
+		Time: 1, Self: selfAt(0, 0), Nearby: []unit.Snapshot{bowl}, Field: field,
 	})
 	cmds := drain(out)
+	if hasRadius(cmds, orcaRadius) || despawned(cmds, 9) {
+		t.Fatal("刚碰上该开始吃，不该立刻变身")
+	}
+	if !a.eating {
+		t.Fatal("该在吃饭")
+	}
+	first := teleportOf(cmds, 1)
+	if first == nil {
+		t.Fatal("吃饭该坐到碗边")
+	}
+	if math.Hypot(first.X-bowl.X, first.Y-bowl.Y) > chewGap+chewAmp+3 {
+		t.Fatalf("离碗太远 (%v,%v)", first.X, first.Y)
+	}
+
+	out = make(chan unit.Cmd, 16)
+	a.Handle(ctx(out), unit.Sense{
+		Time: 1.4, Self: selfAt(first.X, first.Y), Nearby: []unit.Snapshot{bowl}, Field: field,
+	})
+	cmds = drain(out)
+	second := teleportOf(cmds, 1)
+	if second == nil || (second.X == first.X && second.Y == first.Y) {
+		t.Fatalf("吃饭该小幅抖动 first=%v second=%v", first, second)
+	}
+	if despawned(cmds, 9) {
+		t.Fatal("1.5 秒没到，碗还在")
+	}
+
+	out = make(chan unit.Cmd, 16)
+	a.Handle(ctx(out), unit.Sense{
+		Time: 1 + eatSec, Self: selfAt(second.X, second.Y), Nearby: []unit.Snapshot{bowl}, Field: field,
+	})
+	cmds = drain(out)
 	if !hasRadius(cmds, orcaRadius) {
-		t.Fatal("吃到自己的白饭该变成半径 34")
+		t.Fatal("吃完该变成半径 34")
 	}
 	if !despawned(cmds, 9) {
-		t.Fatal("碗该消失")
-	}
-	if spawned(cmds, "大肥鱼家族") {
-		t.Fatal("不该再叫家族")
+		t.Fatal("吃完碗该消失")
 	}
 	if a.phase != phaseDive {
 		t.Fatalf("phase=%d 该潜水", a.phase)
@@ -260,7 +287,6 @@ func TestFormEndsAtSix(t *testing.T) {
 }
 
 func TestGrowPushesOutOfWall(t *testing.T) {
-	out := make(chan unit.Cmd, 16)
 	a := &大肥鱼{}
 	field := unit.HexField()
 	field.Walls = []unit.FieldWall{{
@@ -269,11 +295,14 @@ func TestGrowPushesOutOfWall(t *testing.T) {
 		Radius: 50,
 	}}
 	bowl := unit.Snapshot{ID: 9, Kind: KindRice, OwnerID: 1, X: 16, Y: 0, Radius: bowlRadius, HP: 1}
+	out := make(chan unit.Cmd, 16)
 	a.Handle(ctx(out), unit.Sense{
-		Time:   0,
-		Self:   selfAt(0, 0),
-		Nearby: []unit.Snapshot{bowl},
-		Field:  field,
+		Time: 0, Self: selfAt(0, 0), Nearby: []unit.Snapshot{bowl}, Field: field,
+	})
+	drain(out)
+	out = make(chan unit.Cmd, 16)
+	a.Handle(ctx(out), unit.Sense{
+		Time: eatSec, Self: selfAt(0, 0), Nearby: []unit.Snapshot{bowl}, Field: field,
 	})
 	tp := teleportOf(drain(out), 1)
 	if tp == nil {

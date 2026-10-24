@@ -33,6 +33,10 @@ const (
 	bowlClear     = 16.0
 	bowlCap       = 5
 	riceEvery     = 3.0
+	eatSec        = 1.5
+	chewGap       = 22.0
+	chewAmp       = 4.0
+	chewRate      = 18.0
 	orcaDR        = 0.5
 	riceKinds     = 7
 	placeTries    = 40
@@ -87,6 +91,11 @@ type 大肥鱼 struct {
 	fromX, fromY float64
 	haveAim      bool
 	nextRice     float64
+	eating       bool
+	mealID       uint64
+	mealUntil    float64
+	mealX, mealY float64
+	mealAng      float64
 }
 
 func (a *大肥鱼) Handle(ctx unit.Context, ev unit.Event) {
@@ -110,8 +119,10 @@ func (a *大肥鱼) onHit(ctx unit.Context, d unit.IncomingDamage) {
 	if amt+1e-9 >= hp {
 		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID}
 		a.form = false
+		a.eating = false
 		a.hp = 0
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
+		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
 	} else if a.seen {
 		a.hp -= amt
 	}
@@ -142,10 +153,60 @@ func (a *大肥鱼) ensure(stream uint64) {
 }
 
 func (a *大肥鱼) maid(ctx unit.Context, s unit.Sense) {
+	if a.eating {
+		a.chew(ctx, s)
+		return
+	}
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: maidCruise}
 	if bowl := overlappingBowl(s); bowl != nil {
-		a.eat(ctx, s, bowl)
+		a.beginMeal(ctx, s, bowl)
 	}
+}
+
+func (a *大肥鱼) beginMeal(ctx unit.Context, s unit.Sense, bowl *unit.Snapshot) {
+	a.eating = true
+	a.mealID = bowl.ID
+	a.mealUntil = s.Time + eatSec
+	a.mealX, a.mealY = bowl.X, bowl.Y
+	dx, dy := s.Self.X-bowl.X, s.Self.Y-bowl.Y
+	if math.Hypot(dx, dy) < 1e-6 {
+		dx, dy = -1, 0
+	}
+	a.mealAng = math.Atan2(dy, dx)
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+	a.sit(ctx, s)
+}
+
+func (a *大肥鱼) chew(ctx unit.Context, s unit.Sense) {
+	bowl := bowlByID(s, a.mealID)
+	if bowl == nil {
+		a.eating = false
+		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
+		ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: maidCruise}
+		return
+	}
+	a.mealX, a.mealY = bowl.X, bowl.Y
+	if s.Time+1e-9 < a.mealUntil {
+		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+		a.sit(ctx, s)
+		return
+	}
+	a.eating = false
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
+	a.eat(ctx, s, bowl)
+}
+
+func (a *大肥鱼) sit(ctx unit.Context, s unit.Sense) {
+	wobble := math.Sin(s.Time*chewRate) * chewAmp
+	pulse := math.Sin(s.Time*chewRate*2) * 2
+	gap := chewGap + pulse
+	c, sn := math.Cos(a.mealAng), math.Sin(a.mealAng)
+	x := a.mealX + c*gap + (-sn)*wobble
+	y := a.mealY + sn*gap + c*wobble
+	x, y = s.Field.Clamp(x, y, maidRadius)
+	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: x, Y: y}
 }
 
 func (a *大肥鱼) stock(ctx unit.Context, s unit.Sense) {
@@ -331,6 +392,16 @@ func (a *大肥鱼) paint(ctx unit.Context, s unit.Sense) {
 		Name: "form", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
 		X: s.Self.X, Y: s.Self.Y, Amount: amt,
 	}
+}
+
+func bowlByID(s unit.Sense, id uint64) *unit.Snapshot {
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.ID == id && o.OwnerID == s.Self.ID && o.Kind == KindRice {
+			return o
+		}
+	}
+	return nil
 }
 
 func bowlCount(s unit.Sense) int {
