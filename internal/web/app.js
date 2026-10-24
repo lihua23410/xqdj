@@ -1137,6 +1137,76 @@ function onFighterBar(ev) {
   followHeld = false;
 }
 
+let introClip = null;
+let introStart = 0;
+let introPlayed = false;
+
+function playIntro(scale, cx, cy) {
+  if (!introClip && state.intro && state.intro.frames && state.intro.frames.length && state.intro.death >= 0) {
+    introClip = state.intro;
+    introStart = performance.now();
+    introPlayed = false;
+  }
+  let layer = document.getElementById("intro-layer");
+  if (!introClip || !(introClip.death >= 0) || !introClip.frames || !introClip.frames.length) {
+    if (layer) layer.replaceChildren();
+    return false;
+  }
+  const death = Number(introClip.death);
+  const playDur = 0.5 + Math.max(0, death) / 10;
+  const dur = playDur + 0.5;
+  const elapsed = (performance.now() - introStart) / 1000;
+  if (elapsed >= dur) {
+    if (layer) layer.replaceChildren();
+    if (!introPlayed) {
+      introPlayed = true;
+      send({ type: "intro" });
+    }
+    return false;
+  }
+  let t;
+  if (elapsed < 0.5) t = Math.max(0, death - 0.5) + elapsed;
+  else if (elapsed < playDur) t = Math.max(0, death - (elapsed - 0.5) * 10);
+  else t = 0;
+  let frame = introClip.frames[0];
+  let best = Infinity;
+  for (const f of introClip.frames) {
+    const d = Math.abs(Number(f.t) - t);
+    if (d < best) {
+      best = d;
+      frame = f;
+    }
+  }
+  if (!layer && hex) {
+    layer = document.createElement("div");
+    layer.id = "intro-layer";
+    hex.appendChild(layer);
+  }
+  if (!layer) return true;
+  const bodies = frame.b || [];
+  while (layer.childElementCount < bodies.length) {
+    const el = document.createElement("div");
+    el.className = "intro-ball";
+    layer.appendChild(el);
+  }
+  while (layer.childElementCount > bodies.length) layer.lastChild.remove();
+  bodies.forEach((b, i) => {
+    const el = layer.children[i];
+    const r = (b.r || 18) * scale;
+    const [sx, sy] = screenPos(b.x, b.y, scale, cx, cy);
+    el.style.width = `${r * 2}px`;
+    el.style.height = `${r * 2}px`;
+    el.style.left = `${sx}px`;
+    el.style.top = `${sy}px`;
+    el.style.background = kindColor(b.k);
+    el.style.boxShadow = "0 0 10px " + kindColor(b.k);
+    paintKind(el, b.k);
+    applyLookFX(el, b.k);
+    runLookFX(el, { id: "intro-" + i, kind: b.k, x: b.x, y: b.y, radius: b.r || 18, slot: b.s }, {});
+  });
+  return true;
+}
+
 function renderArena() {
   // 场皮外形/尺寸由各 map 私产 CSS 按 [data-field] 自绘，引擎不按 fieldShape 分支。
   if (state.field) hex.dataset.field = state.field;
@@ -1147,6 +1217,11 @@ function renderArena() {
   const h = hex.clientHeight || 1;
   const cx = w / 2;
   const cy = h / 2;
+  if (playIntro(scale, cx, cy)) {
+    if (unitsEl) unitsEl.style.visibility = "hidden";
+    return;
+  }
+  if (unitsEl) unitsEl.style.visibility = "";
   hex.classList.toggle(
     "flooded",
     (state.units || []).some((u) => u.kind === "钓鱼佬场鱼塘"),
@@ -1362,6 +1437,10 @@ function releaseLobby() {
 
 function render() {
   const inLobby = state.phase === "select";
+  if (inLobby) {
+    introClip = null;
+    introPlayed = false;
+  }
   if (inLobby && !wasLobby) {
     location.reload();
     return;

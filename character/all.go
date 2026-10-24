@@ -3,6 +3,7 @@
 package character
 
 import (
+	"xqdj/character/acausal"
 	"xqdj/character/archer"
 	"xqdj/character/axe"
 	"xqdj/character/bloodpact"
@@ -48,6 +49,11 @@ import (
 )
 
 const (
+	KindAcausal         = 非因果.KindAcausal
+	KindFighterGhost    = 非因果.KindFighterGhost
+	KindLockShot        = 非因果.KindLockShot
+	KindMinionGhost     = 非因果.KindMinionGhost
+	KindSelfGhost       = 非因果.KindSelfGhost
 	KindArcher          = 弓箭.KindArcher
 	KindArrow           = 弓箭.KindArrow
 	KindVolleyArrow     = 弓箭.KindVolleyArrow

@@ -421,4 +421,6 @@ type SpawnInfo struct {
 	OwnerID uint64
 	Slot    int
 	Stream  uint64
+	// Silent 为真时，这只非因果在探针里不出伤。别的战斗机不看这个字段。
+	Silent bool
 }

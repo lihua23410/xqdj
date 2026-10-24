@@ -1,0 +1,97 @@
+.look-acausal-ghost {
+  opacity: 0.32;
+}
+
+.guide.acausal-spec {
+  border: none;
+  height: 42px;
+  width: 112px;
+  transform: translate(-50%, -100%);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.guide.acausal-hp {
+  border: none;
+  width: auto;
+  height: auto;
+  transform: translate(-50%, -100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px #000, 0 0 6px #000;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.guide.acausal-spec svg {
+  display: block;
+  overflow: visible;
+}
+
+.acausal-bin {
+  position: absolute;
+  top: 12%;
+  width: 2px;
+  height: 76%;
+  background: #fff;
+  box-shadow: 0 0 4px #efe7ff;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* 非因果的球皮，和锁影弹上的电弧，都画在各自的一块 canvas 上。 */
+.look-acausal,
+.look-acausal-shot {
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+canvas.acausal-skin,
+canvas.acausal-bolt {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.guide.acausal-lock {
+  border: none;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.guide.acausal-lock svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.guide.acausal-trail {
+  border: none;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.guide.acausal-trail svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}

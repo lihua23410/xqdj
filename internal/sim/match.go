@@ -143,40 +143,45 @@ type wallSnap struct {
 }
 
 type Match struct {
-	mu         sync.Mutex
-	phase      Phase
-	slots      [2][]string
-	teamPick   [2][]string // 团队赛人选。当场名单会清空，这一份留下来
-	lineup     [2][]string // 开局名单，胜负文案和血条用
-	team       bool
-	units      map[uint64]*unit
-	order      []uint64
-	actors     []*unit // 本场开过的所有角色（离场的也留着，停场要等它们的协程真退出）
-	cmds       chan unitpkg.Cmd
-	nextID     uint64
-	time       float64
-	spec       fieldSpec
-	winner     string
-	winnerID   uint64
-	seq        uint64
-	rng        *rand.Rand
-	seed       uint64
-	pinned     bool
-	rootN      uint64
-	recap      strings.Builder
-	trace      strings.Builder
-	logReady   bool
-	logMute    bool
-	logNames   map[uint64]string
-	logLeapAt  map[uint64]float64 // 上一拍瞬移的时刻。连续每拍瞬移不当成一下子挪走
-	logLeaps   []logLeap
-	fx         []unitpkg.FX
-	hitStop    int
-	walls      []*barrier
-	pending    []unitpkg.Damage
-	dmgSeq     uint64
-	pendingDmg map[uint64]dmgOffer
-	wardAbsorb map[uint64]bool
+	mu          sync.Mutex
+	phase       Phase
+	slots       [2][]string
+	teamPick    [2][]string // 团队赛人选。当场名单会清空，这一份留下来
+	lineup      [2][]string // 开局名单，胜负文案和血条用
+	team        bool
+	units       map[uint64]*unit
+	order       []uint64
+	actors      []*unit // 本场开过的所有角色（离场的也留着，停场要等它们的协程真退出）
+	cmds        chan unitpkg.Cmd
+	nextID      uint64
+	time        float64
+	spec        fieldSpec
+	winner      string
+	winnerID    uint64
+	seq         uint64
+	rng         *rand.Rand
+	seed        uint64
+	pinned      bool
+	skipProbe   bool
+	spawnSilent bool
+	rootN       uint64
+	introUntil  time.Time
+	intro       *introFilm
+	introSent   bool
+	recap       strings.Builder
+	trace       strings.Builder
+	logReady    bool
+	logMute     bool
+	logNames    map[uint64]string
+	logLeapAt   map[uint64]float64 // 上一拍瞬移的时刻。连续每拍瞬移不当成一下子挪走
+	logLeaps    []logLeap
+	fx          []unitpkg.FX
+	hitStop     int
+	walls       []*barrier
+	pending     []unitpkg.Damage
+	dmgSeq      uint64
+	pendingDmg  map[uint64]dmgOffer
+	wardAbsorb  map[uint64]bool
 }
 
 type dmgOffer struct {
@@ -257,6 +262,7 @@ func (m *Match) SnapshotJSON() []byte {
 		Units    []unitpkg.Snapshot          `json:"units"`
 		Walls    []wallSnap                  `json:"walls"`
 		Effects  []unitpkg.FX                `json:"effects"`
+		Intro    *introFilm                  `json:"intro,omitempty"`
 	}{
 		Type:     "state",
 		Phase:    m.phase,
@@ -279,6 +285,7 @@ func (m *Match) SnapshotJSON() []byte {
 		Units:    make([]unitpkg.Snapshot, 0, len(m.order)),
 		Walls:    make([]wallSnap, 0, len(m.walls)),
 		Effects:  append([]unitpkg.FX(nil), m.fx...),
+		Intro:    m.takeIntroLocked(),
 	}
 	for _, id := range m.order {
 		u := m.units[id]
@@ -616,6 +623,9 @@ func (m *Match) Start() {
 		m.seed = unitpkg.NextStream()
 	}
 	m.rng = unitpkg.EngineRNG(m.seed)
+	if !m.skipProbe {
+		m.runAcausalProbeLocked()
+	}
 	m.logMute = true
 	m.resetLocked()
 	m.installFieldLocked()
@@ -642,6 +652,7 @@ func (m *Match) Start() {
 			spots = append(spots, spawnSpot{p: p, r: spec.Radius, side: side})
 		}
 	}
+	m.flipAcausalLocked()
 	if m.spec.bootKind != "" {
 		m.addUnitLocked(m.spec.bootKind, vec{}, vec{}, 0, 0)
 	}
@@ -757,6 +768,7 @@ func (m *Match) End() {
 	if m.phase == PhaseRunning || m.phase == PhasePaused {
 		m.closeLogLocked("中止")
 	}
+	m.introUntil = time.Time{}
 	m.logMute = true
 	m.stopAllLocked()
 	m.logMute = false
@@ -1044,7 +1056,10 @@ func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot in
 	if !ok {
 		return nil
 	}
-	actor := unitpkg.NewActor(kind, unitpkg.SpawnInfo{OwnerID: owner, Slot: slot, Stream: stream})
+	actor := unitpkg.NewActor(kind, unitpkg.SpawnInfo{
+		OwnerID: owner, Slot: slot, Stream: stream,
+		Silent: m.spawnSilent && kind == acausalKind(),
+	})
 	if actor == nil {
 		return nil
 	}
@@ -2698,6 +2713,10 @@ func (m *Match) Loop(broadcast func([]byte), halt <-chan struct{}) {
 		case <-halt:
 			return
 		case <-ticker.C:
+			if m.holdingIntro() {
+				broadcast(m.SnapshotJSON())
+				continue
+			}
 			m.Tick()
 			broadcast(m.SnapshotJSON())
 		}

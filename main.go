@@ -164,6 +164,8 @@ func main() {
 				match.SetField(msg.Field)
 			case "start":
 				match.Start()
+			case "intro":
+				match.FinishIntro()
 			case "pause":
 				match.Pause()
 			case "end":

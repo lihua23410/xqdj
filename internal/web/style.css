@@ -292,7 +292,15 @@ body[data-page="team"] .kinds { max-height: 360px; overflow: auto; }
   overflow: hidden;
   background: var(--hex);
 }
-#fx, #units, #walls, #guides { position: absolute; inset: 0; overflow: hidden; }
+#fx, #units, #walls, #guides, #intro-layer { position: absolute; inset: 0; overflow: hidden; }
+#intro-layer { pointer-events: none; z-index: 2; }
+#intro-layer .intro-ball {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.88;
+  background: #d7c4ff;
+}
 #fx, #walls, #guides { pointer-events: none; }
 .over {
   position: absolute;
