@@ -1,0 +1,11 @@
+大肥鱼贴图署名
+
+- orca-04.png（家族侧影）：digicla，CC BY 2.0
+  https://commons.wikimedia.org/wiki/File:Bull_orca_victoria.jpg
+- rice-02.png：Midori，CC BY 3.0
+  https://commons.wikimedia.org/wiki/File:Nasi_putih_in_Indonesia.JPG
+- rice-07.png：Guilhem Vellut，CC BY 2.0
+  https://commons.wikimedia.org/wiki/File:White_rice,_Resto_des_Amis,_Montparnasse,_Paris_001.jpg
+
+其余虎鲸与白饭图见素材包 SOURCES.md（公有领域、CC0、Pixabay 或 Pexels，不要求署名）。
+fish-02.png 是球皮原画，不在该素材包的署名清单里。

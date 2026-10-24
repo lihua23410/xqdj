@@ -1,0 +1,78 @@
+.ball.look-orca,
+.ball.look-orca-rice {
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ball.look-orca > .orca-art,
+.ball.look-orca-rice > .orca-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150%;
+  height: 150%;
+  object-fit: contain;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.ball.look-orca > .orca-art.whale {
+  width: 220%;
+  height: 150%;
+}
+
+.ball.look-orca > .orca-art.dive {
+  width: 140%;
+  height: 90%;
+  opacity: 0.38;
+}
+
+.ball.look-orca > .orca-art.leap {
+  width: 260%;
+  height: 180%;
+}
+
+.fx.fx-orca-flash {
+  width: 110px;
+  height: 78px;
+  margin: 0;
+  transform: translate(-50%, -60%);
+  animation: orca-flash 0.42s ease-out forwards;
+  pointer-events: none;
+}
+
+.fx.fx-orca-flash img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.fx.fx-orca-splash,
+.fx.fx-orca-splash-2 {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(186, 224, 255, 0.9);
+  background: radial-gradient(circle, rgba(210, 236, 255, 0.35), transparent 68%);
+  transform: translate(-50%, -50%);
+  animation: orca-splash 0.45s ease-out forwards;
+  pointer-events: none;
+}
+
+.fx.fx-orca-splash-2 {
+  animation-delay: 0.08s;
+  opacity: 0.8;
+}
+
+@keyframes orca-flash {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.7); }
+  35% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -80%) scale(1.05); }
+}
+
+@keyframes orca-splash {
+  0% { opacity: 0.95; transform: translate(-50%, -50%) scale(0.4); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(5.46); }
+}

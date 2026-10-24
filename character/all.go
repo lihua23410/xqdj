@@ -26,6 +26,7 @@ import (
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
 	"xqdj/character/mezhou"
+	"xqdj/character/orca"
 	"xqdj/character/pastor"
 	"xqdj/character/pink"
 	"xqdj/character/piper"
@@ -127,6 +128,8 @@ const (
 	KindMe              = 我与周旋久.KindMe
 	KindVoidShot        = 我与周旋久.KindVoidShot
 	KindZhou            = 我与周旋久.KindZhou
+	KindOrca            = 大肥鱼.KindOrca
+	KindRice            = 大肥鱼.KindRice
 	KindGlyph           = 老牧师.KindGlyph
 	KindPastor          = 老牧师.KindPastor
 	KindBottle          = pink.KindBottle
