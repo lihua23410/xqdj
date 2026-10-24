@@ -39,6 +39,7 @@ import (
 	"xqdj/character/relay"
 	"xqdj/character/rmiu"
 	"xqdj/character/sot"
+	"xqdj/character/static"
 	"xqdj/character/tachi"
 	"xqdj/character/tanyongchen"
 	"xqdj/character/tokei"
@@ -177,6 +178,7 @@ const (
 	KindSot             = 酒翁.KindSot
 	KindSotStain        = 酒翁.KindSotStain
 	KindSotWine         = 酒翁.KindSotWine
+	KindStaticBall      = 静电魔球.KindStaticBall
 	KindTachi           = 太刀.KindTachi
 	KindBell            = 谭泳辰.KindBell
 	KindDomain          = 谭泳辰.KindDomain

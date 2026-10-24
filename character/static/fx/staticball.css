@@ -1,0 +1,75 @@
+/* 静电魔球：淡蓝电光球，电荷越满皮越亮；满电待发放电时高频脉冲。
+   电荷经后端「静电充能」标记折成层数，由 staticball.js 写进 --charge (0~1)。 */
+
+.ball.look-staticball {
+  overflow: visible;
+}
+
+.static-skin {
+  position: absolute;
+  inset: -30%;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: calc(0.12 + var(--charge, 0) * 0.88);
+  background: radial-gradient(circle at 50% 45%,
+      rgba(234, 255, 255, 0.55) 0%,
+      rgba(111, 211, 255, 0.25) 45%,
+      transparent 72%);
+  box-shadow:
+    0 0 calc(8px + var(--charge, 0) * 16px) rgba(127, 216, 255, 0.55),
+    inset 0 0 12px rgba(224, 247, 255, 0.4);
+  transition: opacity 0.25s linear;
+}
+
+.ball.look-staticball.static-full .static-skin {
+  animation: static-ready 0.38s ease-in-out infinite alternate;
+}
+
+@keyframes static-ready {
+  from { filter: brightness(1); }
+  to   { filter: brightness(1.8); }
+}
+
+/* 闪电链的一跳：几何、描线进度、明暗全部由 shot.js 的 rAF 逐帧用普通属性驱动
+   （追踪每帧都改几何，这类动态交给 CSS 动画在部分引擎会卡住不释放）。
+   这里只留静态增强：辉光层模糊。描边等关键属性都内联在元素上。 */
+.static-bolt-glow {
+  filter: blur(1px);
+}
+
+/* 命中点的小闪光。初始透明，等电弧尖端描到（JS 设 animation-delay）再炸。 */
+.fx-static-flash {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, #ffffff 0%, rgba(159, 228, 255, 0.35) 45%, transparent 70%);
+  pointer-events: none;
+  opacity: 0;
+  animation: static-flash 0.35s ease-out forwards;
+}
+
+@keyframes static-flash {
+  0%   { opacity: 0.95; transform: translate(-50%, -50%) scale(0.5); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+}
+
+/* 命中点溅出的火花：从撞点飞向 --dx/--dy。 */
+.fx-static-spark {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #eef9ff;
+  box-shadow: 0 0 5px #7fd8ff;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+  animation: static-spark 0.45s ease-out forwards;
+}
+
+@keyframes static-spark {
+  0%   { opacity: 1; transform: translate(-50%, -50%); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))); }
+}
