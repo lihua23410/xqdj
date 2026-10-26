@@ -313,6 +313,15 @@ function knightEnsureRing(el) {
   return canvas;
 }
 
+function knightRingRel(ang, sweep) {
+  if (sweep <= 0) return -1;
+  const start = -Math.PI / 2;
+  let rel = ang - start;
+  rel %= Math.PI * 2;
+  if (rel < 0) rel += Math.PI * 2;
+  return rel <= sweep ? rel : -1;
+}
+
 function knightRingPaint(canvas, fill) {
   const w = KNIGHT_DOOM_W;
   const h = KNIGHT_DOOM_H;
@@ -321,26 +330,47 @@ function knightRingPaint(canvas, fill) {
   const n = canvas.width;
   const ctx = canvas.getContext("2d");
   const img = ctx.createImageData(n, n);
-  const cx = (n - 1) / 2;
-  const half = cx || 1;
-  const inner = half * 0.56;
-  const outer = half * 0.82;
+  const c = (n - 1) / 2;
+  const half = c || 1;
+  const R = half * 0.58;
+  const base = 1;
+  const flameH = 6;
   const sweep = Math.max(0, Math.min(1, fill)) * Math.PI * 2;
-  const start = -Math.PI / 2;
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      const dx = x - cx;
-      const dy = y - cx;
-      const r = Math.hypot(dx, dy);
-      if (r < inner || r > outer) continue;
-      let rel = Math.atan2(dy, dx) - start;
-      rel %= Math.PI * 2;
-      if (rel < 0) rel += Math.PI * 2;
-      if (sweep <= 0 || rel > sweep) continue;
-      const t = (r - inner) / (outer - inner);
+      const dx = x - c;
+      const dy = y - c;
+      const dist = Math.hypot(dx, dy);
+      let rel = -1;
+      let rise = 0;
+      let fade = 0;
+      if (Math.abs(dist - R) <= base) {
+        rel = knightRingRel(Math.atan2(dy, dx), sweep);
+        if (rel >= 0) fade = 1 - Math.abs(dist - R) / base;
+      }
+      if (rel < 0 && Math.abs(dx) <= R) {
+        const span = Math.sqrt(Math.max(0, R * R - dx * dx));
+        const rings = span === 0 ? [c] : [c - span, c + span];
+        let best = Infinity;
+        let srcY = 0;
+        for (const ry of rings) {
+          const up = ry - y;
+          if (up < 0 || up > flameH || up >= best) continue;
+          best = up;
+          srcY = ry;
+        }
+        if (best <= flameH) {
+          rel = knightRingRel(Math.atan2(srcY - c, dx), sweep);
+          if (rel >= 0) {
+            rise = best;
+            fade = 1 - rise / flameH;
+          }
+        }
+      }
+      if (rel < 0 || fade <= 0) continue;
+      const t = rise / flameH;
       const fy = Math.min(h - 1, Math.max(0, Math.round((1 - t) * (h - 1))));
       const fx = Math.floor((rel / (Math.PI * 2)) * w * 2) % w;
-      const fade = Math.min(1, (outer - r) / Math.max(1, (outer - inner) * 0.35));
       knightDoomPut(img, y * n + x, cells[fy * w + fx], fade);
     }
   }
