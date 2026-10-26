@@ -292,8 +292,8 @@ function dmgPop(amount) {
   const amt = Math.max(0, Number(amount) || 0);
   const t = Math.min(1, amt / 48);
   return {
-    "--dmg-size": `${(14 + t * 30).toFixed(1)}px`,
-    "--dmg-dur": `${(0.5 + t * 1.3).toFixed(2)}s`,
+    "--dmg-size": `${(17.5 + t * 37.5).toFixed(1)}px`,
+    "--dmg-dur": `${(0.8 + t).toFixed(2)}s`,
     "--dmg-rise": `${(-56 - t * 72).toFixed(0)}px`,
   };
 }
@@ -304,7 +304,7 @@ function spawnFx(cls, x, y, kind, extra = {}, root = fxRoot) {
   el.className = `fx ${cls}`;
   el.style.left = `${x}px`;
   el.style.top = `${y}px`;
-  el.style.color = kindColor(kind);
+  el.style.color = cls.split(/\s+/).includes("fx-dmg") ? "#fff" : kindColor(kind);
   for (const [k, v] of Object.entries(extra)) el.style.setProperty(k, v);
   root.appendChild(el);
   el.addEventListener("animationend", (ev) => {

@@ -118,7 +118,7 @@ window.heroState = window.heroState || {}; // unitId -> {level, exp, need, party
   arena.registerShot("heal-saint", (fx, ctx) => {
     const n = Math.round(fx.amount || 0);
     const el = arena.spawnFx("fx-dmg heal", ctx.x, ctx.y - 12, fx.kind, {
-      "--dmg-size": "18px",
+      "--dmg-size": "22.5px",
       "--dmg-dur": "0.9s",
       "--dmg-rise": "-48px",
     });

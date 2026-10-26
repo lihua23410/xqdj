@@ -621,11 +621,11 @@ body[data-page="team"] .kinds { max-height: 360px; overflow: auto; }
   100% { transform: translate(-50%, -50%) scale(3.2); opacity: 0; }
 }
 .fx-dmg {
-  color: #ff6b6b;
+  color: #fff;
   font-weight: 700;
-  font-size: var(--dmg-size, 18px);
+  font-size: var(--dmg-size, 22px);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px #000, 0 0 8px #0008;
+  text-shadow: 0 0 6px #fff, 0 0 16px #fff, 0 1px 2px #000;
   white-space: nowrap;
   animation: dmg-float var(--dmg-dur, 0.75s) ease-out forwards;
 }
@@ -693,7 +693,6 @@ body[data-page="team"] .kinds { max-height: 360px; overflow: auto; }
   pointer-events: none;
   z-index: 5;
 }
-.fx-dmg.heal { color: #7dff9a; }
 .seek-ring {
   position: absolute;
   border-radius: 50%;
