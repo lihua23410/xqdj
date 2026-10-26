@@ -309,11 +309,12 @@ func (b *brain) transfer(ctx unit.Context, s unit.Sense) {
 	if !ok {
 		return
 	}
+	// hand 的 Amount 带被交出去那颗炭的面值；前端按同一比例放大飞行中的炭。
 	ctx.Out <- unit.FX{
 		Name: "hand", Kind: KindCharcoal, UnitID: ctx.ID,
 		X: s.Self.X, Y: s.Self.Y,
 		VX: t.X, VY: t.Y,
-		Slot: int(t.ID),
+		Slot: int(t.ID), Amount: b.coals[idx].value,
 	}
 	b.evictOldest(ctx, t.ID, idx)
 	b.nextHand = s.Time + handCD
@@ -389,13 +390,8 @@ func (b *brain) oldestExcept(holder uint64, keep int) int {
 
 func (b *brain) emitFX(ctx unit.Context, s unit.Sense) {
 	ctx.Out <- unit.FX{Name: "coals", Kind: KindCharcoal, UnitID: ctx.ID, Amount: -1}
-	count := map[uint64]int{}
-	for _, c := range b.coals {
-		if c.holder == 0 {
-			continue
-		}
-		count[c.holder]++
-	}
+	// coal 的 VX 是持有者身上的序号，VY 是这颗炭的面值；颗数由前端数事件。
+	// 面值决定前端炭块大小，6 点是基准尺寸，不设上限。
 	idx := map[uint64]int{}
 	for _, c := range b.coals {
 		if c.holder == 0 {
@@ -403,14 +399,13 @@ func (b *brain) emitFX(ctx unit.Context, s unit.Sense) {
 		}
 		i := idx[c.holder]
 		idx[c.holder] = i + 1
-		n := count[c.holder]
 		white := 0.0
 		if s.Time+timeEps >= c.due-coalWhite {
 			white = 1
 		}
 		ctx.Out <- unit.FX{
 			Name: "coal", Kind: KindCharcoal, UnitID: ctx.ID,
-			VX: float64(i), VY: float64(n),
+			VX: float64(i), VY: c.value,
 			Amount: white,
 			Slot:   int(c.holder),
 		}

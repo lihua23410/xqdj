@@ -58,7 +58,7 @@ func init() {
 		Speed:   0,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: "#b56a32", Overlay: true},
+		Look:    unit.Look{Color: "#b56a32", Overlay: true, FX: []string{"hook"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return idle{}
 	})

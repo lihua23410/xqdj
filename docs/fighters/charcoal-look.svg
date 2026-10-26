@@ -1,1 +1,51 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><defs><radialGradient id="g" cx="50%" cy="42%" r="50%"><stop offset="0%" stop-color="#c5cad1"/><stop offset="46%" stop-color="#8d939b"/><stop offset="100%" stop-color="#5c636b"/></radialGradient></defs><circle cx="28" cy="28" r="24" fill="url(#g)"/><circle cx="18" cy="22" r="4" fill="#e0622a"/><circle cx="34" cy="18" r="3.5" fill="#e0622a"/><circle cx="30" cy="34" r="4" fill="#f7f4ef"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="72" height="72" viewBox="0 0 72 72">
+  <defs>
+    <clipPath id="bodyClip">
+      <circle cx="36" cy="34" r="16"/>
+    </clipPath>
+    <g id="coal">
+      <polygon points="0,-4 5,-2 6,2 2,5 -3,4 -5,0" fill="#ff8a3d" stroke="#3a1204" stroke-width="0.8"/>
+      <polygon points="-5,0 -3,4 2,5 6,2 4,3 0,4 -3,2" fill="#c2430f"/>
+      <rect x="-2" y="-2.4" width="2.6" height="2" fill="#ffd06b"/>
+    </g>
+  </defs>
+
+  <!-- 地面 -->
+  <ellipse cx="36" cy="57" rx="25" ry="5" fill="#0a0c0f" opacity="0.45"/>
+
+  <!-- 窑身 -->
+  <circle cx="36" cy="34" r="16" fill="#454d55" stroke="#12151a" stroke-width="1.5"/>
+  <circle cx="36" cy="34" r="15" fill="none" stroke="#6b747d" stroke-width="1.2"/>
+  <g clip-path="url(#bodyClip)">
+    <path d="M19 36 L53 36 L53 53 L19 53 Z" fill="#313840"/>
+    <circle cx="27" cy="26" r="4" fill="#6b747d" opacity="0.75"/>
+    <circle cx="46" cy="24" r="2.6" fill="#101317" opacity="0.45"/>
+    <circle cx="27" cy="46" r="3" fill="#101317" opacity="0.4"/>
+  </g>
+
+  <!-- 裂纹 -->
+  <g fill="none" stroke="#ff8a3d" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 20 L27 26 L24 30 L29 35"/>
+    <path d="M50 19 L45 26 L50 31 L46 36"/>
+    <path d="M20 42 L24 40 L27 44"/>
+    <path d="M52 43 L47 48 L51 53"/>
+  </g>
+
+  <!-- 窑口与火 -->
+  <ellipse cx="36" cy="44" rx="6.2" ry="4.2" fill="#14171b" stroke="#12151a" stroke-width="1.2"/>
+  <path d="M36 40 L38 43 L37 43 L39 45.5 L37 45.5 L38 48 L34 48 L35 45.5 L33.5 45.5 L35 43 L34 43 Z" fill="#ff8a3d"/>
+  <path d="M38.5 42 L40 45 L38.8 45 L39.6 48 L36.8 48 L37.4 45.2 L36.2 45.2 Z" fill="#ffd06b" opacity="0.9"/>
+
+  <!-- 斗笠 -->
+  <polygon points="36,7 65,24 7,24" fill="#d8b46c" stroke="#12151a" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M36 8 L58 22 M36 8 L47 22 M36 8 L25 22 M36 8 L14 22" stroke="#b8924e" stroke-width="1" opacity="0.85"/>
+  <ellipse cx="36" cy="24" rx="29" ry="4.5" fill="#d8b46c" stroke="#8a6533" stroke-width="1.4"/>
+
+  <!-- 六边形环绕的炭 -->
+  <use xlink:href="#coal" transform="translate(61 34)"/>
+  <use xlink:href="#coal" transform="translate(48.5 51.8)"/>
+  <use xlink:href="#coal" transform="translate(23.5 51.8)"/>
+  <use xlink:href="#coal" transform="translate(11 34)"/>
+  <use xlink:href="#coal" transform="translate(23.5 12.3)"/>
+  <use xlink:href="#coal" transform="translate(48.5 12.3)"/>
+</svg>

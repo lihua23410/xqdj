@@ -10,47 +10,60 @@
   box-sizing: border-box;
 }
 .ball.look-prisoner.is-shock {
-  box-shadow: 0 0 16px #fcf05a, 0 0 28px #32b1cc, inset 0 0 0 1px #0008;
-  filter: saturate(1.2) brightness(1.08);
+  box-shadow: 0 0 16px #fcf05a, 0 0 34px #32b1cc, inset 0 0 0 1px #0008;
+  animation: prisoner-shock 0.34s ease-in-out infinite alternate;
 }
+@keyframes prisoner-shock {
+  from { filter: brightness(1) saturate(1.2); }
+  to { filter: brightness(1.28) saturate(1.4); }
+}
+
+/* 钩爪：钉在墙上的那一节锈铁链。球心是铆钉，外面一圈是墙板。 */
+.ball.look-hook {
+  box-sizing: border-box;
+  border: 1px solid #1a0d04;
+  background: radial-gradient(circle at 38% 30%, #e0a46a 0 9%, #a2632f 28%, #5a3418 55%, #241205 82%, #160a03 100%);
+  box-shadow: 0 0 5px #b56a3244, inset -1px -1px 2px #000a, inset 1px 1px 1px #ffd7a566;
+}
+.ball.look-hook::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 30% 30%, #e0a46a 0 1.4px, #2a1408 1.9px 2.6px, transparent 3px),
+    radial-gradient(circle at 70% 30%, #e0a46a 0 1.4px, #2a1408 1.9px 2.6px, transparent 3px),
+    radial-gradient(circle at 30% 70%, #e0a46a 0 1.4px, #2a1408 1.9px 2.6px, transparent 3px),
+    radial-gradient(circle at 70% 70%, #e0a46a 0 1.4px, #2a1408 1.9px 2.6px, transparent 3px),
+    radial-gradient(
+      circle,
+      transparent 0 39%,
+      #1a0d04 40% 44%,
+      #8a5628 45% 49%,
+      #d9a066 50% 53%,
+      #6a3c1c 54% 60%,
+      #2a1408 61% 64%,
+      transparent 65%
+    );
+  filter: drop-shadow(0 1px 2px #000c);
+}
+
+/* 锁链：一条一节一节的锈铁链。链节和电弧都画在 guide 内的一张 canvas 上，
+   每帧只清画布 + drawImage 24 个预渲染链节；guide 只负责平移/旋转。
+   松弛时链节沿一条向下垂的二次曲线均匀铺开，绷直时拉成直线。 */
 .guide.prisoner-chain {
-  height: 12px;
+  height: 20px;
   border: none;
   background: none;
   overflow: visible;
   pointer-events: none;
 }
-.guide.prisoner-chain > i {
+.guide.prisoner-chain > .chain-paint {
   position: absolute;
-  top: 50%;
-  width: 12px;
-  height: 8px;
-  margin: -4px 0 0 -6px;
-  border: 2px solid #b56a32;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px #4a2810 inset, 0 0 4px #8a4a2288;
-  box-sizing: border-box;
-  background: transparent;
+  pointer-events: none;
 }
-.guide.prisoner-chain > i:nth-child(even) {
-  width: 8px;
-  height: 12px;
-  margin: -6px 0 0 -4px;
-}
-.guide.prisoner-chain.is-slack > i:not(.hook) {
-  width: 10px;
-  height: 7px;
-  margin: -3.5px 0 0 -5px;
-  opacity: 0.92;
-}
-.guide.prisoner-chain > i.hook {
-  width: 11px;
-  height: 11px;
-  margin: -5.5px 0 0 -5.5px;
-  border-color: #8a4a22;
-  background: radial-gradient(circle at 35% 30%, #d4894a 0 35%, #6a3214 70%, #3a1a0c 100%);
-  box-shadow: 0 0 6px #b56a32aa;
-}
+
 .guide.prisoner-drop {
   width: 28px;
   height: 28px;
@@ -125,4 +138,36 @@
 @keyframes prisoner-scream {
   0% { opacity: 1; transform: translate(-50%, -50%) scale(0.8); }
   100% { opacity: 0; transform: translate(-50%, -70%) scale(1.25); }
+}
+
+/* 钉钩爪 / 绷直那一下：钢圈炸开。 */
+.fx-chain-clank {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #c99763;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #b56a32aa, inset 0 0 8px #b56a32aa;
+  animation: prisoner-chain-clank 0.42s cubic-bezier(0.16, 0.8, 0.3, 1) forwards;
+}
+@keyframes prisoner-chain-clank {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4); border-width: 4px; }
+  55% { opacity: 0.8; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(3.4); border-width: 1px; }
+}
+
+/* 绷直那一瞬顺着弦亮一下。 */
+.fx-chain-strain {
+  width: var(--len, 80px);
+  height: 2px;
+  margin: 0;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, #e4a96a 18%, #fff2d6 50%, #e4a96a 82%, transparent);
+  box-shadow: 0 0 10px #b56a32cc, 0 0 20px #b56a3255;
+  transform: translate(-50%, -50%) rotate(var(--ang, 0rad));
+  pointer-events: none;
+  animation: prisoner-chain-strain 0.34s ease-out forwards;
+}
+@keyframes prisoner-chain-strain {
+  0% { opacity: 1; filter: brightness(2); }
+  100% { opacity: 0; filter: brightness(0.8); }
 }

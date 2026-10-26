@@ -1,31 +1,772 @@
+/* 炭翁：平面 2D。平涂、硬边、硬投影；身边的炭排成六边形，越多越沉。 */
+
 .ball.look-charcoal {
-  background: radial-gradient(circle at 50% 42%, #c5cad1 0%, #8d939b 46%, #5c636b 100%);
-  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.18), 0 0 10px rgba(90, 96, 104, 0.45);
+  --load: 0;
+  --coal-count: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  isolation: isolate;
+}
+
+/* ---------- 骨架：负载下压 / 走路摇摆 / 满载发抖 ---------- */
+
+.ball.look-charcoal > .charcoal-rig {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  transform-origin: 50% 88%;
+  transform:
+    translateY(calc(var(--r, 18px) * var(--load, 0) * 0.36))
+    rotate(calc(var(--load, 0) * -6deg))
+    scale(calc(1 + var(--load, 0) * 0.05), calc(1 - var(--load, 0) * 0.14));
+}
+
+.charcoal-sway {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 92%;
+  animation: charcoal-trudge calc(2.6s + var(--load, 0) * 1.2s) ease-in-out infinite;
+}
+
+.charcoal-jitter {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 88%;
+}
+
+.charcoal-rig.is-max .charcoal-jitter {
+  animation: charcoal-strain 0.17s steps(2, end) infinite;
+}
+
+/* ---------- 地面 ---------- */
+
+.charcoal-ground {
+  position: absolute;
+  left: 50%;
+  top: 92%;
+  width: 150%;
+  height: 24%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #0a0c0f;
+  opacity: calc(0.22 + var(--load, 0) * 0.46);
+  z-index: 0;
+}
+
+.charcoal-ground::before,
+.charcoal-ground::after {
+  content: "";
+  position: absolute;
+  top: 46%;
+  width: 26%;
+  height: 2px;
+  background: #0a0c0f;
+  opacity: clamp(0, calc((var(--load, 0) - 0.35) * 2), 0.85);
+}
+
+.charcoal-ground::before {
+  left: -8%;
+  rotate: -16deg;
+}
+
+.charcoal-ground::after {
+  right: -8%;
+  rotate: 16deg;
+}
+
+/* ---------- 窑身 ---------- */
+
+.charcoal-body {
+  position: absolute;
+  inset: 2%;
+  z-index: 2;
+  overflow: hidden;
+  border: 1.5px solid #12151a;
+  border-radius: 50%;
+  background: #454d55;
+  box-shadow: inset 0 0 0 1.5px #6b747d;
+  filter: drop-shadow(1px 1.5px 0 #0a0c0f);
+}
+
+.charcoal-body::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 38%;
+  background: #313840;
+  border-radius: 0 0 999px 999px;
+}
+
+.charcoal-body::after {
+  content: "";
+  position: absolute;
+  left: 22%;
+  top: 16%;
+  width: 26%;
+  height: 18%;
+  border-radius: 50%;
+  background: #6b747d;
+  opacity: 0.75;
+}
+
+.charcoal-crust {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 27% 30%, rgba(16, 19, 23, 0.55) 0 8%, transparent 8.5%),
+    radial-gradient(circle at 65% 23%, rgba(16, 19, 23, 0.42) 0 6%, transparent 6.5%),
+    radial-gradient(circle at 76% 62%, rgba(16, 19, 23, 0.5) 0 10%, transparent 10.5%),
+    radial-gradient(circle at 43% 82%, rgba(16, 19, 23, 0.4) 0 7%, transparent 7.5%);
+  z-index: 1;
+}
+
+.charcoal-cracks {
+  position: absolute;
+  inset: 0;
+  background: url("charcoal-cracks.svg") center / 100% 100% no-repeat;
+  opacity: calc(0.5 + var(--load, 0) * 0.5);
+  animation: charcoal-crack-glow 2.1s steps(2, end) infinite;
+  z-index: 2;
+}
+
+/* 窑口：黑口 + 平涂火苗 */
+.charcoal-mouth {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  width: 40%;
+  height: 24%;
+  transform: translateX(-50%);
+  border: 1.5px solid #12151a;
+  border-radius: 24% 24% 38% 38% / 22% 22% 64% 64%;
+  background: #14171b;
+  overflow: hidden;
+  z-index: 4;
+}
+
+.charcoal-mouth b {
+  position: absolute;
+  left: 50%;
+  bottom: 3%;
+  width: 56%;
+  height: calc(68% + var(--load, 0) * 10%);
+  transform: translateX(-50%);
+  transform-origin: 50% 100%;
+  background: #ff8a3d;
+  clip-path: polygon(
+    50% 0%,
+    66% 30%,
+    58% 32%,
+    78% 62%,
+    64% 60%,
+    72% 100%,
+    38% 100%,
+    44% 66%,
+    26% 78%,
+    34% 44%,
+    46% 50%
+  );
+  animation: charcoal-flame 0.9s steps(3, end) infinite;
+}
+
+.charcoal-mouth::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 4%;
+  width: 30%;
+  height: 50%;
+  margin-left: -14%;
+  transform-origin: 50% 100%;
+  background: #ff8a3d;
+  clip-path: polygon(50% 0%, 92% 64%, 62% 58%, 72% 100%, 16% 100%, 28% 56%, 4% 62%);
+  animation: charcoal-flame 0.72s steps(2, end) -0.18s infinite;
+}
+
+.charcoal-mouth::after {
+  content: "";
+  position: absolute;
+  left: 55%;
+  bottom: 6%;
+  width: 32%;
+  height: 54%;
+  transform: translateX(-50%);
+  background: #ffd06b;
+  clip-path: polygon(50% 0%, 78% 52%, 62% 50%, 70% 100%, 34% 100%, 40% 58%, 22% 62%);
+  animation: charcoal-flame 0.7s steps(2, end) -0.28s infinite;
+}
+
+/* ---------- 斗笠 ---------- */
+
+.charcoal-hat {
+  position: absolute;
+  left: 50%;
+  top: -16%;
+  width: 90%;
+  height: 34%;
+  z-index: 3;
+  transform: translateX(-50%) rotate(calc(var(--load, 0) * 8deg));
+  transform-origin: 50% 100%;
+  filter: drop-shadow(1px 1.5px 0 #0a0c0f);
+}
+
+.charcoal-hat-crown {
+  position: absolute;
+  inset: 0 5% 10%;
+  clip-path: polygon(50% 0%, 96% 86%, 100% 100%, 0% 100%, 4% 86%);
+  background: repeating-linear-gradient(102deg, #d8b46c 0 3px, #b8924e 3px 5px);
+}
+
+.charcoal-hat-brim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2%;
+  height: 26%;
+  border-radius: 50%;
+  background: #d8b46c;
+  border-bottom: 2px solid #8a6533;
+}
+
+/* 满载时从斗笠两侧滴下来的汗 */
+.charcoal-sweat {
+  position: absolute;
+  top: 24%;
+  width: calc(var(--r, 18px) * 0.12);
+  height: calc(var(--r, 18px) * 0.17);
+  background: #9fdcff;
+  clip-path: polygon(50% 0%, 100% 58%, 50% 100%, 0% 58%);
+  z-index: 6;
+  opacity: 0;
+  animation: charcoal-sweat 1.5s steps(4, end) infinite;
+}
+
+.charcoal-sweat.s1 {
+  left: 12%;
+  animation-delay: -0.2s;
+}
+
+.charcoal-sweat.s2 {
+  right: 12%;
+  animation-delay: -0.9s;
+}
+
+/* ---------- 烟与火星 ---------- */
+
+.charcoal-smoke {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  opacity: calc(0.72 + var(--load, 0) * 0.28);
+}
+
+.charcoal-smoke i {
+  position: absolute;
+  left: 50%;
+  top: -6%;
+  width: calc(var(--r, 18px) * 0.38);
+  height: calc(var(--r, 18px) * 0.38);
+  border-radius: 50%;
+  background: #c3cad0;
+  opacity: 0;
+  animation: charcoal-smoke-rise 2.7s linear infinite;
+  animation-delay: var(--d, 0s);
+}
+
+.charcoal-smoke i::before,
+.charcoal-smoke i::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.charcoal-smoke i::before {
+  left: -55%;
+  top: 8%;
+  width: 78%;
+  height: 78%;
+}
+
+.charcoal-smoke i::after {
+  left: 58%;
+  top: -12%;
+  width: 66%;
+  height: 66%;
+}
+
+.charcoal-smoke i:nth-child(1) { --dx: -0.5; --dy: -2.0; --d: -0.05s; }
+.charcoal-smoke i:nth-child(2) { --dx: 0.55; --dy: -2.4; --d: -0.48s; }
+.charcoal-smoke i:nth-child(3) { --dx: -0.15; --dy: -2.8; --d: -0.91s; }
+.charcoal-smoke i:nth-child(4) { --dx: 0.9; --dy: -2.2; --d: -1.34s; }
+.charcoal-smoke i:nth-child(5) { --dx: -0.85; --dy: -2.6; --d: -1.77s; }
+.charcoal-smoke i:nth-child(6) { --dx: 0.2; --dy: -3.0; --d: -2.2s; }
+
+.charcoal-embers {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: calc(0.55 + var(--load, 0) * 0.45);
+}
+
+.charcoal-embers i {
+  position: absolute;
+  width: calc(var(--r, 18px) * 0.11);
+  height: calc(var(--r, 18px) * 0.11);
+  background: #ffd06b;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  animation: charcoal-ember-rise 2.4s linear infinite;
+  animation-delay: var(--d, 0s);
+}
+
+.charcoal-embers i:nth-child(1) { left: 45%; top: 62%; --dx: -0.9; --dy: -1.7; --d: -0.1s; }
+.charcoal-embers i:nth-child(2) { left: 56%; top: 64%; --dx: 0.8; --dy: -2.0; --d: -0.4s; }
+.charcoal-embers i:nth-child(3) { left: 50%; top: 58%; --dx: -0.3; --dy: -2.4; --d: -0.75s; }
+.charcoal-embers i:nth-child(4) { left: 38%; top: 58%; --dx: -1.2; --dy: -1.5; --d: -1.1s; }
+.charcoal-embers i:nth-child(5) { left: 64%; top: 58%; --dx: 1.1; --dy: -1.8; --d: -1.45s; }
+.charcoal-embers i:nth-child(6) { left: 50%; top: 53%; --dx: 0.3; --dy: -2.6; --d: -1.8s; }
+.charcoal-embers i:nth-child(7) { left: 43%; top: 61%; --dx: -0.6; --dy: -2.2; --d: -2.1s; }
+.charcoal-embers i:nth-child(8) { left: 60%; top: 61%; --dx: 0.6; --dy: -2.2; --d: -2.3s; }
+
+/* ---------- 窑火脉冲 ---------- */
+
+.charcoal-forge-flash {
+  position: absolute;
+  inset: -8%;
+  border-radius: 50%;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  background: transparent;
+  border: 2px solid #ffd06b;
+}
+
+.charcoal-rig.is-forging .charcoal-forge-flash {
+  animation: charcoal-forgeflash 0.56s steps(4, end);
+}
+
+.charcoal-rig.is-forging .charcoal-body {
+  animation: charcoal-jolt 0.44s steps(4, end);
+}
+
+.charcoal-rig.is-forging .charcoal-hat {
+  animation: charcoal-hat-lift 0.52s steps(3, end);
+}
+
+.charcoal-rig.is-throwing .charcoal-hat {
+  animation: charcoal-hat-throw 0.44s steps(4, end);
+}
+
+/* ---------- 炭块：一颗炭一个点，六边形环绕 ---------- */
+
+.coal-group {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  translate: 0 calc(var(--coal-r, 18px) * var(--coal-load, 0) * 0.22);
+  scale: calc(1 - var(--coal-load, 0) * 0.1);
+  transition: translate 0.3s ease, scale 0.3s ease;
+  animation: coal-orbit 48s linear infinite;
 }
 
 .coal-dot {
   position: absolute;
-  z-index: 2;
-  border: none;
-  border-radius: 50%;
-  background: #e0622a;
-  box-shadow: 0 0 6px #e0622a;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
+  left: var(--x, 50%);
+  top: var(--y, 50%);
+  width: var(--s, 20%);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+  background: #ff8a3d;
+  clip-path: polygon(18% 0%, 76% 6%, 100% 38%, 88% 88%, 52% 100%, 10% 82%, 0% 40%);
+  filter: drop-shadow(0.8px 0.8px 0 #3a1204);
+  z-index: 1;
+  transition: left 0.25s ease, top 0.25s ease, width 0.25s ease;
+}
+
+.coal-dot::before {
+  content: "";
+  position: absolute;
+  left: 15%;
+  top: 16%;
+  width: 28%;
+  height: 22%;
+  background: #ffd06b;
+}
+
+.coal-dot::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 36%;
+  background: #c2430f;
+  clip-path: inherit;
+}
+
+.coal-dot:nth-child(2n) {
+  clip-path: polygon(10% 12%, 58% 0%, 96% 22%, 100% 66%, 70% 100%, 24% 92%, 0% 58%);
+}
+
+.coal-dot:nth-child(3n) {
+  clip-path: polygon(26% 0%, 82% 14%, 100% 52%, 72% 94%, 22% 100%, 4% 66%, 0% 24%);
 }
 
 .coal-dot.white {
-  background: #f7f4ef;
-  box-shadow: 0 0 8px #fff6ea;
+  background: #fff4d6;
+  filter: drop-shadow(0.8px 0.8px 0 #b8692c);
+  animation: coal-white-pulse 0.3s steps(2, end) infinite alternate;
 }
 
-.coal-hand {
+.coal-dot.white::before {
+  background: #ffffff;
+}
+
+.coal-dot.white::after {
+  background: #ffd06b;
+}
+
+/* ---------- 负担：焦痕、地面阴影、落灰 ---------- */
+
+.coal-burden {
   position: absolute;
-  z-index: 5;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #e0622a;
-  box-shadow: 0 0 8px #e0622a, 0 0 18px rgba(224, 98, 42, 0.75);
+  inset: 0;
+  z-index: 1;
   pointer-events: none;
+  --load: 0;
+}
+
+.coal-burden > .coal-ground {
+  position: absolute;
+  left: 50%;
+  top: 97%;
+  width: 135%;
+  height: 16%;
+  border-radius: 50%;
+  transform: translate(-50%, 0);
+  background: #0a0c0f;
+  opacity: calc(0.18 + var(--load, 0) * 0.42);
+}
+
+.coal-burden > .coal-ash {
+  position: absolute;
+  left: var(--x, 50%);
+  top: 42%;
+  width: 3px;
+  height: 3px;
+  background: #c9c2b6;
+  opacity: 0;
+  animation: coal-ash-fall 2.8s steps(4, end) infinite;
+  animation-delay: var(--d, 0s);
+}
+
+.coal-burden.full > .coal-ash {
+  opacity: 0.85;
+}
+
+.coal-burden > .coal-ash:nth-child(2) { --x: 38%; --d: -0.4s; }
+.coal-burden > .coal-ash:nth-child(3) { --x: 56%; --d: -1.3s; }
+.coal-burden > .coal-ash:nth-child(4) { --x: 64%; --d: -2.1s; }
+
+.ball.look-charcoal > .coal-burden {
+  display: none;
+}
+
+/* ---------- 一次性特效：全部平面 ---------- */
+
+.fx.charcoal-spark {
+  width: 3px;
+  height: 3px;
+  background: #ffd06b;
+  animation: charcoal-spark-fly 0.58s steps(4, end) forwards;
+}
+
+.fx.charcoal-puff {
+  width: var(--s, 10px);
+  height: var(--s, 10px);
+  border-radius: 50%;
+  background: #aeb6bd;
+  opacity: 0.34;
+  animation: charcoal-puff-rise 0.9s steps(5, end) forwards;
+}
+
+.fx.charcoal-forge-ring {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #ffd06b;
+  animation: charcoal-ring-burst 0.58s steps(5, end) forwards;
+}
+
+.fx.charcoal-forge-core {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffd06b;
+  animation: charcoal-core-burst 0.4s steps(3, end) forwards;
+}
+
+.fx.charcoal-burn-flash {
+  width: var(--r, 36px);
+  height: var(--r, 36px);
+  background: #ffd06b;
+  clip-path: polygon(
+    50% 0%, 59% 32%, 85% 12%, 70% 41%, 100% 50%, 70% 59%, 85% 88%, 59% 68%,
+    50% 100%, 41% 68%, 15% 88%, 30% 59%, 0% 50%, 30% 41%, 15% 12%, 41% 32%
+  );
+  opacity: 0.9;
+  animation: charcoal-burn-flash 0.5s steps(4, end) forwards;
+}
+
+.fx.charcoal-burn-ring {
+  width: var(--r, 36px);
+  height: var(--r, 36px);
+  border-radius: 50%;
+  border: 3px solid #ff8a3d;
+  animation: charcoal-ring-burst 0.66s steps(5, end) forwards;
+}
+
+.fx.charcoal-burn-smoke {
+  width: var(--r, 36px);
+  height: var(--r, 36px);
+  border-radius: 50%;
+  background: #5c6167;
+  opacity: 0.5;
+  animation: charcoal-burn-smoke 1.05s steps(5, end) forwards;
+}
+
+.fx.charcoal-ash {
+  width: 3px;
+  height: 3px;
+  background: #d8d0c2;
+  animation: charcoal-ash-fly 0.85s steps(4, end) forwards;
+}
+
+.fx.charcoal-step {
+  width: calc(var(--s, 1) * 7px);
+  height: calc(var(--s, 1) * 4px);
+  border-radius: 50%;
+  background: #6f6a61;
+  opacity: 0.4;
+  animation: charcoal-step 0.55s steps(4, end) forwards;
+}
+
+.fx.charcoal-trail {
+  width: 4px;
+  height: 4px;
+  background: #ff8a3d;
+  animation: charcoal-trail 0.5s steps(3, end) forwards;
+}
+
+.fx.charcoal-land {
+  width: var(--r, 18px);
+  height: var(--r, 18px);
+  border-radius: 50%;
+  border: 2px solid #ffd06b;
+  animation: charcoal-ring-burst 0.42s steps(4, end) forwards;
+}
+
+.fx.charcoal-hand {
+  width: var(--s, 13px);
+  height: var(--s, 13px);
+  z-index: 30;
+  border: 1.5px solid #3a1204;
+  background: #ff8a3d;
+  clip-path: polygon(18% 0%, 76% 6%, 100% 38%, 88% 88%, 52% 100%, 10% 82%, 0% 40%);
+}
+
+.fx.charcoal-hand::before {
+  content: "";
+  position: absolute;
+  left: 15%;
+  top: 16%;
+  width: 28%;
+  height: 22%;
+  background: #ffd06b;
+}
+
+.fx.charcoal-hand::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--s, 13px) * 1.2);
+  height: 2px;
+  transform: translate(-100%, -50%) rotate(var(--tail-ang, 0rad));
+  background: #c2430f;
+  opacity: 0.9;
+}
+
+/* ---------- 关键帧 ---------- */
+
+@keyframes charcoal-trudge {
+  0%, 100% {
+    transform: translateY(0) rotate(calc(var(--load, 0) * -1.6deg));
+  }
+  50% {
+    transform: translateY(calc(-1px - var(--load, 0) * 1.8px)) rotate(calc(var(--load, 0) * 1.8deg));
+  }
+}
+
+@keyframes charcoal-strain {
+  0% { transform: translate(-0.7px, 0); }
+  100% { transform: translate(0.7px, 0.2px); }
+}
+
+@keyframes charcoal-crack-glow {
+  0%, 100% { opacity: calc(0.42 + var(--load, 0) * 0.45); }
+  50% { opacity: calc(0.62 + var(--load, 0) * 0.38); }
+}
+
+@keyframes charcoal-flame {
+  0% { transform: translateX(-50%) scale(0.9, 0.92); }
+  50% { transform: translateX(-50%) scale(1.04, 1.08); }
+  100% { transform: translateX(-50%) scale(0.96, 1.0); }
+}
+
+@keyframes coal-orbit {
+  from { rotate: 0deg; }
+  to { rotate: 360deg; }
+}
+
+@keyframes charcoal-smoke-rise {
+  0% {
+    transform: translate(-50%, 0) scale(0.5);
+    opacity: 0;
+  }
+  16% { opacity: 0.6; }
+  70% { opacity: 0.32; }
+  100% {
+    transform: translate(
+      calc(-50% + var(--dx, 0) * var(--r, 18px)),
+      calc(var(--dy, 0) * var(--r, 18px))
+    ) scale(2.1);
+    opacity: 0;
+  }
+}
+
+@keyframes charcoal-ember-rise {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+  12% { opacity: 1; }
+  100% {
+    transform: translate(
+      calc(-50% + var(--dx, 0) * var(--r, 18px)),
+      calc(-50% + var(--dy, 0) * var(--r, 18px))
+    ) scale(0.2);
+    opacity: 0;
+  }
+}
+
+@keyframes charcoal-forgeflash {
+  0% { opacity: 0; transform: scale(0.55); }
+  22% { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.2); }
+}
+
+@keyframes charcoal-jolt {
+  0% { scale: 1; }
+  25% { scale: 1.12; }
+  50% { scale: 0.97; }
+  75% { scale: 1.03; }
+  100% { scale: 1; }
+}
+
+@keyframes charcoal-hat-lift {
+  0% { translate: 0 0; }
+  30% { translate: 0 -2px; }
+  100% { translate: 0 0; }
+}
+
+@keyframes charcoal-hat-throw {
+  0% { translate: 0 0; rotate: 0deg; }
+  30% { translate: 0 -2px; rotate: -7deg; }
+  62% { translate: 0 0; rotate: 4deg; }
+  100% { translate: 0 0; rotate: 0deg; }
+}
+
+@keyframes charcoal-sweat {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  18% { opacity: calc(var(--load, 0) * 0.95); }
+  78% { opacity: calc(var(--load, 0) * 0.7); }
+  100% { transform: translateY(calc(var(--r, 18px) * 0.55)) scale(0.95); opacity: 0; }
+}
+
+@keyframes coal-white-pulse {
+  from {
+    filter: drop-shadow(0.8px 0.8px 0 #b8692c) brightness(1);
+  }
+  to {
+    filter: drop-shadow(0.8px 0.8px 0 #b8692c) brightness(1.18);
+  }
+}
+
+@keyframes coal-ash-fall {
+  0% { transform: translate(0, 0); opacity: 0; }
+  18% { opacity: 0.85; }
+  100% { transform: translate(4px, 16px); opacity: 0; }
+}
+
+@keyframes charcoal-spark-fly {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% {
+    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(0.2);
+    opacity: 0;
+  }
+}
+
+@keyframes charcoal-puff-rise {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0.3; }
+  100% {
+    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, -18px))) scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes charcoal-ring-burst {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+}
+
+@keyframes charcoal-core-burst {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+}
+
+@keyframes charcoal-burn-flash {
+  0% { transform: translate(-50%, -50%) scale(0.25); opacity: 0.95; }
+  100% { transform: translate(-50%, -50%) scale(1.35); opacity: 0; }
+}
+
+@keyframes charcoal-burn-smoke {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0.55; }
+  100% { transform: translate(-50%, calc(-50% - 18px)) scale(1.7); opacity: 0; }
+}
+
+@keyframes charcoal-ash-fly {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 14px))) scale(0.3); opacity: 0; }
+}
+
+@keyframes charcoal-step {
+  0% { transform: translate(-50%, -50%) scale(0.45); opacity: 0.5; }
+  100% {
+    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes charcoal-trail {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
 }

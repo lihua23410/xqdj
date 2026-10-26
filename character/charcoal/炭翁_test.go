@@ -257,7 +257,7 @@ func TestHandFXOnTransfer(t *testing.T) {
 			hand = &cp
 		}
 	}
-	if hand == nil || hand.Slot != 2 || hand.X != 0 || hand.Y != 0 || hand.VX != 40 || hand.VY != 0 {
+	if hand == nil || hand.Slot != 2 || hand.X != 0 || hand.Y != 0 || hand.VX != 40 || hand.VY != 0 || hand.Amount != selfValue {
 		t.Fatalf("hand=%+v", hand)
 	}
 }
@@ -266,7 +266,7 @@ func TestCoalOutsideVisionStillEmitsFX(t *testing.T) {
 	a := &炭翁{brain: newBrain()}
 	a.brain.owner = 1
 	a.brain.nextSelf = 100
-	a.brain.coals = []placed{{holder: 2, value: 6, due: 20}}
+	a.brain.coals = []placed{{holder: 2, value: 27, due: 20}}
 	ctx, out := pipe(1)
 	a.Handle(ctx, unit.Sense{Time: 3, Self: selfAt(0, 0)})
 	var got bool
@@ -274,6 +274,9 @@ func TestCoalOutsideVisionStillEmitsFX(t *testing.T) {
 		fx, ok := c.(unit.FX)
 		if ok && fx.Name == "coal" && fx.Slot == 2 {
 			got = true
+			if fx.VY != 27 {
+				t.Fatalf("coal value=%v", fx.VY)
+			}
 		}
 	}
 	if !got {
