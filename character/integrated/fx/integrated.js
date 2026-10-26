@@ -24,6 +24,16 @@ function syncTracks(ctx) {
   const next = {};
   for (const fx of ctx.effects || []) applyTrackFX(next, fx, ctx.time);
   window.integratedTrack = next;
+  // #region agent log
+  const now = Date.now();
+  window.__knightDbgAt = window.__knightDbgAt || {};
+  if (now - (window.__knightDbgAt.E || 0) > 500) {
+    window.__knightDbgAt.E = now;
+    const names = {};
+    for (const fx of ctx.effects || []) names[fx.name] = (names[fx.name] || 0) + 1;
+    fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "bd0da0" }, body: JSON.stringify({ sessionId: "bd0da0", hypothesisId: "E", location: "integrated.js:syncTracks", message: "tracks rebuilt", data: { names, tracks: next, time: ctx.time || 0 }, timestamp: now }) }).catch(() => {});
+  }
+  // #endregion
 }
 
 function trackOf(id) {
@@ -147,7 +157,7 @@ function orangeAt(t) {
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
 }
 
-function dropTrail(id) {
+function dropShotTrail(id) {
   shotPaths.delete(id);
   document.querySelector(`#itrail-${id}`)?.remove();
 }
@@ -157,13 +167,13 @@ function sweepTrails(ctx) {
   ctx._trailSwept = true;
   const alive = new Set((ctx.units || []).map((o) => o.id));
   for (const id of shotPaths.keys()) {
-    if (!alive.has(id)) dropTrail(id);
+    if (!alive.has(id)) dropShotTrail(id);
   }
 }
 
 function paintTrail(el, u, ctx, tracking) {
   if (!tracking) {
-    dropTrail(u.id);
+    dropShotTrail(u.id);
     return;
   }
   const svg = trailLayer(ctx);
@@ -230,7 +240,7 @@ window.lookFX["integrated-shot"] = {
     el.querySelector(":scope > .integrated-shot-shape")?.remove();
     el.classList.remove("tracking");
     const id = Number(String(el.id || "").replace(/^u-/, ""));
-    if (id) dropTrail(id);
+    if (id) dropShotTrail(id);
   },
 };
 

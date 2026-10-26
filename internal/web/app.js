@@ -434,6 +434,16 @@ function playEffects(effects, scale, cx, cy) {
       if (typeof hook === "function") {
         hook(fx, ctx);
       } else if (fx.name) {
+        // #region agent log
+        if (fx.name === "fire-ring") {
+          const now = Date.now();
+          window.__knightDbgAt = window.__knightDbgAt || {};
+          if (now - (window.__knightDbgAt.A2 || 0) > 500) {
+            window.__knightDbgAt.A2 = now;
+            fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "bd0da0" }, body: JSON.stringify({ sessionId: "bd0da0", hypothesisId: "A", location: "app.js:playEffects", message: "fire-ring fell through", data: { kind, base: lookOf(kind).base || "", hasBase: !!base }, timestamp: now }) }).catch(() => {});
+          }
+        }
+        // #endregion
         spawnFx(`fx-${fx.name}`, x, y, kind);
       }
     }
@@ -460,6 +470,11 @@ let followHeld = false;
 const hiddenBody = new Set(["无下限术士", "分身者(百战)", "蛆"]);
 let hudKey = "";
 
+// #region agent log
+window.addEventListener("error", (ev) => {
+  fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "bd0da0" }, body: JSON.stringify({ sessionId: "bd0da0", hypothesisId: "F", location: "app.js:onerror", message: "window error", data: { message: ev.message, filename: ev.filename, lineno: ev.lineno, colno: ev.colno, stack: ev.error && ev.error.stack }, timestamp: Date.now() }) }).catch(() => {});
+});
+// #endregion
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
 const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
 ws.onopen = () => send({ type: "mode", team: teamPage });

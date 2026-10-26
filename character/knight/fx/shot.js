@@ -7,6 +7,14 @@ arena.registerShot("fire-ring", (fx) => {
     readyAt: fx.vx || 0,
     start: fx.vy || 0,
   };
+  // #region agent log
+  const now = Date.now();
+  window.__knightDbgAt = window.__knightDbgAt || {};
+  if (now - (window.__knightDbgAt.A || 0) > 500) {
+    window.__knightDbgAt.A = now;
+    fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "bd0da0" }, body: JSON.stringify({ sessionId: "bd0da0", hypothesisId: "A", location: "shot.js:fire-ring", message: "fire-ring stored", data: { unitId: fx.unitId, unitIdType: typeof fx.unitId, amount: fx.amount, vx: fx.vx, vy: fx.vy }, timestamp: now }) }).catch(() => {});
+  }
+  // #endregion
 });
 
 arena.registerShot("blink", (fx, ctx) => {

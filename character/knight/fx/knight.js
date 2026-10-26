@@ -306,7 +306,14 @@ function knightEnsureRing(el) {
   el.appendChild(canvas);
   const step = () => {
     if (!canvas._alive || !canvas.isConnected) return;
-    knightRingPaint(canvas, canvas._fill || 0);
+    try {
+      knightRingPaint(canvas, canvas._fill || 0);
+    } catch (err) {
+      // #region agent log
+      fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "bd0da0" }, body: JSON.stringify({ sessionId: "bd0da0", hypothesisId: "D", location: "knight.js:ring-raf", message: "ring paint threw", data: { error: String(err && err.message || err), fill: canvas._fill || 0 }, timestamp: Date.now() }) }).catch(() => {});
+      // #endregion
+      throw err;
+    }
     requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
@@ -336,6 +343,11 @@ function knightRingPaint(canvas, fill) {
   const base = 1;
   const flameH = 6;
   const sweep = Math.max(0, Math.min(1, fill)) * Math.PI * 2;
+  const ballR = half / 2.4;
+  let opaque = 0;
+  let inside = 0;
+  let minY = n;
+  let maxY = 0;
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
       const dx = x - c;
@@ -371,15 +383,40 @@ function knightRingPaint(canvas, fill) {
       const t = rise / flameH;
       const fy = Math.min(h - 1, Math.max(0, Math.round((1 - t) * (h - 1))));
       const fx = Math.floor((rel / (Math.PI * 2)) * w * 2) % w;
-      knightDoomPut(img, y * n + x, cells[fy * w + fx], fade);
+      const level = cells[fy * w + fx];
+      if (level > 0) {
+        opaque++;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (dist < ballR) inside++;
+      }
+      knightDoomPut(img, y * n + x, level, fade);
     }
   }
   ctx.putImageData(img, 0, 0);
+  // #region agent log
+  const now = Date.now();
+  window.__knightDbgAt = window.__knightDbgAt || {};
+  if (now - (window.__knightDbgAt.D || 0) > 500) {
+    window.__knightDbgAt.D = now;
+    fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "bd0da0" }, body: JSON.stringify({ sessionId: "bd0da0", hypothesisId: "D", location: "knight.js:knightRingPaint", message: "ring pixels", data: { fill, opaque, inside, minY, maxY, n, ballR, R }, timestamp: now }) }).catch(() => {});
+  }
+  // #endregion
 }
 
 function knightRingTick(el, u, ctx) {
   const id = u && u.id;
   const st = id != null && window.knightRing ? window.knightRing[id] : null;
+  // #region agent log
+  const now = Date.now();
+  window.__knightDbgAt = window.__knightDbgAt || {};
+  if (u && u.kind === "小骑士" && now - (window.__knightDbgAt.B || 0) > 500) {
+    window.__knightDbgAt.B = now;
+    const time = (ctx && ctx.time) || 0;
+    const fill = st ? Math.max(0, Math.min(1, (time - (st.start || 0)) / KNIGHT_RING_DUR)) : null;
+    fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "bd0da0" }, body: JSON.stringify({ sessionId: "bd0da0", hypothesisId: "B", location: "knight.js:knightRingTick", message: "ring tick", data: { id, idType: typeof id, found: !!st, on: st ? st.on : null, start: st ? st.start : null, readyAt: st ? st.readyAt : null, time, fill, elId: el && el.id, ringNodes: el ? el.querySelectorAll(":scope > .knight-ring").length : 0 }, timestamp: now }) }).catch(() => {});
+  }
+  // #endregion
   if (!st || !st.on) {
     knightClearRing(el);
     return;
