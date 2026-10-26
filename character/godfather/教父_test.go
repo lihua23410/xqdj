@@ -208,6 +208,19 @@ func TestSniperFiresAfterSevenSeconds(t *testing.T) {
 	}
 }
 
+func TestSniperShotUsesArmorPiercingLook(t *testing.T) {
+	look, ok := unit.Looks()[KindGodfatherShot]
+	if !ok {
+		t.Fatalf("%s not registered", KindGodfatherShot)
+	}
+	for _, fx := range look.FX {
+		if fx == "ap" {
+			return
+		}
+	}
+	t.Fatalf("shot look fx=%v, want ap", look.FX)
+}
+
 func TestDealerDropsAtFiveThenLeavesAfterTwo(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	a := &贩卖者{owner: 1, slot: 0, left: 2}

@@ -30,6 +30,36 @@
   overflow: visible;
 }
 
+/* 教父狙击弹：细长钨芯穿甲弹，弹头朝速度方向。 */
+.ball.look-ap {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+  z-index: 2;
+}
+.ap-round {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--ap-len, 48px);
+  height: var(--ap-h, 16px);
+  transform-origin: 50% 50%;
+  transform: translate(-50%, -50%) rotate(var(--ap-ang, 0deg));
+  pointer-events: none;
+  overflow: visible;
+  filter:
+    drop-shadow(0 0 2px rgba(255, 236, 194, 0.85))
+    drop-shadow(0 0 6px rgba(255, 90, 58, 0.5));
+  will-change: transform;
+}
+.ap-round svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
 .sniper-laser {
   position: absolute;
   left: 50%;
