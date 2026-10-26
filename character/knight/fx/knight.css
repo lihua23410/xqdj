@@ -41,6 +41,17 @@
   box-shadow: none;
 }
 /* DOOM 火焰：filipedeschamps/doom-fire-algorithm。像素从球底往上烧，平涂，比 #ff2a2a 更深。 */
+.ball.look-knight > .knight-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 240%;
+  height: 240%;
+  transform: translate(-50%, -50%);
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 2;
+}
 .ball.look-knight > .knight-doom {
   position: absolute;
   left: 50%;

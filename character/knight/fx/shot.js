@@ -1,3 +1,14 @@
+window.knightRing = window.knightRing || {};
+
+arena.registerShot("fire-ring", (fx) => {
+  if (!fx || fx.unitId == null) return;
+  window.knightRing[fx.unitId] = {
+    on: (fx.amount || 0) > 0,
+    readyAt: fx.vx || 0,
+    start: fx.vy || 0,
+  };
+});
+
 arena.registerShot("blink", (fx, ctx) => {
   const { x, y, kind, scale } = ctx;
   const d = 36 * (scale || 1);

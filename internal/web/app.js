@@ -1316,6 +1316,7 @@ function renderArena() {
     }
     runLookFX(el, u, {
       now,
+      time: state.time || 0,
       scale,
       cx,
       cy,

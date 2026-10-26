@@ -66,15 +66,7 @@ function knightIgnite(el) {
   el.appendChild(canvas);
   const step = () => {
     if (!alive || !canvas.isConnected) return;
-    for (let y = 0; y < last; y++) {
-      for (let x = 0; x < KNIGHT_DOOM_W; x++) {
-        const src = (y + 1) * KNIGHT_DOOM_W + x;
-        const decay = Math.random() < 0.4 ? 1 : 0;
-        const dstX = Math.min(KNIGHT_DOOM_W - 1, Math.max(0, x + Math.floor(Math.random() * 3) - 1));
-        const next = cells[src] - decay;
-        cells[y * KNIGHT_DOOM_W + dstX] = next > 0 ? next : 0;
-      }
-    }
+    knightDoomStep(cells, KNIGHT_DOOM_W, KNIGHT_DOOM_H);
     const img = ctx.createImageData(KNIGHT_DOOM_W, KNIGHT_DOOM_H);
     for (let i = 0; i < cells.length; i++) {
       const x = i % KNIGHT_DOOM_W;
@@ -98,6 +90,19 @@ function knightIgnite(el) {
     requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
+}
+
+function knightDoomStep(cells, w, h) {
+  const last = h - 1;
+  for (let y = 0; y < last; y++) {
+    for (let x = 0; x < w; x++) {
+      const src = (y + 1) * w + x;
+      const decay = Math.random() < 0.4 ? 1 : 0;
+      const dstX = Math.min(w - 1, Math.max(0, x + Math.floor(Math.random() * 3) - 1));
+      const next = cells[src] - decay;
+      cells[y * w + dstX] = next > 0 ? next : 0;
+    }
+  }
 }
 
 function knightDoomRGB(level) {
@@ -273,11 +278,97 @@ window.lookFX["knight-arc"] = {
   },
 };
 
+const KNIGHT_RING_N = 48;
+const KNIGHT_RING_DUR = 6;
+
+function knightClearRing(el) {
+  if (!el) return;
+  const ring = el.querySelector(":scope > .knight-ring");
+  if (!ring) return;
+  if (ring._knightStop) ring._knightStop();
+  ring.remove();
+}
+
+function knightEnsureRing(el) {
+  let canvas = el.querySelector(":scope > .knight-ring");
+  if (canvas) return canvas;
+  canvas = document.createElement("canvas");
+  canvas.className = "knight-ring";
+  canvas.width = KNIGHT_RING_N;
+  canvas.height = KNIGHT_RING_N;
+  const cells = new Uint8Array(KNIGHT_DOOM_W * KNIGHT_DOOM_H);
+  const last = KNIGHT_DOOM_H - 1;
+  for (let x = 0; x < KNIGHT_DOOM_W; x++) cells[last * KNIGHT_DOOM_W + x] = KNIGHT_DOOM_COLORS.length - 1;
+  canvas._cells = cells;
+  canvas._fill = 0;
+  canvas._alive = true;
+  canvas._knightStop = () => { canvas._alive = false; };
+  el.appendChild(canvas);
+  const step = () => {
+    if (!canvas._alive || !canvas.isConnected) return;
+    knightRingPaint(canvas, canvas._fill || 0);
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  return canvas;
+}
+
+function knightRingPaint(canvas, fill) {
+  const w = KNIGHT_DOOM_W;
+  const h = KNIGHT_DOOM_H;
+  const cells = canvas._cells;
+  knightDoomStep(cells, w, h);
+  const n = canvas.width;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(n, n);
+  const cx = (n - 1) / 2;
+  const half = cx || 1;
+  const inner = half * 0.56;
+  const outer = half * 0.82;
+  const sweep = Math.max(0, Math.min(1, fill)) * Math.PI * 2;
+  const start = -Math.PI / 2;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const dx = x - cx;
+      const dy = y - cx;
+      const r = Math.hypot(dx, dy);
+      if (r < inner || r > outer) continue;
+      let rel = Math.atan2(dy, dx) - start;
+      rel %= Math.PI * 2;
+      if (rel < 0) rel += Math.PI * 2;
+      if (sweep <= 0 || rel > sweep) continue;
+      const t = (r - inner) / (outer - inner);
+      const fy = Math.min(h - 1, Math.max(0, Math.round((1 - t) * (h - 1))));
+      const fx = Math.floor((rel / (Math.PI * 2)) * w * 2) % w;
+      const fade = Math.min(1, (outer - r) / Math.max(1, (outer - inner) * 0.35));
+      knightDoomPut(img, y * n + x, cells[fy * w + fx], fade);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function knightRingTick(el, u, ctx) {
+  const id = u && u.id;
+  const st = id != null && window.knightRing ? window.knightRing[id] : null;
+  if (!st || !st.on) {
+    knightClearRing(el);
+    return;
+  }
+  const time = (ctx && ctx.time) || 0;
+  const fill = Math.max(0, Math.min(1, (time - (st.start || 0)) / KNIGHT_RING_DUR));
+  const canvas = knightEnsureRing(el);
+  canvas._fill = fill;
+}
+
 window.lookFX.knight = {
   unmount(el) {
     knightClearLock(el);
+    knightClearRing(el);
+    const id = knightId(el);
+    if (id && window.knightRing) delete window.knightRing[id];
   },
-  tick(el, u) {
+  tick(el, u, ctx) {
+    knightRingTick(el, u, ctx);
     if (!knightLocking(u)) {
       knightClearLock(el);
       return;

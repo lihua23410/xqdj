@@ -1,6 +1,7 @@
 package 小骑士
 
 import (
+	"math/rand/v2"
 	"testing"
 	"xqdj/internal/unit"
 	_ "xqdj/map/hex"
@@ -142,5 +143,105 @@ func TestBlinkFXCarriesLanding(t *testing.T) {
 	}
 	if !hasFX(cmds, "dash") {
 		t.Fatalf("landing dash missing: %v", cmds)
+	}
+}
+
+func freshKnight() *小骑士 {
+	return &小骑士{readyAt: knightCD, hp: knightStartHP, ringOn: true}
+}
+
+func knightSelf() unit.Snapshot {
+	return unit.Snapshot{ID: 1, Role: unit.RoleFighter, Slot: 0, X: 0, Y: 0, Radius: knightRadius, HP: knightStartHP}
+}
+
+func knightEnemy() unit.Snapshot {
+	return unit.Snapshot{
+		ID: 2, Role: unit.RoleFighter, Slot: 1,
+		X: 80, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim,
+	}
+}
+
+func fireRing(cmds []unit.Cmd) (unit.FX, bool) {
+	for _, c := range cmds {
+		if fx, ok := c.(unit.FX); ok && fx.Name == "fire-ring" {
+			return fx, true
+		}
+	}
+	return unit.FX{}, false
+}
+
+func hasTeleport(cmds []unit.Cmd) bool {
+	for _, c := range cmds {
+		if _, ok := c.(unit.Teleport); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func rngRoll(belowHalf bool) *rand.Rand {
+	for seed := uint64(1); seed < 100000; seed++ {
+		r := rand.New(rand.NewPCG(seed, seed))
+		if (r.Float64() < 0.5) == belowHalf {
+			return rand.New(rand.NewPCG(seed, seed))
+		}
+	}
+	panic("no rng seed")
+}
+
+func TestRingOpensOnTheSixSecondWindow(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	k := freshKnight()
+	ctx := unit.Context{ID: 1, Kind: KindKnight, Out: out}
+	k.Handle(ctx, unit.Sense{Time: 0, Self: knightSelf()})
+	cmds := drain(out)
+	fx, ok := fireRing(cmds)
+	if !ok || fx.Amount != 1 || fx.VX != knightCD || fx.VY != 0 {
+		t.Fatalf("opening ring=%v ok=%v", fx, ok)
+	}
+	if hasTeleport(cmds) {
+		t.Fatalf("should not charge before the window: %v", cmds)
+	}
+}
+
+func TestRingStaysFullWithoutTarget(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	k := freshKnight()
+	ctx := unit.Context{ID: 1, Kind: KindKnight, Out: out}
+	k.Handle(ctx, unit.Sense{Time: knightCD, Self: knightSelf()})
+	cmds := drain(out)
+	fx, ok := fireRing(cmds)
+	if !ok || fx.Amount != 1 || fx.VX != knightCD || fx.VY != 0 {
+		t.Fatalf("full ring=%v ok=%v", fx, ok)
+	}
+	if hasTeleport(cmds) {
+		t.Fatalf("no target should not charge: %v", cmds)
+	}
+}
+
+func TestChainHidesRing(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	k := freshKnight()
+	k.rng = rngRoll(true)
+	ctx := unit.Context{ID: 1, Kind: KindKnight, Out: out}
+	k.Handle(ctx, unit.Sense{Time: knightCD, Self: knightSelf(), Nearby: []unit.Snapshot{knightEnemy()}})
+	cmds := drain(out)
+	fx, ok := fireRing(cmds)
+	if !hasTeleport(cmds) || !ok || fx.Amount != 0 || k.readyAt != knightCD+knightChainGap || k.ringOn {
+		t.Fatalf("chain ring=%v on=%v ready=%v cmds=%v", fx, k.ringOn, k.readyAt, cmds)
+	}
+}
+
+func TestLongWindowRestartsRing(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	k := freshKnight()
+	k.rng = rngRoll(false)
+	ctx := unit.Context{ID: 1, Kind: KindKnight, Out: out}
+	now := knightCD
+	k.Handle(ctx, unit.Sense{Time: now, Self: knightSelf(), Nearby: []unit.Snapshot{knightEnemy()}})
+	cmds := drain(out)
+	fx, ok := fireRing(cmds)
+	if !hasTeleport(cmds) || !ok || fx.Amount != 1 || fx.VX != now+knightCD || fx.VY != now || !k.ringOn {
+		t.Fatalf("restart ring=%v on=%v cmds=%v", fx, k.ringOn, cmds)
 	}
 }

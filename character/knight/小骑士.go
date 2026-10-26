@@ -45,7 +45,7 @@ func init() {
 		Fighter: true,
 		Look:    unit.Look{Color: knightColor, Ghost: 250, FX: []string{"knight"}},
 	}, func(unit.SpawnInfo) unit.Actor {
-		return &小骑士{readyAt: knightCD, hp: knightStartHP}
+		return &小骑士{readyAt: knightCD, hp: knightStartHP, ringOn: true}
 	})
 	p.Register(unit.Spec{
 		Kind:     KindKnightArc,
@@ -66,6 +66,8 @@ func init() {
 
 type 小骑士 struct {
 	readyAt   float64
+	ringOn    bool
+	ringAt    float64
 	arc       unit.AttachState
 	rng       *rand.Rand
 	hp        float64
@@ -96,6 +98,7 @@ func (k *小骑士) onSense(ctx unit.Context, s unit.Sense) {
 		unit.SpawnAttach(ctx, s, KindKnightArc)
 	}
 	k.tryRam(ctx, s)
+	k.emitRing(ctx)
 }
 
 func (k *小骑士) hurt(ctx unit.Context, d unit.IncomingDamage) {
@@ -163,8 +166,27 @@ func (k *小骑士) tryRam(ctx unit.Context, sense unit.Sense) {
 	}
 	if k.rng.Float64() < 0.5 {
 		k.readyAt = sense.Time + knightChainGap
+		k.ringOn = false
 	} else {
 		k.readyAt = sense.Time + knightCD
+		k.ringOn = true
+		k.ringAt = sense.Time
+	}
+}
+
+func (k *小骑士) emitRing(ctx unit.Context) {
+	on := 0.0
+	if k.ringOn {
+		on = 1
+	}
+	ctx.Out <- unit.FX{
+		Name:   "fire-ring",
+		Kind:   ctx.Kind,
+		UnitID: ctx.ID,
+		Slot:   k.slot,
+		Amount: on,
+		VX:     k.readyAt,
+		VY:     k.ringAt,
 	}
 }
 
