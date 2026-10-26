@@ -1,0 +1,73 @@
+/* 靶子的伤害播报：挂在球头顶的一只对话气泡，一直把 DPS 说出来。 */
+.ball.look-dummy-dps > .dummy-say {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 34px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 9px 5px;
+  border: 1px solid rgba(122, 208, 255, 0.55);
+  border-radius: 9px;
+  background: rgba(7, 16, 27, 0.92);
+  box-shadow:
+    0 0 12px rgba(74, 163, 255, 0.35),
+    inset 0 0 8px rgba(74, 163, 255, 0.12);
+  color: #eaf6ff;
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transform-origin: 50% 100%;
+  z-index: 3;
+}
+
+.ball.look-dummy-dps > .dummy-say::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: rgba(7, 16, 27, 0.92);
+  filter: drop-shadow(0 1px 0 rgba(122, 208, 255, 0.35));
+}
+
+.ball.look-dummy-dps > .dummy-say > b {
+  color: var(--kind, #4aa3ff);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--kind, #4aa3ff) 65%, transparent);
+}
+
+.ball.look-dummy-dps > .dummy-say > span {
+  color: #9db4c8;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ball.look-dummy-dps > .dummy-say.bump {
+  animation: dummy-say-bump 0.18s ease-out;
+}
+
+@keyframes dummy-say-bump {
+  0% { transform: translateX(-50%) scale(0.94); }
+  55% { transform: translateX(-50%) scale(1.03); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
+/* 皮肤脚本还没挂上的那一两帧，引擎会退化画 .fx-dps。让它自己退场，别留在 DOM 里。 */
+.fx-dps {
+  width: 0;
+  height: 0;
+  opacity: 0;
+  animation: dummy-dps-gone 0.2s linear forwards;
+}
+
+@keyframes dummy-dps-gone {
+  to { opacity: 0; }
+}
