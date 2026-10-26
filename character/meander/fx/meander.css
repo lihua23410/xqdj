@@ -1,28 +1,174 @@
-/* 2D 平涂：无光晕、无立体渐变；环线在球下、跟场地一起被裁切。 */
+/* 迷走：2D 平涂。环线是「迷径」，点亮盘是「迷心」，球是「迷失者」。
+   不加立体渐变与光晕；所有装饰都是平涂线条/色块，且在球与环本身上。 */
 
+/* ── 迷失者 ─────────────────────────────────────────── */
 .ball.look-meander {
-  background: #5e6d78 !important;
-  box-shadow: none !important;
-  border: 2px solid #243039;
+  box-sizing: border-box;
+  background: #66757f !important;
+  border: 2px solid #1c2a33;
+  box-shadow:
+    inset 0 0 0 1px #b3c5cf,
+    inset 0 0 0 4px #45555f !important;
 }
 
+/* 球芯：一颗更深的同心圆，像走失在迷径里的核心 */
+.ball.look-meander::before {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  background: #2b3942;
+  box-shadow: inset 0 0 0 1px #8fa8b6;
+  pointer-events: none;
+}
+
+/* 球外一圈缓慢自转的虚线，像随身带着一小段迷径 */
+.ball.look-meander::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(163, 210, 220, 0.62);
+  animation: meander-orbit 8s linear infinite;
+  pointer-events: none;
+  will-change: transform;
+}
+@keyframes meander-orbit {
+  to { transform: rotate(360deg); }
+}
+
+/* ── 迷径：未亮环线 ─────────────────────────────────── */
 .ball.look-meander-ring,
 .ball.look-meander-lit {
-  box-shadow: none !important;
   box-sizing: border-box;
   z-index: 0;
   pointer-events: none;
+  will-change: left, top;
 }
 
 .ball.look-meander-ring {
   background: transparent !important;
-  border: 2px solid #3d5c66;
-  opacity: 0.72;
+  border: 1.5px solid #4d7a8a;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #4d7a8a 46%, transparent) !important;
+  opacity: 0.9;
 }
 
+/* 环内一条流动的虚线：每条环速度、方向不同（由 meander.js 写变量） */
+.ball.look-meander-ring::before,
+.ball.look-meander-lit::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  border: 1px dashed rgba(127, 207, 220, 0.34);
+  animation: meander-dash var(--dash-dur, 24s) linear infinite;
+  animation-direction: var(--dash-dir, normal);
+  pointer-events: none;
+  will-change: transform;
+}
+@keyframes meander-dash {
+  to { transform: rotate(360deg); }
+}
+
+/* ── 迷心：点亮盘 ──────────────────────────────────── */
 .ball.look-meander-lit {
-  /* 亮盘：环上描边 + 环内铺色 */
-  background: color-mix(in srgb, #1a6f82 28%, transparent) !important;
-  border: 2.5px solid #1a6f82;
-  opacity: 0.95;
+  background: color-mix(in srgb, #177a90 34%, transparent) !important;
+  border: 2px solid #2ea1b8;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #7ff3e3 36%, transparent) !important;
+  opacity: 0.96;
+  will-change: left, top, opacity;
+  animation: meander-lit-breathe 3.6s ease-in-out infinite alternate;
+}
+
+.ball.look-meander-lit::before {
+  inset: 8px;
+  border-color: rgba(127, 243, 227, 0.45);
+  --dash-dur: 16s;
+}
+
+/* 由心向外的一圈脉冲，表示这条环正在出伤 */
+.ball.look-meander-lit::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(127, 243, 227, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  animation: meander-lit-pulse 3.2s ease-out infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes meander-lit-breathe {
+  from { opacity: 0.88; }
+  to { opacity: 1; }
+}
+@keyframes meander-lit-pulse {
+  0% { transform: scale(0.52); opacity: 0.8; }
+  70% { opacity: 0.16; }
+  100% { transform: scale(1.06); opacity: 0; }
+}
+
+/* ── 迷影：球自己缩小、变淡后留在身后的残像（meander.js 生成） ── */
+.meander-trail {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #66757f;
+  opacity: 0.34;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px #b3c5cf,
+    inset 0 0 0 3px #45555f;
+  animation: meander-trail-fade 0.48s ease-out forwards;
+}
+.meander-trail::before {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  background: #2b3942;
+  box-shadow: inset 0 0 0 1px #8fa8b6;
+  opacity: 0.9;
+}
+@keyframes meander-trail-fade {
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.58); }
+}
+
+/* ── 岔路：两条环严格相交处的菱形节点（meander.js 生成） ── */
+.ghost.meander-junctions {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  opacity: 1;
+  transform: none;
+  animation: none;
+  pointer-events: none;
+}
+.meander-junction {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(127, 243, 227, 0.5);
+  background: rgba(127, 243, 227, 0.14);
+  transform: translate3d(-20px, -20px, 0) translate(-50%, -50%) rotate(45deg);
+  will-change: transform;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ball.look-meander::after,
+  .ball.look-meander-ring::before,
+  .ball.look-meander-lit::before,
+  .ball.look-meander-lit,
+  .ball.look-meander-lit::after,
+  .meander-trail {
+    animation: none !important;
+  }
+  .ball.look-meander-lit { opacity: 0.96; }
 }

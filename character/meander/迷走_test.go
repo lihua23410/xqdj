@@ -157,16 +157,18 @@ func TestDriftStaysInLeashAndWalkable(t *testing.T) {
 	if !ok {
 		t.Fatal("build maze")
 	}
-	drifts := initDrifts(m, rng, 0)
-	hubAx, hubAy := drifts[0].ax, drifts[0].ay
+	drifts, mid := initDrifts(m, rng, 0)
+	inset := m.guideR + driftLeash
 	now := 0.0
 	dt := 1.0 / 60
 	for step := 0; step < 60*20; step++ {
 		now += dt
-		driftCenters(m.rings, drifts, f, rng, now, dt)
-		// 心环锚点钉死
-		if math.Hypot(drifts[0].ax-hubAx, drifts[0].ay-hubAy) > 1e-6 {
-			t.Fatalf("hub anchor moved")
+		driftCenters(m.rings, drifts, &mid, f, rng, now, dt)
+		if !f.OutlineContains(mid.x, mid.y, inset) {
+			t.Fatalf("mid outside inset: %v,%v", mid.x, mid.y)
+		}
+		if d := math.Hypot(m.rings[0].x-mid.x, m.rings[0].y-mid.y); d > driftLeash+1e-3 {
+			t.Fatalf("heart left mid leash: %v", d)
 		}
 		for i, r := range m.rings {
 			d := math.Hypot(r.x-drifts[i].ax, r.y-drifts[i].ay)
@@ -183,6 +185,49 @@ func TestDriftStaysInLeashAndWalkable(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestMidTravelsAndBounces(t *testing.T) {
+	f := unit.HexField()
+	rng := rand.New(rand.NewPCG(3, 5))
+	m, ok := buildMaze(f, rng)
+	if !ok {
+		t.Fatal("build maze")
+	}
+	drifts, mid := initDrifts(m, rng, 0)
+	inset := m.guideR + driftLeash
+	px, py := mid.x, mid.y
+	travel := 0.0
+	now := 0.0
+	dt := 1.0 / 60
+	for step := 0; step < 60*30; step++ {
+		now += dt
+		driftCenters(m.rings, drifts, &mid, f, rng, now, dt)
+		if !f.OutlineContains(mid.x, mid.y, inset) {
+			t.Fatalf("mid outside inset at step %d: %v,%v", step, mid.x, mid.y)
+		}
+		travel += math.Hypot(mid.x-px, mid.y-py)
+		px, py = mid.x, mid.y
+	}
+	if travel < midSpeed*10 {
+		t.Fatalf("mid barely travelled: %v", travel)
+	}
+}
+
+func TestWallHitTurnsMid(t *testing.T) {
+	a := &迷走{booted: true, mid: midPoint{vx: 100, vy: 100}}
+	a.turnMid(unit.WallHit{Time: 1, NX: 0, NY: 1})
+	if math.Abs(a.mid.vx-100) > 1e-9 || math.Abs(a.mid.vy+100) > 1e-9 {
+		t.Fatalf("mid not reflected: %v,%v", a.mid.vx, a.mid.vy)
+	}
+	a.turnMid(unit.WallHit{Time: 1.2, NX: 0, NY: 1})
+	if math.Abs(a.mid.vy+100) > 1e-9 {
+		t.Fatalf("mid turned inside cooldown: %v", a.mid.vy)
+	}
+	a.turnMid(unit.WallHit{Time: 2, NX: 0, NY: 1})
+	if math.Abs(a.mid.vy-100) > 1e-9 {
+		t.Fatalf("mid did not turn after cooldown: %v", a.mid.vy)
 	}
 }
 

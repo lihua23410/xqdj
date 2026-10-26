@@ -93,6 +93,7 @@ type 迷走 struct {
 	litID     uint64
 	ringIDs   []uint64
 	drifts    []ringDrift
+	mid       midPoint
 	lastT     float64
 	rng       *rand.Rand
 	flipUntil float64
@@ -116,6 +117,7 @@ func (a *迷走) Handle(ctx unit.Context, ev unit.Event) {
 		a.rail(ctx, e)
 	case unit.WallHit:
 		a.flipSpin(e.Time)
+		a.turnMid(e)
 	case unit.Collision:
 		a.onBump(e)
 	}
@@ -164,6 +166,21 @@ func (a *迷走) flipSpin(t float64) {
 	a.ignoreJ = t + junctionCD
 }
 
+// turnMid：迷走撞墙时，把中点速度按墙法线弹过去；0.5 秒内只吃一次。
+// 场边、硬墙、胶囊墙都算——迷径被墙弹出去是这套机制的输入。
+func (a *迷走) turnMid(e unit.WallHit) {
+	if !a.booted || e.Time+1e-9 < a.mid.nextTurn {
+		return
+	}
+	nx, ny := e.NX, e.NY
+	l := math.Hypot(nx, ny)
+	if l < 1e-9 {
+		return
+	}
+	reflectMid(&a.mid, nx/l, ny/l)
+	a.mid.nextTurn = e.Time + midTurnCD
+}
+
 func (a *迷走) ensureRNG(id uint64) {
 	if a.rng != nil {
 		return
@@ -180,7 +197,7 @@ func (a *迷走) boot(ctx unit.Context, s unit.Sense) {
 	a.booted = true
 	a.hasLastJ = false
 	a.ringIDs = make([]uint64, len(m.rings))
-	a.drifts = initDrifts(m, a.rng, s.Time)
+	a.drifts, a.mid = initDrifts(m, a.rng, s.Time)
 	a.lastT = s.Time
 
 	for _, r := range m.rings {
@@ -217,7 +234,7 @@ func (a *迷走) stepDrift(s unit.Sense) {
 	if dt <= 0 || dt > 0.5 {
 		return
 	}
-	driftCenters(a.maze.rings, a.drifts, s.Field, a.rng, s.Time, dt)
+	driftCenters(a.maze.rings, a.drifts, &a.mid, s.Field, a.rng, s.Time, dt)
 	a.maze.junc = fieldJunctions(s.Field, a.maze.rings)
 }
 

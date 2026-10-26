@@ -3,3 +3,11 @@
 *.test
 *.out
 .temp/
+.shots/
+.tmp-*
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+.cursor/
+.zcode/
