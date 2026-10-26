@@ -1,4 +1,5 @@
-// 大肥鱼在场上碰到随机出现的白饭就变成虎鲸。
+// 大肥鱼碰到自己的白饭就变成虎鲸。
+// 原身太久没吃上会喊饭，把最近的白饭叫到开口那一点。
 // 虎鲸潜水，再跃到跃起那一瞬敌人所在的位置，入水时溅起水花。
 package 大肥鱼
 
@@ -26,6 +27,7 @@ const (
 	leapSec       = 0.5
 	surfaceSec    = 1.1
 	leapSpeed     = 640.0
+	leapReach     = leapSpeed * leapSec
 	splashRadius  = 56.0 * 1.3
 	splashDamage  = 12.0 * 0.75
 	leapAhead     = 140.0
@@ -34,6 +36,12 @@ const (
 	bowlCap       = 5
 	riceEvery     = 3.0
 	eatSec        = 1.5
+	mealHeal      = 5.0
+	hungerSec     = 7.0
+	callEvery     = 0.5
+	rushSec       = 0.4
+	rushDist      = 60.0
+	rushSlip      = 1.0 / 30
 	chewGap       = 22.0
 	chewAmp       = 4.0
 	chewRate      = 18.0
@@ -96,6 +104,19 @@ type 大肥鱼 struct {
 	mealUntil    float64
 	mealX, mealY float64
 	mealAng      float64
+	callArmed    bool
+	callAt       float64
+	calling      bool
+	pinX, pinY   float64
+	nextShout    float64
+	rushOn       bool
+	rushID       uint64
+	rushFromX    float64
+	rushFromY    float64
+	rushDirX     float64
+	rushDirY     float64
+	rushSpan     float64
+	rushStart    float64
 }
 
 func (a *大肥鱼) Handle(ctx unit.Context, ev unit.Event) {
@@ -120,6 +141,8 @@ func (a *大肥鱼) onHit(ctx unit.Context, d unit.IncomingDamage) {
 		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID}
 		a.form = false
 		a.eating = false
+		a.calling = false
+		a.rushOn = false
 		a.hp = 0
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
 		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
@@ -134,7 +157,7 @@ func (a *大肥鱼) onSense(ctx unit.Context, s unit.Sense) {
 	a.seen = true
 	a.hp = s.Self.HP
 	if a.form && s.Time+1e-9 >= a.until {
-		a.leave(ctx)
+		a.leave(ctx, s.Time)
 	}
 	a.stock(ctx, s)
 	if a.form {
@@ -157,14 +180,127 @@ func (a *大肥鱼) maid(ctx unit.Context, s unit.Sense) {
 		a.chew(ctx, s)
 		return
 	}
+	if !a.callArmed {
+		a.callArmed = true
+		a.callAt = s.Time + hungerSec
+	}
+	if s.Time+1e-9 >= a.callAt {
+		a.call(ctx, s)
+		return
+	}
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: maidCruise}
 	if bowl := overlappingBowl(s); bowl != nil {
 		a.beginMeal(ctx, s, bowl)
 	}
 }
 
+func (a *大肥鱼) call(ctx unit.Context, s unit.Sense) {
+	if !a.calling {
+		a.calling = true
+		a.pinX, a.pinY = s.Self.X, s.Self.Y
+		a.nextShout = s.Time
+		a.rushOn = false
+	}
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: a.pinX, Y: a.pinY}
+	if bowl := bowlTouching(s, a.pinX, a.pinY); bowl != nil {
+		a.beginMeal(ctx, s, bowl)
+		return
+	}
+	if a.stepRush(ctx, s) {
+		return
+	}
+	if s.Time+1e-9 < a.nextShout {
+		return
+	}
+	a.nextShout = s.Time + callEvery
+	ctx.Out <- unit.FX{
+		Name: "call", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
+		X: a.pinX, Y: a.pinY,
+	}
+	a.beginRush(s)
+	a.stepRush(ctx, s)
+}
+
+func (a *大肥鱼) beginRush(s unit.Sense) {
+	bowl := nearestBowl(s, a.pinX, a.pinY)
+	if bowl == nil {
+		a.rushOn = false
+		return
+	}
+	dx, dy := a.pinX-bowl.X, a.pinY-bowl.Y
+	span := math.Hypot(dx, dy)
+	if span < 1e-6 {
+		a.rushOn = false
+		return
+	}
+	a.rushOn = true
+	a.rushID = bowl.ID
+	a.rushFromX, a.rushFromY = bowl.X, bowl.Y
+	a.rushDirX, a.rushDirY = dx/span, dy/span
+	a.rushSpan = span
+	a.rushStart = s.Time
+}
+
+func (a *大肥鱼) stepRush(ctx unit.Context, s unit.Sense) bool {
+	if !a.rushOn {
+		return false
+	}
+	elapsed := s.Time - a.rushStart
+	if elapsed > rushSec+rushSlip {
+		a.rushOn = false
+		return false
+	}
+	bowl := bowlByID(s, a.rushID)
+	if bowl == nil {
+		a.rushOn = false
+		return false
+	}
+	dist := rushTravel(elapsed)
+	contact := a.rushSpan - (s.Self.Radius + bowl.Radius)
+	if contact < 0 {
+		contact = 0
+	}
+	hit := dist+1e-9 >= contact
+	if hit {
+		dist = contact
+	}
+	if dist < 1e-6 && !hit {
+		return false
+	}
+	x := a.rushFromX + a.rushDirX*dist
+	y := a.rushFromY + a.rushDirY*dist
+	ctx.Out <- unit.Teleport{UnitID: bowl.ID, X: x, Y: y}
+	if !hit {
+		if elapsed+1e-9 >= rushSec {
+			a.rushOn = false
+		}
+		return false
+	}
+	moved := *bowl
+	moved.X, moved.Y = x, y
+	a.rushOn = false
+	a.beginMeal(ctx, s, &moved)
+	return true
+}
+
+func rushTravel(elapsed float64) float64 {
+	if elapsed <= 0 {
+		return 0
+	}
+	if elapsed > rushSec {
+		elapsed = rushSec
+	}
+	return rushDist * (1 - math.Cos(math.Pi*elapsed/rushSec)) / 2
+}
+
 func (a *大肥鱼) beginMeal(ctx unit.Context, s unit.Sense, bowl *unit.Snapshot) {
 	a.eating = true
+	a.calling = false
+	a.rushOn = false
+	a.callArmed = true
+	a.callAt = s.Time + hungerSec
 	a.mealID = bowl.ID
 	a.mealUntil = s.Time + eatSec
 	a.mealX, a.mealY = bowl.X, bowl.Y
@@ -259,15 +395,20 @@ func (a *大肥鱼) eat(ctx unit.Context, s unit.Sense, bowl *unit.Snapshot) {
 	ctx.Out <- unit.SetVision{UnitID: ctx.ID, Vision: orcaVision}
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: diveCruise}
 	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+	ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: mealHeal}
 	if x, y, moved := fit(s.Field, s.Self.X, s.Self.Y, orcaRadius); moved {
 		ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: x, Y: y}
 	}
 }
 
-func (a *大肥鱼) leave(ctx unit.Context) {
+func (a *大肥鱼) leave(ctx unit.Context, now float64) {
 	a.form = false
 	a.phase = 0
 	a.haveAim = false
+	a.calling = false
+	a.rushOn = false
+	a.callArmed = true
+	a.callAt = now + hungerSec
 	ctx.Out <- unit.SetRadius{UnitID: ctx.ID, Radius: maidRadius}
 	ctx.Out <- unit.SetVision{UnitID: ctx.ID, Vision: maidVision}
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: maidCruise}
@@ -321,6 +462,7 @@ func (a *大肥鱼) land(ctx unit.Context, s unit.Sense) {
 	if !a.haveAim {
 		x, y = s.Self.X, s.Self.Y
 	}
+	x, y = leapPoint(a.fromX, a.fromY, x, y)
 	x, y = s.Field.Clamp(x, y, orcaRadius)
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: x, Y: y}
 	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
@@ -347,11 +489,24 @@ func (a *大肥鱼) surface(ctx unit.Context, s unit.Sense) {
 }
 
 func (a *大肥鱼) mark(s unit.Sense) (float64, float64) {
+	x, y := s.Self.X, s.Self.Y
 	if e := nearestEnemy(s); e != nil {
-		return s.Field.Clamp(e.X, e.Y, orcaRadius)
+		x, y = e.X, e.Y
+	} else {
+		vx, vy := unitVec(s.Self.VX, s.Self.VY, leapAhead)
+		x, y = s.Self.X+vx, s.Self.Y+vy
 	}
-	vx, vy := unitVec(s.Self.VX, s.Self.VY, leapAhead)
-	return s.Field.Clamp(s.Self.X+vx, s.Self.Y+vy, orcaRadius)
+	x, y = s.Field.Clamp(x, y, orcaRadius)
+	return leapPoint(s.Self.X, s.Self.Y, x, y)
+}
+
+func leapPoint(fromX, fromY, x, y float64) (float64, float64) {
+	dx, dy := x-fromX, y-fromY
+	d := math.Hypot(dx, dy)
+	if d <= leapReach || d < 1e-6 {
+		return x, y
+	}
+	return fromX + dx/d*leapReach, fromY + dy/d*leapReach
 }
 
 func (a *大肥鱼) splash(ctx unit.Context, s unit.Sense, x, y float64) {
@@ -416,16 +571,37 @@ func bowlCount(s unit.Sense) int {
 }
 
 func overlappingBowl(s unit.Sense) *unit.Snapshot {
+	return bowlTouching(s, s.Self.X, s.Self.Y)
+}
+
+func bowlTouching(s unit.Sense, x, y float64) *unit.Snapshot {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if o.OwnerID != s.Self.ID || o.Kind != KindRice {
 			continue
 		}
-		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) <= s.Self.Radius+o.Radius {
+		if math.Hypot(o.X-x, o.Y-y) <= s.Self.Radius+o.Radius {
 			return o
 		}
 	}
 	return nil
+}
+
+func nearestBowl(s unit.Sense, x, y float64) *unit.Snapshot {
+	var best *unit.Snapshot
+	bestD := math.MaxFloat64
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.OwnerID != s.Self.ID || o.Kind != KindRice {
+			continue
+		}
+		d := math.Hypot(o.X-x, o.Y-y)
+		if d < bestD {
+			bestD = d
+			best = o
+		}
+	}
+	return best
 }
 
 func nearestEnemy(s unit.Sense) *unit.Snapshot {

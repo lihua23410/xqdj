@@ -97,4 +97,15 @@ window.orcaRice = window.orcaRice || {};
     arena.spawnFx("fx-orca-splash", ctx.x, ctx.y, fx.kind);
     arena.spawnFx("fx-orca-splash-2", ctx.x, ctx.y, fx.kind);
   });
+  arena.registerShot("call", (fx, ctx) => {
+    if (!arena || !arena.spawnFx) return;
+    const scale = ctx.scale || 1;
+    // 立绘比球高一半，字心要抬出这截，否则被 #units 里的图盖住。
+    const lift = 18 * scale * 1.5 + 14;
+    const el = arena.spawnFx("fx-orca-call", ctx.x, ctx.y - lift, fx.kind);
+    if (!el) return;
+    // spawnFx 会把字色写成角色色 #243456，深色场上看不见。
+    el.style.color = "#fff";
+    el.textContent = "饭来！";
+  });
 })();

@@ -244,6 +244,38 @@ func TestLeapLandsWhereEnemyWas(t *testing.T) {
 	}
 }
 
+func TestLeapStopsAtReach(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	a := &大肥鱼{form: true, until: 20, phase: phaseDive, phaseUntil: 1}
+	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 240, Y: 0, HP: 100, Radius: 18}
+	a.Handle(ctx(out), unit.Sense{
+		Time:   1,
+		Self:   selfAt(-200, 0),
+		Nearby: []unit.Snapshot{enemy},
+		Field:  unit.HexField(),
+	})
+	drain(out)
+	want := -200 + leapReach
+	if math.Abs(a.aimX-want) > 1e-6 || a.aimY != 0 {
+		t.Fatalf("落点=%v,%v 该停在最远 %v，不该钉在敌人身上", a.aimX, a.aimY, want)
+	}
+
+	a.Handle(ctx(out), unit.Sense{
+		Time:   1 + leapSec,
+		Self:   selfAt(-200, 0),
+		Nearby: []unit.Snapshot{enemy},
+		Field:  unit.HexField(),
+	})
+	cmds := drain(out)
+	tp := teleportOf(cmds, 1)
+	if tp == nil || math.Abs(tp.X-want) > 1e-6 || tp.Y != 0 {
+		t.Fatalf("入水=%v 不该闪到 %v", tp, enemy.X)
+	}
+	if len(damages(cmds)) != 0 {
+		t.Fatal("够不着的敌人不该吃到水花")
+	}
+}
+
 func TestSplashHitsWhoeverIsThere(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	a := &大肥鱼{
@@ -347,6 +379,157 @@ func TestRiceSkinSticks(t *testing.T) {
 	}
 }
 
+func TestNoCallBeforeSevenSeconds(t *testing.T) {
+	a := &大肥鱼{nextRice: 100}
+	field := unit.HexField()
+	bowl := unit.Snapshot{ID: 9, Kind: KindRice, OwnerID: 1, X: 200, Y: 0, Radius: bowlRadius, HP: 1}
+	out := make(chan unit.Cmd, 32)
+	a.Handle(ctx(out), unit.Sense{Time: 0, Self: selfAt(0, 0), Field: field})
+	drain(out)
+	a.Handle(ctx(out), unit.Sense{
+		Time: 6.9, Self: selfAt(0, 0), Nearby: []unit.Snapshot{bowl}, Field: field,
+	})
+	cmds := drain(out)
+	if named(cmds, "call") != nil {
+		t.Fatal("未满 7 秒不该喊饭")
+	}
+	if teleportOf(cmds, 9) != nil {
+		t.Fatal("未满 7 秒碗不该动")
+	}
+}
+
+func TestCallPinsAndPullsNearestBowl(t *testing.T) {
+	a := &大肥鱼{nextRice: 100}
+	field := unit.HexField()
+	near := unit.Snapshot{ID: 9, Kind: KindRice, OwnerID: 1, X: 200, Y: 0, Radius: bowlRadius, HP: 1}
+	far := unit.Snapshot{ID: 10, Kind: KindRice, OwnerID: 1, X: 400, Y: 0, Radius: bowlRadius, HP: 1}
+	other := unit.Snapshot{ID: 11, Kind: KindRice, OwnerID: 2, X: 40, Y: 0, Radius: bowlRadius, HP: 1}
+	bowls := []unit.Snapshot{near, far, other}
+	out := make(chan unit.Cmd, 32)
+	a.Handle(ctx(out), unit.Sense{Time: 0, Self: selfAt(0, 0), Field: field})
+	drain(out)
+
+	a.Handle(ctx(out), unit.Sense{Time: 7, Self: selfAt(0, 0), Nearby: bowls, Field: field})
+	cmds := drain(out)
+	if named(cmds, "call") == nil {
+		t.Fatal("满 7 秒该喊饭")
+	}
+	if !standHeld(cmds, true) {
+		t.Fatal("喊饭该站住")
+	}
+	if teleportOf(cmds, 9) != nil {
+		t.Fatal("开口这一拍碗还在原点")
+	}
+
+	a.Handle(ctx(out), unit.Sense{Time: 7.1, Self: selfAt(15, 0), Nearby: bowls, Field: field})
+	cmds = drain(out)
+	self := teleportOf(cmds, 1)
+	if self == nil || math.Abs(self.X) > 1e-6 || math.Abs(self.Y) > 1e-6 {
+		t.Fatalf("该拉回开口那一点，got %v", self)
+	}
+	if !velZero(cmds, 1) {
+		t.Fatal("喊饭速度该是 0")
+	}
+
+	a.Handle(ctx(out), unit.Sense{Time: 7.2, Self: selfAt(0, 0), Nearby: bowls, Field: field})
+	cmds = drain(out)
+	got := teleportOf(cmds, 9)
+	if got == nil || math.Abs(got.X-170) > 1e-6 || math.Abs(got.Y) > 1e-6 {
+		t.Fatalf("0.2 秒该走出 30，got %v", got)
+	}
+	if teleportOf(cmds, 10) != nil || teleportOf(cmds, 11) != nil {
+		t.Fatal("更远的碗和别人的碗不该动")
+	}
+
+	a.Handle(ctx(out), unit.Sense{Time: 7.4, Self: selfAt(0, 0), Nearby: bowls, Field: field})
+	cmds = drain(out)
+	got = teleportOf(cmds, 9)
+	if got == nil || math.Abs(got.X-140) > 1e-6 || math.Abs(got.Y) > 1e-6 {
+		t.Fatalf("0.4 秒该走出 60，got %v", got)
+	}
+}
+
+func TestCallRushStartsMealWithoutHeal(t *testing.T) {
+	a := &大肥鱼{nextRice: 100}
+	field := unit.HexField()
+	bowl := unit.Snapshot{ID: 9, Kind: KindRice, OwnerID: 1, X: 50, Y: 0, Radius: bowlRadius, HP: 1}
+	out := make(chan unit.Cmd, 32)
+	a.Handle(ctx(out), unit.Sense{Time: 0, Self: selfAt(0, 0), Field: field})
+	drain(out)
+	a.Handle(ctx(out), unit.Sense{
+		Time: 7, Self: selfAt(0, 0), Nearby: []unit.Snapshot{bowl}, Field: field,
+	})
+	drain(out)
+	a.Handle(ctx(out), unit.Sense{
+		Time: 7.2, Self: selfAt(0, 0), Nearby: []unit.Snapshot{bowl}, Field: field,
+	})
+	cmds := drain(out)
+	if !a.eating {
+		t.Fatal("冲到重叠该开始吃白饭")
+	}
+	if _, ok := healOf(cmds); ok {
+		t.Fatal("刚吃上不该回血")
+	}
+	landed := teleportOf(cmds, 9)
+	if landed == nil || math.Abs(landed.X-(maidRadius+bowlRadius)) > 1e-6 {
+		t.Fatalf("该停在接触点，got %v", landed)
+	}
+
+	bowl.X = landed.X
+	a.Handle(ctx(out), unit.Sense{
+		Time: 7.2 + eatSec, Self: selfAt(0, 0), Nearby: []unit.Snapshot{bowl}, Field: field,
+	})
+	cmds = drain(out)
+	h, ok := healOf(cmds)
+	if !ok || h.Amount != mealHeal || h.UnitID != 1 {
+		t.Fatalf("吃完该回 %v，got %v %v", mealHeal, ok, h)
+	}
+}
+
+func TestWhaleDoesNotCallUntilSevenAfterLeave(t *testing.T) {
+	field := unit.HexField()
+	bowl := unit.Snapshot{ID: 9, Kind: KindRice, OwnerID: 1, X: 80, Y: 0, Radius: bowlRadius, HP: 1}
+	a := &大肥鱼{form: true, until: 100, phase: phaseSurface, phaseUntil: 100, nextRice: 100}
+	out := make(chan unit.Cmd, 32)
+	a.Handle(ctx(out), unit.Sense{
+		Time: 30, Self: selfAt(0, 0), Nearby: []unit.Snapshot{bowl}, Field: field,
+	})
+	cmds := drain(out)
+	if named(cmds, "call") != nil || teleportOf(cmds, 9) != nil {
+		t.Fatal("虎鲸不该喊饭")
+	}
+
+	a = &大肥鱼{form: true, until: 6, phase: phaseDive, nextRice: 100}
+	a.Handle(ctx(out), unit.Sense{Time: 6, Self: selfAt(0, 0), Field: field})
+	drain(out)
+	a.Handle(ctx(out), unit.Sense{Time: 12.9, Self: selfAt(0, 0), Field: field})
+	if named(drain(out), "call") != nil {
+		t.Fatal("回到原身后未满 7 秒不该喊")
+	}
+	a.Handle(ctx(out), unit.Sense{Time: 13, Self: selfAt(0, 0), Field: field})
+	if named(drain(out), "call") == nil {
+		t.Fatal("回到原身再满 7 秒该喊")
+	}
+}
+
+func TestCallWithoutBowlStillSpeaks(t *testing.T) {
+	a := &大肥鱼{nextRice: 100}
+	out := make(chan unit.Cmd, 32)
+	a.Handle(ctx(out), unit.Sense{Time: 0, Self: selfAt(0, 0), Field: unit.HexField()})
+	drain(out)
+	a.Handle(ctx(out), unit.Sense{Time: 7, Self: selfAt(0, 0), Field: unit.HexField()})
+	cmds := drain(out)
+	if named(cmds, "call") == nil {
+		t.Fatal("没有碗也该喊饭")
+	}
+	for _, c := range cmds {
+		tp, ok := c.(unit.Teleport)
+		if ok && tp.UnitID != 1 {
+			t.Fatalf("没有碗不该传送别人 %v", tp)
+		}
+	}
+}
+
 func ctx(out chan unit.Cmd) unit.Context {
 	return unit.Context{ID: 1, Kind: KindOrca, Out: out, Stream: 1}.WithBirths()
 }
@@ -426,6 +609,36 @@ func teleportOf(cmds []unit.Cmd, id uint64) *unit.Teleport {
 		}
 	}
 	return nil
+}
+
+func healOf(cmds []unit.Cmd) (unit.Heal, bool) {
+	for _, c := range cmds {
+		h, ok := c.(unit.Heal)
+		if ok {
+			return h, true
+		}
+	}
+	return unit.Heal{}, false
+}
+
+func standHeld(cmds []unit.Cmd, hold bool) bool {
+	for _, c := range cmds {
+		st, ok := c.(unit.Stand)
+		if ok && st.UnitID == 1 && st.Hold == hold {
+			return true
+		}
+	}
+	return false
+}
+
+func velZero(cmds []unit.Cmd, id uint64) bool {
+	for _, c := range cmds {
+		v, ok := c.(unit.SetVelocity)
+		if ok && v.UnitID == id && v.VX == 0 && v.VY == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func passHeld(cmds []unit.Cmd, hold bool) bool {
