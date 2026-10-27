@@ -10,6 +10,45 @@
 
   var FIRE_KIND = "炭翁";
   var dirty = false;
+  var script = document.currentScript;
+  var pack = (script && script.dataset && script.dataset.pack) || "";
+  var forgeVoice = arena.voice(new Audio(pack + "/fx/forge.wav"), {
+    mode: arena.SOUND_MODE.IMMUNE,
+    priority: 0,
+  });
+  forgeVoice.audio.preload = "auto";
+  var handVoice = arena.voice(new Audio(pack + "/fx/hand.wav"), {
+    mode: arena.SOUND_MODE.IMMUNE,
+    priority: 0,
+  });
+  handVoice.audio.preload = "auto";
+  var burnVoice = arena.voice(new Audio(pack + "/fx/burn.wav"), {
+    mode: arena.SOUND_MODE.PREEMPT,
+    priority: 199,
+  });
+  burnVoice.audio.preload = "auto";
+
+  function playForge() {
+    if (!forgeVoice) return;
+    forgeVoice.stop();
+    forgeVoice.reset();
+    forgeVoice.audio.currentTime = 0;
+    forgeVoice.play();
+  }
+
+  function playHand() {
+    if (!handVoice) return;
+    handVoice.stop();
+    handVoice.reset();
+    handVoice.play();
+  }
+
+  function playBurn() {
+    if (!burnVoice) return;
+    burnVoice.stop();
+    burnVoice.reset();
+    burnVoice.play();
+  }
 
   function schedule() {
     if (dirty) return;
@@ -133,6 +172,7 @@
   }
 
   function forge(host, added) {
+    playForge();
     if (!host || !window.arena || !arena.spawnFx) return;
     var p = hostPoint(host, 50, 56);
     if (S.flare) S.flare(host);
@@ -152,6 +192,7 @@
   }
 
   function burn(host, count, isSelf, value) {
+    playBurn();
     if (!host || !window.arena || !arena.spawnFx) return;
     var p = hostPoint(host, 50, 52);
     var n = Math.max(1, Math.min(6, count));
@@ -488,6 +529,7 @@
 
   arena.registerShot("hand", function (fx, ctx) {
     if (!fx || !ctx) return;
+    playHand();
     S.handAt[fx.unitId] = performance.now();
     var ownerHost = hostOf(fx.unitId);
     if (ownerHost) {

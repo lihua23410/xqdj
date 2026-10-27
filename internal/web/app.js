@@ -1757,6 +1757,9 @@ function renderArena() {
   for (const root of [unitsEl, overEl]) {
     if (!root) continue;
     for (const child of [...root.children]) {
+      // 特效层（尤其炭翁 hand/burn/land）由 spawnFx/自身动画负责移除；
+      // 这里只清理挂在单位上的 UI，否则 over 层的 .fx 会在下一帧被误删。
+      if (root === overEl && child.classList.contains("fx")) continue;
       if (child.classList.contains("ghost")) continue;
       if (child.classList.contains("seek-ring")) {
         const id = child.id.replace(/^(ring|field)-/, "");
