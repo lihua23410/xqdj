@@ -65,6 +65,7 @@ type 内燃机 struct {
 	hasEnemy   bool
 	slot       int
 	booted     bool
+	maxCruise  bool
 }
 
 func (e *内燃机) Handle(ctx unit.Context, ev unit.Event) {
@@ -110,6 +111,18 @@ func (e *内燃机) onSense(ctx unit.Context, s unit.Sense) {
 		e.addHeat(ctx, dt, s.Time)
 	}
 	e.tickAtk(ctx, s)
+	if e.gear == 6 && !e.maxCruise && math.Hypot(s.Self.VX, s.Self.VY) >= engineCruise[6]*0.98 {
+		e.maxCruise = true
+		ctx.Out <- unit.FX{
+			Name:   "cruise",
+			Kind:   ctx.Kind,
+			UnitID: ctx.ID,
+			X:      e.x,
+			Y:      e.y,
+			Slot:   e.slot,
+			Amount: float64(e.gear),
+		}
+	}
 	e.emitHeat(ctx)
 }
 
@@ -129,6 +142,15 @@ func (e *内燃机) addHeat(ctx unit.Context, dt, now float64) {
 	if e.gear < 6 {
 		e.gear++
 		e.applyStats(ctx)
+		ctx.Out <- unit.FX{
+			Name:   "gear",
+			Kind:   ctx.Kind,
+			UnitID: ctx.ID,
+			X:      e.x,
+			Y:      e.y,
+			Slot:   e.slot,
+			Amount: float64(e.gear),
+		}
 		return
 	}
 	e.breakNow(ctx, now)
@@ -146,12 +168,25 @@ func (e *内燃机) tickAtk(ctx unit.Context, s unit.Sense) {
 	if amt <= 0 {
 		return
 	}
+	hit := false
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if !unit.Hittable(*o, s.Self.Slot) {
 			continue
 		}
 		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: amt}
+		hit = true
+	}
+	if hit {
+		ctx.Out <- unit.FX{
+			Name:   "attack",
+			Kind:   ctx.Kind,
+			UnitID: ctx.ID,
+			X:      s.Self.X,
+			Y:      s.Self.Y,
+			Slot:   s.Self.Slot,
+			Amount: float64(e.gear),
+		}
 	}
 }
 
@@ -190,6 +225,7 @@ func (e *内燃机) endFrail(ctx unit.Context) {
 	e.frail = false
 	e.blasted = false
 	e.gear = 1
+	e.maxCruise = false
 	e.heat = 0
 	e.applyStats(ctx)
 	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}

@@ -40,13 +40,17 @@ window.lookFX.engine = {
     wave.className = "engine-ripple";
     host.appendChild(wave);
     wave.addEventListener("animationend", () => wave.remove());
-    const n = 8 + gear * 2;
+    const n = 9 + gear * 2;
     const spin = Math.random() * 360;
+    const step = 360 / n;
     for (let i = 0; i < n; i++) {
       const p = document.createElement("i");
-      const jitter = (Math.random() - 0.5) * 16;
-      p.className = i % 3 === 0 ? "engine-ember is-spark" : "engine-ember";
-      p.style.setProperty("--ang", `${spin + (360 / n) * i + jitter}deg`);
+      const jitter = (Math.random() - 0.5) * Math.min(16, step * 0.5);
+      const spark = Math.random() < 0.28;
+      p.className = spark ? "engine-ember is-spark" : "engine-ember";
+      // 火花角度独立随机，避免固定 4 条长粒子在圆心交叉成十字。
+      const ang = spark ? Math.random() * 360 : spin + (360 / n) * i + jitter;
+      p.style.setProperty("--ang", `${ang}deg`);
       p.style.setProperty("--s", String(0.65 + Math.random() * 0.7));
       p.style.setProperty("--delay", `${Math.random() * 0.07}s`);
       host.appendChild(p);

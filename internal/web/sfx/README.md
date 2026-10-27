@@ -18,3 +18,10 @@
 `default-hit.wav`、`default-impact.wav` 均来自 Kenney 的 Impact Sounds 包，
 以 CC0 1.0 Universal 公共领域贡献发布。CC0 不要求署名；这里保留来源与
 可选的致谢：Impact SFX: Kenney (www.kenney.nl) — CC0。
+
+## 音量
+
+这两个缺省音效与角色音效统一到同一响度标准：以 `character/glitch/fx/iai.mp3`
+（地慧星斩击）的 -15.7 LUFS 为基准，真实峰值不超过 -1.0 dBFS。
+`app.js` 中 `DEFAULT_SFX` 的 `volume` 已设为 `1.0`，不再额外压低。
+完整测量表与处理方法见 `docs/audio-loudness.md`。

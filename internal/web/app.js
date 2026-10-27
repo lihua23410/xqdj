@@ -20,8 +20,8 @@ const ENGINE_FX = new Set([
 
 const ownHurtKinds = new Set();
 const DEFAULT_SFX = {
-  hit: { src: "/sfx/default-hit.wav", volume: 0.32, cooldown: 45, voices: 3, last: -1e9, idx: 0, pool: [], ...SOUND_HIT },
-  impact: { src: "/sfx/default-impact.wav", volume: 0.16, cooldown: 45, voices: 3, last: -1e9, idx: 0, pool: [], ...SOUND_IMPACT },
+  hit: { src: "/sfx/default-hit.wav", volume: 1.0, cooldown: 45, voices: 3, last: -1e9, idx: 0, pool: [], ...SOUND_HIT },
+  impact: { src: "/sfx/default-impact.wav", volume: 1.0, cooldown: 45, voices: 3, last: -1e9, idx: 0, pool: [], ...SOUND_IMPACT },
 };
 
 function registerOwnHurt(kind) {
@@ -583,6 +583,17 @@ function playWallFx(fx, scale, cx, cy, fading) {
   }
 }
 
+// 声音按快照到达即时触发；画面仍按 rAF 合并。否则两次命中挤进一帧时，
+// 后一声会当场 stop 掉前一声，听起来只剩一下。
+function playSoundFX(fx) {
+  if (!fx || fx.name !== "attack") return;
+  const base = lookOf(fx.kind).base;
+  const hook = base && window.shotFX && window.shotFX[base] && window.shotFX[base].attack;
+  if (typeof hook === "function") {
+    hook(fx, { x: 0, y: 0, kind: fx.kind, scale: 1, cx: 0, cy: 0, time: 0, audioOnly: true });
+  }
+}
+
 function playEffects(effects, scale, cx, cy) {
   for (const fx of effects || []) {
     const [x, y] = screenPos(fx.x, fx.y, scale, cx, cy);
@@ -617,6 +628,8 @@ function playEffects(effects, scale, cx, cy) {
       burst(x, y, kind, fx.name === "impact" ? 14 : 8);
       playDefaultSfx("impact");
     } else if (!ENGINE_FX.has(fx.name)) {
+      // 普通对局的 attack 已在 onmessage 里按到达顺序播过；导出页没有 WS，仍在这里播。
+      if (!EXPORT && fx.name === "attack") continue;
       const base = lookOf(kind).base;
       const hook = base && window.shotFX && window.shotFX[base] && window.shotFX[base][fx.name];
       if (typeof hook === "function") {
@@ -691,6 +704,7 @@ function lineup(slot) {
 }
 
 let pendingFrame = null;
+let pendingEffects = [];
 let frameScheduled = false;
 let pendingCopy = null;
 if (ws) ws.onmessage = (ev) => {
@@ -700,15 +714,25 @@ if (ws) ws.onmessage = (ev) => {
     takeLog(msg);
     return;
   }
+  if (Array.isArray(msg.effects)) {
+    for (const fx of msg.effects) playSoundFX(fx);
+  }
   pendingFrame = msg;
+  if (Array.isArray(msg.effects) && msg.effects.length) {
+    pendingEffects.push(...msg.effects);
+    if (pendingEffects.length > 2000) pendingEffects.splice(0, pendingEffects.length - 2000);
+  }
   if (frameScheduled) return;
   frameScheduled = true;
   requestAnimationFrame(() => {
     frameScheduled = false;
     const raw = pendingFrame;
+    const effects = pendingEffects;
     pendingFrame = null;
+    pendingEffects = [];
     if (raw == null) return;
     state = raw;
+    if (effects.length) state.effects = effects;
     hexR = state.hexRadius || 280;
     render();
   });

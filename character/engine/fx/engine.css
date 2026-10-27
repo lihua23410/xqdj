@@ -24,6 +24,7 @@
   mask: radial-gradient(circle, transparent 66%, #000 68%, #000 78%, transparent 80%);
   pointer-events: none;
 }
+
 .engine-embers {
   position: absolute;
   left: 50%;

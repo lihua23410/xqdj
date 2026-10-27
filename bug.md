@@ -17,3 +17,15 @@
 # 雷达
 修改
 # 筑墙者百战 BUG
+
+# 内燃机圆心十字伪影（2026-10-28，未修复）
+
+- 现象：任何含内燃机的正常对局，内燃机圆心附近周期性闪出橙色十字；持续很短，截图容易错过。
+- 关键线索：**只有正常对局能看见，导出的视频里看不见**。导出是无头 Chrome 逐帧截图 + 软件合成，正常对局走 GPU 合成，大概率是合成层/GPU 光栅化伪影，不是 sim 或服务端 FX。
+- 已排除：粒子。`character/engine/fx/engine.js` 的火花角度已改成逐颗独立随机，十字仍出现；无头逐帧 screencast 176 帧也没抓到（但无头是软件合成，不能代表 GPU 现场）。
+- 可疑点（都在 `character/engine/fx/engine.css`）：
+  - `.ball.look-engine` 的 `filter: brightness(...)`，会强制单独合成层；
+  - `.ball.look-engine::after` 的 `conic-gradient` + `mask` 齿轮弧，锥形渐变在圆心汇合，GPU 合成可能产生接缝；
+  - `.engine-ripple` 动画里的 `inset box-shadow` + 径向渐变层。
+- 曾临时移除 `filter` 和齿轮弧，未最终确认十字是否消失；为保留齿轮视觉已还原。
+- 建议：在正常 GPU Chrome 下逐项 toggle 上述三层；若确认是齿轮弧，改用 SVG / `clip-path` 等非 conic 实现；修复前不要为此改 sim 或服务端，导出链路正常。
