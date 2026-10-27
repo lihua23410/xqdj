@@ -28,8 +28,11 @@
 | `character/engine/fx/blast.wav` | 内燃机击破爆发 | -15.7 | -3.4 |
 | `character/engine/fx/gear.wav` | 内燃机升档 | -16.0 | -1.0 |
 | `character/engine/fx/cruise.wav` | 内燃机最高档巡航 | -15.7 | -2.3 |
+| `character/melee/fx/dash.wav` | 原型机_近战突进加速 | -15.9 | -1.0 |
+| `character/melee/fx/attack.wav` | 原型机_近战攻击 | -70.0 | -1.0 |
 
 `default-impact.wav` 只有 0.16 秒，积分响度对这类极短点击没有意义；它已按真峰值
-限制到 -1.0 dBFS，听感上是一次短促碰撞。`iai.mp3` 作为基准未改动。
+限制到 -1.0 dBFS，听感上是一次短促碰撞。`character/melee/fx/attack.wav` 同样只有
+0.34 秒，按峰值归一到 -1.0 dBFS。`iai.mp3` 作为基准未改动。
 
 原始文件备份在 `tmp/audio-volume-backup/`（已被 `.gitignore` 的 `/tmp/` 覆盖）。

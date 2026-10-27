@@ -107,6 +107,14 @@ func (a *近战弧) Handle(ctx unit.Context, ev unit.Event) {
 			return
 		}
 		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: meleeDamage}
+		ctx.Out <- unit.FX{
+			Name:   "attack",
+			UnitID: ctx.ID,
+			Kind:   ctx.Kind,
+			X:      e.Other.X,
+			Y:      e.Other.Y,
+			Slot:   e.Other.Slot,
+		}
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
 }
