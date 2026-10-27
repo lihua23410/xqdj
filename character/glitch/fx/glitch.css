@@ -1,13 +1,13 @@
 .ball.look-glitch {
   isolation: isolate;
-  overflow: visible;
+  overflow: hidden;
 }
 .ball.look-glitch > .look-glitch-slices {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  overflow: visible;
-  z-index: 2;
+  overflow: hidden;
+  border-radius: 50%;
 }
 .ball.look-glitch > .look-glitch-slices i {
   position: absolute;
@@ -16,44 +16,6 @@
   background: var(--kind);
   box-shadow: 0 0 10px currentColor;
   display: none;
-}
-
-/* 沿路径追在本体后面。越滞后越淡，青红通道错开。 */
-.glitch-echoes {
-  position: absolute;
-  inset: 0;
-  overflow: visible;
-  pointer-events: none;
-}
-.glitch-echo {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  overflow: visible;
-  pointer-events: none;
-}
-.glitch-echo .core,
-.glitch-echo .chroma {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  overflow: hidden;
-  pointer-events: none;
-}
-.glitch-echo .core {
-  background: none;
-  box-shadow: none;
-}
-.glitch-echo .chroma {
-  mix-blend-mode: normal;
-}
-.glitch-echo .chroma.c { transform: translateX(var(--dx)); }
-.glitch-echo .chroma.m { transform: translateX(calc(var(--dx) * -1)); }
-.glitch-echo i {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  box-shadow: none;
-  pointer-events: none;
 }
 .kinds button.look-glitch,
 .slot.look-glitch {

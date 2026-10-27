@@ -1,14 +1,14 @@
 .ball.look-glitch-still {
   isolation: isolate;
-  overflow: visible;
+  overflow: hidden;
   opacity: 0.58;
 }
 .ball.look-glitch-still > .look-glitch-slices {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  overflow: visible;
-  z-index: 2;
+  overflow: hidden;
+  border-radius: 50%;
 }
 .ball.look-glitch-still > .look-glitch-slices i {
   position: absolute;
