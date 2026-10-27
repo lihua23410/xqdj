@@ -30,6 +30,7 @@
 | `character/engine/fx/cruise.wav` | 内燃机最高档巡航 | -15.7 | -2.3 |
 | `character/melee/fx/dash.wav` | 原型机_近战突进加速 | -15.9 | -1.0 |
 | `character/melee/fx/attack.wav` | 原型机_近战攻击 | -70.0 | -1.0 |
+| `character/ranged/fx/shot.wav` | 原型机_远程发射 | -17.3 | -1.0 |
 
 `default-impact.wav` 只有 0.16 秒，积分响度对这类极短点击没有意义；它已按真峰值
 限制到 -1.0 dBFS，听感上是一次短促碰撞。`character/melee/fx/attack.wav` 同样只有

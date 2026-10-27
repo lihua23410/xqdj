@@ -198,6 +198,8 @@ function createSoundVoice(audio, opts) {
     },
     reset() {
       this.cancelled = false;
+      // 上一发可能停在 1.5s 的尾部；只 pause 再 play 会从尾部起播，听上去像没声。
+      try { this.audio.currentTime = 0; } catch {}
     },
     setMode(mode, priority) {
       this.mode = normalizeSoundMode(mode);
@@ -585,10 +587,21 @@ function playWallFx(fx, scale, cx, cy, fading) {
 
 // 声音按快照到达即时触发；画面仍按 rAF 合并。否则两次命中挤进一帧时，
 // 后一声会当场 stop 掉前一声，听起来只剩一下。
+const IMMEDIATE_AUDIO = new Set(["attack", "gear", "cruise", "scream", "verse"]);
+
 function playSoundFX(fx) {
-  if (!fx || fx.name !== "attack") return;
+  if (!fx) return;
   const base = lookOf(fx.kind).base;
-  const hook = base && window.shotFX && window.shotFX[base] && window.shotFX[base].attack;
+  if (!base || !fx.name) return;
+  if (fx.name === "shot") {
+    const hook = window.shotFX && window.shotFX[base] && window.shotFX[base].shot;
+    if (typeof hook === "function") {
+      hook(fx, { x: 0, y: 0, kind: fx.kind, scale: 1, cx: 0, cy: 0, time: 0, audioOnly: true });
+    }
+    return;
+  }
+  if (!IMMEDIATE_AUDIO.has(fx.name)) return;
+  const hook = window.shotFX && window.shotFX[base] && window.shotFX[base][fx.name];
   if (typeof hook === "function") {
     hook(fx, { x: 0, y: 0, kind: fx.kind, scale: 1, cx: 0, cy: 0, time: 0, audioOnly: true });
   }
@@ -628,12 +641,13 @@ function playEffects(effects, scale, cx, cy) {
       burst(x, y, kind, fx.name === "impact" ? 14 : 8);
       playDefaultSfx("impact");
     } else if (!ENGINE_FX.has(fx.name)) {
-      // 普通对局的 attack 已在 onmessage 里按到达顺序播过；导出页没有 WS，仍在这里播。
-      if (!EXPORT && fx.name === "attack") continue;
+      // 普通对局的 attack/shot 已在 onmessage 里按到达顺序播过；导出页没有 WS，仍在这里播。
+      if (!EXPORT && IMMEDIATE_AUDIO.has(fx.name)) continue;
       const base = lookOf(kind).base;
       const hook = base && window.shotFX && window.shotFX[base] && window.shotFX[base][fx.name];
       if (typeof hook === "function") {
-        hook(fx, ctx);
+        if (!EXPORT && fx.name === "shot") hook(fx, { ...ctx, visualOnly: true });
+        else hook(fx, ctx);
       } else if (fx.name) {
         // #region agent log
         if (fx.name === "fire-ring") {
