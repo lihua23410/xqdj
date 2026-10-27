@@ -15,7 +15,21 @@
   box-shadow: none !important;
   border: none !important;
   overflow: visible;
-  color: #141414;
+  color: #ffe5ad;
+  z-index: 3;
+}
+.ball.look-pastor-glyph::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 230%;
+  height: 230%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(8, 5, 3, 0.9) 0%, rgba(8, 5, 3, 0.55) 46%, rgba(8, 5, 3, 0) 72%);
+  pointer-events: none;
+  animation: pastor-glyph-halo 3.6s ease-in-out infinite;
 }
 .ball.look-pastor-glyph > i {
   position: absolute;
@@ -24,7 +38,25 @@
   font-style: normal;
   font-weight: 700;
   line-height: 1;
-  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-family: "STKaiti", "KaiTi", "Songti SC", "Noto Serif SC", serif;
   pointer-events: none;
   white-space: nowrap;
+  color: #ffe5ad;
+  -webkit-text-stroke: 0.4px rgba(18, 9, 3, 0.9);
+  paint-order: stroke fill;
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.95),
+    0 0 8px rgba(255, 172, 58, 0.95),
+    0 0 20px rgba(255, 112, 18, 0.55),
+    0 0 38px rgba(255, 80, 0, 0.25);
+  animation: pastor-glyph-breathe 2.9s ease-in-out infinite;
+}
+
+@keyframes pastor-glyph-halo {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 0.95; }
+}
+@keyframes pastor-glyph-breathe {
+  0%, 100% { opacity: 0.86; filter: brightness(1); }
+  50% { opacity: 1; filter: brightness(1.22); }
 }

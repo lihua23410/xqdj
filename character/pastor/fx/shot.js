@@ -8,7 +8,7 @@
   });
   const screamVoice = arena.voice(new Audio(base + "/fx/scream.mp3"), {
     mode: arena.SOUND_MODE.PREEMPT,
-    priority: 200,
+    priority: 150,
   });
   screamVoice.audio.preload = "auto";
   if (window.arena && typeof arena.registerOwnHurt === "function") arena.registerOwnHurt("老牧师");
@@ -71,8 +71,9 @@
     }
   };
 
-  arena.registerShot("verse", (fx) => {
-    playVerse(Math.round(fx.amount || 0));
+  arena.registerShot("verse", (fx, ctx) => {
+    if (!fx) return;
+    if (!ctx || !ctx.visualOnly) playVerse(Math.round(fx.amount || 0));
   });
   arena.registerShot("scream", (fx) => {
     if (!fx) return;

@@ -36,8 +36,9 @@
       }
       const ch = runeChar(u);
       if (mark.textContent !== ch) mark.textContent = ch;
-      const size = Math.max(10, el.clientWidth * 0.72);
+      const size = Math.max(20, el.clientWidth * 1.12);
       mark.style.fontSize = size + "px";
+      mark.style.animationDelay = (-((u.id || 0) % 7) * 0.33) + "s";
       const owner = ownerOf(u, ctx && ctx.units);
       let rot = 0;
       if (owner && ctx && typeof ctx.scale === "number") {
