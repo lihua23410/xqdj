@@ -299,9 +299,17 @@ func (a *时计) syncFx(ctx unit.Context) {
 		if a.moments[i].pin == 0 {
 			continue
 		}
+		// X/Y 带这一档的静默窗口：踩影后前端靠它把表盘压暗、把时针从上一小时
+		// 慢慢拨回这个时刻。窗口外 X/Y 都是 0，前端按正常残影画。
+		coolFrom, coolTo := 0.0, 0.0
+		if a.moments[i].silent > 0 {
+			coolFrom = a.moments[i].silent - tripSilence
+			coolTo = a.moments[i].silent
+		}
 		ctx.Out <- unit.FX{
 			Name: "moment", Kind: ctx.Kind, UnitID: a.moments[i].pin, Slot: a.slot,
 			Amount: float64(a.moments[i].hour),
+			X:      coolFrom, Y: coolTo,
 		}
 	}
 }
@@ -375,6 +383,7 @@ func (a *时计) trap(ctx unit.Context, s unit.Sense) {
 			continue
 		}
 		m.silent = s.Time + tripSilence
+		a.syncFx(ctx)
 		dx, dy := bait.X-m.x, bait.Y-m.y
 		if math.Hypot(dx, dy) < 1e-6 {
 			dx, dy = 1, 0 // 鱼正好压在档位上：没方向可用，随便朝一边顶

@@ -15,8 +15,17 @@ arena.registerShot("clock", (fx) => {
 
 arena.registerShot("moment", (fx) => {
   window.tokeiSt = window.tokeiSt || {};
-  // 残影没有窗口（from/to 都是 0），针就停在它刻下那一刻的读数上
-  window.tokeiSt[fx.unitId] = { hours: Number(fx.amount) || 0, full: false, ghost: true, from: 0, to: 0 };
+  // 残影的针停在它刻下那一刻的读数上；X/Y 是踩影后的静默窗口，
+  // 冷却期间 tokei.js 会把盘面压暗、把时针从上一小时拨回这个读数。
+  window.tokeiSt[fx.unitId] = {
+    hours: Number(fx.amount) || 0,
+    full: false,
+    ghost: true,
+    from: 0,
+    to: 0,
+    coolFrom: Number(fx.x) || 0,
+    coolTo: Number(fx.y) || 0,
+  };
 });
 
 arena.registerShot("rewind", (fx, ctx) => {

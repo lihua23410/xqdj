@@ -20,6 +20,22 @@
   border-color: rgba(20, 22, 26, 0.55);
 }
 
+/* 时刻被踩后的静默 3s：只压暗残影自己的盘面，不碰本体时计。
+   盘面变深色后刻度和针反白，走针才看得见。 */
+.look-tokei-moment .tokei-face.cooling {
+  background: rgba(16, 18, 22, 0.72);
+  border-color: rgba(244, 242, 236, 0.38);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.7);
+}
+
+.look-tokei-moment .tokei-face.cooling .tick {
+  background: rgba(244, 242, 236, 0.42);
+}
+
+.look-tokei-moment .tokei-face.cooling .hand {
+  background: #f4f2ec;
+}
+
 /* 12 个刻度：每 30° 一个 */
 .look-tokei .tokei-face .tick,
 .look-tokei-moment .tokei-face .tick {

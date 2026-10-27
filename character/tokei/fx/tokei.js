@@ -45,19 +45,29 @@ function tokeiFace(el) {
 // 本体：时针在本拍窗口 [from,to] 里从当前读数扫到下一拍读数（+2h），分针一拍正好一圈（8s/r）；
 //   两根针都在窗口末尾——也就是刻档那一瞬——刚好落在整点上（先推时间再留时刻）。
 // 残影：针停在它刻下的读数上（分针指 12，读出来就是 2:00 / 4:00……）。
+// 残影踩影后的静默窗口：盘面压暗，时针退到上一小时再拨回原读数，分针同步走满一圈。
 // 满仓（12 档读数 = 12:00）：没有下一拍，针停在 12:00（与 0:00 重合）。
 window.tokeiAngles = function (st, now) {
   const hours = Number(st && st.hours) || 0;
   const from = Number(st && st.from) || 0;
   const to = Number(st && st.to) || 0;
   const ghost = !!(st && st.ghost);
+  const coolFrom = Number(st && st.coolFrom) || 0;
+  const coolTo = Number(st && st.coolTo) || 0;
   let phase = 0;
+  if (ghost && coolTo > coolFrom && Number(now) >= coolFrom && Number(now) < coolTo) {
+    phase = (Number(now) - coolFrom) / (coolTo - coolFrom);
+    phase = Math.min(1, Math.max(0, phase));
+    const back = Math.max(0, hours - 1);
+    // 时针从上一小时走回原时刻；分针在同一个窗口里走满一圈，当冷却进度看。
+    return { hour: (back + phase) * 30, minute: phase * 360, cooling: true };
+  }
   if (!ghost && hours < 12 && to > from) {
     phase = (Number(now) - from) / (to - from);
     phase = Math.min(1, Math.max(0, phase));
   }
   const step = ghost ? 0 : 2;
-  return { hour: (hours + step * phase) * 30, minute: phase * 360 };
+  return { hour: (hours + step * phase) * 30, minute: phase * 360, cooling: false };
 };
 
 function paintTokei(el, id, ghost) {
@@ -65,6 +75,7 @@ function paintTokei(el, id, ghost) {
   const face = tokeiFace(el);
   face.classList.toggle("dust", !ghost && !!st.full);
   const a = window.tokeiAngles(st, tokeiNow());
+  face.classList.toggle("cooling", !!a.cooling);
   const hour = face.querySelector(".hand.hour");
   const minute = face.querySelector(".hand.minute");
   if (hour) hour.style.transform = `rotate(${a.hour}deg)`;
