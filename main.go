@@ -6,8 +6,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
+	"xqdj/internal/export"
 	"xqdj/internal/sim"
 	"xqdj/internal/unit"
 	"xqdj/internal/web"
@@ -105,6 +107,15 @@ func main() {
 	halt := make(chan struct{})
 	go match.Loop(h.broadcast, halt)
 
+	addr := os.Getenv("XQDJ_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	base := "http://" + addr
+	if strings.HasPrefix(addr, ":") {
+		base = "http://127.0.0.1" + addr
+	}
+
 	static, err := fs.Sub(web.FS, ".")
 	if err != nil {
 		log.Fatal(err)
@@ -121,6 +132,8 @@ func main() {
 	})
 	mux.Handle("/", http.FileServer(http.FS(static)))
 	mux.Handle("/ball/", http.StripPrefix("/ball/", http.FileServer(http.FS(unit.BallFS()))))
+	exporter := export.NewManager(base, match.RecordFrames)
+	exporter.Handle(mux)
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -185,10 +198,6 @@ func main() {
 		}
 	})
 
-	addr := os.Getenv("XQDJ_ADDR")
-	if addr == "" {
-		addr = ":8080"
-	}
 	log.Printf("open http://127.0.0.1%s", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }

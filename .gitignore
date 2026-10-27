@@ -3,6 +3,7 @@
 *.test
 *.out
 .temp/
+/tmp/
 .shots/
 .tmp-*
 *.log

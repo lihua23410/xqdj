@@ -101,6 +101,17 @@ window.arena = {
   registerFactions,
 };
 
+const packLoads = new Set();
+const packWaiters = [];
+function packLoaded(url) {
+  packLoads.delete(url);
+  if (packLoads.size === 0) packWaiters.splice(0).forEach((fn) => fn());
+}
+function waitPacks() {
+  return packLoads.size ? new Promise((resolve) => packWaiters.push(resolve)) : Promise.resolve();
+}
+window.__packsWait = waitPacks;
+
 function ensurePacks() {
   const packs = (state && state.packs) || {};
   for (const pack of Object.values(packs)) {
@@ -110,16 +121,23 @@ function ensurePacks() {
       const url = `${base}/${file}`;
       if (loadedPackFiles.has(url)) continue;
       loadedPackFiles.add(url);
+      if (!file.endsWith(".css") && !file.endsWith(".js")) continue;
+      packLoads.add(url);
+      const done = () => packLoaded(url);
       if (file.endsWith(".css")) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
         link.href = url;
+        link.onload = done;
+        link.onerror = done;
         document.head.appendChild(link);
-      } else if (file.endsWith(".js")) {
+      } else {
         const script = document.createElement("script");
         script.src = url;
         script.async = false;
         if (base) script.dataset.pack = base;
+        script.onload = done;
+        script.onerror = done;
         document.head.appendChild(script);
       }
     }
@@ -475,12 +493,16 @@ window.addEventListener("error", (ev) => {
   fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "bd0da0" }, body: JSON.stringify({ sessionId: "bd0da0", hypothesisId: "F", location: "app.js:onerror", message: "window error", data: { message: ev.message, filename: ev.filename, lineno: ev.lineno, colno: ev.colno, stack: ev.error && ev.error.stack }, timestamp: Date.now() }) }).catch(() => {});
 });
 // #endregion
+const EXPORT = new URLSearchParams(location.search).has("export");
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
-const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
-ws.onopen = () => send({ type: "mode", team: teamPage });
+const ws = EXPORT ? null : new WebSocket(`${wsProto}://${location.host}/ws`);
+if (ws) ws.onopen = () => send({ type: "mode", team: teamPage });
 
+let exporting = false;
+let exportPicking = false;
 function send(obj) {
-  if (ws.readyState === WebSocket.OPEN) {
+  if (exporting) return;
+  if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(obj));
   }
 }
@@ -501,7 +523,7 @@ function lineup(slot) {
 let pendingFrame = null;
 let frameScheduled = false;
 let pendingCopy = null;
-ws.onmessage = (ev) => {
+if (ws) ws.onmessage = (ev) => {
   let msg;
   try { msg = JSON.parse(ev.data); } catch { return; }
   if (msg && msg.type === "log") {
@@ -582,6 +604,137 @@ function renderLogChrome() {
 }
 for (const btn of document.querySelectorAll("[data-copy]")) {
   btn.addEventListener("click", () => copyLog(btn.dataset.copy));
+}
+
+const exportModal = document.getElementById("export-modal");
+const exportStatus = document.getElementById("export-status");
+const exportBar = document.getElementById("export-bar");
+const exportCount = document.getElementById("export-count");
+const exportCancel = document.getElementById("export-cancel");
+let exportCancelled = false;
+
+function setExportStatus(text, pct) {
+  if (exportStatus) exportStatus.textContent = text;
+  if (exportBar) exportBar.style.width = `${Math.max(0, Math.min(100, pct || 0))}%`;
+}
+function setExportProgress(job) {
+  const total = job.total || 0;
+  const done = job.done || 0;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const label =
+    job.phase === "preparing" ? "正在准备导出…" :
+    job.phase === "muxing" ? "正在合成音轨…" :
+    job.phase === "done" ? "已完成" : "正在渲染视频…";
+  setExportStatus(label, pct);
+  if (exportCount) {
+    exportCount.textContent = total ? `${done} / ${total} 帧 · ${pct}%` : "";
+  }
+}
+function showExportModal() {
+  if (!exportModal) return;
+  exportModal.classList.remove("hidden");
+  setExportStatus("正在准备导出…", 0);
+  if (exportCount) exportCount.textContent = "";
+  if (exportCancel) {
+    exportCancel.disabled = false;
+    exportCancel.textContent = "取消";
+  }
+}
+function hideExportModal() {
+  if (exportModal) exportModal.classList.add("hidden");
+  exporting = false;
+}
+exportCancel && (exportCancel.onclick = () => {
+  if (!exporting) {
+    hideExportModal();
+    return;
+  }
+  exportCancelled = true;
+  if (exportCancel) exportCancel.disabled = true;
+  setExportStatus("正在取消…", 0);
+});
+
+async function exportVideo() {
+  if (exporting || exportPicking) return;
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const suggested = `xqdj-${stamp}.mp4`;
+  let handle = null;
+  if (window.showSaveFilePicker) {
+    exportPicking = true;
+    try {
+      handle = await window.showSaveFilePicker({
+        suggestedName: suggested,
+        types: [{ description: "MP4 视频", accept: { "video/mp4": [".mp4"] } }],
+      });
+    } catch {
+      exportPicking = false;
+      return;
+    }
+    exportPicking = false;
+  }
+
+  exporting = true;
+  exportCancelled = false;
+  showExportModal();
+  try {
+    const res = await fetch("/api/export", { method: "POST" });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `导出请求失败（${res.status}）`);
+    }
+    const { id, total } = await res.json();
+    setExportStatus("正在准备导出…", 0);
+    if (exportCount) exportCount.textContent = `0 / ${total} 帧 · 0%`;
+
+    let job = null;
+    for (;;) {
+      if (exportCancelled) {
+        await fetch(`/api/export/${encodeURIComponent(id)}/cancel`, { method: "POST" }).catch(() => {});
+        throw new Error("已取消");
+      }
+      await new Promise((r) => setTimeout(r, 400));
+      const st = await fetch(`/api/export/${encodeURIComponent(id)}`, { cache: "no-store" });
+      if (!st.ok) throw new Error(`读取进度失败（${st.status}）`);
+      job = await st.json();
+      setExportProgress(job);
+      if (job.phase === "done") break;
+      if (job.phase === "error") throw new Error(job.error || "导出失败");
+      if (job.phase === "cancelled") throw new Error("已取消");
+    }
+
+    setExportStatus("正在写入文件…", 100);
+    const file = await fetch(job.download);
+    if (!file.ok || !file.body) throw new Error(`下载失败（${file.status}）`);
+    if (handle) {
+      const writable = await handle.createWritable();
+      await file.body.pipeTo(writable);
+    } else {
+      const blob = await file.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = suggested;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+    setExportStatus("已保存", 100);
+    if (exportCount) exportCount.textContent = "视频已保存";
+    exporting = false;
+    setTimeout(hideExportModal, 900);
+  } catch (err) {
+    exporting = false;
+    setExportStatus(`导出失败：${(err && err.message) || err}`, 0);
+    if (exportCancel) {
+      exportCancel.disabled = false;
+      exportCancel.textContent = "关闭";
+    }
+  }
+}
+
+for (const btn of document.querySelectorAll("[data-export]")) {
+  btn.addEventListener("click", exportVideo);
 }
 
 document.getElementById("btn-start").onclick = () => {
@@ -1479,3 +1632,12 @@ function render() {
   }
   renderLogChrome();
 }
+
+window.__exportSetState = (snap) => {
+  state = snap;
+  hexR = snap.hexRadius || 280;
+};
+window.__exportRender = (snap) => {
+  window.__exportSetState(snap);
+  render();
+};

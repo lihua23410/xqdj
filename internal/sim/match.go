@@ -175,6 +175,8 @@ type Match struct {
 	logNames    map[uint64]string
 	logLeapAt   map[uint64]float64 // 上一拍瞬移的时刻。连续每拍瞬移不当成一下子挪走
 	logLeaps    []logLeap
+	record      []json.RawMessage // 本场观众快照，按拍记；导出视频用
+	recordDone  bool
 	fx          []unitpkg.FX
 	hitStop     int
 	walls       []*barrier
@@ -911,6 +913,8 @@ func (m *Match) resetLocked() {
 	m.pendingDmg = make(map[uint64]dmgOffer)
 	m.wardAbsorb = make(map[uint64]bool)
 	m.rootN = 0
+	m.record = nil
+	m.recordDone = false
 	unitpkg.SetLiveField(m.spec.toUnitField())
 }
 
@@ -2718,7 +2722,34 @@ func (m *Match) Loop(broadcast func([]byte), halt <-chan struct{}) {
 				continue
 			}
 			m.Tick()
-			broadcast(m.SnapshotJSON())
+			snap := m.SnapshotJSON()
+			m.recordSnapshot(snap)
+			broadcast(snap)
 		}
 	}
+}
+
+// recordSnapshot 把本拍观众快照留在本场里。只从 Loop 调用，保证一场只有一条时间线。
+func (m *Match) recordSnapshot(snap []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.recordDone {
+		return
+	}
+	switch m.phase {
+	case PhaseRunning, PhaseEnded:
+		m.record = append(m.record, append(json.RawMessage(nil), snap...))
+		if m.phase == PhaseEnded {
+			m.recordDone = true
+		}
+	}
+}
+
+// RecordFrames 返回本场已记下的观众快照。下一场 Start 时清掉。
+func (m *Match) RecordFrames() []json.RawMessage {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]json.RawMessage, len(m.record))
+	copy(out, m.record)
+	return out
 }

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>小球对战</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/export.css" />
+  <script src="/export-clock.js"></script>
 </head>
 <body>
   <section id="lobby" class="panel">
@@ -25,6 +27,7 @@
     <div id="log-lobby" class="log-actions hidden" data-log="lobby">
       <button type="button" data-copy="recap">复制战报</button>
       <button type="button" data-copy="trace">复制排查</button>
+      <button type="button" data-export>导出视频</button>
     </div>
   </section>
 
@@ -57,13 +60,49 @@
       <div id="log-banner" class="log-actions hidden" data-log="banner">
         <button type="button" data-copy="recap">复制战报</button>
         <button type="button" data-copy="trace">复制排查</button>
+        <button type="button" data-export>导出视频</button>
       </div>
     </div>
   </section>
 
   <pre id="log-box" class="log-box hidden"></pre>
 
+  <div id="export-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="export-title">
+    <div class="export-card">
+      <h3 id="export-title">导出视频</h3>
+      <p id="export-status">准备中…</p>
+      <div class="export-track"><i id="export-bar"></i></div>
+      <p id="export-count"></p>
+      <div class="export-actions">
+        <button id="export-cancel" type="button">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="export-root" class="hidden">
+    <div id="export-frame">
+      <div id="export-top">
+        <span id="export-name-0"></span>
+        <span id="export-vs">VS</span>
+        <span id="export-name-1"></span>
+      </div>
+      <div id="export-arena"></div>
+      <div id="export-bottom">
+        <div class="export-hp" data-slot="0">
+          <span class="export-hp-num">0</span>
+          <div class="export-hp-bar"><i></i></div>
+        </div>
+        <div class="export-hp" data-slot="1">
+          <span class="export-hp-num">0</span>
+          <div class="export-hp-bar"><i></i></div>
+        </div>
+      </div>
+    </div>
+    <div id="export-winner"><small>胜者</small><b></b></div>
+  </section>
+
   <script src="/lib/gsap.min.js"></script>
   <script src="/app.js"></script>
+  <script src="/export.js" defer></script>
 </body>
 </html>
