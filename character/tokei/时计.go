@@ -201,6 +201,10 @@ func (a *时计) save(ctx unit.Context, s unit.Sense) {
 			Kind: KindTokeiMoment, X: m.x, Y: m.y,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
 		})
+		ctx.Out <- unit.FX{
+			Name: "carve", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
+			Amount: float64(m.hour), X: m.x, Y: m.y,
+		}
 	}
 	if a.hand >= handCap {
 		a.stopped = true
@@ -344,6 +348,10 @@ func (a *时计) rewind(ctx unit.Context, now float64) {
 	ctx.Out <- unit.FX{
 		Name: "rewind", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
 		X: a.x, Y: a.y, VX: m.x, VY: m.y, Amount: float64(a.hand),
+	}
+	ctx.Out <- unit.FX{
+		Name: "revive", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
+		X: m.x, Y: m.y,
 	}
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: m.x, Y: m.y}
 	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: m.hp, MaxHP: m.maxHP}

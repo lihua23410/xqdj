@@ -31,6 +31,8 @@
 | `character/melee/fx/dash.wav` | 原型机_近战突进加速 | -15.9 | -1.0 |
 | `character/melee/fx/attack.wav` | 原型机_近战攻击 | -70.0 | -1.0 |
 | `character/ranged/fx/shot.wav` | 原型机_远程发射 | -17.3 | -1.0 |
+| `character/tokei/fx/moment.wav` | 时计留下时刻 | -15.7 | -4.2 |
+| `character/tokei/fx/revive.wav` | 时计回拨复活 | -19.6 | -1.0 |
 
 `default-impact.wav` 只有 0.16 秒，积分响度对这类极短点击没有意义；它已按真峰值
 限制到 -1.0 dBFS，听感上是一次短促碰撞。`character/melee/fx/attack.wav` 同样只有

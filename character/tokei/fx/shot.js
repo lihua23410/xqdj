@@ -1,8 +1,36 @@
-// 时计的四个 FX：
+// 时计的 FX：
 //   clock  本体表针状态：Amount = 已提交小时读数、VX = 停针/满仓、X/Y = 本拍窗口的起止模拟时刻
 //   moment 每个时刻残影自己的针位（Amount = 落下钟点，UnitID = 残影实体）——残影的针停在它刻下时的时间
+//   carve  新时刻落下时的铃音（mode 2，不参与抢占）
+//   revive 从时刻回拨复活时的滴答声（mode 2）
 //   rewind 回拨：旧位置 → 档位拉一条影子，落点闪一下
 //   trip   踩影拉撞：时刻位置爆一圈
+const tokeiMomentAudio = new Audio(
+  ((document.currentScript && document.currentScript.dataset && document.currentScript.dataset.pack) || "") + "/fx/moment.wav",
+);
+tokeiMomentAudio.preload = "auto";
+tokeiMomentAudio.load();
+const tokeiMomentVoice = arena.voice(tokeiMomentAudio, { mode: arena.SOUND_MODE.IMMUNE });
+
+const tokeiReviveAudio = new Audio(
+  ((document.currentScript && document.currentScript.dataset && document.currentScript.dataset.pack) || "") + "/fx/revive.wav",
+);
+tokeiReviveAudio.preload = "auto";
+tokeiReviveAudio.load();
+const tokeiReviveVoice = arena.voice(tokeiReviveAudio, { mode: arena.SOUND_MODE.IMMUNE });
+
+arena.registerShot("carve", () => {
+  tokeiMomentVoice.stop();
+  tokeiMomentVoice.reset();
+  tokeiMomentVoice.play();
+});
+
+arena.registerShot("revive", () => {
+  tokeiReviveVoice.stop();
+  tokeiReviveVoice.reset();
+  tokeiReviveVoice.play();
+});
+
 arena.registerShot("clock", (fx) => {
   window.tokeiSt = window.tokeiSt || {};
   window.tokeiSt[fx.unitId] = {

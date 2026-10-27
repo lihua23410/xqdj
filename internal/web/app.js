@@ -587,7 +587,7 @@ function playWallFx(fx, scale, cx, cy, fading) {
 
 // 声音按快照到达即时触发；画面仍按 rAF 合并。否则两次命中挤进一帧时，
 // 后一声会当场 stop 掉前一声，听起来只剩一下。
-const IMMEDIATE_AUDIO = new Set(["attack", "gear", "cruise", "scream", "verse"]);
+const IMMEDIATE_AUDIO = new Set(["attack", "gear", "cruise", "scream", "verse", "carve", "revive"]);
 
 function playSoundFX(fx) {
   if (!fx) return;
