@@ -1,13 +1,17 @@
 (function () {
   const el = document.currentScript;
   const base = (el && el.dataset && el.dataset.pack) || "";
-  const verses = [0, 1, 2, 3].map((i) => {
+  const verseVoices = [0, 1, 2, 3].map((i) => {
     const a = new Audio(base + "/fx/verse" + i + ".mp3");
     a.preload = "auto";
-    return a;
+    return arena.voice(a, { mode: arena.SOUND_MODE.IMMUNE, priority: 0 });
   });
-  const scream = new Audio(base + "/fx/scream.mp3");
-  scream.preload = "auto";
+  const screamVoice = arena.voice(new Audio(base + "/fx/scream.mp3"), {
+    mode: arena.SOUND_MODE.PREEMPT,
+    priority: 200,
+  });
+  screamVoice.audio.preload = "auto";
+  if (window.arena && typeof arena.registerOwnHurt === "function") arena.registerOwnHurt("老牧师");
 
   window.pastorFX = window.pastorFX || {};
   window.pastorFX.screaming = window.pastorFX.screaming || {};
@@ -22,43 +26,46 @@
   }
 
   function playVerse(i) {
-    for (const a of verses) {
-      a.pause();
-      a.currentTime = 0;
+    for (const voice of verseVoices) {
+      voice.stop();
+      voice.audio.currentTime = 0;
     }
     verseOn = i;
-    const a = verses[i];
-    if (!a) return;
-    a.play().catch(() => {});
+    const voice = verseVoices[i];
+    if (!voice) return;
+    voice.reset();
+    voice.audio.currentTime = 0;
+    voice.play();
   }
 
   function playScream(id) {
-    scream.pause();
-    scream.currentTime = 0;
+    screamVoice.stop();
+    screamVoice.reset();
+    screamVoice.audio.currentTime = 0;
     screamFor = id;
     screamLeft = 0.696599;
     window.pastorFX.screaming[id] = true;
-    scream.play().catch(() => {});
+    screamVoice.play();
   }
 
   window.pastorFX.tickAudio = function () {
     const now = performance.now();
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
     last = now;
-    const verse = verseOn >= 0 ? verses[verseOn] : null;
+    const verseVoice = verseOn >= 0 ? verseVoices[verseOn] : null;
     if (stopped()) {
-      if (!scream.paused) scream.pause();
-      if (verse && !verse.paused) verse.pause();
+      if (!screamVoice.audio.paused) screamVoice.pause();
+      if (verseVoice && !verseVoice.audio.paused) verseVoice.pause();
       return;
     }
-    if (verse && verse.paused && verse.currentTime > 0 && !verse.ended) {
-      verse.play().catch(() => {});
+    if (verseVoice && verseVoice.audio.paused && verseVoice.audio.currentTime > 0 && !verseVoice.audio.ended) {
+      verseVoice.play();
     }
     if (!screamFor) return;
-    if (scream.paused && screamLeft > 0) scream.play().catch(() => {});
+    if (screamVoice.audio.paused && screamLeft > 0) screamVoice.play();
     screamLeft -= dt;
     if (screamLeft <= 0) {
-      scream.pause();
+      screamVoice.stop();
       delete window.pastorFX.screaming[screamFor];
       screamFor = 0;
     }

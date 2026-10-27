@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	unitpkg "xqdj/internal/unit"
+	"xqdj/internal/web"
 )
 
 const audioRate = 48000
@@ -137,7 +138,7 @@ func normalizeSrc(raw string) string {
 }
 
 func decodeAudio(ctx context.Context, ffmpeg, name string, rate float64, preservesPitch *bool) ([]float32, error) {
-	data, err := readBallFile(name)
+	data, err := readAudioFile(name)
 	if err != nil {
 		return nil, err
 	}
@@ -165,6 +166,13 @@ func decodeAudio(ctx context.Context, ffmpeg, name string, rate float64, preserv
 		buf[i] = math.Float32frombits(binary.LittleEndian.Uint32(out[i*4:]))
 	}
 	return buf, nil
+}
+
+func readAudioFile(name string) ([]byte, error) {
+	if strings.HasPrefix(name, "sfx/") {
+		return web.FS.ReadFile(name)
+	}
+	return readBallFile(name)
 }
 
 func readBallFile(name string) ([]byte, error) {

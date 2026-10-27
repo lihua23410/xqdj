@@ -5,6 +5,7 @@
   const iai = new Audio(iaiSrc);
   iai.preload = "auto";
   iai.load();
+  const iaiVoice = arena.voice(iai, { mode: arena.SOUND_MODE.PREEMPT, priority: 1 });
 
   function unlock() {
     iai.muted = true;
@@ -21,11 +22,11 @@
   document.addEventListener("pointerdown", unlock, { once: true });
 
   function playIai() {
-    iai.pause();
+    iaiVoice.stop();
+    iaiVoice.reset();
     iai.muted = false;
     iai.currentTime = 0;
-    const start = iai.play();
-    if (start && typeof start.catch === "function") start.catch(() => {});
+    iaiVoice.play();
   }
 
   arena.registerShot("iai", () => {

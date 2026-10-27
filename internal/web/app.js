@@ -3,6 +3,9 @@ let prevHP = new Map();
 let dashGhostAt = new Map();
 
 const FALLBACK_COLOR = "#3dd6c6";
+const SOUND_MODE = { NORMAL: 0, PREEMPT: 1, IMMUNE: 2, FORCE: 3 };
+const SOUND_HIT = { mode: SOUND_MODE.PREEMPT, priority: 200 };
+const SOUND_IMPACT = { mode: SOUND_MODE.NORMAL, priority: 210 };
 const ENGINE_FX = new Set([
   "hurt",
   "heal",
@@ -14,6 +17,43 @@ const ENGINE_FX = new Set([
   "hit",
   "faction",
 ]);
+
+const ownHurtKinds = new Set();
+const DEFAULT_SFX = {
+  hit: { src: "/sfx/default-hit.wav", volume: 0.32, cooldown: 45, voices: 3, last: -1e9, idx: 0, pool: [], ...SOUND_HIT },
+  impact: { src: "/sfx/default-impact.wav", volume: 0.16, cooldown: 45, voices: 3, last: -1e9, idx: 0, pool: [], ...SOUND_IMPACT },
+};
+
+function registerOwnHurt(kind) {
+  if (kind) ownHurtKinds.add(kind);
+}
+
+function initDefaultSfx() {
+  for (const s of Object.values(DEFAULT_SFX)) {
+    for (let i = 0; i < s.voices; i++) {
+      const a = new Audio(s.src);
+      a.preload = "auto";
+      a.volume = s.volume;
+      s.pool.push(arena.voice(a, { mode: s.mode, priority: s.priority }));
+    }
+  }
+}
+
+function playDefaultSfx(key) {
+  const s = DEFAULT_SFX[key];
+  if (!s || !s.pool.length) return;
+  const now = performance.now();
+  if (now - s.last < s.cooldown) return;
+  s.last = now;
+  const v = s.pool[s.idx++ % s.pool.length];
+  const a = v.audio;
+  try {
+    v.reset();
+    a.currentTime = 0;
+    a.volume = s.volume;
+    v.play();
+  } catch {}
+}
 
 function lookOf(kind) {
   const looks = (state && state.looks) || {};
@@ -90,7 +130,134 @@ function registerFactions(list) {
   ingestFactions(list, packBaseFromScript());
 }
 
+const soundVoices = new Set();
+
+function clampSoundPriority(value) {
+  const n = Math.trunc(Number(value));
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(255, n));
+}
+
+function normalizeSoundMode(value) {
+  const n = Math.trunc(Number(value));
+  return n >= 0 && n <= 3 ? n : SOUND_MODE.NORMAL;
+}
+
+function soundPriorityRank(priority) {
+  const value = clampSoundPriority(priority);
+  return value === 0 ? 256 : value;
+}
+
+function soundEffectivePriority(mode, priority) {
+  if (mode === SOUND_MODE.IMMUNE) return 256;
+  if (mode === SOUND_MODE.FORCE) return 1;
+  return soundPriorityRank(priority);
+}
+
+function activeSoundVoices(except) {
+  const list = [];
+  for (const voice of soundVoices) {
+    if (voice !== except && voice.active) list.push(voice);
+  }
+  return list;
+}
+
+function arbitrateSound(voice) {
+  const active = activeSoundVoices(voice);
+  if (voice.mode === SOUND_MODE.FORCE) {
+    for (const other of active) other.kill();
+    return true;
+  }
+  if (active.some((other) => other.mode === SOUND_MODE.FORCE)) return false;
+  if (voice.mode === SOUND_MODE.IMMUNE) return true;
+  if (voice.mode === SOUND_MODE.PREEMPT) {
+    if (active.some((other) => other.mode !== SOUND_MODE.IMMUNE && other.effectivePriority < voice.effectivePriority)) {
+      return false;
+    }
+    for (const other of active) {
+      if (other.mode !== SOUND_MODE.IMMUNE) other.kill();
+    }
+    return true;
+  }
+  const preempts = active.filter((other) => other.mode === SOUND_MODE.PREEMPT);
+  if (preempts.some((other) => other.effectivePriority <= voice.effectivePriority)) return false;
+  for (const other of preempts) other.kill();
+  return true;
+}
+
+function createSoundVoice(audio, opts) {
+  const options = opts || {};
+  const voice = {
+    audio,
+    mode: normalizeSoundMode(options.mode),
+    priority: clampSoundPriority(options.priority),
+    started: false,
+    cancelled: false,
+    get active() {
+      return this.started && !this.audio.paused && !this.audio.ended;
+    },
+    reset() {
+      this.cancelled = false;
+    },
+    setMode(mode, priority) {
+      this.mode = normalizeSoundMode(mode);
+      this.priority = clampSoundPriority(priority);
+      this.effectivePriority = soundEffectivePriority(this.mode, this.priority);
+    },
+    play(playOptions) {
+      if (playOptions) this.setMode(playOptions.mode, playOptions.priority);
+      if (this.cancelled) return false;
+      if (!arbitrateSound(this)) {
+        this.cancelled = true;
+        return false;
+      }
+      this.started = true;
+      try {
+        const result = this.audio.play();
+        if (result && typeof result.catch === "function") result.catch(() => {});
+      } catch {
+        this.started = false;
+        return false;
+      }
+      return true;
+    },
+    pause() {
+      try { this.audio.pause(); } catch {}
+    },
+    stop() {
+      this.pause();
+      this.started = false;
+    },
+    kill() {
+      this.cancelled = true;
+      this.stop();
+    },
+  };
+  voice.effectivePriority = soundEffectivePriority(voice.mode, voice.priority);
+  if (options.volume != null) audio.volume = Math.max(0, Math.min(1, Number(options.volume)));
+  if (options.loop) audio.loop = true;
+  if (options.rate != null) audio.playbackRate = Number(options.rate);
+  if (options.preservesPitch != null) {
+    audio.preservesPitch = !!options.preservesPitch;
+    audio.webkitPreservesPitch = !!options.preservesPitch;
+  }
+  soundVoices.add(voice);
+  return voice;
+}
+
 window.arena = {
+  SOUND_MODE,
+  voice: createSoundVoice,
+  audio: (src, opts) => {
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    return createSoundVoice(audio, opts);
+  },
+  playAudio: (src, opts) => {
+    const voice = window.arena.audio(src, opts);
+    voice.play();
+    return voice;
+  },
   lookOf,
   kindColor,
   screenPos,
@@ -99,6 +266,7 @@ window.arena = {
   spawnGhostFrom,
   registerShot,
   registerFactions,
+  registerOwnHurt,
 };
 
 const packLoads = new Set();
@@ -431,6 +599,7 @@ function playEffects(effects, scale, cx, cy) {
       const n = Math.round(fx.amount || 0);
       const el = spawnFx("fx-dmg", x, y - 12, kind, dmgPop(n));
       if (el) el.textContent = `-${n}`;
+      if (!ownHurtKinds.has(kind)) playDefaultSfx("hit");
     } else if (fx.name === "swap") {
       spawnFx("fx-swap", x, y, kind);
       spawnFx("fx-flash", x, y, kind);
@@ -446,6 +615,7 @@ function playEffects(effects, scale, cx, cy) {
       spawnFx("fx-flash", x, y, kind);
       spawnFx("fx-shock", x, y, kind);
       burst(x, y, kind, fx.name === "impact" ? 14 : 8);
+      playDefaultSfx("impact");
     } else if (!ENGINE_FX.has(fx.name)) {
       const base = lookOf(kind).base;
       const hook = base && window.shotFX && window.shotFX[base] && window.shotFX[base][fx.name];
@@ -1641,3 +1811,5 @@ window.__exportRender = (snap) => {
   window.__exportSetState(snap);
   render();
 };
+
+initDefaultSfx();

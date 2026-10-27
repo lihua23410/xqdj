@@ -8,6 +8,7 @@
   howl.preservesPitch = true;
   howl.webkitPreservesPitch = true;
   howl.load();
+  const howlVoice = arena.voice(howl, { mode: arena.SOUND_MODE.IMMUNE });
 
   let howlGen = 0;
   let howling = false;
@@ -33,28 +34,21 @@
   document.addEventListener("pointerdown", unlock, { once: true });
 
   function playHowl() {
-    const gen = ++howlGen;
+    howlGen++;
     howling = true;
-    howl.pause();
+    howlVoice.stop();
+    howlVoice.reset();
     howl.muted = false;
     howl.playbackRate = 1 + 0.2 * howlPlays;
     howlPlays++;
     howl.currentTime = 0;
-    const start = howl.play();
-    if (start && typeof start.then === "function") {
-      start.then(() => {
-        if (gen !== howlGen || !howling) {
-          howl.pause();
-          howl.currentTime = 0;
-        }
-      }).catch(() => {});
-    }
+    howlVoice.play();
   }
 
   function stopHowl() {
     howlGen++;
     howling = false;
-    howl.pause();
+    howlVoice.stop();
     howl.currentTime = 0;
   }
 
