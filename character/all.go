@@ -11,6 +11,7 @@ import (
 	"xqdj/character/doppel"
 	"xqdj/character/doppel_veteran"
 	"xqdj/character/dummy"
+	"xqdj/character/echo"
 	"xqdj/character/engine"
 	"xqdj/character/fisher"
 	"xqdj/character/freischutz"
@@ -74,6 +75,9 @@ const (
 	KindDoppelVeteran      = 分身者_百战.KindDoppelVeteran
 	KindShadow             = 分身者_百战.KindShadow
 	KindDummy              = 靶子.KindDummy
+	KindEcho               = 回声.KindEcho
+	KindShard              = 回声.KindShard
+	KindStar               = 回声.KindStar
 	KindEngine             = 内燃机.KindEngine
 	KindFish               = 钓鱼佬.KindFish
 	KindFishBig            = 钓鱼佬.KindFishBig
