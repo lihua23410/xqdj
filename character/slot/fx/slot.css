@@ -1,0 +1,275 @@
+/* 老虎机：像素机身完全覆盖球体，三个转轮由 JS 驱动。 */
+
+.ball.look-slot {
+  overflow: visible;
+  background: radial-gradient(circle at 40% 30%, #ffdf8a, #b92245 55%, #3a101b 100%);
+  box-shadow:
+    inset 0 0 0 2px #ffe49a,
+    0 0 14px #ff3154aa,
+    0 0 30px #6f102955;
+}
+
+.slot-machine {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 86px;
+  transform: translate(-50%, -52%);
+  z-index: 8;
+  pointer-events: none;
+  image-rendering: pixelated;
+  filter:
+    drop-shadow(0 0 4px #fff4cf)
+    drop-shadow(0 0 10px #d61d49)
+    drop-shadow(0 4px 2px #16070c);
+}
+
+.slot-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  z-index: 3;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.slot-reels {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.slot-window {
+  position: absolute;
+  top: 28%;
+  width: 20%;
+  height: 31%;
+  overflow: hidden;
+  background: #09080d;
+  border-radius: 1px;
+  box-shadow: inset 0 0 4px #000;
+}
+.slot-window.r0 { left: 12.5%; }
+.slot-window.r1 { left: 38.5%; }
+.slot-window.r2 { left: 64.5%; }
+
+.slot-strip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  will-change: transform, filter;
+}
+.slot-strip img {
+  display: block;
+  width: 100%;
+  height: 22px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.slot-window.rolling {
+  box-shadow: inset 0 0 5px #000, 0 0 6px #fff4a8;
+}
+.slot-window.stopped {
+  box-shadow: inset 0 0 4px #000, 0 0 5px #ffd33888;
+}
+
+.slot-badge {
+  position: absolute;
+  left: 50%;
+  top: -11px;
+  transform: translate(-50%, -100%);
+  min-width: 45px;
+  padding: 1px 6px;
+  border: 1px solid #f6c646;
+  border-radius: 3px;
+  background: #180a10e8;
+  color: #ffe9a3;
+  box-shadow: 0 0 8px #d61d49;
+  font: 700 9px/13px "Microsoft YaHei", "PingFang SC", sans-serif;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.slot-machine.triple {
+  animation: slot-machine-jackpot 0.18s steps(2) infinite;
+}
+@keyframes slot-machine-jackpot {
+  0% { filter: drop-shadow(0 0 5px #fff) drop-shadow(0 0 16px #ffd338); }
+  100% { filter: drop-shadow(0 0 9px #fff) drop-shadow(0 0 32px #ff334e); }
+}
+
+.ball.look-slot.slot-drawing {
+  box-shadow:
+    inset 0 0 0 2px #fff,
+    0 0 26px #ffe36e,
+    0 0 52px #8b7be8cc;
+}
+.ball.look-slot.slot-drawing::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border: 2px solid #fff2a6;
+  border-radius: 50%;
+  box-shadow: 0 0 16px #ffe36e, inset 0 0 12px #8b7be8;
+  animation: slot-invuln 0.65s linear infinite;
+}
+@keyframes slot-invuln {
+  from { transform: rotate(0deg); opacity: 0.45; }
+  50% { opacity: 1; }
+  to { transform: rotate(360deg); opacity: 0.45; }
+}
+
+/* 樱桃小球。 */
+.ball.look-slot-cherry-ball {
+  overflow: visible;
+  background: #d51d49;
+  box-shadow: 0 0 12px #ff3b68aa;
+}
+.slot-cherry-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 175%;
+  height: 175%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 3;
+  filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 10px #ff3154);
+}
+
+/* 图案弹。 */
+.ball.look-slot-bullet {
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+.slot-bullet-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+  z-index: 4;
+  filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 9px #ff3154);
+}
+.ball.look-slot-bullet.jackpot-shot .slot-bullet-img {
+  width: 56px;
+  height: 56px;
+  filter:
+    drop-shadow(0 0 7px #fff)
+    drop-shadow(0 0 18px #ff304e)
+    drop-shadow(0 0 34px #ffd338);
+}
+
+/* 一次性图片与中奖效果。 */
+.slot-fx-img,
+.slot-fx-symbol,
+.slot-fx-bomb {
+  position: absolute;
+  width: 0;
+  height: 0;
+  z-index: 36;
+  pointer-events: none;
+}
+.slot-fx-img img,
+.slot-fx-symbol img,
+.slot-fx-bomb img {
+  position: absolute;
+  left: calc(var(--size, 40px) / -2);
+  top: calc(var(--size, 40px) / -2);
+  width: var(--size, 40px);
+  height: var(--size, 40px);
+  object-fit: contain;
+  image-rendering: pixelated;
+  transform: rotate(var(--ang, 0rad));
+  filter: drop-shadow(0 0 5px #fff) drop-shadow(0 0 12px #ff3154);
+  animation: slot-fx-pop 0.55s ease-out forwards;
+}
+.slot-fx-symbol img {
+  animation-duration: 0.72s;
+}
+.slot-fx-bomb img {
+  animation-duration: 0.65s;
+  filter: drop-shadow(0 0 8px #fff) drop-shadow(0 0 22px #ff5b22);
+}
+@keyframes slot-fx-pop {
+  0% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(0.2); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(1.45); }
+}
+
+.fx-slot-shield {
+  width: 52px;
+  height: 52px;
+  border: 3px solid #fff2a6;
+  border-radius: 50%;
+  box-shadow: 0 0 16px #ffe36e, inset 0 0 16px #8b7be8;
+  animation: slot-shield 0.55s ease-out forwards;
+}
+@keyframes slot-shield {
+  from { transform: scale(0.4); opacity: 1; }
+  to { transform: scale(2.2); opacity: 0; }
+}
+
+.fx-slot-reveal {
+  width: 46px;
+  height: 46px;
+  border: 3px solid #ffe36e;
+  border-radius: 50%;
+  box-shadow: 0 0 18px #ffd338;
+  animation: slot-reveal 0.5s ease-out forwards;
+}
+@keyframes slot-reveal {
+  from { transform: scale(0.4); opacity: 1; }
+  to { transform: scale(2); opacity: 0; }
+}
+
+.fx-slot-jackpot-burst {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 8%, #ffe36e 22%, #ff304e88 48%, transparent 70%);
+  box-shadow: 0 0 32px #ffb52e;
+  animation: slot-jackpot-burst 1s ease-out forwards;
+}
+@keyframes slot-jackpot-burst {
+  0% { transform: scale(0.2); opacity: 0; }
+  18% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(4.2); opacity: 0; }
+}
+
+.fx-slot-bomb-timer {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  border: 1px solid #ffb13d;
+  border-radius: 4px;
+  background: #160b10e8;
+  color: #ffd98a;
+  font: 700 11px/14px ui-monospace, monospace;
+  box-shadow: 0 0 10px #ff5b22;
+  transform: translate(-50%, -100%);
+  animation: slot-bomb-timer 0.56s linear forwards;
+}
+.fx-slot-bomb-timer img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+@keyframes slot-bomb-timer {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
