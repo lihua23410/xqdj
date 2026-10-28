@@ -825,24 +825,88 @@ function setExportStatus(text, pct) {
   if (exportStatus) exportStatus.textContent = text;
   if (exportBar) exportBar.style.width = `${Math.max(0, Math.min(100, pct || 0))}%`;
 }
+
+// ---- 导出预计剩余时间 ----
+// 页面每 400ms 拉一次进度，用最近 6 秒的帧数增量算速率，再拿剩余帧数除。
+// 窗口太短会被单帧抖动带偏（片头是纯黑画面、正片有战场和特效，单帧耗能差一倍），
+// 窗口太长又跟不上节奏变化；6 秒两头都够用，稳态下误差在 1 秒量级。
+const exportEtaEl = document.getElementById("export-eta");
+const exportEtaWindow = 6000;
+let exportEtaSamples = [];
+let exportEtaTotal = 0;
+
+function resetExportEta() {
+  exportEtaSamples = [];
+  exportEtaTotal = 0;
+  if (exportEtaEl) exportEtaEl.textContent = "";
+}
+
+function formatEtaSeconds(sec) {
+  if (!(sec >= 1)) return "马上就好";
+  const s = Math.ceil(sec);
+  if (s < 60) return `预计剩余 ${s} 秒`;
+  const m = Math.floor(s / 60);
+  const rest = s % 60;
+  return rest ? `预计剩余 ${m} 分 ${rest} 秒` : `预计剩余 ${m} 分`;
+}
+
+function updateExportEta(job, total, done) {
+  if (!exportEtaEl) return;
+  if (job.phase === "done") {
+    exportEtaEl.textContent = "";
+    return;
+  }
+  if (job.phase !== "rendering" || !total) {
+    exportEtaEl.textContent = job.phase === "muxing" ? "正在合成，马上就好" : "";
+    return;
+  }
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  if (exportEtaTotal !== total) {
+    exportEtaTotal = total;
+    exportEtaSamples = [];
+  }
+  exportEtaSamples.push({ t: now, done });
+  while (exportEtaSamples.length > 2 && now - exportEtaSamples[0].t > exportEtaWindow) {
+    exportEtaSamples.shift();
+  }
+  const left = total - done;
+  if (left <= 0) {
+    exportEtaEl.textContent = "马上就好";
+    return;
+  }
+  const first = exportEtaSamples[0];
+  const secs = (now - first.t) / 1000;
+  const frames = done - first.done;
+  if (!(secs > 0.5) || !(frames > 0)) {
+    exportEtaEl.textContent = "估算剩余时间…";
+    return;
+  }
+  exportEtaEl.textContent = formatEtaSeconds(left / (frames / secs));
+}
+// ---- /导出预计剩余时间 ----
+
 function setExportProgress(job) {
   const total = job.total || 0;
   const done = job.done || 0;
-  const pct = total ? Math.round((done / total) * 100) : 0;
+  const pct = total ? Math.min(100, (done / total) * 100) : 0;
+  // 四舍五入会把“还差 5 帧”显示成 100%，改成一位小数。
+  const pctText = total ? (pct >= 100 ? "100" : (Math.round(pct * 10) / 10).toFixed(1)) : "";
   const label =
     job.phase === "preparing" ? "正在准备导出…" :
     job.phase === "muxing" ? "正在合成音轨…" :
     job.phase === "done" ? "已完成" : "正在渲染视频…";
   setExportStatus(label, pct);
   if (exportCount) {
-    exportCount.textContent = total ? `${done} / ${total} 帧 · ${pct}%` : "";
+    exportCount.textContent = total ? `${done} / ${total} 帧 · ${pctText}%` : "";
   }
+  updateExportEta(job, total, done);
 }
 function showExportModal() {
   if (!exportModal) return;
   exportModal.classList.remove("hidden");
   setExportStatus("正在准备导出…", 0);
   if (exportCount) exportCount.textContent = "";
+  resetExportEta();
   if (exportCancel) {
     exportCancel.disabled = false;
     exportCancel.textContent = "取消";

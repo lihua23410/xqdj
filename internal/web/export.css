@@ -199,6 +199,9 @@ body.export #log-box {
   text-align: center;
   opacity: 0;
   pointer-events: none;
+  /* 胜者与名字整体上移一点。flex 居中是在内容盒里算的，所以位移是这里的值的一半。 */
+  --winner-lift: 112px;
+  padding-bottom: var(--winner-lift);
   background: radial-gradient(
     ellipse at center,
     rgba(0, 0, 0, 0.58) 0%,

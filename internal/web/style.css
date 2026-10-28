@@ -779,7 +779,8 @@ body[data-page="team"] .kinds { max-height: 360px; overflow: auto; }
   transition: width 0.2s linear;
 }
 #export-count { min-height: 18px; margin: 8px 0 14px; color: #8b949e; font-size: 12px; }
-.export-actions { display: flex; justify-content: flex-end; }
+.export-actions { display: flex; align-items: center; gap: 12px; justify-content: flex-end; }
+#export-eta { margin-right: auto; color: #8b949e; font-size: 12px; min-height: 18px; }
 #export-cancel {
   background: #21262d;
   color: var(--text);
