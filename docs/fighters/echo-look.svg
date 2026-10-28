@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="72" height="72" viewBox="0 0 72 72">
+  <defs>
+    <radialGradient id="echoBody" cx="42%" cy="34%" r="68%">
+      <stop offset="0" stop-color="#8fa6d8"/>
+      <stop offset="0.48" stop-color="#3b4775"/>
+      <stop offset="1" stop-color="#171d33"/>
+    </radialGradient>
+    <g id="star">
+      <path d="M0 -6 L1.6 -1.6 L6 0 L1.6 1.6 L0 6 L-1.6 1.6 L-6 0 L-1.6 -1.6 Z"
+            fill="#ffd45c" stroke="#7a4b00" stroke-width="0.7" stroke-linejoin="round"/>
+    </g>
+    <g id="shard">
+      <circle r="3.2" fill="none" stroke="#8fecff" stroke-width="1.4"/>
+    </g>
+  </defs>
+
+  <!-- 地面 -->
+  <ellipse cx="30" cy="58" rx="24" ry="5" fill="#0a0c0f" opacity="0.45"/>
+
+  <!-- 声呐：从回声这边扫出去 -->
+  <g fill="none" stroke="#6fe3ff" stroke-linecap="round">
+    <path d="M38 30 A12 12 0 0 1 38 50" stroke-width="1.4" opacity="0.75"/>
+    <path d="M44 25 A20 20 0 0 1 44 55" stroke-width="1.2" opacity="0.5"/>
+    <path d="M50 20 A27 27 0 0 1 50 60" stroke-width="1" opacity="0.28"/>
+  </g>
+
+  <!-- 本体：闭着的眼 -->
+  <circle cx="28" cy="40" r="14" fill="url(#echoBody)" stroke="#0d1120" stroke-width="1.4"/>
+  <circle cx="28" cy="40" r="13" fill="none" stroke="#bcd8ff" stroke-width="0.7" opacity="0.5"/>
+  <rect x="17" y="38.6" width="22" height="2.8" rx="1.4" fill="#0a1024"/>
+
+  <!-- 星弹 -->
+  <use xlink:href="#star" transform="translate(58 15) scale(1.05)"/>
+
+  <!-- 被扫到的目标：青环 + 已亮的格 -->
+  <circle cx="56" cy="50" r="6" fill="#5b2430" stroke="#2a0d14" stroke-width="1"/>
+  <circle cx="56" cy="50" r="11" fill="none" stroke="#6fe3ff" stroke-width="1.2" opacity="0.75"/>
+  <path d="M56 39 A11 11 0 0 1 66.5 52" fill="none" stroke="#bff6ff" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="56" cy="39" r="1.3" fill="#bff6ff"/>
+  <circle cx="62.5" cy="41.1" r="1.3" fill="#bff6ff"/>
+  <circle cx="66.5" cy="46.6" r="1.3" fill="#bff6ff"/>
+
+  <!-- 声呐碎片 -->
+  <use xlink:href="#shard" transform="translate(43 12)"/>
+  <use xlink:href="#shard" transform="translate(64 32)"/>
+  <use xlink:href="#shard" transform="translate(45 61)"/>
+</svg>

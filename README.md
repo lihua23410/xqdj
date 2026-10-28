@@ -103,7 +103,7 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 
 ## 现有战斗机
 
-选人按钮顺序 = `unit.FighterKinds()` = 各包 `init()` 的注册顺序。包的加载顺序是 `all.go` 的 import 顺序，也就是 **目录名字母序**。下表按这个顺序，共 47 只（含靶子）。巡航和视野是 `Spec` 的开局值；对局中改巡航、改视野的不写在这里。行为见 `CONTEXT.md` 和 `战斗机.md`。
+选人按钮顺序 = `unit.FighterKinds()` = 各包 `init()` 的注册顺序。包的加载顺序是 `all.go` 的 import 顺序，也就是 **目录名字母序**。下表按这个顺序，共 49 只（含靶子）。巡航和视野是 `Spec` 的开局值；对局中改巡航、改视野的不写在这里。行为见 `CONTEXT.md` 和 `战斗机.md`。
 
 | 目录 `character/` | Kind | 巡航 | 视野 |
 | --- | --- | ---: | ---: |
@@ -115,6 +115,7 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 | `doppel` | `分身者` | 175 | 0 |
 | `doppel_veteran` | `分身者(百战)` | 0 | 9999 |
 | `dummy` | `靶子` | 165 | 9999 |
+| `echo` | `回声` | 165 | 0 |
 | `engine` | `内燃机` | 120 | 96 |
 | `fisher` | `钓鱼佬` | 148 | 9999 |
 | `freischutz` | `中转站[Freischutz]` | 160 | 9999 |
@@ -143,6 +144,7 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 | `reaper` | `收割者` | 175 | 0 |
 | `relay` | `中转站` | 160 | 0 |
 | `rmiu` | `R.缪` | 170 | 9999 |
+| `slot` | `老虎机` | 150 | 9999 |
 | `sot` | `酒翁` | 165 | 9999 |
 | `static` | `静电魔球` | 160 | 280 |
 | `tachi` | `太刀` | 140 | 9999 |
@@ -164,6 +166,7 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 - 炭翁：`炭烬`
 - 分身者：`分身`、`分身弧`
 - 分身者(百战)：`战影`
+- 回声：`回声星弹`、`回声碎片`
 - 钓鱼佬：`钓鱼佬鱼塘`、`钓鱼佬场鱼塘`、`钓鱼佬鱼`、`钓鱼佬中鱼`、`钓鱼佬大鱼`
 - 地慧星：`地慧星残影`、`地慧星斩击`、`地慧星弧`、`地慧星弹`
 - 教父：`教父暗杀者`、`教父狙击者`、`教父贩卖者`、`教父狙击弹`、`教父药物`
@@ -397,7 +400,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 | `MarkFaction` | 给战斗机打派系。`Cycle` 时撞墙（非单位）换派系，同一目标 0.2s 一次；`AmpOut`/`AmpIn` 是角色自己给的倍率（0 = 不改）；`Collect` 凑齐四种时按 `Barrage` 的 kind 朝四周各生成一发（速度用该 kind 的 `Spec.Speed`），或按 `BlastRadius` / `BlastDamage` 炸一次 |
 | `ClearFactionSeen` | 清空 `Collect` 记录，当前派系仍算已出现 |
 | `Heal` | 给战斗机或活随从回血，不超过 MaxHP，不触发 hit-stop。实际增加 ≥ 0.5 才发引擎 `heal` 特效 |
-| `StackMark` | 给单位叠一层状态（Kind / Icon 由角色定）。`Delta` 可为负，减到 0 就消失 |
+| `StackMark` | 给单位叠一层状态（Kind / Icon 由角色定）。`Delta` 可为负，减到 0 就消失。`Lifetime` > 0 时每一层从叠上去那一拍起活这么多秒，到点由引擎掉这一层；0 表示不过期 |
 | `ClearMarks` | 清掉该单位指定 Kind 的状态；Kind 为空则全清 |
 | `AddFS` | 加一条**瞬时 FS**：`DX,DY` 是方向，`BaseSpeed` 是速率。持着时引擎每帧把速度写成所有瞬时 FS 的向量和（巡航带子暂停）。`OnWall: true` 撞墙即清；`ExpiresAt: 0` 不过期。同 `Token` 覆盖 |
 | `RemoveFS` | 按 `Token` 撤一条瞬时 FS；撤完自动回到巡航 |
@@ -635,7 +638,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 
 ## 引擎会替你做的事
 
-这些是改角色或物理时不要随便推翻的约定。巡航带子的来由见 `docs/adr/0001-cruise-is-a-band.md`；活随从见 `docs/adr/0002-living-minions-take-damage.md`；场地可选见 `docs/adr/0003-field-is-selectable-data.md`；胶囊墙改名见 `docs/adr/0004-masonry-renamed-capsule-wall.md`；硬墙穿透见 `docs/adr/0005-break-walls-pass-through-hard-walls.md`；索敌看可瞄准见 `docs/adr/0006-seek-by-aim-priority.md`；无下限术士两半叠中扣两次见 `docs/adr/0007-twin-halves-stack-hits.md`；挡视线见 `docs/adr/0009-vision-block-is-entity-tag.md`。
+这些是改角色或物理时不要随便推翻的约定。巡航带子的来由见 `docs/adr/0001-cruise-is-a-band.md`；活随从见 `docs/adr/0002-living-minions-take-damage.md`；场地可选见 `docs/adr/0003-field-is-selectable-data.md`；胶囊墙改名见 `docs/adr/0004-masonry-renamed-capsule-wall.md`；硬墙穿透见 `docs/adr/0005-break-walls-pass-through-hard-walls.md`；索敌看可瞄准见 `docs/adr/0006-seek-by-aim-priority.md`；无下限术士两半叠中扣两次见 `docs/adr/0007-twin-halves-stack-hits.md`；挡视线见 `docs/adr/0009-vision-block-is-entity-tag.md`；标记寿命见 `docs/adr/0022-stack-lifetime.md`。
 
 - **场地是数据**。库在 `map/`（包名 `场地`）：一份场地一个 ASCII 子包，`init` 里 `unit.RegisterField`；`go generate ./map` 写出 `all.go`。`unit.Field` 有形状、场心到场边距离和预放墙；库里默认六边形（平顶、`Extent = HexRadius = 280`、无硬墙），另有圆（`Extent = 280`，场心一条硬墙，开局 `x ∈ [-110, 110]`、半宽 6，绕场心顺时针 8 秒一圈；转到固体身上时挤出，并按固体自己的速度弹开）。`Match.SetField` 只在选人阶段生效，开打后忽略；不认识的名字不改当前这份。单挑拒绝奇美拉。`UseTeam` 在当前场地是六边形或名字为空时改选奇美拉。库里另有火山、机关房、八边形、大六边形和奇美拉：轮廓判定是各场地私产（`RegisterOutline` 登记实现），其中八边形截角方形（场心到边 280·cos22.5°），开局由场地演员（BootKind）在三个 120° 均分位砌三段带 `VisionBlock` 的方端硬墙——走 `PlaceWall` 造墙链，不是预放墙（ADR 0009）。大六边形外形同默认六边形，场心到场边 472.5（ADR 0014）；开局两只中心对称的旋涡钉在场心半径 280 的圆上，12 秒逆时针一圈，战斗机、活随从、子弹碰上就送到对面往场心偏一截并把方向倒转 180°（Helper 不送）；场心另有一条同圆的转墙（长 220、粗 6、8 秒顺时针一圈），由场地演员 `PlaceWall{Hard, VisionBlock}` 砌出（ADR 0009），不是预放墙。`NewMatch` 按名字装六边形，没有则列表第一份，登记表空则用 `unit.HexField()` 垫底（不进选人列表）。落点、夹紧、撞边都走 `unit.Field`，角色不要自己算。
 - **时间**：`sim.TickHz = 60`，`DT = 1/60`，hit-stop `HitStopFrames = 3`。引擎每 tick 广播一次快照。

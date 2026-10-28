@@ -819,6 +819,7 @@ func (m *Match) Tick() {
 	m.expireWallsLocked()
 	m.releaseHoldLocked()
 	m.expireStunLocked()
+	m.decayMarksLocked()
 	m.seq++
 	m.emitLocked()
 	m.checkWinLocked()
