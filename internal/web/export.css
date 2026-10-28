@@ -54,6 +54,7 @@ body.export #log-box {
   bottom: 0;
   height: 1px;
   background: rgba(242, 239, 233, 0.12);
+  opacity: var(--intro-hud, 1);
 }
 #export-top span {
   min-width: 0;
@@ -85,7 +86,8 @@ body.export #log-box {
   border-radius: 50%;
   background: var(--accent, #f2efe9);
   vertical-align: 0.12em;
-  opacity: 0.9;
+  /* 片头期间用 opacity 藏，不能用 display：圆点一收一放会让名字横向跳 23px。 */
+  opacity: calc(0.9 * var(--intro-hud, 1));
 }
 #export-name-0::before {
   margin-right: 16px;
@@ -112,6 +114,7 @@ body.export #log-box {
   height: 1000px;
   overflow: hidden;
   background: transparent;
+  opacity: var(--intro-hud, 1);
 }
 #export-arena .stage-wrap {
   position: absolute;
@@ -139,6 +142,7 @@ body.export #log-box {
   gap: 42px;
   padding: 0 56px;
   box-sizing: border-box;
+  opacity: var(--intro-hud, 1);
 }
 #export-bottom::before {
   content: "";

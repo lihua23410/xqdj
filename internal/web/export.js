@@ -19,9 +19,11 @@
 
   const NAME_MAX = 76;
   const NAME_MIN = 30;
+  const TEXT_FLOOR = 12;
   const NUM_MAX = 46;
   const NUM_MIN = 28;
 
+  // 名字要整条可见：缩到 min 还放不下就接着缩，不用省略号兜底。
   function fitText(el, max, min) {
     if (!el) return 0;
     const width = el.clientWidth;
@@ -35,9 +37,16 @@
       if (el.scrollWidth <= width) lo = mid;
       else hi = mid;
     }
-    el.style.fontSize = `${lo}px`;
-    return lo;
+    let size = lo;
+    el.style.fontSize = `${size}px`;
+    while (el.scrollWidth > width && size > TEXT_FLOOR) {
+      size -= 1;
+      el.style.fontSize = `${size}px`;
+    }
+    return size;
   }
+
+  const nameStretch = [1, 1];
 
   function fitNames() {
     const sizes = nameEls.map((el) => fitText(el, NAME_MAX, NAME_MIN));
@@ -45,13 +54,11 @@
     nameEls.forEach((el, i) => {
       if (!el) return;
       const size = sizes[i];
-      if (!size || tallest <= size) {
-        el.style.transform = "none";
-        return;
-      }
       // 长名字缩了字号但纵向被压扁；只拉高、不拉宽，让两边字高一致。
+      // 拉伸系数只记账，transform 交给片头统一合成（见 placeLine）。
+      nameStretch[i] = size && tallest > size ? tallest / size : 1;
       el.style.transformOrigin = i === 0 ? "left bottom" : "right bottom";
-      el.style.transform = `scaleY(${(tallest / size).toFixed(3)})`;
+      el.style.transform = nameStretch[i] > 1 ? `scaleY(${nameStretch[i].toFixed(3)})` : "none";
     });
   }
 
@@ -68,8 +75,11 @@
 
   const clock = window.__clock;
   const realRAF = window.__realRAF;
-  const TOTAL_START = 60;
-  const TOTAL_END = 120;
+  // 帧数账本。Go 侧 internal/export/export.go 有同名的一份（introFrames/holdStart/holdEnd），
+  // 改这里必须同步改那边，否则进度条和成片长度会悄悄错开。
+  const TOTAL_INTRO = 300; // 片头：出现 60 + 移动 180 + 浮现 60
+  const TOTAL_START = 60; // 首帧静止
+  const TOTAL_END = 300; // 胜者定格：0.6 秒淡入 + 4.4 秒静止
   const FPS = 60;
 
   let frames = [];
@@ -270,13 +280,168 @@
     return all;
   }
 
+  // ---- 片头 ----------------------------------------------------------
+  // 0–1 秒逐个点出三行，1–4 秒移到顶栏，4–5 秒画面元素浮现。
+  // 全部是帧号的纯函数：片头期间绝不推进假时钟，否则 setTimeout、角色 fx 时间轴
+  // 和首拍的 CSS 动画都会跟着提前走，对局第一拍就会错位。
+  const INTRO_APPEAR = 60; // 1.0 秒逐个点出
+  const INTRO_MOVE = 180; // 3.0 秒移到顶栏
+  const INTRO_REVEAL = 60; // 1.0 秒元素浮现
+  const GAP = 104; // 三行行距
+  const RISE = 12; // 入场时向上浮的像素
+  const FADE = 15; // 单行淡入 0.25 秒
+  const SHIFT = 36; // 换位 0.6 秒
+  const BEATS = [0, 21, 42]; // 三关节拍：0.00 / 0.35 / 0.70 秒
+  const INTRO_SCALE = 1.4; // 片头放大倍数（按全名可见收窄）
+
+  const vsEl = document.getElementById("export-vs");
+  const lineEls = [nameEls[0], vsEl, nameEls[1]];
+  const lineStretch = [1, 1, 1];
+  const lineGeom = [null, null, null];
+  let frameCenter = { x: 540, y: 648 };
+  let introDone = false;
+
+  const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  // GSAP power2.inOut 的同款曲线（三次缓入缓出）。
+  const easeInOutCubic = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+  const easeOutCubic = (p) => 1 - Math.pow(1 - p, 3);
+
+  // 量一次就够：片头不动布局，只把“文字中心”和“这块框的位置”记下来。
+  function measureLines() {
+    const rect = frameEl.getBoundingClientRect();
+    frameCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    lineEls.forEach((el, i) => {
+      if (!el) return;
+      el.style.transform = "none"; // 量的是没拉伸过的框
+      const box = el.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const text = range.getBoundingClientRect();
+      // 缩放原点沿用到位后的那套：左边名字吊左边、右边名字吊右边、VS 居中。
+      const ox = i === 0 ? 0 : i === 2 ? box.width : box.width / 2;
+      const oy = i === 0 || i === 2 ? box.height : box.height / 2;
+      el.style.transformOrigin = `${ox}px ${oy}px`;
+      lineGeom[i] = {
+        left: box.left,
+        top: box.top,
+        ox,
+        oy,
+        px: text.left + text.width / 2 - box.left,
+        py: text.top + text.height / 2 - box.top,
+        w: text.width,
+      };
+      if (i === 0 || i === 2) lineStretch[i] = nameStretch[i === 0 ? 0 : 1];
+    });
+  }
+
+  // 三行围绕画布中线长大：一行压中线 → 两行关于中线对称 → VS 回到中线。
+  // 行距跟着放大倍数走，否则 1.4× 的字高（约 106px）会压过 104 的间距。
+  function introGap() {
+    return GAP * Math.min(introScale(0), introScale(2), INTRO_SCALE);
+  }
+
+  // 换位默认 0.6 秒，但必须在下一拍（或移动开始）之前落位，
+  // 否则出现段只有 1 秒时三行会停在半路、间距变成 135/109。
+  function shiftSpan(from, until) {
+    return Math.max(1, Math.min(SHIFT, until - from));
+  }
+
+  function lineOffset(i, f) {
+    const gap = introGap();
+    const span2 = shiftSpan(BEATS[2], INTRO_APPEAR);
+    if (i === 0) {
+      if (f < BEATS[1]) return 0;
+      if (f < BEATS[2]) return (-gap / 2) * easeInOutCubic((f - BEATS[1]) / shiftSpan(BEATS[1], BEATS[2]));
+      return -gap / 2 - (gap / 2) * easeInOutCubic((f - BEATS[2]) / span2);
+    }
+    if (i === 1) {
+      if (f < BEATS[2]) return gap / 2;
+      return (gap / 2) * (1 - easeInOutCubic((f - BEATS[2]) / span2));
+    }
+    return gap;
+  }
+
+  function lineOpacity(i, f) {
+    return easeOutCubic(clamp01((f - BEATS[i]) / FADE));
+  }
+
+  // 全名优先：放大倍数先让位给“整条名字不出画”，再谈好看。
+  function introScale(i) {
+    const g = lineGeom[i];
+    if (!g || !g.w) return INTRO_SCALE;
+    return Math.min(INTRO_SCALE, 1000 / g.w);
+  }
+
+  // 到位后的自然位置：纵向拉伸过的名字按底边为原点长高，中心比原始中心高一点。
+  function settledPoint(i) {
+    const g = lineGeom[i];
+    const sy = lineStretch[i];
+    return { x: g.left + g.px, y: g.top + g.oy + sy * (g.py - g.oy), k: 1 };
+  }
+
+  function appearPoint(i) {
+    return { x: frameCenter.x, y: frameCenter.y + lineOffset(i, INTRO_APPEAR), k: introScale(i) };
+  }
+
+  // 把第 i 行的“文字中心”摆到 (cx, cy)，并按 k 缩放；缩放不改变文字中心。
+  function placeLine(i, cx, cy, k) {
+    const el = lineEls[i];
+    const g = lineGeom[i];
+    if (!el || !g) return;
+    const sy = k * lineStretch[i];
+    const ax = g.left + g.ox + k * (g.px - g.ox);
+    const ay = g.top + g.oy + sy * (g.py - g.oy);
+    const dx = cx - ax;
+    const dy = cy - ay;
+    el.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(${k.toFixed(4)}, ${sy.toFixed(4)})`;
+  }
+
+  function setHud(v) {
+    root.style.setProperty("--intro-hud", String(v));
+  }
+
+  function applyIntro(f) {
+    if (!lineGeom[0]) return;
+    if (f < INTRO_APPEAR) {
+      for (let i = 0; i < 3; i++) {
+        const op = lineOpacity(i, f);
+        lineEls[i].style.opacity = op.toFixed(3);
+        placeLine(i, frameCenter.x, frameCenter.y + lineOffset(i, f) + RISE * (1 - op), introScale(i));
+      }
+      setHud(0);
+      return;
+    }
+    const e = easeInOutCubic(clamp01((f - INTRO_APPEAR) / INTRO_MOVE));
+    for (let i = 0; i < 3; i++) {
+      const from = appearPoint(i);
+      const to = settledPoint(i);
+      lineEls[i].style.opacity = "1";
+      placeLine(i, from.x + (to.x - from.x) * e, from.y + (to.y - from.y) * e, from.k + (to.k - from.k) * e);
+    }
+    setHud(easeOutCubic(clamp01((f - INTRO_APPEAR - INTRO_MOVE) / INTRO_REVEAL)));
+  }
+
+  // 片头收尾：把三行落回它们自己的自然状态（拉伸的名字恢复 scaleY，其余清空）。
+  function finishIntro() {
+    if (introDone) return;
+    introDone = true;
+    setHud(1);
+    for (let i = 0; i < 3; i++) {
+      const el = lineEls[i];
+      if (!el) continue;
+      el.style.opacity = "1";
+      const sy = lineStretch[i];
+      el.style.transform = i !== 1 && sy > 1 ? `scaleY(${sy.toFixed(3)})` : "none";
+    }
+  }
+
   async function boot() {
     const res = await fetch(`/api/export/${encodeURIComponent(job)}/frames`, { cache: "no-store" });
     if (!res.ok) throw new Error(await res.text());
     const text = await res.text();
     frames = text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
     if (!frames.length) throw new Error("没有帧");
-    total = TOTAL_START + frames.length + TOTAL_END;
+    total = TOTAL_INTRO + TOTAL_START + frames.length + TOTAL_END;
     window.__exportTotal = total;
 
     const allPacks = mergePacks(frames);
@@ -293,10 +458,11 @@
     root.classList.remove("hidden");
     fitNames();
     fitHpNumbers();
+    measureLines();
 
     clock.set(0);
     audioActive = true;
-    frameNo = TOTAL_START;
+    frameNo = TOTAL_INTRO + TOTAL_START;
     window.__exportRender(frames[0]);
     scaleStage();
     pauseAnimations(0);
@@ -311,6 +477,7 @@
     clock.flush(0);
     pauseAnimations(0);
     scaleStage();
+    applyIntro(0);
     ready = true;
     started = true;
     window.__exportReady = true;
@@ -318,12 +485,25 @@
 
   window.__exportStep = async function (i) {
     if (!ready) throw new Error("导出页还没准备好");
-    if (i < TOTAL_START) return;
-    if (i < TOTAL_START + frames.length) {
-      const fi = i - TOTAL_START;
+    if (i < TOTAL_INTRO) {
+      // 片头只算样式，不动假时钟：比赛的时间轴还停在 0。
+      audioActive = false;
+      applyIntro(i);
+      await new Promise((r) => realRAF(r));
+      return;
+    }
+    if (i < TOTAL_INTRO + TOTAL_START) {
+      finishIntro();
+      audioActive = false;
+      await new Promise((r) => realRAF(r));
+      return;
+    }
+    const first = TOTAL_INTRO + TOTAL_START;
+    if (i < first + frames.length) {
+      const fi = i - first;
       if (fi === 0) {
         audioActive = true;
-        frameNo = TOTAL_START;
+        frameNo = first;
         return;
       }
       const t = (fi * 1000) / FPS;
@@ -340,7 +520,7 @@
       updateHp(frames[fi]);
       tickMedia();
     } else {
-      const j = i - (TOTAL_START + frames.length);
+      const j = i - (first + frames.length);
       endShown = true;
       setWinner(Math.min(1, j / 36));
     }

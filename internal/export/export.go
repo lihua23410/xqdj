@@ -9,18 +9,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 )
 
 const (
-	holdStart = 60
-	holdEnd   = 120
-	fps       = 60
+	// 帧数账本。网页侧 export.js 里有同名的一份（TOTAL_INTRO/TOTAL_START/TOTAL_END），
+	// 改这里必须同步改那边，否则进度条和成片长度会悄悄错开。
+	introFrames = 300 // 片头：逐个出现 60 + 移到顶栏 180 + 元素浮现 60
+	holdStart   = 60  // 首帧静止
+	holdEnd     = 300 // 胜者定格：0.6 秒淡入 + 4.4 秒静止
+	fps         = 60
 )
 
 var errNoFrames = errors.New("这一场还没有可导出的帧")
@@ -50,35 +55,106 @@ type Job struct {
 }
 
 func NewManager(baseURL string, frames func() []json.RawMessage) *Manager {
-	return &Manager{
+	m := &Manager{
 		baseURL: baseURL,
 		frames:  frames,
 		chrome:  findChrome(),
 		ffmpeg:  findFFmpeg(),
 		jobs:    make(map[string]*Job),
 	}
+	m.logEnv()
+	return m
 }
 
+// logEnv 在启动时把选中的浏览器和 ffmpeg 打出来。导出出问题时第一眼看这行就知道
+// 是环境没配好还是渲染本身有问题。
+func (m *Manager) logEnv() {
+	if m.chrome == "" {
+		log.Printf("导出：找不到 Chromium 浏览器，用 XQDJ_CHROME 指定 chrome.exe / msedge.exe 的完整路径")
+	} else {
+		log.Printf("导出：浏览器 %s", m.chrome)
+	}
+	if m.ffmpeg == "" {
+		log.Printf("导出：找不到 ffmpeg，用 XQDJ_FFMPEG 指定 ffmpeg.exe 的完整路径")
+	} else {
+		log.Printf("导出：ffmpeg %s", m.ffmpeg)
+	}
+}
+
+// findChrome 找一个能跑无头截图的 Chromium：先看 XQDJ_CHROME，再看 PATH，
+// 最后翻 Windows 的常见安装位置（本机往往既没装 Chrome，也没把 msedge 加进 PATH，
+// 但 Edge 就是 Chromium，导出照样能用）。
 func findChrome() string {
 	if p := os.Getenv("XQDJ_CHROME"); p != "" {
 		return p
 	}
-	for _, name := range []string{"google-chrome-stable", "google-chrome", "chromium", "chromium-browser"} {
+	for _, name := range []string{
+		"google-chrome-stable", "google-chrome", "chromium", "chromium-browser",
+		"chrome", "chrome.exe", "msedge", "msedge.exe",
+	} {
 		if p, err := exec.LookPath(name); err == nil {
+			return p
+		}
+	}
+	for _, p := range browserCandidates() {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
 			return p
 		}
 	}
 	return ""
 }
 
+func browserCandidates() []string {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+	var out []string
+	for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "LocalAppData"} {
+		root := os.Getenv(env)
+		if root == "" {
+			continue
+		}
+		out = append(out,
+			filepath.Join(root, "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(root, "Microsoft", "Edge", "Application", "msedge.exe"),
+		)
+	}
+	return out
+}
+
 func findFFmpeg() string {
 	if p := os.Getenv("XQDJ_FFMPEG"); p != "" {
 		return p
 	}
-	if p, err := exec.LookPath("ffmpeg"); err == nil {
-		return p
+	for _, name := range []string{"ffmpeg", "ffmpeg.exe"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p
+		}
+	}
+	for _, p := range ffmpegCandidates() {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
 	}
 	return ""
+}
+
+func ffmpegCandidates() []string {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+	var out []string
+	if root := os.Getenv("ProgramData"); root != "" {
+		out = append(out, filepath.Join(root, "chocolatey", "bin", "ffmpeg.exe"))
+	}
+	if root := os.Getenv("LocalAppData"); root != "" {
+		out = append(out, filepath.Join(root, "Microsoft", "WinGet", "Links", "ffmpeg.exe"))
+	}
+	if root := os.Getenv("ProgramFiles"); root != "" {
+		out = append(out, filepath.Join(root, "ffmpeg", "bin", "ffmpeg.exe"))
+	}
+	out = append(out, `C:\ffmpeg\bin\ffmpeg.exe`)
+	return out
 }
 
 func (m *Manager) Handle(mux *http.ServeMux) {
@@ -110,7 +186,7 @@ func (m *Manager) handleStart(w http.ResponseWriter, r *http.Request) {
 		ID:     id,
 		Frames: frames,
 		phase:  "preparing",
-		total:  holdStart + len(frames) + holdEnd,
+		total:  introFrames + holdStart + len(frames) + holdEnd,
 		dir:    dir,
 		ctx:    ctx,
 		cancel: cancel,
