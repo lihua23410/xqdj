@@ -84,7 +84,7 @@ map/all.go               生成：blank import 每个子包，触发 init 登记
 map/all_test.go          清单过期 / 空 import 会失败
 internal/unit/           Actor / Cmd / Sense / Look / Pack / Field，sim 与 character 的唯一协议
 internal/sim/            物理、对局状态机、CCD、墙
-internal/web/            单挑选人页、团队赛页（`team.html`）、战场、引擎级特效（embed）；lib/ 放 gsap 等第三方脚本。不要为新球改这里
+internal/web/            单挑选人页、团队赛页（`team.html`）、战场、引擎级特效（embed）；lib/ 放 gsap 等第三方脚本；sfx/ 是两段缺省音效。不要为新球改这里
 cmd/winrate/             无头胜率矩阵
 docs/adr/                架构决策（巡航带子、活随从、场地可选、胶囊墙改名、硬墙穿透、索敌看可瞄准、挡视线）
 docs/fighters/           战斗机介绍用的外观和雷达图 svg（只覆盖部分球）
@@ -506,7 +506,7 @@ arena.registerShot("shot", (fx, ctx) => {
 
 前端脚本加载是异步的：第一帧可能钩子还没挂上。引擎对未知名字会退化为 `spawnFx("fx-"+name, …)`，所以尽量自己登记；没登记又没 css 动画的名字，元素会因为等不到 `animationend` 而留在 DOM 里。
 
-`window.arena` 提供：`lookOf`、`kindColor`、`screenPos`、`spawnFx`、`burst`、`spawnGhostFrom`、`registerShot`、`registerFactions`。包内脚本不要写顶层 `const arena`，会盖住 `window.arena`。
+`window.arena` 提供：`lookOf`、`kindColor`、`screenPos`、`spawnFx`、`burst`、`spawnGhostFrom`、`registerShot`、`registerFactions`、`registerOwnHurt`，以及声音的 `SOUND_MODE`、`voice`、`audio`、`playAudio`（见 [音效](#音效)）。包内脚本不要写顶层 `const arena`，会盖住 `window.arena`。
 
 `spawnFx(cls, x, y, kind, extra = {})`：`extra` 是 CSS 变量，例如 `{ "--ang": "1rad" }`。元素在 `animationend` 后删掉，css 里要有动画。
 
@@ -568,6 +568,8 @@ go test ./...
 - `Spawn` 战斗机 Kind（会被丢掉；选人只走 `Fighter: true` 的注册表）。
 - `Look.FX` / `window.lookFX` 短名和别的球撞车。
 - `unit.FX.Kind` 填一个没有 `Look.Base` 的字符串（钩子找不到包）。派系闪光除外，那是引擎的 `"faction"`。
+- 直接 `new Audio(...).play()` 发声，或点开声音却不给 `mode` / `priority`（见 [音效](#音效)）。
+- 把音效放进 `internal/web/sfx/`，或在 `app.js` 里按 Kind 挂音效。
 
 ### 13. 核对清单
 
@@ -581,6 +583,9 @@ go test ./...
 - [ ] 皮肤短名、`fx/<短名>.css`、`Look.FX` 三者一致，且没和已占用短名撞车
 - [ ] 自己发的 `FX.Name` 已 `registerShot`，且不在引擎保留名里
 - [ ] 状态图走 `/ball/<Kind>/status/…`；派系图走 `RegisterFactions` / `registerFactions`
+- [ ] 音效走 `arena.voice` / `audio` / `playAudio`，重触发是 `stop → reset → play`，mode 与 priority 已显式给
+- [ ] 自带受击音已 `arena.registerOwnHurt(Kind)`；新音效的响度已量过并写进 `docs/audio-loudness.md`
+- [ ] 包内 `fx/README.md` 记了音效来源与许可
 - [ ] 没有硬编码 280 / 六条场边
 - [ ] `go generate ./character` 且 `go test ./...` 通过
 - [ ] 没改 `internal/web` / `main.go`
@@ -635,6 +640,121 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 ```
 
 带皮肤时：把 `Look` 改成 `Look{Color: "#7ad0ff", FX: []string{"nova"}}`，`NewPack` 传入 embed 的 `fx`，并加上 `fx/nova.css`（以及可选的 `fx/nova.js`、`fx/shot.js`）。然后 `go generate ./character`。
+
+## 音效
+
+声音和特效一样是**角色私产**：文件放包内，播放在包内的 `fx/*.js` 里登记。引擎只提供三样东西——一个仲裁器（`arena.voice`）、两段全局缺省音效（受击 / 碰撞），以及导出时的音轨采集。约定见 `docs/adr/0019-export-audio-by-event-log.md`、`docs/adr/0020-sound-mode-and-priority.md`、`docs/adr/0021-reset-playhead-on-retrigger.md`。
+
+### 1. 三种来源
+
+| 来源 | 文件 | 什么时候响 |
+| --- | --- | --- |
+| 角色自带 | `character/<ascii>/fx/*.wav` / `*.mp3` | 角色自己的 `unit.FX` 上，`registerShot` 的钩子里播 |
+| 缺省受击音 | `internal/web/sfx/default-hit.wav` | 引擎发 `hurt`（掉血）时；该 kind 调过 `arena.registerOwnHurt` 就不放 |
+| 缺省碰撞音 | `internal/web/sfx/default-impact.wav` | 引擎发 `impact`（身体互撞）/ `hit`（弹体命中）时；总是放 |
+
+`hurt` 与 `impact`/`hit` 是两回事：掉血才响受击音，撞上才响碰撞音，互相不替代。角色自带受击音时，在 `fx/*.js` 顶部登记一次，缺省受击音就对它彻底闭嘴（见 `character/pastor/fx/shot.js`）：
+
+```js
+arena.registerOwnHurt("老牧师");   // 参数是 Kind 字符串；活随从自带受击音也要登记它自己的 Kind
+```
+
+两段缺省音效的参数写死在 `app.js` 的 `DEFAULT_SFX` 里：
+
+| | mode | priority | 冷却 | 声部 |
+| --- | --- | ---: | ---: | ---: |
+| `hit` | 1（抢占） | 200 | 45ms | 3 |
+| `impact` | 0（不抢占） | 210 | 45ms | 3 |
+
+45ms 内的第二下直接丢掉，3 个 `Audio` 轮着用——连击时不至于糊成一片。
+
+### 2. 所有声音都走仲裁器
+
+```js
+// 建一次，反复用（推荐）
+const v = arena.voice(new Audio(pack + "/fx/attack.wav"), {
+  mode: arena.SOUND_MODE.PREEMPT,
+  priority: 120,
+  volume: 1.0,      // 可选，默认 1
+  loop: false,      // 可选
+});
+
+// 重触发：停 → 归零 → 播
+v.stop();
+v.reset();
+v.play();
+
+// 一次性播完拉倒（内部建完就 play，不复用）
+arena.playAudio(src, { mode: arena.SOUND_MODE.NORMAL, priority: 200 });
+```
+
+`new Audio(...).play()` 直接播不行：它绕开仲裁，该被抢占时停不下来；导出页也接不到这次播放，成片里就少这一声。
+
+### 3. mode 与 priority
+
+| mode | 值 | 行为 |
+| --- | ---: | --- |
+| `NORMAL` | 0 | 默认。不抢占：场上有 `PREEMPT` 在播就让路；同级之间共存 |
+| `PREEMPT` | 1 | 起播时停掉正在播的（`IMMUNE` 除外）；但若正在播的有效优先级比自己强，自己让路 |
+| `IMMUNE` | 2 | 双向免疫：既不停别人，也不会被 `PREEMPT` 停。有效优先级固定 256 |
+| `FORCE` | 3 | 起播停掉**所有**在播的并锁住窗口，窗口内只有后到的 `FORCE` 能接管。有效优先级固定 1 |
+
+`priority` 取 0–255，**数值越小越强，`1` 最强**，`0` 表示“最低”（内部按 256 排）。没写就是 `NORMAL` + `0`。优先级比较看的是“有效优先级”：`IMMUNE` → 256，`FORCE` → 1，其余取 `priority` 的档次。
+
+“正在播”按 `started && !paused && !ended` 算，声音自然播完窗口就关了；暂停、命中停顿、导出页的假时钟共用同一套判断，所以实时与成片听感一致。
+
+**被抢占过的 voice 会带着 `cancelled` 标记，之后 `play()` 一律返回 false——必须 `reset()` 才能再播。** 这就是所有重触发都写成 `stop → reset → play` 的原因。
+
+两个现成的取值参考：地慧星斩击用 `PREEMPT/1`（最强的抢占音）；时计的刻钟与复活用 `IMMUNE`（只管自己不被压，不去压别人），见 `character/tokei/fx/shot.js`。
+
+### 4. 点击之后才能出声
+
+浏览器要求先有用户手势。角色自己做了“静音试播解锁”：第一次 `pointerdown` 时静音播一下就停，之后正常发声（见 `character/glitch/fx/shot.js` 的 `unlock`、`character/wolf/fx/shot.js`）。开场就要响的角色照抄这段。
+
+### 5. 触发时机：`shot` 与 `IMMEDIATE_AUDIO`
+
+快照到达时先按到达顺序把声音播掉，画面仍走 rAF 合并（`app.js` 的 `playSoundFX`）。理由：两发命中挤进同一帧时，后一声会把前一声 `stop` 掉，听起来只剩一下。
+
+- 挂在 `shot` 上的声音（绝大多数）自动享受这个顺序：钩子被调两次，一次 `audioOnly: true`（到达时），一次 `visualOnly: true`（画的时候）。模板（例：`character/ranged/fx/shot.js`）：
+
+```js
+arena.registerShot("shot", (fx, ctx) => {
+  const audioOnly = !!(ctx && ctx.audioOnly);
+  const visualOnly = !!(ctx && ctx.visualOnly);
+  if (!visualOnly) { v.stop(); v.reset(); v.play(); }
+  if (audioOnly) return;
+  // 画东西
+});
+```
+
+- 挂在别的名字上的声音默认跟画面一起播（合并后）。要它也按到达顺序，得把 FX 名加进 `app.js` 的 `IMMEDIATE_AUDIO`（现在有 `attack`、`gear`、`cruise`、`scream`、`verse`、`carve`、`revive`）——那是引擎侧改动，加之前先确认。
+
+### 6. 重触发与暂停
+
+- 重触发一律 `stop() → reset() → play()`；`reset()` 会把播放头归零。只 `pause + play` 会从上一段的尾部起播，听上去像没声。
+- 命中停顿、暂停后用 `pause()` / `play()` 恢复，**不要** `reset()`：那是“接着放”，不是“重来”。
+- 循环音别 `reset()`，会从开头重来。
+
+### 7. 响度与音量
+
+- 全部音效统一到 **-15.7 LUFS**（基准 `character/glitch/fx/iai.mp3`），真峰值 ≤ **-1.0 dBFS**；播放音量一律 1.0，不再按文件单独压低。
+- 加了新音效，用 `ffmpeg -filter_complex ebur128=peak=true` 量一遍，把结果补进 `docs/audio-loudness.md` 的表。
+- 极短音（0.1–0.3 秒）积分响度没有意义，按真峰值归一到 -1.0 dBFS。
+
+### 8. 素材与许可
+
+- 角色自带音效：来源、许可、署名要求写进包内 `fx/README.md`（例：`character/tokei/fx/README.md`、`character/melee/fx/README.md`）。
+- 两段缺省音效：`internal/web/sfx/README.md`（Kenney Impact Sounds，CC0 1.0）。
+- 只用可商用 / 公共领域素材；CC0 不强制署名，但来源要记下来。
+
+### 9. 导出视频里的声音
+
+导出页不真出声，只把 `play` / `pause` 接住，按帧号记下 `{src, frame, volume, loop, rate, preservesPitch, offset}`，服务端再按 `frame * 800` 采样混成一条轨。所以：
+
+- 用 `arena.voice` / `arena.audio` / `arena.playAudio`，或自己 `new Audio(src)` 再 `play()`——这些都会被记下来。
+- **不要**用 Web Audio（`AudioContext`、`AudioBufferSourceNode`）、`<audio autoplay>`、内联 data URI：不进事件表，成片里没有这声。
+- 路径必须是页面能取到的 URL（`/ball/<Kind>/fx/…` 或 `/sfx/…`），服务端要按同一份 `unit.BallFS()` 读回来混音。
+- 导出页把 `audio.paused` 伪装成 false 并对重复 `play()` 去重：角色 tick 里“没播完就再 play”的写法不会叠音，但也别靠 `paused` 判断状态。
 
 ## 引擎会替你做的事
 
