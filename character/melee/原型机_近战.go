@@ -38,7 +38,7 @@ func init() {
 		Speed:   meleeSpeed,
 		Vision:  meleeVision,
 		Fighter: true,
-		Look:    unit.Look{Color: meleeColor, Ghost: 280, VisionRing: true},
+		Look:    unit.Look{Color: meleeColor, Ghost: 280, VisionRing: true, FX: []string{"melee"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &原型机_近战{}
 	})
@@ -53,7 +53,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  unit.Deg(meleeArcMin),
 		ArcInner: meleeArcInner,
-		Look:     unit.Look{Color: meleeColor, Overlay: true},
+		Look:     unit.Look{Color: meleeColor, Overlay: true, FX: []string{"melee-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &近战弧{slot: info.Slot}
 	})

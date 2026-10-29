@@ -1,0 +1,98 @@
+/* 深青装甲、青色光学核心；全部状态保持青色系。 */
+.ball.fighter.look-melee {
+  background: radial-gradient(circle, #174b4d 0%, #072528 65%, #03171b 100%);
+  border: 1px solid #4ea6a1;
+  box-shadow: 0 0 5px #3dd6c640, inset 0 0 5px #021318;
+}
+.melee-chassis { position: absolute; inset: -5%; pointer-events: none; }
+.melee-hull {
+  position: absolute; inset: 5%; overflow: hidden;
+  clip-path: polygon(19% 6%, 65% 6%, 94% 32%, 94% 68%, 65% 94%, 19% 94%, 4% 73%, 4% 27%);
+  background: linear-gradient(135deg, #70a8a5 0%, #294f52 22%, #0a272c 42%, #15383e 67%, #437775 100%);
+  box-shadow: inset 0 0 0 2px #316367;
+}
+.melee-hull::before {
+  content: ''; position: absolute; inset: 12%;
+  clip-path: polygon(12% 0, 64% 0, 100% 35%, 100% 65%, 64% 100%, 12% 100%, 0 75%, 0 25%);
+  background: linear-gradient(150deg, #163f43, #062126 60%, #225257);
+  border: 1px solid #70d2c866;
+}
+.melee-spine { position: absolute; left: 23%; top: 44%; width: 35%; height: 12%; background: #3dd6c6; box-shadow: 0 0 4px #65f6e5; }
+.melee-optic {
+  position: absolute; top: 28%; right: 15%; height: 44%; width: 9%;
+  background: #b6fff4; border-radius: 1px; box-shadow: 0 0 5px #5ffff0, 0 0 9px #3dd6c680;
+  transform: skewY(-15deg);
+}
+.melee-vent {
+  position: absolute; top: 30%; left: 12%; width: 14%; height: 40%;
+  background: repeating-linear-gradient(0deg, #030f17 0 2px, #448581 2px 3px);
+}
+.melee-pod {
+  position: absolute; z-index: 1; left: 23%; width: 40%; height: 15%;
+  background: linear-gradient(0deg, #0a282e, #3d7677); border: 1px solid #69b5ad;
+  clip-path: polygon(12% 0, 83% 0, 100% 70%, 100% 100%, 0 100%, 0 30%);
+}
+.melee-pod.upper { top: 0; }
+.melee-pod.lower { bottom: 0; transform: scaleY(-1); }
+.melee-bolt { position: absolute; width: 5%; height: 5%; left: 35%; background: #b1e1d8; }
+.melee-bolt.upper { top: 19%; }.melee-bolt.lower { bottom: 19%; }
+.melee-exhaust {
+  position: absolute; z-index: -1; right: 91%; top: 35%; width: calc(12% + 40% * var(--melee-boost, 0)); height: 30%;
+  clip-path: polygon(100% 0, 100% 100%, 0 50%);
+  background: linear-gradient(90deg, transparent, #3dd6c688 55%, #b6fff4);
+  opacity: calc(0.25 + 0.75 * var(--melee-boost, 0));
+}
+.look-melee.melee-boosting { border-color: #9bfff0; box-shadow: 0 0 11px #3dd6c680; }
+.ball.arc.look-melee-arc { border-color: #9effee; filter: drop-shadow(0 0 3px #3dd6c6); }
+
+/* 外圈半径直接对应快照 vision；细刻度与低透明度扫描不遮住战场。 */
+.guide.melee-radar { border: 0; color: #3dd6c6; opacity: 0.65; background: transparent; animation: none; box-shadow: none; }
+.melee-radar svg { display: block; width: 100%; height: 100%; overflow: visible; fill: none; stroke: currentColor; }
+.melee-radar path, .melee-radar circle { vector-effect: non-scaling-stroke; }
+.melee-range-line { stroke-width: 0.8; stroke-dasharray: 15 3 2 3; opacity: 0.72; }
+.melee-range-inset { stroke-width: 0.5; stroke-dasharray: 3 7; opacity: 0.24; }
+.melee-range-ticks .minor { stroke-width: 0.7; opacity: 0.38; }
+.melee-range-ticks .major { stroke-width: 1.2; opacity: 0.9; }
+.melee-range-gates { stroke-width: 1.7; opacity: 0.9; }
+.melee-heading { transform: rotate(var(--melee-heading, 0rad)); transform-origin: 200px 200px; stroke-width: 1.7; opacity: 0.9; }
+.melee-scan-pulses { position: absolute; inset: 0; }
+.melee-scan-pulses i {
+  position: absolute; inset: 0; border-radius: 50%; border: 1px solid #75f2df;
+  box-sizing: border-box; box-shadow: 0 0 7px #3dd6c622, inset 0 0 5px #3dd6c614;
+  background: radial-gradient(circle, transparent 90%, #3dd6c60b 100%);
+  transform-origin: center; pointer-events: none;
+}
+.melee-radar-state, .melee-radar-range {
+  position: absolute; padding: 2px 4px; font: 8px/1.1 ui-monospace, Consolas, monospace; letter-spacing: 1.2px;
+  color: #7ee4d6; background: #062226cc; border-left: 2px solid #3dd6c67a;
+}
+.melee-radar-state { left: 16%; top: 10%; }.melee-radar-range { right: 16%; bottom: 10%; }
+.melee-radar.acquired { color: #9bfff0; opacity: 0.9; }
+.melee-radar.acquired .melee-range-line { stroke-width: 1.2; stroke-dasharray: 33 5; }
+.melee-radar.acquired .melee-radar-state { color: #bcfff5; border-left-color: #9bfff0; }
+.guide.melee-target { border: 0; transform: translate(-50%, -50%); color: #9bfff0; }
+.melee-target i, .melee-target b { position: absolute; inset: 0; }
+.melee-target i {
+  background: linear-gradient(currentColor, currentColor) left top/9px 1px,
+    linear-gradient(currentColor, currentColor) left top/1px 9px,
+    linear-gradient(currentColor, currentColor) right top/9px 1px,
+    linear-gradient(currentColor, currentColor) right top/1px 9px,
+    linear-gradient(currentColor, currentColor) left bottom/9px 1px,
+    linear-gradient(currentColor, currentColor) left bottom/1px 9px,
+    linear-gradient(currentColor, currentColor) right bottom/9px 1px,
+    linear-gradient(currentColor, currentColor) right bottom/1px 9px;
+  background-repeat: no-repeat; opacity: 0.95;
+}
+.melee-target b { inset: -4px; border: 1px solid #3dd6c640; border-radius: 50%; border-left-color: #9bfff0; border-right-color: #9bfff0; transform: rotate(var(--melee-lock-angle, 0deg)); }
+
+.fx-melee-boost {
+  width: var(--trail, 70px); height: 20px; margin: -10px 0 0;
+  transform-origin: 0 50%; transform: rotate(var(--heading, 0rad));
+}
+.fx-melee-boost::before {
+  content: ''; position: absolute; right: 100%; width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, #3dd6c650 60%, #a7fff0);
+  clip-path: polygon(0 50%, 78% 22%, 100% 0, 100% 100%, 78% 78%);
+  animation: melee-boost-flare 0.35s ease-out forwards;
+}
+@keyframes melee-boost-flare { from { opacity: 1; transform: scaleX(1); } to { opacity: 0; transform: scaleX(0.3); } }

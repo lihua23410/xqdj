@@ -24,8 +24,10 @@
     dashVoice.play();
 
     const { x, y, kind } = ctx;
-    arena.spawnFx("fx-shock", x, y, kind);
-    arena.spawnFx("fx-ring", x, y, kind);
-    arena.burst(x, y, kind, 12);
+    arena.spawnFx("fx-melee-boost", x, y, kind, {
+      "--heading": `${Math.atan2(-(fx.vy || 0), fx.vx || 0)}rad`,
+      "--trail": `${72 * (ctx.scale || 1)}px`,
+    });
+    arena.burst(x, y, kind, 6);
   });
 })();
