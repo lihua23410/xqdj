@@ -1,0 +1,111 @@
+/* 传票员：米色纸球，正面压一枚红章；票是斜着飞的纸条，票面数字挂在纸角上方。 */
+
+.ball.fighter.look-subpoena {
+  box-sizing: border-box;
+  background: radial-gradient(
+    circle at 36% 28%,
+    #fffdf4 0 22%,
+    #ece0bd 58%,
+    #c9b585 100%
+  );
+  border: 1px solid rgba(122, 96, 50, 0.6);
+  box-shadow:
+    0 0 10px rgba(240, 226, 187, 0.4),
+    inset 0 0 8px rgba(120, 96, 52, 0.28);
+}
+
+/* 红章：歪着的方框，纸球上一眼认得出是公文。 */
+.ball.fighter.look-subpoena::before {
+  content: "";
+  position: absolute;
+  inset: 22%;
+  border: 1.5px solid rgba(178, 52, 44, 0.85);
+  border-radius: 3px;
+  transform: rotate(-9deg);
+  box-shadow: inset 0 0 4px rgba(178, 52, 44, 0.35);
+}
+
+/* 章里那两行字：一条实线一条淡线，缩到多小都还在。 */
+.ball.fighter.look-subpoena::after {
+  content: "";
+  position: absolute;
+  left: 34%;
+  top: 46%;
+  width: 32%;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(178, 52, 44, 0.8);
+  box-shadow: 0 3px 0 rgba(178, 52, 44, 0.45);
+  transform: rotate(-9deg);
+}
+
+.ball.look-ticket {
+  box-sizing: border-box;
+  border-radius: 1.5px;
+  rotate: -12deg;
+  background: linear-gradient(158deg, #fffdf5, #efe5c9);
+  border: 1px solid rgba(122, 96, 50, 0.75);
+  box-shadow:
+    0 0 calc(6px + var(--heat, 0) * 16px)
+      rgba(255, 226, 150, calc(0.35 + var(--heat, 0) * 0.45)),
+    0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* 纸面上的三行公文线。 */
+.ball.look-ticket::after {
+  content: "";
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  top: 34%;
+  height: 1px;
+  background: rgba(122, 96, 50, 0.55);
+  box-shadow:
+    0 3px 0 rgba(122, 96, 50, 0.4),
+    0 6px 0 rgba(122, 96, 50, 0.25);
+}
+
+.ticket-amount {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 3px);
+  transform: translateX(-50%);
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(26, 21, 14, 0.78);
+  color: #ffe7a8;
+  font: 700 11px/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* 故障气泡。 */
+.fx-subpoena-fault {
+  position: absolute;
+  font: 700 13px/1.2 sans-serif;
+  color: #ffd9d2;
+  text-shadow:
+    0 0 8px rgba(220, 70, 60, 0.75),
+    0 1px 0 #000;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: subpoena-fault 1.15s ease-out forwards;
+}
+
+@keyframes subpoena-fault {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -30%) scale(0.8);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -55%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -110%) scale(1.02);
+  }
+}

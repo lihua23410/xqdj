@@ -14,3 +14,4 @@ desktop.ini
 .cursor/
 .zcode/
 .test-ap/
+.dsh-ops-update-*.lock

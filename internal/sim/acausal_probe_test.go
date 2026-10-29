@@ -3,6 +3,7 @@ package sim
 import (
 	"math"
 	"testing"
+	"time"
 
 	"xqdj/character"
 	"xqdj/character/acausal"
@@ -80,6 +81,9 @@ func TestAcausalProbeFlipsAndDiesOnClock(t *testing.T) {
 
 	for i := 0; i < 8; i++ {
 		m.Tick()
+		// 角色跑在自己的协程里：给这一帧的感知一点落地时间。8 拍内出弹是产品要求，
+		// 但协程什么时候被调度不是——机器满载时不给时间会偶发地拿不到锁影弹。
+		time.Sleep(300 * time.Microsecond)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
