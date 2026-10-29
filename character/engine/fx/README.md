@@ -6,6 +6,8 @@
 
 - 原始文件：`tmp/fire-sfx/2026-10-27/fire-flare-ignition-01.wav`
 - 处理：`ffmpeg -filter:a atempo=2.0`（2 倍速，保留音高），44.1kHz / 16-bit / stereo
+- 后续柔化：3.2kHz 附近削减 5 dB、5kHz 高频搁架削减 5 dB、7kHz 低通，并加入轻度瞬态压缩、5ms 淡入和 30ms 淡出；保持原音高和 0.580499 秒时长。
+- 柔化滤镜：`equalizer=f=3200:t=q:w=0.8:g=-5,highshelf=f=5000:g=-5,lowpass=f=7000:p=2,acompressor=threshold=0.25:ratio=2.5:attack=3:release=60:makeup=1,afade=t=in:st=0:d=0.005,afade=t=out:st=0.550499:d=0.03`。输入为已统一响度的旧版 `attack.wav`，不再重新归一化增益。
 - 来源：OpenGameArt — *Flare ignition* — qubodup
   https://opengameart.org/content/flare-ignition
 - 许可：CC0 1.0 Universal，全文见同目录 `LICENSE-CC0-1.0.txt`
@@ -43,6 +45,8 @@
 
 ## 音量
 
-`attack.wav`、`blast.wav`、`gear.wav`、`cruise.wav` 已统一到 -15.7 LUFS
+`blast.wav`、`gear.wav`、`cruise.wav` 已统一到 -15.7 LUFS
 （以地慧星斩击 `character/glitch/fx/iai.mp3` 为基准），真实峰值不超过 -1.0 dBFS。
 完整测量表见 `docs/audio-loudness.md`。
+
+`attack.wav` 柔化后测得 -19.4 LUFS、真峰值 -6.7 dBFS。普通攻击播放时继续使用 `volume: 0.5`（额外降低约 6 dB），保留点火声的主体、减轻高频刺耳感；其余内燃机音效保持原音量。

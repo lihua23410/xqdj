@@ -5,6 +5,7 @@
   const attackVoice = arena.voice(new Audio(attackSrc + "/fx/attack.wav"), {
     mode: arena.SOUND_MODE.PREEMPT,
     priority: 199,
+    volume: 0.5,
   });
   attackVoice.audio.preload = "auto";
 

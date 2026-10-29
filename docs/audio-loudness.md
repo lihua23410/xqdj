@@ -9,7 +9,7 @@
 2. 目标增益 `gain = -15.7 - I`。
 3. 受真峰值限制：`gain = min(gain, -1.0 - TP)`，避免削波。
 4. WAV 用 PCM s16le 重写；MP3 用 libmp3lame 192k 重写。
-5. 所有播放音量保持 1.0；缺省受击/碰撞原先的 0.32 / 0.16 已取消。
+5. 统一时播放音量为 1.0；内燃机普攻现单独设为 0.5。缺省受击/碰撞原先的 0.32 / 0.16 已取消。
 
 ## 结果
 
@@ -24,7 +24,7 @@
 | `character/pastor/fx/verse2.mp3` | 老牧师经文 2 | -15.9 | -8.4 |
 | `character/pastor/fx/verse3.mp3` | 老牧师经文 3 | -15.9 | -12.1 |
 | `character/wolf/fx/animals.mp3` | 狼人嚎叫 | -16.0 | -6.8 |
-| `character/engine/fx/attack.wav` | 内燃机普通攻击 | -15.7 | -2.6 |
+| `character/engine/fx/attack.wav` | 内燃机普通攻击（柔化后） | -19.4 | -6.7 |
 | `character/engine/fx/blast.wav` | 内燃机击破爆发 | -15.7 | -3.4 |
 | `character/engine/fx/gear.wav` | 内燃机升档 | -16.0 | -1.0 |
 | `character/engine/fx/cruise.wav` | 内燃机最高档巡航 | -15.7 | -2.3 |
@@ -37,5 +37,7 @@
 `default-impact.wav` 只有 0.16 秒，积分响度对这类极短点击没有意义；它已按真峰值
 限制到 -1.0 dBFS，听感上是一次短促碰撞。`character/melee/fx/attack.wav` 同样只有
 0.34 秒，按峰值归一到 -1.0 dBFS。`iai.mp3` 作为基准未改动。
+
+内燃机普通攻击在统一响度后单独削减了高频并压柔瞬态，播放音量为 0.5；这项例外不再拉回 -15.7 LUFS。滤镜见 `character/engine/fx/README.md`。
 
 原始文件备份在 `tmp/audio-volume-backup/`（已被 `.gitignore` 的 `/tmp/` 覆盖）。
