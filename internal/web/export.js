@@ -75,12 +75,10 @@
 
   const clock = window.__clock;
   const realRAF = window.__realRAF;
-  // 帧数账本。Go 侧 internal/export/export.go 有同名的一份（introFrames/holdStart/holdEnd），
-  // 改这里必须同步改那边，否则进度条和成片长度会悄悄错开。
-  const TOTAL_INTRO = 300; // 片头：出现 60 + 移动 180 + 浮现 60
-  const TOTAL_START = 60; // 首帧静止
-  const TOTAL_END = 300; // 胜者定格：0.6 秒淡入 + 4.4 秒静止
-  const FPS = 60;
+  // 服务端统一下发帧数账本，演出不占用正式比赛的假时钟。
+  let TOTAL_INTRO, TOTAL_START, TOTAL_END, TOTAL_PROBE, FPS;
+  let initial, probe, probeClockMark;
+  let battlePrepared = false;
 
   let frames = [];
   let total = 0;
@@ -88,7 +86,7 @@
   let ready = false;
   let started = false;
   let endShown = false;
-  let frameNo = TOTAL_START;
+  let frameNo = 0;
   let audioActive = false;
   const audioEvents = [];
   const playingMedia = new Set();
@@ -436,15 +434,27 @@
   }
 
   async function boot() {
-    const res = await fetch(`/api/export/${encodeURIComponent(job)}/frames`, { cache: "no-store" });
+    const base = `/api/export/${encodeURIComponent(job)}`;
+    const [res, metaRes] = await Promise.all([
+      fetch(`${base}/frames`, { cache: "no-store" }),
+      fetch(`${base}/meta`, { cache: "no-store" }),
+    ]);
     if (!res.ok) throw new Error(await res.text());
+    if (!metaRes.ok) throw new Error(await metaRes.text());
+    const meta = await metaRes.json();
+    const tl = meta.timeline;
+    TOTAL_INTRO = tl.titleFrames; TOTAL_START = tl.holdStartFrames;
+    TOTAL_END = tl.endFrames; TOTAL_PROBE = tl.probeFrames; FPS = tl.fps;
     const text = await res.text();
-    frames = text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    frames = text.split("\n").filter(Boolean).map((line) => ({ ...JSON.parse(line), intro: null }));
     if (!frames.length) throw new Error("没有帧");
-    total = TOTAL_INTRO + TOTAL_START + frames.length + TOTAL_END;
+    probe = meta.intro;
+    initial = { ...(meta.initial || frames[0]), intro: null, effects: [] };
+    total = tl.totalFrames;
+    if (total !== TOTAL_INTRO + TOTAL_PROBE + TOTAL_START + frames.length + TOTAL_END) throw new Error("录像与时间线不匹配");
     window.__exportTotal = total;
 
-    const allPacks = mergePacks(frames);
+    const allPacks = mergePacks([initial, ...frames]);
     window.__exportSetState({ ...frames[0], packs: allPacks });
     ensurePacks();
     await window.__packsWait();
@@ -454,27 +464,36 @@
 
     const wrap = document.querySelector("#arena .stage-wrap");
     if (wrap && arenaEl) arenaEl.appendChild(wrap);
-    setupHud(frames[0]);
+    setupHud(initial);
     root.classList.remove("hidden");
     fitNames();
     fitHpNumbers();
     measureLines();
 
     clock.set(0);
-    audioActive = true;
-    frameNo = TOTAL_INTRO + TOTAL_START;
-    window.__exportRender(frames[0]);
+    frameNo = TOTAL_INTRO + TOTAL_PROBE + TOTAL_START;
+    if (TOTAL_PROBE) {
+      audioActive = false;
+      probeClockMark = clock.checkpoint();
+      window.__exportRender(initial, { film: probe, elapsed: 0 });
+    } else {
+      audioActive = true;
+      window.__exportRender(frames[0]);
+      battlePrepared = true;
+    }
     scaleStage();
     pauseAnimations(0);
-    clock.run();
-    pauseAnimations(0);
-    clock.flush(0);
-    pauseAnimations(0);
-    updateHp(frames[0]);
+    if (!TOTAL_PROBE) {
+      clock.run();
+      pauseAnimations(0);
+      clock.flush(0);
+      pauseAnimations(0);
+    }
+    updateHp(initial);
 
     await new Promise((r) => realRAF(r));
     await new Promise((r) => realRAF(r));
-    clock.flush(0);
+    if (!TOTAL_PROBE) clock.flush(0);
     pauseAnimations(0);
     scaleStage();
     applyIntro(0);
@@ -492,25 +511,54 @@
       await new Promise((r) => realRAF(r));
       return;
     }
-    if (i < TOTAL_INTRO + TOTAL_START) {
-      finishIntro();
+    finishIntro();
+    if (i < TOTAL_INTRO + TOTAL_PROBE) {
+      audioActive = false;
+      const elapsed = (i - TOTAL_INTRO) / FPS;
+      window.__exportRender(initial, { film: probe, elapsed });
+      pauseAnimations(elapsed * 1000);
+      scaleStage();
+      await new Promise((r) => realRAF(r));
+      return;
+    }
+    const first = TOTAL_INTRO + TOTAL_PROBE + TOTAL_START;
+    if (!battlePrepared) {
+      clock.discardSince(probeClockMark);
+      frameNo = first;
+      audioActive = true;
+      // 首拍的音效记在正式比赛开始处；画面在首帧停留段先准备好。
+      window.__exportRender(initial);
+      scaleStage();
+      pauseAnimations(0);
+      clock.run(); clock.flush(0); pauseAnimations(0);
+      updateHp(initial);
+      battlePrepared = true;
+    }
+    if (i < first) {
       audioActive = false;
       await new Promise((r) => realRAF(r));
       return;
     }
-    const first = TOTAL_INTRO + TOTAL_START;
     if (i < first + frames.length) {
       const fi = i - first;
       if (fi === 0) {
         audioActive = true;
         frameNo = first;
+        if (TOTAL_PROBE) {
+          window.__exportRender(frames[0]);
+          clock.run(); pauseAnimations(0); clock.flush(0); pauseAnimations(0);
+          scaleStage(); updateHp(frames[0]);
+          // 首次加入比赛特效会新建合成层，跨过一次实际绘制再截图。
+          await new Promise((r) => realRAF(r));
+        }
+        await new Promise((r) => realRAF(r));
         return;
       }
       const t = (fi * 1000) / FPS;
-      clock.set(t);
-      clock.run();
       frameNo = i;
       audioActive = true;
+      clock.set(t);
+      clock.run();
       window.__exportRender(frames[fi]);
       clock.run();
       pauseAnimations(t);

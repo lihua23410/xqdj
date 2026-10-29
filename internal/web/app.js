@@ -1580,27 +1580,33 @@ function onFighterBar(ev) {
 let introClip = null;
 let introStart = 0;
 let introPlayed = false;
+let exportIntro = null;
 
 function playIntro(scale, cx, cy) {
+  if (EXPORT) return drawIntro(exportIntro && exportIntro.film, exportIntro && exportIntro.elapsed, scale, cx, cy);
   if (!introClip && state.intro && state.intro.frames && state.intro.frames.length && state.intro.death >= 0) {
     introClip = state.intro;
     introStart = performance.now();
     introPlayed = false;
   }
-  let layer = document.getElementById("intro-layer");
-  if (!introClip || !(introClip.death >= 0) || !introClip.frames || !introClip.frames.length) {
-    if (layer) layer.replaceChildren();
-    return false;
-  }
-  const death = Number(introClip.death);
-  const playDur = 0.5 + Math.max(0, death) / 10;
-  const dur = playDur + 0.5;
   const elapsed = (performance.now() - introStart) / 1000;
-  if (elapsed >= dur) {
-    if (layer) layer.replaceChildren();
-    if (!introPlayed) {
-      introPlayed = true;
-      send({ type: "intro" });
+  const playing = drawIntro(introClip, elapsed, scale, cx, cy);
+  if (!playing && introClip && !introPlayed) {
+    introPlayed = true;
+    send({ type: "intro" });
+  }
+  return playing;
+}
+
+// 正常观战和导出共用画面；导出显式给经过时间，不依赖收到 WS 的时刻。
+function drawIntro(clip, elapsed, scale, cx, cy) {
+  let layer = document.getElementById("intro-layer");
+  const death = clip && Number(clip.death);
+  const playDur = 0.5 + Math.max(0, death) / 10;
+  if (!clip || !clip.frames || !clip.frames.length || !(death >= 0) || elapsed >= playDur + 0.5) {
+    if (layer) {
+      if (window.gsap) window.gsap.killTweensOf(layer.querySelectorAll("*"));
+      layer.remove();
     }
     return false;
   }
@@ -1608,9 +1614,9 @@ function playIntro(scale, cx, cy) {
   if (elapsed < 0.5) t = Math.max(0, death - 0.5) + elapsed;
   else if (elapsed < playDur) t = Math.max(0, death - (elapsed - 0.5) * 10);
   else t = 0;
-  let frame = introClip.frames[0];
+  let frame = clip.frames[0];
   let best = Infinity;
-  for (const f of introClip.frames) {
+  for (const f of clip.frames) {
     const d = Math.abs(Number(f.t) - t);
     if (d < best) {
       best = d;
@@ -1912,7 +1918,8 @@ window.__exportSetState = (snap) => {
   state = snap;
   hexR = snap.hexRadius || 280;
 };
-window.__exportRender = (snap) => {
+window.__exportRender = (snap, intro = null) => {
+  exportIntro = intro;
   window.__exportSetState(snap);
   render();
 };

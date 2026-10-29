@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -17,11 +18,11 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"xqdj/internal/replay"
 )
 
 const (
-	// 帧数账本。网页侧 export.js 里有同名的一份（TOTAL_INTRO/TOTAL_START/TOTAL_END），
-	// 改这里必须同步改那边，否则进度条和成片长度会悄悄错开。
+	// 帧数账本通过 /meta 下发，导出页不再另算一份总时长。
 	introFrames = 300 // 片头：逐个出现 60 + 移到顶栏 180 + 元素浮现 60
 	holdStart   = 60  // 首帧静止
 	holdEnd     = 300 // 胜者定格：0.6 秒淡入 + 4.4 秒静止
@@ -31,36 +32,39 @@ const (
 var errNoFrames = errors.New("这一场还没有可导出的帧")
 
 type Manager struct {
-	baseURL string
-	frames  func() []json.RawMessage
-	chrome  string
-	ffmpeg  string
+	baseURL   string
+	recording func() replay.Recording
+	chrome    string
+	ffmpeg    string
 
 	mu   sync.Mutex
 	jobs map[string]*Job
 }
 
 type Job struct {
-	mu     sync.Mutex
-	ID     string
-	Frames []json.RawMessage
-	phase  string
-	done   int
-	total  int
-	err    string
-	dir    string
-	file   string
-	cancel context.CancelFunc
-	ctx    context.Context
+	mu       sync.Mutex
+	ID       string
+	Frames   []json.RawMessage
+	Initial  json.RawMessage
+	Intro    *replay.IntroFilm
+	Timeline timeline
+	phase    string
+	done     int
+	total    int
+	err      string
+	dir      string
+	file     string
+	cancel   context.CancelFunc
+	ctx      context.Context
 }
 
-func NewManager(baseURL string, frames func() []json.RawMessage) *Manager {
+func NewManager(baseURL string, recording func() replay.Recording) *Manager {
 	m := &Manager{
-		baseURL: baseURL,
-		frames:  frames,
-		chrome:  findChrome(),
-		ffmpeg:  findFFmpeg(),
-		jobs:    make(map[string]*Job),
+		baseURL:   baseURL,
+		recording: recording,
+		chrome:    findChrome(),
+		ffmpeg:    findFFmpeg(),
+		jobs:      make(map[string]*Job),
 	}
 	m.logEnv()
 	return m
@@ -161,6 +165,7 @@ func (m *Manager) Handle(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/export", m.handleStart)
 	mux.HandleFunc("GET /api/export/{id}", m.handleStatus)
 	mux.HandleFunc("GET /api/export/{id}/frames", m.handleFrames)
+	mux.HandleFunc("GET /api/export/{id}/meta", m.handleMeta)
 	mux.HandleFunc("POST /api/export/{id}/cancel", m.handleCancel)
 	mux.HandleFunc("GET /api/export/{id}/file", m.handleFile)
 }
@@ -170,7 +175,8 @@ func (m *Manager) handleStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "导出需要本机 Chrome 和 ffmpeg", http.StatusServiceUnavailable)
 		return
 	}
-	frames := m.frames()
+	recording := m.recording()
+	frames := recording.Frames
 	if len(frames) < 2 {
 		http.Error(w, errNoFrames.Error(), http.StatusConflict)
 		return
@@ -182,14 +188,18 @@ func (m *Manager) handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	tl := newTimeline(recording)
 	j := &Job{
-		ID:     id,
-		Frames: frames,
-		phase:  "preparing",
-		total:  introFrames + holdStart + len(frames) + holdEnd,
-		dir:    dir,
-		ctx:    ctx,
-		cancel: cancel,
+		ID:       id,
+		Frames:   frames,
+		Initial:  recording.Initial,
+		Intro:    recording.Intro,
+		Timeline: tl,
+		phase:    "preparing",
+		total:    tl.TotalFrames,
+		dir:      dir,
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 	m.mu.Lock()
 	m.jobs[id] = j
@@ -325,4 +335,35 @@ func newID() string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b[:])
+}
+
+// timeline 是服务端与导出页面共用的帧数账本。
+type timeline struct {
+	FPS             int `json:"fps"`
+	TitleFrames     int `json:"titleFrames"`
+	ProbeFrames     int `json:"probeFrames"`
+	HoldStartFrames int `json:"holdStartFrames"`
+	EndFrames       int `json:"endFrames"`
+	BattleFrames    int `json:"battleFrames"`
+	TotalFrames     int `json:"totalFrames"`
+}
+
+func newTimeline(r replay.Recording) timeline {
+	probe := int(math.Ceil(r.Intro.Duration() * fps))
+	return timeline{FPS: fps, TitleFrames: introFrames, ProbeFrames: probe, HoldStartFrames: holdStart, EndFrames: holdEnd, BattleFrames: len(r.Frames), TotalFrames: introFrames + probe + holdStart + len(r.Frames) + holdEnd}
+}
+
+func (m *Manager) handleMeta(w http.ResponseWriter, r *http.Request) {
+	j := m.job(r)
+	if j == nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(struct {
+		Initial  json.RawMessage   `json:"initial,omitempty"`
+		Intro    *replay.IntroFilm `json:"intro,omitempty"`
+		Timeline timeline          `json:"timeline"`
+	}{j.Initial, j.Intro, j.Timeline})
 }

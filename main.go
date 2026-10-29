@@ -132,7 +132,7 @@ func main() {
 	})
 	mux.Handle("/", http.FileServer(http.FS(static)))
 	mux.Handle("/ball/", http.StripPrefix("/ball/", http.FileServer(http.FS(unit.BallFS()))))
-	exporter := export.NewManager(base, match.RecordFrames)
+	exporter := export.NewManager(base, match.Recording)
 	exporter.Handle(mux)
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)

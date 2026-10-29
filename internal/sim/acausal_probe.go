@@ -2,6 +2,7 @@ package sim
 
 import (
 	"time"
+	"xqdj/internal/replay"
 
 	"xqdj/character/acausal"
 	unitpkg "xqdj/internal/unit"
@@ -28,23 +29,9 @@ func (st *probeState) closeUnfinished() {
 	st.drops = drops
 }
 
-type introBody struct {
-	K string  `json:"k"`
-	S int     `json:"s"`
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-	R float64 `json:"r"`
-}
-
-type introFrame struct {
-	T float64     `json:"t"`
-	B []introBody `json:"b"`
-}
-
-type introFilm struct {
-	Death  float64      `json:"death"`
-	Frames []introFrame `json:"frames"`
-}
+type introBody = replay.IntroBody
+type introFrame = replay.IntroFrame
+type introFilm = replay.IntroFilm
 
 func acausalKind() string { return 非因果.KindAcausal }
 

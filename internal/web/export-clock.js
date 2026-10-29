@@ -95,6 +95,12 @@
     set: setNow,
     run: runTimers,
     flush: flushRAF,
+    // 演出期间不推进比赛时钟；离开时丢掉演出私有的定时器和 RAF。
+    checkpoint: () => ({ timers: new Set(timers.keys()), rafCount: rafs.length }),
+    discardSince(mark) {
+      for (const id of timers.keys()) if (!mark.timers.has(id)) timers.delete(id);
+      rafs.splice(mark.rafCount);
+    },
   };
   window.__realRAF = realRAF;
   window.__realSetTimeout = realSetTimeout;

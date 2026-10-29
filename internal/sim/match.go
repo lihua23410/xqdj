@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"xqdj/internal/replay"
 	unitpkg "xqdj/internal/unit"
 	奇美拉 "xqdj/map/chimera"
 )
@@ -185,6 +186,10 @@ type Match struct {
 	dmgSeq      uint64
 	pendingDmg  map[uint64]dmgOffer
 	wardAbsorb  map[uint64]bool
+
+	// 开场演出与真局初态单独归档，不跟随直播演出回执清除。
+	recordInitial json.RawMessage
+	recordIntro   *introFilm
 }
 
 type dmgOffer struct {
@@ -239,6 +244,10 @@ func newMatch(seed uint64, pinned bool) *Match {
 func (m *Match) SnapshotJSON() []byte {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.snapshotJSONLocked(true)
+}
+
+func (m *Match) snapshotJSONLocked(withIntro bool) []byte {
 	type ujson struct {
 		unitpkg.Snapshot
 	}
@@ -287,7 +296,9 @@ func (m *Match) SnapshotJSON() []byte {
 		Units:    make([]unitpkg.Snapshot, 0, len(m.order)),
 		Walls:    make([]wallSnap, 0, len(m.walls)),
 		Effects:  append([]unitpkg.FX(nil), m.fx...),
-		Intro:    m.takeIntroLocked(),
+	}
+	if withIntro {
+		msg.Intro = m.takeIntroLocked()
 	}
 	for _, id := range m.order {
 		u := m.units[id]
@@ -656,6 +667,11 @@ func (m *Match) Start() {
 		m.addUnitLocked(m.spec.bootKind, vec{}, vec{}, 0, 0)
 	}
 	m.phase = PhaseRunning
+	// 演出只存一次；真局初态在第一拍推进之前固定下来。
+	if !m.skipProbe && m.intro.Duration() > 0 {
+		m.recordIntro = m.intro
+		m.recordInitial = m.snapshotJSONLocked(false)
+	}
 }
 
 func (m *Match) listFieldsLocked() []string {
@@ -914,6 +930,8 @@ func (m *Match) resetLocked() {
 	m.rootN = 0
 	m.record = nil
 	m.recordDone = false
+	m.recordInitial = nil
+	m.recordIntro = nil
 }
 
 func (m *Match) installFieldLocked() {
@@ -2722,8 +2740,14 @@ func (m *Match) Loop(broadcast func([]byte), halt <-chan struct{}) {
 				continue
 			}
 			m.Tick()
-			snap := m.SnapshotJSON()
-			m.recordSnapshot(snap)
+			m.mu.Lock()
+			snap := m.snapshotJSONLocked(true)
+			recorded := snap
+			if m.takeIntroLocked() != nil {
+				recorded = m.snapshotJSONLocked(false)
+			}
+			m.recordSnapshotLocked(recorded)
+			m.mu.Unlock()
 			broadcast(snap)
 		}
 	}
@@ -2733,6 +2757,10 @@ func (m *Match) Loop(broadcast func([]byte), halt <-chan struct{}) {
 func (m *Match) recordSnapshot(snap []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.recordSnapshotLocked(snap)
+}
+
+func (m *Match) recordSnapshotLocked(snap []byte) {
 	if m.recordDone {
 		return
 	}
@@ -2752,4 +2780,11 @@ func (m *Match) RecordFrames() []json.RawMessage {
 	out := make([]json.RawMessage, len(m.record))
 	copy(out, m.record)
 	return out
+}
+
+// Recording 原子取得同一场的帧、初态和演出。新一场不会修改旧导出任务持有的数据。
+func (m *Match) Recording() replay.Recording {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return replay.Recording{Frames: append([]json.RawMessage(nil), m.record...), Initial: m.recordInitial, Intro: m.recordIntro}
 }
