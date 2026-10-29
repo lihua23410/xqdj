@@ -1,9 +1,13 @@
 package 分身者
 
 import (
+	"embed"
 	"math"
 	"xqdj/internal/unit"
 )
+
+//go:embed fx
+var assets embed.FS
 
 const KindDoppel = "分身者"
 const KindClone = "分身"
@@ -24,7 +28,7 @@ const (
 )
 
 func init() {
-	p := unit.NewPack(KindDoppel, nil)
+	p := unit.NewPack(KindDoppel, assets)
 	p.Register(unit.Spec{
 		Kind:    KindDoppel,
 		Role:    unit.RoleFighter,
@@ -33,7 +37,7 @@ func init() {
 		Speed:   doppelSpeed,
 		Vision:  0,
 		Fighter: true,
-		Look:    unit.Look{Color: cloneColor},
+		Look:    unit.Look{Color: cloneColor, FX: []string{"doppel"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &分身者{}
 	})
@@ -45,7 +49,7 @@ func init() {
 		Speed:   doppelSpeed,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: cloneColor},
+		Look:    unit.Look{Color: cloneColor, FX: []string{"doppel"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &分身{slot: info.Slot}
 	})
@@ -60,7 +64,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  2 * math.Pi,
 		ArcInner: cloneArcInner,
-		Look:     unit.Look{Color: cloneColor, Overlay: true},
+		Look:     unit.Look{Color: cloneColor, Overlay: true, FX: []string{"doppel-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &分身弧{slot: info.Slot}
 	})
@@ -141,5 +145,9 @@ func (a *分身弧) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: cloneDamage}
+	ctx.Out <- unit.FX{
+		Name: "doppel-touch", UnitID: ctx.ID, Kind: ctx.Kind,
+		X: e.Other.X + e.NX*e.Other.Radius, Y: e.Other.Y + e.NY*e.Other.Radius,
+	}
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }
