@@ -37,7 +37,7 @@ func init() {
 		Speed:   rangedSpeed,
 		Vision:  rangedVision,
 		Fighter: true,
-		Look:    unit.Look{Color: "#f0a050"},
+		Look:    unit.Look{Color: "#f0a050", FX: []string{"ranged"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &原型机_远程{}
 	})

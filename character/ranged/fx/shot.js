@@ -7,19 +7,12 @@
   shotVoice.audio.preload = "auto";
 
   arena.registerShot("shot", (fx, ctx) => {
-    const audioOnly = !!(ctx && ctx.audioOnly);
     const visualOnly = !!(ctx && ctx.visualOnly);
     if (!visualOnly) {
       shotVoice.stop();
       shotVoice.reset();
       shotVoice.play();
     }
-    if (audioOnly) return;
-
-    const { x, y, kind } = ctx;
-    arena.spawnFx("fx-flash", x, y, kind);
-    const ang = Math.atan2(-(fx.vy || 0), fx.vx || 1) * (180 / Math.PI);
-    const beam = arena.spawnFx("fx-beam", x, y, kind);
-    if (beam) beam.style.transform = `translate(0, -50%) rotate(${ang}deg)`;
+    // 炮口焰、后坐和散热由 ranged 皮肤读取同一 shot FX，按比赛时间推进。
   });
 })();
