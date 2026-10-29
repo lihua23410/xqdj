@@ -3,6 +3,13 @@
 window.tachiSt = window.tachiSt || {};
 
 (function () {
+  const pack = (document.currentScript && document.currentScript.dataset.pack) || "/ball/太刀";
+  const swingVoice = arena.voice(new Audio(pack + "/fx/swing.mp3"), {
+    mode: arena.SOUND_MODE.PREEMPT,
+    priority: 199,
+  });
+  swingVoice.audio.preload = "auto";
+
   const LEVELS = [
     { name: "无", color: "#d9dfe8", glow: "rgba(180, 190, 210, 0.5)" },
     { name: "白", color: "#f4f7ff", glow: "rgba(240, 245, 255, 0.95)" },
@@ -234,6 +241,9 @@ window.tachiSt = window.tachiSt || {};
   });
 
   arena.registerShot("swing", (fx, ctx) => {
+    swingVoice.stop();
+    swingVoice.reset();
+    swingVoice.play();
     const L = levelOf(fx.unitId);
     swing(fx.unitId, 150, 30, 0.24);
     line(ctx, fx, "fx-tachi-swing", L.color, BLADE.swing, dirAng(fx));

@@ -3,6 +3,7 @@
 *.test
 *.out
 .temp/
+.tmep/
 /tmp/
 .shots/
 .tmp-*
