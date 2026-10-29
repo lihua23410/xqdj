@@ -249,6 +249,15 @@ func TestShardNeverDamages(t *testing.T) {
 			t.Fatalf("n=%d 碎片不该出伤", n)
 		}
 		mark, ok := stackOf(cmds, 9, kind)
+		if n >= countMax {
+			if ok {
+				t.Fatalf("n=%d 满环后不应再积累扫描", n)
+			}
+			if _, ok := fxOf(cmds, "echo-ping"); ok {
+				t.Fatalf("n=%d 满环后不应再播补层演出", n)
+			}
+			continue
+		}
 		if !ok || !mark.Hidden {
 			t.Fatalf("n=%d 扫描标记应隐藏：%+v", n, mark)
 		}
@@ -312,7 +321,7 @@ func TestDashWhenLocked(t *testing.T) {
 
 	e.Handle(ctx, unit.Collision{Time: 0.30, Other: foe})
 	cmds = drain(out)
-	if d, ok := damageOf(cmds); !ok || d.Amount != ramDmg || d.To != 9 {
+	if d, ok := damageOf(cmds); !ok || d.Amount != 6 || d.To != 9 {
 		t.Fatalf("突进撞人伤害=%+v %v", d, ok)
 	}
 	e.Handle(ctx, unit.Collision{Time: 0.32, Other: foe})
@@ -332,10 +341,15 @@ func TestDashWhenLocked(t *testing.T) {
 		t.Fatal("突进后应放下站定")
 	}
 
-	send(0.70, echoFoe(9, 9, kind)) // lock drops
+	send(0.70, echoFoe(9, 9, kind)) // 扫描层不再控制锁定的持续时间。
+	if e.mode != modeDash {
+		t.Fatalf("mode=%d，六秒锁定窗口内应继续突进", e.mode)
+	}
+	drain(out)
+	send(6.10, echoFoe(9, 9, kind)) // 固定窗口到期。
 	cmds = drain(out)
 	if e.mode != modeScan {
-		t.Fatalf("mode=%d，掉锁后应回到扫描", e.mode)
+		t.Fatalf("mode=%d，六秒结束后应回到扫描", e.mode)
 	}
 	if !hasPass(cmds, false) || !hasStand(cmds, false) {
 		t.Fatal("回扫描应清掉站定/穿人")

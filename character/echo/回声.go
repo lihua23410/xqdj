@@ -1,8 +1,8 @@
 // Package 回声：只靠声呐找人的战士。
 //
 // 平时朝移动方向放星弹；星弹炸成 16 枚声呐碎片，碎片碰到敌人只补一格扫描，完全不出伤。
-// 每个敌人各有一份按层寿命的扫描窗口；满 10 格锁定后，回声改成穿人冲墙（狼人式，但不限次数），
-// 不再发星弹；锁定掉回 10 格以下，再回到扫描。
+// 每个敌人各有一份扫描窗口；满 10 格后冻结为 6 秒锁定，不再补层或逐层衰减。
+// 锁定期间穿人冲墙；结束后标记清零，再回到扫描。
 package 回声
 
 import (
@@ -46,10 +46,11 @@ const (
 	dashSpeed = 640.0
 	dashLock  = 0.08
 	dashGap   = 0.10
-	ramDmg    = 12.0
+	ramDmg    = 6.0
 
 	countMax  = 10
 	countLife = 10.0
+	lockLife  = 6.0
 )
 
 const (
@@ -130,6 +131,7 @@ type 回声 struct {
 	aimX      float64
 	aimY      float64
 	struck    bool
+	locks     map[uint64]*scanLock
 }
 
 func (e *回声) Handle(ctx unit.Context, ev unit.Event) {
@@ -137,11 +139,20 @@ func (e *回声) Handle(ctx unit.Context, ev unit.Event) {
 	case unit.IncomingDamage:
 		unit.ConfirmHit(ctx, v)
 	case unit.Collision:
+		e.expireLocks(ctx, v.Time)
+		if e.mode != modeScan && !e.lockedAt(v.Time) {
+			e.exitDash(ctx)
+		}
 		if e.mode == modeDash && !e.struck && unit.EnemyTarget(v, e.slot) {
 			e.struck = true
 			ctx.Out <- unit.Damage{From: ctx.ID, To: v.Other.ID, Amount: ramDmg}
 		}
 	case unit.WallHit:
+		e.expireLocks(ctx, v.Time)
+		if e.mode != modeScan && !e.lockedAt(v.Time) {
+			e.exitDash(ctx)
+			return
+		}
 		if e.mode == modeDash {
 			e.endDash(ctx)
 			e.mode = modeLock
@@ -159,17 +170,21 @@ func (e *回声) onSense(ctx unit.Context, s unit.Sense) {
 		e.booted = true
 		return
 	}
+	e.syncLocks(ctx, s)
+	target := e.lockTarget(ctx, s)
+	if e.mode != modeScan && target == nil {
+		e.exitDash(ctx)
+		e.charge = 0
+		return
+	}
 	if dt <= 0 || dt > 0.5 {
 		return
 	}
 
-	if target := e.lockTarget(ctx, s); target != nil {
+	if target != nil {
 		e.charge = 0
 		e.tickDash(ctx, s, target)
 		return
-	}
-	if e.mode != modeScan {
-		e.exitDash(ctx)
 	}
 	if math.Hypot(s.Self.VX, s.Self.VY) <= moveEps {
 		return
@@ -182,9 +197,8 @@ func (e *回声) onSense(ctx unit.Context, s unit.Sense) {
 	e.fire(ctx, s)
 }
 
-// lockTarget 找最近的、已经扫满 10 层的敌人。没有就回到扫描。
+// lockTarget 找最近的、仍处在固定锁定窗口内的敌人。
 func (e *回声) lockTarget(ctx unit.Context, s unit.Sense) *unit.Snapshot {
-	kind := countKind(ctx.ID)
 	var best *unit.Snapshot
 	bestD := math.MaxFloat64
 	for i := range s.Nearby {
@@ -195,7 +209,8 @@ func (e *回声) lockTarget(ctx unit.Context, s unit.Sense) *unit.Snapshot {
 		if !unit.Hittable(*o, s.Self.Slot) {
 			continue
 		}
-		if markStacks(*o, kind) < countMax {
+		lock := e.locks[o.ID]
+		if lock == nil || lock.reset || s.Time+1e-9 >= lock.until {
 			continue
 		}
 		d := math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y)
@@ -362,10 +377,9 @@ func (s *碎片) Handle(ctx unit.Context, ev unit.Event) {
 			s.die(ctx)
 		}
 	case unit.Collision:
-		if unit.Hittable(v.Other, s.slot) {
+		if unit.Hittable(v.Other, s.slot) && markStacks(v.Other, lockedKind(s.markKind)) == 0 && markStacks(v.Other, s.markKind) < countMax {
 			stacks := markStacks(v.Other, s.markKind)
-			// 每次命中都补新的一层：旧层自己过期，新层从这一拍重新活 countLife 秒。
-			// 层数可以超过 10；10 只是锁定门槛，不是上限。
+			// 扫描阶段每次命中补一层；满环或进入固定锁定窗口后不再补层。
 			ctx.Out <- unit.StackMark{
 				UnitID: v.Other.ID, Kind: s.markKind, Delta: 1, Icon: countIcon,
 				Lifetime: countLife, Hidden: true,

@@ -1,8 +1,8 @@
 // 回声的声呐演出。
 //
 // 碎片每碰到敌人一次，在它身上补一格扫描；碎片完全不出伤。
-// 10 格满 = 锁定，回声改成穿人冲墙（狼人式，不限次数）；锁定掉回 10 格以下再回到扫描。
-// 扫描窗口由引擎的 mark 按层管：每层 10 秒到点自己掉，环也跟着收。
+// 10 格满后冻结为 6 秒锁定，期间不再补层或逐层衰减；结束清零，再回到扫描。
+// 未满时每层独立存活 10 秒；锁定时十格保持全亮，到期一起收起。
 //
 // 扫描环挂在回声自己的 lookFX 上，每帧读 ctx.units 里敌人的 marks 来画；
 // 这样不用改 app.js，也能在回声死后靠 until 定时器把环收掉。
@@ -42,7 +42,7 @@ window.lookFX = window.lookFX || {};
     el.className = "echo-scan";
     el.innerHTML = '<i class="echo-scan-fill"></i><i class="echo-scan-dash"></i>';
     host.appendChild(el);
-    const ring = { el, owner, target, timer: 0, zeroAt: 0, prev: 0, lastAt: 0 };
+    const ring = { el, owner, target, timer: 0, zeroAt: 0, prev: 0, lastAt: 0, lockUntil: 0 };
     rings.set(key, ring);
     return ring;
   }
@@ -58,9 +58,9 @@ window.lookFX = window.lookFX || {};
 
   // 每一层独立活 lifetime 秒；用最新一次命中 + lifetime 作为 mark 归零的兜底时间，
   // 回声死后定时器也能把环收掉。
-  function armTimer(ring, key, mark, ctx) {
+  function armTimer(ring, key, mark, ctx, lockUntil) {
     if (!(mark.lifetime > 0)) return;
-    const zero = (ring.lastAt || ctx.time) + mark.lifetime;
+    const zero = lockUntil > 0 ? lockUntil : (ring.lastAt || ctx.time) + mark.lifetime;
     if (ring.zeroAt === zero) return;
     ring.zeroAt = zero;
     if (ring.timer) clearTimeout(ring.timer);
@@ -91,12 +91,14 @@ window.lookFX = window.lookFX || {};
       if (!root) return;
 
       const kind = "回声计数" + u.id;
+      const freezeKind = kind + "锁定";
       const seen = new Set();
       let locked = false;
 
       for (const o of (ctx && ctx.units) || []) {
         if (o.slot === u.slot) continue;
-        const mark = (o.marks || []).find((m) => m.kind === kind);
+        const frozen = (o.marks || []).find((m) => m.kind === freezeKind && m.stacks > 0);
+        const mark = frozen || (o.marks || []).find((m) => m.kind === kind);
         if (!mark || mark.stacks <= 0) continue;
 
         const key = keyOf(u.id, o.id);
@@ -104,6 +106,15 @@ window.lookFX = window.lookFX || {};
         let ring = rings.get(key);
         if (!ring) ring = makeRing(key, u.id, o.id);
         place(ring, o, ctx);
+
+        // 锁定到期时，不把清理指令尚未落地的迟到扫描层画成下一轮。
+        if (!frozen && ring.lockUntil > 0 && ctx.time >= ring.lockUntil &&
+            mark.nextDecayAt > 0 && mark.nextDecayAt - mark.lifetime < ring.lockUntil - 1e-9) {
+          ring.el.style.display = "none";
+          continue;
+        }
+        ring.el.style.display = "";
+        if (frozen) ring.lockUntil = frozen.nextDecayAt || 0;
 
         const full = mark.stacks >= 10;
         locked = locked || full;
@@ -114,12 +125,12 @@ window.lookFX = window.lookFX || {};
           ((Math.min(10, mark.stacks) / 10) * 360).toFixed(0) + "deg",
         );
         const left =
-          mark.lifetime > 0 && mark.nextDecayAt > 0
+          !full && mark.lifetime > 0 && mark.nextDecayAt > 0
             ? Math.max(0, (mark.nextDecayAt - ctx.time) / mark.lifetime)
             : 1;
         ring.el.style.setProperty("--left", Math.min(1, left).toFixed(3));
         ring.el.classList.toggle("locked", full);
-        armTimer(ring, key, mark, ctx);
+        armTimer(ring, key, mark, ctx, frozen ? ring.lockUntil : 0);
       }
 
       for (const key of Array.from(rings.keys())) {
