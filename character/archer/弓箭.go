@@ -90,7 +90,7 @@ func init() {
 		Fighter: true,
 		// Ghost 260：巡航 178 不拉残影，只有后撤/翻滚那两下（350/300）留残影。
 		Look: unit.Look{Color: archerColor, Ghost: 260, FX: []string{"archer"}},
-	}, func(unit.SpawnInfo) unit.Actor { return &弓箭{} })
+	}, func(info unit.SpawnInfo) unit.Actor { return &弓箭{field: info.Field} })
 	// 箭：撞墙即消（收 WallHit → Despawn，不弹射）；撞人出伤 + 0.2s 眩晕 + 自毁。
 	p.Register(unit.Spec{
 		Kind: KindArrow, Role: unit.RoleProjectile,
@@ -150,6 +150,7 @@ type 弓箭 struct {
 	booted    bool
 	x, y      float64
 	world     []safeTarget
+	field     unit.Field
 }
 
 func (a *弓箭) Handle(ctx unit.Context, ev unit.Event) {
@@ -163,6 +164,7 @@ func (a *弓箭) Handle(ctx unit.Context, ev unit.Event) {
 
 func (a *弓箭) tick(ctx unit.Context, s unit.Sense) {
 	a.x, a.y, a.slot = s.Self.X, s.Self.Y, s.Self.Slot
+	a.field = s.Field
 	a.note(s)
 	if !a.booted {
 		a.booted = true
@@ -386,7 +388,7 @@ func enemyBullet(o unit.Snapshot, slot int) bool {
 // safeDir 安全向：采样 12 个方向（30° 一格）各自算落点，取分最高的那个单位方向。
 func (a *弓箭) safeDir(s unit.Sense, dist float64) (float64, float64) {
 	best, bestScore := 0.0, math.Inf(-1)
-	f := unit.LiveField()
+	f := s.Field
 	for i := 0; i < safeDirs; i++ {
 		ang := float64(i) * 2 * math.Pi / safeDirs
 		lx, ly := s.Self.X+math.Cos(ang)*dist, s.Self.Y+math.Sin(ang)*dist
@@ -400,7 +402,7 @@ func (a *弓箭) safeDir(s unit.Sense, dist float64) (float64, float64) {
 // safeDirCached 是翻滚用的版本：世界状态取上一拍的摘要（IncomingDamage 里没有 Sense）。
 func (a *弓箭) safeDirCached(dist float64) (float64, float64) {
 	best, bestScore := 0.0, math.Inf(-1)
-	f := unit.LiveField()
+	f := a.field
 	s := unit.Sense{Self: unit.Snapshot{X: a.x, Y: a.y, Slot: a.slot}}
 	for _, w := range a.world {
 		s.Nearby = append(s.Nearby, unit.Snapshot{

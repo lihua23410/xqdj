@@ -317,7 +317,7 @@ func TestLeavePauseThenDashToNearestEdge(t *testing.T) {
 	}
 	a.Handle(ctx, unit.Sense{Time: leavePause, Self: self})
 	v := lastVel(drain(out))
-	dx, dy := nearestEdgeDir(80, 0)
+	dx, dy := nearestEdgeDir(unit.HexField(), 80, 0)
 	if v == nil || math.Abs(v.VX-dx*leaveSpeed) > 1e-6 || math.Abs(v.VY-dy*leaveSpeed) > 1e-6 {
 		t.Fatalf("dash vel=%v want %v,%v", v, dx*leaveSpeed, dy*leaveSpeed)
 	}
@@ -332,7 +332,7 @@ func TestLeaveFadesOnFieldEdge(t *testing.T) {
 	_ = drain(out)
 	a.Handle(ctx, unit.Sense{Time: leavePause, Self: self})
 	_ = drain(out)
-	dx, dy := nearestEdgeDir(80, 0)
+	dx, dy := nearestEdgeDir(unit.HexField(), 80, 0)
 	a.Handle(ctx, unit.WallHit{Time: leavePause + 0.01, NX: dx, NY: dy})
 	cmds := drain(out)
 	if lastFX(cmds, "leave") == nil {

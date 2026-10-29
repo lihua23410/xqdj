@@ -432,7 +432,7 @@ func (a *钓鱼佬) openDomain(ctx unit.Context) {
 func (a *钓鱼佬) plantPonds(ctx unit.Context) {
 	used := make([][2]float64, 0, pondN)
 	for i := 0; i < pondN; i++ {
-		x, y := a.placePond(used)
+		x, y := a.placePond(ctx.Field, used)
 		used = append(used, [2]float64{x, y})
 		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind: KindPond, X: x, Y: y,
@@ -441,9 +441,8 @@ func (a *钓鱼佬) plantPonds(ctx unit.Context) {
 	}
 }
 
-func (a *钓鱼佬) placePond(used [][2]float64) (float64, float64) {
+func (a *钓鱼佬) placePond(f unit.Field, used [][2]float64) (float64, float64) {
 	minGap := pondRadius*2 + 24
-	f := unit.LiveField()
 	for n := 0; n < 40; n++ {
 		x, y, ok := f.RandomWalkable(a.rng, pondRadius)
 		if !ok {

@@ -2,8 +2,6 @@ package 奇美拉
 
 import (
 	"testing"
-
-	"xqdj/internal/unit"
 )
 
 func TestContourClosedAndInside(t *testing.T) {
@@ -20,7 +18,7 @@ func TestContourClosedAndInside(t *testing.T) {
 		t.Fatalf("want CCW area, got %v", area/2)
 	}
 	f := Field()
-	unit.SetLiveField(f)
+
 	if !f.OutlineContains(0, 0, 18) {
 		t.Fatal("hub center should be inside")
 	}

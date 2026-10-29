@@ -96,7 +96,6 @@ func echoFoe(id uint64, stacks int, kind string) unit.Snapshot {
 }
 
 func TestFiresOnlyWhileMoving(t *testing.T) {
-	unit.SetLiveField(unit.HexField())
 	out := make(chan unit.Cmd, 128)
 	ctx := unit.Context{ID: 1, Kind: KindEcho, Out: out, Stream: 7}.WithBirths()
 	e := &回声{}
@@ -137,7 +136,6 @@ func TestFiresOnlyWhileMoving(t *testing.T) {
 }
 
 func TestStarBurstsIntoSixteenOnWall(t *testing.T) {
-	unit.SetLiveField(unit.HexField())
 	out := make(chan unit.Cmd, 128)
 	ctx := unit.Context{ID: 2, Kind: KindStar, Out: out, Stream: 1}.WithBirths()
 	a := &星弹{owner: 7, slot: 0}
@@ -171,7 +169,6 @@ func TestStarBurstsIntoSixteenOnWall(t *testing.T) {
 }
 
 func TestStarBurstsOnUnit(t *testing.T) {
-	unit.SetLiveField(unit.HexField())
 	out := make(chan unit.Cmd, 128)
 	ctx := unit.Context{ID: 2, Kind: KindStar, Out: out, Stream: 1}.WithBirths()
 	a := &星弹{owner: 7, slot: 0}

@@ -201,7 +201,7 @@ func (a *星弹) burst(ctx unit.Context, x, y float64) {
 	}
 	a.done = true
 	ctx.Out <- unit.FX{Name: "echo-burst", Kind: KindStar, X: x, Y: y}
-	field := unit.LiveField()
+	field := ctx.Field
 	r := starRadius + shardRadius + 1
 	for i := 0; i < shardN; i++ {
 		ang := 2 * math.Pi * float64(i) / shardN

@@ -190,7 +190,7 @@ func TestGlitchDodgeBlocksAndLeavesGhost(t *testing.T) {
 		t.Fatalf("dodged hit still dropped hp %.1f -> %.1f", hp0, u.hp)
 	}
 	moved := math.Hypot(u.p.X-x0, u.p.Y-y0) > 1
-	if !moved || !unitpkg.HexContains(u.p.X, u.p.Y, u.radius) {
+	if !moved || !m.liveFieldLocked().Walkable(u.p.X, u.p.Y, u.radius) {
 		m.mu.Unlock()
 		t.Fatalf("dodge dest %+v want a walkable move", u.p)
 	}
@@ -419,11 +419,18 @@ func TestGlitchSlashUsesMarksAndGhostsThenClears(t *testing.T) {
 		t.Fatal("damage should wait until the slash expands")
 	}
 	m.send(g, unitpkg.Sense{Time: 22, Self: g.snap(), Nearby: nearby})
-	m.mu.Unlock()
-	time.Sleep(4 * time.Millisecond)
-	m.mu.Lock()
-	m.drainCmdsLocked()
-	m.settleHitsLocked()
+	// 报价和目标确认分属两个演员协程，等待实际结算而非假定 4ms 足够。
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		m.drainCmdsLocked()
+		m.settleHitsLocked()
+		if m.units[oid].hp < hp0 {
+			break
+		}
+		m.mu.Unlock()
+		time.Sleep(time.Millisecond)
+		m.mu.Lock()
+	}
 	defer m.mu.Unlock()
 	dst := m.units[oid]
 	if dst == nil {

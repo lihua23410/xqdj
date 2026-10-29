@@ -7,11 +7,10 @@ import (
 )
 
 func TestHexOutlineWalkable(t *testing.T) {
-	unit.SetLiveField(Field())
-	if !unit.HexContains(0, 0, 18) {
+	if !Field().Walkable(0, 0, 18) {
 		t.Fatal("center")
 	}
-	if unit.HexContains(unit.HexRadius, 0, 18) {
+	if Field().Walkable(unit.HexRadius, 0, 18) {
 		t.Fatal("edge")
 	}
 }

@@ -258,9 +258,9 @@ func (g *地慧星) onIncoming(ctx unit.Context, d unit.IncomingDamage) {
 		if g.rng == nil {
 			g.rng = unit.NewRNG(ctx.Stream)
 		}
-		nx, ny, ok := unit.LiveField().RandomWalkable(g.rng, glitchCagePad)
+		nx, ny, ok := ctx.Field.RandomWalkable(g.rng, glitchCagePad)
 		if !ok {
-			nx, ny = unit.LiveField().Clamp(g.x, g.y, glitchCagePad)
+			nx, ny = ctx.Field.Clamp(g.x, g.y, glitchCagePad)
 		}
 		ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: nx, Y: ny}
 		g.x, g.y = nx, ny

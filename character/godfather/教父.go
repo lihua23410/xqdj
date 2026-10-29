@@ -220,7 +220,7 @@ func (a *教父) spawnOne(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	a.pending = append(a.pending, k)
-	x, y, vx, vy := edgeKick(a.rng, minionRadius)
+	x, y, vx, vy := edgeKick(s.Field, a.rng, minionRadius)
 	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: k, X: x, Y: y, VX: vx, VY: vy,
 		OwnerID: ctx.ID, Slot: s.Self.Slot,

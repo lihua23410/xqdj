@@ -41,7 +41,7 @@ func TestAcausalProbeFlipsAndDiesOnClock(t *testing.T) {
 	m.Start()
 	t.Cleanup(m.End)
 
-	tape := 非因果.Current()
+	tape := m.probeTape
 	if tape == nil || tape.DeathTime < 0 {
 		t.Fatalf("death %v", tape)
 	}

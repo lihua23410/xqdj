@@ -164,7 +164,7 @@ func (w *狼人) bootMoon(ctx unit.Context, s unit.Sense) {
 	rng := unit.NewRNG(ctx.Stream)
 	x, y, ok := s.Field.RandomWalkable(rng, moonRadius)
 	if !ok {
-		x, y = unit.LiveField().Clamp(0, 80, moonRadius)
+		x, y = s.Field.Clamp(0, 80, moonRadius)
 	}
 	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindMoon,

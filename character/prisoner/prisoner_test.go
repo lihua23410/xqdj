@@ -254,7 +254,7 @@ func TestDropSpotsKeepGap(t *testing.T) {
 		t.Fatalf("enemy spot=%v", a.spots[0])
 	}
 	for i := 0; i < 3; i++ {
-		if !unit.HexContains(a.spots[i].x, a.spots[i].y, cageFit) {
+		if !unit.HexField().Walkable(a.spots[i].x, a.spots[i].y, cageFit) {
 			t.Fatalf("spot %d out of cage fit: %v", i, a.spots[i])
 		}
 		for j := i + 1; j < 3; j++ {

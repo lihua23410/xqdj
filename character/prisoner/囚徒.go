@@ -278,13 +278,12 @@ func (a *囚徒) planDrop(s unit.Sense) {
 	if o := unit.Seek(s); o != nil {
 		ex, ey = o.X, o.Y
 	}
-	a.spots[0] = clampFit(ex, ey)
-	a.spots[1] = a.randSpot(rng, a.spots[0])
-	a.spots[2] = a.randSpot(rng, a.spots[0], a.spots[1])
+	a.spots[0] = clampFit(s.Field, ex, ey)
+	a.spots[1] = a.randSpot(s.Field, rng, a.spots[0])
+	a.spots[2] = a.randSpot(s.Field, rng, a.spots[0], a.spots[1])
 }
 
-func (a *囚徒) randSpot(rng *rand.Rand, avoid ...vec) vec {
-	f := unit.LiveField()
+func (a *囚徒) randSpot(f unit.Field, rng *rand.Rand, avoid ...vec) vec {
 	for n := 0; n < 80; n++ {
 		x, y, ok := f.RandomWalkable(rng, cageFit)
 		if !ok {
@@ -302,7 +301,7 @@ func (a *囚徒) randSpot(rng *rand.Rand, avoid ...vec) vec {
 			return p
 		}
 	}
-	return clampFit(0, 0)
+	return clampFit(f, 0, 0)
 }
 
 func (a *囚徒) emitChain(ctx unit.Context, s unit.Sense) {
@@ -319,8 +318,8 @@ func (a *囚徒) emitChain(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-func clampFit(x, y float64) vec {
-	nx, ny := unit.LiveField().Clamp(x, y, cageFit)
+func clampFit(field unit.Field, x, y float64) vec {
+	nx, ny := field.Clamp(x, y, cageFit)
 	return vec{nx, ny}
 }
 

@@ -49,7 +49,6 @@ func TestBootReadyWithoutExtraSpawn(t *testing.T) {
 }
 
 func TestEruptPlansThreeSpotsAndLands(t *testing.T) {
-	unit.SetLiveField(Field())
 	out := make(chan unit.Cmd, 64)
 	a := &火山{nextErupt: 0}
 	ctx := unit.Context{ID: 2, Kind: KindVolcano, Out: out}

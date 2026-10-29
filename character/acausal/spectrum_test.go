@@ -102,16 +102,15 @@ func TestGhostHitSpendsShadowNotBody(t *testing.T) {
 }
 
 func TestDoomStopsAfterDeath(t *testing.T) {
-	Install(&Tape{
+	tape := &Tape{
 		DeathTime: 5,
 		Bins:      []float64{1},
 		Fighters: []FighterTrack{{
 			Slot: 1, Seat: 0, Kind: "靶子", MaxHP: 10, Radius: 18,
 			Samples: []Sample{{X: 80, Y: 0}},
 		}},
-	})
-	t.Cleanup(func() { Install(nil) })
-	a := &非因果{}
+	}
+	a := &非因果{tape: tape}
 	out := make(chan unit.Cmd, 128)
 	ctx := unit.Context{ID: 7, Kind: KindAcausal, Out: out, Stream: 4}.WithBirths()
 	sense := func(now float64) unit.Sense {
@@ -187,9 +186,8 @@ func drainHas(out <-chan unit.Cmd, to uint64, amount float64) bool {
 }
 
 func TestClockSuicides(t *testing.T) {
-	Install(&Tape{DeathTime: 0.2, Bins: []float64{10}})
-	t.Cleanup(func() { Install(nil) })
-	a := &非因果{}
+	tape := &Tape{DeathTime: 0.2, Bins: []float64{10}}
+	a := &非因果{tape: tape}
 	out := make(chan unit.Cmd, 128)
 	ctx := unit.Context{ID: 7, Kind: KindAcausal, Out: out, Stream: 3}.WithBirths()
 	a.Handle(ctx, unit.Sense{

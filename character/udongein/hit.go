@@ -64,6 +64,6 @@ func segHits(x1, y1, x2, y2, half float64, e unit.Snapshot) bool {
 	return laserHits(x1, y1, dx/n, dy/n, half, n, e)
 }
 
-func clampHex(x, y, radius float64) (float64, float64) {
-	return unit.LiveField().Clamp(x, y, radius)
+func clampHex(field unit.Field, x, y, radius float64) (float64, float64) {
+	return field.Clamp(x, y, radius)
 }

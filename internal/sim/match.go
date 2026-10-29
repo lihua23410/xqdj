@@ -167,6 +167,7 @@ type Match struct {
 	rootN       uint64
 	introUntil  time.Time
 	intro       *introFilm
+	probeTape   *unitpkg.ProbeTape
 	introSent   bool
 	recap       strings.Builder
 	trace       strings.Builder
@@ -220,7 +221,6 @@ func newMatch(seed uint64, pinned bool) *Match {
 		slots = [2][]string{{kinds[0]}, {kinds[1]}}
 	}
 	spec := defaultField()
-	unitpkg.SetLiveField(spec.toUnitField())
 	return &Match{
 		phase:      PhaseSelect,
 		slots:      slots,
@@ -409,7 +409,6 @@ func (m *Match) SetField(name string) {
 		return
 	}
 	m.spec = spec
-	unitpkg.SetLiveField(m.spec.toUnitField())
 }
 
 func sidesOrEmpty(in [2][]string) [2][]string {
@@ -510,7 +509,6 @@ func (m *Match) UseTeam() {
 	if m.spec.name == "" || m.spec.name == "六边形" {
 		if spec, ok := lookupField(奇美拉.Name); ok {
 			m.spec = spec
-			unitpkg.SetLiveField(m.spec.toUnitField())
 		}
 	}
 	m.slots[0] = []string{}
@@ -546,7 +544,6 @@ func (m *Match) UseDuel() {
 	if m.spec.name == 奇美拉.Name {
 		if spec, ok := lookupField("六边形"); ok {
 			m.spec = spec
-			unitpkg.SetLiveField(m.spec.toUnitField())
 		}
 	}
 	kinds := unitpkg.FighterKinds()
@@ -779,6 +776,7 @@ func (m *Match) End() {
 	m.winnerID = 0
 	m.time = 0
 	m.lineup = [2][]string{}
+	m.probeTape = nil
 }
 
 func (m *Match) Tick() {
@@ -916,11 +914,9 @@ func (m *Match) resetLocked() {
 	m.rootN = 0
 	m.record = nil
 	m.recordDone = false
-	unitpkg.SetLiveField(m.spec.toUnitField())
 }
 
 func (m *Match) installFieldLocked() {
-	unitpkg.SetLiveField(m.spec.toUnitField())
 	for _, h := range m.spec.hard {
 		m.nextID++
 		w := &barrier{
@@ -1063,6 +1059,7 @@ func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot in
 	}
 	actor := unitpkg.NewActor(kind, unitpkg.SpawnInfo{
 		OwnerID: owner, Slot: slot, Stream: stream,
+		Field: m.liveFieldLocked(), Probe: m.probeTape,
 		Silent: m.spawnSilent && kind == acausalKind(),
 	})
 	if actor == nil {
@@ -1116,7 +1113,7 @@ func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot in
 		m.noteBirthLocked(u)
 	}
 	u.stream = stream
-	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds, Stream: stream}.WithBirths()
+	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds, Stream: stream, Field: m.liveFieldLocked()}.WithBirths()
 	go runActor(u, ctx)
 	return u
 }
@@ -1147,6 +1144,9 @@ func runActor(u *unit, ctx unitpkg.Context) {
 		case ev, ok := <-u.inbox:
 			if !ok {
 				return
+			}
+			if sense, ok := ev.(unitpkg.Sense); ok {
+				ctx.Field = sense.Field
 			}
 			u.actor.Handle(ctx, ev)
 		}
@@ -2620,7 +2620,6 @@ func (m *Match) pushOutOBB(u *unit, w *barrier, cc vec, cr float64) {
 
 func (m *Match) emitLocked() {
 	field := m.liveFieldLocked()
-	unitpkg.SetLiveField(field)
 	snaps := make([]unitpkg.Snapshot, 0, len(m.order))
 	for _, id := range m.order {
 		u := m.units[id]

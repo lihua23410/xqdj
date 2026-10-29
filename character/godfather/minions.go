@@ -22,7 +22,7 @@ func (l *leaveDrive) begin(ctx unit.Context, now float64) {
 	}
 	l.on = true
 	l.pauseUntil = now + leavePause
-	l.dx, l.dy = unit.LiveField().NearestEdgeDir(l.x, l.y)
+	l.dx, l.dy = ctx.Field.NearestEdgeDir(l.x, l.y)
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
 	ctx.Out <- unit.FX{Name: "aim", Kind: KindGodfather, UnitID: ctx.ID, Amount: -1}

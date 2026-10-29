@@ -55,7 +55,6 @@ func bulletAt(x, y, vx, vy float64) unit.Snapshot {
 // 蓄力中贴脸 → 收弓：cancel FX 必须带自己的坐标。
 // 不带 X/Y 时前端拿 ctx.x/ctx.y 画特效会按 (0,0) 画，于是场心堆一圈圈环（线上踩过这个坑）。
 func TestCancelFxCarriesPosition(t *testing.T) {
-	unit.SetLiveField(unit.HexField())
 	f := &弓箭{step: stepCharge, until: 9.0, booted: true, slot: 0}
 	self := archerSelf()
 	self.X, self.Y = 33, -44
@@ -79,7 +78,6 @@ func TestCancelFxCarriesPosition(t *testing.T) {
 
 // 贴脸 → 后撤步，方向必须是"安全向"：先看敌距分（往远处撤）。
 func TestSafeDirRunsAwayFromEnemy(t *testing.T) {
-	unit.SetLiveField(unit.HexField())
 	f := &弓箭{}
 	self := archerSelf()
 	foe := foeAt(0, 70) // 距离 70 < 90：贴脸
@@ -96,7 +94,6 @@ func TestSafeDirRunsAwayFromEnemy(t *testing.T) {
 // 弹道分：敌人那边当然不能去，另一侧压着一条弹道走廊也不能落进去——落点必须在走廊外。
 // （等权打分下它可能选"侧后方"而不是正后方：只要同时躲开两条威胁就符合设计稿。）
 func TestSafeDirAvoidsBallisticCorridor(t *testing.T) {
-	unit.SetLiveField(unit.HexField())
 	f := &弓箭{}
 	self := archerSelf()
 	foe := foeAt(0, 70)
@@ -118,7 +115,6 @@ func TestSafeDirAvoidsBallisticCorridor(t *testing.T) {
 
 // 场地分：撤出去会出场、被夹回来的方向要吃亏——贴边时不该再往边角撤。
 func TestSafeDirKeepsInsideField(t *testing.T) {
-	unit.SetLiveField(unit.HexField())
 	f := &弓箭{}
 	self := archerSelf()
 	self.Y = 220 // 离上边界只差一点（六边形内切半径 242.5）
@@ -128,7 +124,7 @@ func TestSafeDirKeepsInsideField(t *testing.T) {
 	if !ok {
 		t.Fatalf("贴脸没后撤：%v", cmds)
 	}
-	cx, cy := unit.LiveField().Clamp(self.X+ux*retreatDist, self.Y+uy*retreatDist, archerRadius)
+	cx, cy := unit.HexField().Clamp(self.X+ux*retreatDist, self.Y+uy*retreatDist, archerRadius)
 	if loss := math.Hypot(cx-(self.X+ux*retreatDist), cy-(self.Y+uy*retreatDist)); loss > 20 {
 		t.Fatalf("撤进了死角（被夹回 %v）：(%v,%v)", loss, ux, uy)
 	}
@@ -154,7 +150,6 @@ func hasFX(cmds []unit.Cmd, name string) bool {
 
 // 没锁到人：不起手、不出箭。
 func TestIdleWithoutLockDoesNotShoot(t *testing.T) {
-	unit.SetLiveField(unit.HexField())
 	f := &弓箭{}
 	cmds := feed(f, 1, unit.Sense{Time: 1.0, Self: archerSelf()})
 	if hasSpawn(cmds) || hasFX(cmds, "shoot") || hasFX(cmds, "volley") || hasFX(cmds, "draw") {
@@ -164,7 +159,6 @@ func TestIdleWithoutLockDoesNotShoot(t *testing.T) {
 
 // 蓄力到点时锁丢了：收弓，这一箭哑火。
 func TestChargeLostLockDoesNotShoot(t *testing.T) {
-	unit.SetLiveField(unit.HexField())
 	f := &弓箭{step: stepCharge, until: 1.0, booted: true, slot: 0}
 	cmds := feed(f, 1, unit.Sense{Time: 1.0, Self: archerSelf()})
 	if hasSpawn(cmds) || hasFX(cmds, "shoot") || hasFX(cmds, "volley") {
@@ -180,7 +174,6 @@ func TestChargeLostLockDoesNotShoot(t *testing.T) {
 
 // 齐射站定到点时锁丢了：同样不出箭。
 func TestVolleyLostLockDoesNotShoot(t *testing.T) {
-	unit.SetLiveField(unit.HexField())
 	f := &弓箭{step: stepVolley, until: 1.0, booted: true, slot: 0}
 	cmds := feed(f, 1, unit.Sense{Time: 1.0, Self: archerSelf()})
 	if hasSpawn(cmds) || hasFX(cmds, "shoot") || hasFX(cmds, "volley") {

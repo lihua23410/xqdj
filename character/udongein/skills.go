@@ -47,13 +47,13 @@ func (a *人偶使) castFan(ctx unit.Context, s unit.Sense, enemy unit.Snapshot,
 	}
 	ux, uy := toward(s.Self, enemy)
 	ox, oy := offset(s.Self.X, s.Self.Y, ux, uy, dollReach)
-	ox, oy = clampHex(ox, oy, dollRadius)
+	ox, oy = clampHex(ctx.Field, ox, oy, dollRadius)
 	for i := 0; i < nDolls; i++ {
 		px, py := ox, oy
 		if nDolls > 1 {
 			perpX, perpY := -uy, ux
 			off := (float64(i) - float64(nDolls-1)/2) * 16
-			px, py = clampHex(ox+perpX*off, oy+perpY*off, dollRadius)
+			px, py = clampHex(ctx.Field, ox+perpX*off, oy+perpY*off, dollRadius)
 		}
 		spawnDollAt(ctx, s, px, py, dollSpec{mode: dollStrike, pose: pose, recallAt: s.Time + wind + life})
 	}
@@ -71,11 +71,11 @@ func (a *人偶使) castRect(ctx unit.Context, s unit.Sense, enemy unit.Snapshot
 	}
 	ux, uy := toward(s.Self, enemy)
 	ox, oy := offset(s.Self.X, s.Self.Y, ux, uy, dollReach)
-	ox, oy = clampHex(ox, oy, dollRadius)
+	ox, oy = clampHex(ctx.Field, ox, oy, dollRadius)
 	for i := 0; i < 4; i++ {
 		perpX, perpY := -uy, ux
 		col, row := float64(i%2)*18-9, float64(i/2)*18-9
-		px, py := clampHex(ox+ux*row+perpX*col, oy+uy*row+perpY*col, dollRadius)
+		px, py := clampHex(ctx.Field, ox+ux*row+perpX*col, oy+uy*row+perpY*col, dollRadius)
 		spawnDollAt(ctx, s, px, py, dollSpec{mode: dollStrike, pose: poseAh, recallAt: s.Time + atkRectWind + atkRectLife})
 	}
 	a.setJob(ctx, s, job{
@@ -89,7 +89,7 @@ func (a *人偶使) castRect(ctx unit.Context, s unit.Sense, enemy unit.Snapshot
 func (a *人偶使) castPlace(ctx unit.Context, s unit.Sense) bool {
 	ux, uy := randDir(a)
 	x, y := offset(s.Self.X, s.Self.Y, ux, uy, dollFar)
-	x, y = clampHex(x, y, dollRadius)
+	x, y = clampHex(ctx.Field, x, y, dollRadius)
 	spawnDollAt(ctx, s, x, y, dollSpec{mode: dollShoot, shootAt: s.Time + placeWind, shots: placeShots})
 	return true
 }
@@ -112,7 +112,7 @@ func (a *人偶使) castChase(ctx unit.Context, s unit.Sense, enemy unit.Snapsho
 func (a *人偶使) castSpecial26(ctx unit.Context, s unit.Sense) bool {
 	ux, uy := randDir(a)
 	x, y := offset(s.Self.X, s.Self.Y, ux, uy, dollReach)
-	x, y = clampHex(x, y, dollRadius)
+	x, y = clampHex(ctx.Field, x, y, dollRadius)
 	spawnDollAt(ctx, s, x, y, dollSpec{mode: dollEllipse, ux: ux, uy: uy, armAt: s.Time + placeWind, until: s.Time + placeWind + chaseLife, rangeOn: true})
 	return true
 }
@@ -150,7 +150,7 @@ func (a *人偶使) castChain(ctx unit.Context, s unit.Sense, enemy unit.Snapsho
 func (a *人偶使) castSpell26(ctx unit.Context, s unit.Sense) bool {
 	ux, uy := randDir(a)
 	x, y := offset(s.Self.X, s.Self.Y, ux, uy, dollReach)
-	x, y = clampHex(x, y, dollRadius)
+	x, y = clampHex(ctx.Field, x, y, dollRadius)
 	spawnDollAt(ctx, s, x, y, dollSpec{
 		mode: dollEllipseRecall, ux: ux, uy: uy,
 		dmg: float64(a.spellLevel(SkillN26)+5) * 1.4, once: true, rangeOn: true, slow: true,

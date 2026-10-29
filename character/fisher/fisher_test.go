@@ -98,7 +98,7 @@ func TestBootSpawnsThreeRimPonds(t *testing.T) {
 		if math.Hypot(p.X, p.Y) < 80 {
 			t.Fatalf("pond %d too central (%v,%v)", i, p.X, p.Y)
 		}
-		if !unit.HexContains(p.X, p.Y, pondRadius) {
+		if !unit.HexField().Walkable(p.X, p.Y, pondRadius) {
 			t.Fatalf("pond %d outside hex (%v,%v)", i, p.X, p.Y)
 		}
 	}

@@ -197,7 +197,7 @@ func (t *谭泳辰老先生) onSense(ctx unit.Context, s unit.Sense) {
 }
 
 func (t *谭泳辰老先生) spawnItems(ctx unit.Context, s unit.Sense) {
-	f := unit.LiveField()
+	f := s.Field
 	for _, kind := range []string{KindBell, KindKunai} {
 		x, y, ok := f.RandomWalkable(t.rng, 20)
 		if !ok {
@@ -209,7 +209,7 @@ func (t *谭泳辰老先生) spawnItems(ctx unit.Context, s unit.Sense) {
 
 // spawnMilk：在场上随机一个可行走点放一个奶符。
 func (t *谭泳辰老先生) spawnMilk(ctx unit.Context) {
-	f := unit.LiveField()
+	f := ctx.Field
 	x, y, ok := f.RandomWalkable(t.rng, 20)
 	if !ok {
 		x, y = f.Clamp(t.x, t.y, 40)

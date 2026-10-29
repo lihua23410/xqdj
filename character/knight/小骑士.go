@@ -141,7 +141,7 @@ func (k *小骑士) tryRam(ctx unit.Context, sense unit.Sense) {
 	if enemy == nil {
 		return
 	}
-	tx, ty := beside(sense.Self, *enemy)
+	tx, ty := beside(sense.Field, sense.Self, *enemy)
 	ctx.Out <- unit.FX{
 		Name: "blink", Kind: ctx.Kind,
 		X: sense.Self.X, Y: sense.Self.Y,
@@ -190,7 +190,7 @@ func (k *小骑士) emitRing(ctx unit.Context) {
 	}
 }
 
-func beside(self, enemy unit.Snapshot) (float64, float64) {
+func beside(field unit.Field, self, enemy unit.Snapshot) (float64, float64) {
 	gap := self.Radius + enemy.Radius + 8
 	ex, ey := enemy.X, enemy.Y
 	base := math.Atan2(ey, ex)
@@ -198,7 +198,7 @@ func beside(self, enemy unit.Snapshot) (float64, float64) {
 		ang := base + extra
 		x := ex + math.Cos(ang)*gap
 		y := ey + math.Sin(ang)*gap
-		if unit.LiveField().Walkable(x, y, self.Radius+4) {
+		if field.Walkable(x, y, self.Radius+4) {
 			return x, y
 		}
 	}

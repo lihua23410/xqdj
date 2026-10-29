@@ -400,7 +400,7 @@ func (a *时计) trap(ctx unit.Context, s unit.Sense) {
 		// 引擎当场把这对单位弹开、冲撞速度被反弹覆盖（弧的朝向跟着速度走，于是"根本撞不到"）。
 		// 所以沿「档位→鱼」这条线退到刚好够得着之外（留 ramGap 的空隙，小骑士 beside 同款），
 		// 档位只当锚点；冲撞方向再从落脚点重新指向鱼。
-		sx, sy := a.ramStart(bait, dx, dy, *m)
+		sx, sy := a.ramStart(s.Field, bait, dx, dy, *m)
 		vx, vy := bait.X-sx, bait.Y-sy
 		vn := math.Hypot(vx, vy)
 		if vn < 1e-6 {
@@ -422,10 +422,9 @@ func (a *时计) trap(ctx unit.Context, s unit.Sense) {
 
 // ramStart 挑落脚点：优先站在档位那一侧（贴回档位，观众看起来还是"被拉到那个时刻"），
 // 那里不可行走就绕着鱼转圈找（同小骑士 beside 的兜底），都不行才退回档位中心。
-func (a *时计) ramStart(bait unit.Snapshot, mx, my float64, m moment) (float64, float64) {
+func (a *时计) ramStart(f unit.Field, bait unit.Snapshot, mx, my float64, m moment) (float64, float64) {
 	base := math.Atan2(my, mx) // 档位 → 鱼 的方向角
 	clearance := tokeiRadius + bait.Radius + ramGap
-	f := unit.LiveField()
 	for _, off := range []float64{0, 30, -30, 60, -60, 90, -90, 150, -150, 180} {
 		ang := base + unit.Deg(off)
 		x, y := bait.X-math.Cos(ang)*clearance, bait.Y-math.Sin(ang)*clearance

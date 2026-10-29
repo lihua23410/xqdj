@@ -63,7 +63,7 @@ func (m *Match) runAcausalProbeLocked() {
 		panic("两只非因果")
 	}
 	if n == 0 {
-		非因果.Install(nil)
+		m.probeTape = nil
 		m.intro = nil
 		m.introSent = false
 		m.introUntil = time.Time{}
@@ -79,7 +79,8 @@ func (m *Match) runAcausalProbeLocked() {
 	probe.Start()
 	tape, film := captureProbe(probe, slot)
 	probe.End()
-	非因果.Install(tape)
+	tape.Bins = 非因果.Magnitudes(tape.Drops)
+	m.probeTape = tape
 	m.intro = film
 	m.introSent = false
 	m.introUntil = time.Time{}
@@ -90,7 +91,7 @@ func (m *Match) runAcausalProbeLocked() {
 }
 
 func (m *Match) flipAcausalLocked() {
-	tape := 非因果.Current()
+	tape := m.probeTape
 	if tape == nil {
 		return
 	}

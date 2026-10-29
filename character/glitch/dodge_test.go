@@ -31,7 +31,7 @@ func TestDodgeTeleportsWalkableAndShoots(t *testing.T) {
 	if tp == nil {
 		t.Fatalf("teleport missing: %v", cmds)
 	}
-	if !unit.HexContains(tp.X, tp.Y, glitchCagePad) {
+	if !unit.HexField().Walkable(tp.X, tp.Y, glitchCagePad) {
 		t.Fatalf("teleport (%v,%v) not walkable", tp.X, tp.Y)
 	}
 	shot := mustKind(t, cmds, KindGlitchShot)

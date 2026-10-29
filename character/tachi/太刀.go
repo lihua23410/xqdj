@@ -298,7 +298,7 @@ func (t *太刀) startForesight(ctx unit.Context, d unit.IncomingDamage) {
 		dx, dy = dx/n, dy/n
 	}
 	rx, ry := t.x+dx*retreatDist, t.y+dy*retreatDist
-	rx, ry = unit.LiveField().Clamp(rx, ry, retreatPad)
+	rx, ry = ctx.Field.Clamp(rx, ry, retreatPad)
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: rx, Y: ry}
 	t.x, t.y = rx, ry
 	t.fx(ctx, "foresight", rx, ry, 0)

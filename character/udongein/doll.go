@@ -257,7 +257,7 @@ func (d *人偶) onSense(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	if d.spec.arriveAt > 0 {
-		nx, ny := clampHex(d.spec.x, d.spec.y, dollRadius)
+		nx, ny := clampHex(ctx.Field, d.spec.x, d.spec.y, dollRadius)
 		ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: nx, Y: ny}
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 		d.spec.arriveAt = 0
@@ -370,7 +370,7 @@ func (d *人偶) tickFollow(ctx unit.Context, s unit.Sense) {
 	}
 	x := ox + math.Cos(d.spec.ang)*spell24Ring
 	y := oy + math.Sin(d.spec.ang)*spell24Ring
-	nx, ny := clampHex(x, y, dollRadius)
+	nx, ny := clampHex(ctx.Field, x, y, dollRadius)
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: nx, Y: ny}
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 }
@@ -380,7 +380,7 @@ func (d *人偶) tickDeploy(ctx unit.Context, s unit.Sense, dt float64) {
 	n := math.Hypot(dx, dy)
 	remain := d.spec.arriveAt - s.Time
 	if n < 1e-3 || remain <= 1e-6 {
-		nx, ny := clampHex(d.spec.x, d.spec.y, dollRadius)
+		nx, ny := clampHex(ctx.Field, d.spec.x, d.spec.y, dollRadius)
 		ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: nx, Y: ny}
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 		d.spec.arriveAt = 0
@@ -394,13 +394,13 @@ func (d *人偶) tickDeploy(ctx unit.Context, s unit.Sense, dt float64) {
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * sp, VY: uy * sp}
 	step := sp * dt
 	if step >= n {
-		nx, ny := clampHex(d.spec.x, d.spec.y, dollRadius)
+		nx, ny := clampHex(ctx.Field, d.spec.x, d.spec.y, dollRadius)
 		ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: nx, Y: ny}
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 		d.spec.arriveAt = 0
 		return
 	}
-	nx, ny := clampHex(s.Self.X+ux*step, s.Self.Y+uy*step, dollRadius)
+	nx, ny := clampHex(ctx.Field, s.Self.X+ux*step, s.Self.Y+uy*step, dollRadius)
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: nx, Y: ny}
 }
 
@@ -467,11 +467,11 @@ func (d *人偶) tickChase(ctx unit.Context, s unit.Sense, dt float64) {
 		mx, my := dx/n, dy/n
 		step := chaseSp * dt
 		if step >= n {
-			nx, ny := clampHex(d.spec.tx, d.spec.ty, dollRadius)
+			nx, ny := clampHex(ctx.Field, d.spec.tx, d.spec.ty, dollRadius)
 			ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: nx, Y: ny}
 			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 		} else {
-			nx, ny := clampHex(s.Self.X+mx*step, s.Self.Y+my*step, dollRadius)
+			nx, ny := clampHex(ctx.Field, s.Self.X+mx*step, s.Self.Y+my*step, dollRadius)
 			ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: nx, Y: ny}
 			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: mx * chaseSp, VY: my * chaseSp}
 		}

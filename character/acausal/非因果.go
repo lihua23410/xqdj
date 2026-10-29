@@ -43,7 +43,7 @@ func init() {
 		Fighter: true,
 		Look:    unit.Look{Color: bodyColor, FX: []string{"acausal"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &非因果{silent: info.Silent}
+		return &非因果{silent: info.Silent, tape: info.Probe.Clone()}
 	})
 	p.Register(unit.Spec{
 		Kind:     KindSelfGhost,
@@ -193,7 +193,6 @@ func (a *非因果) onSense(ctx unit.Context, s unit.Sense) {
 func (a *非因果) boot(ctx unit.Context, s unit.Sense) {
 	a.booted = true
 	a.rng = unit.NewRNG(ctx.Stream)
-	a.tape = Current()
 	a.seenMinion = map[uint64]taggedMinion{}
 	a.nextIndex = map[minionKey]int{}
 	a.lockTrack = -1

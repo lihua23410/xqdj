@@ -3,7 +3,6 @@ package unit
 import (
 	"math"
 	"math/rand/v2"
-	"sync"
 )
 
 const (
@@ -51,7 +50,7 @@ type Field struct {
 	BootKind string
 }
 
-// HexField 无名六边形几何，给测试和默认 liveField 用；不是场地目录项。
+// HexField 无名六边形几何，给测试用；不是场地目录项。
 func HexField() Field {
 	return Field{Shape: ShapeHex, Extent: HexRadius}
 }
@@ -94,23 +93,6 @@ func cloneField(f Field) Field {
 	return out
 }
 
-var (
-	liveMu    sync.RWMutex
-	liveField = HexField()
-)
-
-func SetLiveField(f Field) {
-	liveMu.Lock()
-	liveField = f
-	liveMu.Unlock()
-}
-
-func LiveField() Field {
-	liveMu.RLock()
-	defer liveMu.RUnlock()
-	return cloneField(liveField)
-}
-
 func (f Field) size() float64 {
 	if f.Extent >= MinExtent {
 		return f.Extent
@@ -120,10 +102,6 @@ func (f Field) size() float64 {
 
 func (f Field) OutlineContains(x, y, radius float64) bool {
 	return f.outline().Contains(x, y, radius)
-}
-
-func HexContains(x, y, radius float64) bool {
-	return LiveField().Walkable(x, y, radius)
 }
 
 func (f Field) Walkable(x, y, radius float64) bool {

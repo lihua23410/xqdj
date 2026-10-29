@@ -387,6 +387,8 @@ type VisionBlock struct {
 }
 
 type Context struct {
+	// Field 是本单位最近一次感知的场地快照；首次感知前使用出生时的快照。
+	Field  Field
 	ID     uint64
 	Kind   string
 	Out    chan<- Cmd
@@ -418,6 +420,9 @@ type Actor interface {
 }
 
 type SpawnInfo struct {
+	Field Field
+	// Probe 是本场非因果的只读探针记录，由构造器复制后持有。
+	Probe   *ProbeTape
 	OwnerID uint64
 	Slot    int
 	Stream  uint64

@@ -21,21 +21,20 @@ func TestWideHexField(t *testing.T) {
 }
 
 func TestWideHexWalkable(t *testing.T) {
-	unit.SetLiveField(Field())
-	if !unit.HexContains(0, 0, 18) {
+	if !Field().Walkable(0, 0, 18) {
 		t.Fatal("center")
 	}
-	if unit.HexContains(Extent, 0, 18) {
+	if Field().Walkable(Extent, 0, 18) {
 		t.Fatal("vertex")
 	}
-	if !unit.HexContains(unit.HexRadius, 0, 18) {
+	if !Field().Walkable(unit.HexRadius, 0, 18) {
 		t.Fatal("default vertex should be inside")
 	}
 	apo := Extent * math.Sqrt(3) / 2
-	if unit.HexContains(0, apo, 18) {
+	if Field().Walkable(0, apo, 18) {
 		t.Fatal("flat")
 	}
-	if !unit.HexContains(0, apo/2, 18) {
+	if !Field().Walkable(0, apo/2, 18) {
 		t.Fatal("mid apo")
 	}
 }

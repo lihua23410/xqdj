@@ -326,7 +326,7 @@ func (h *钉与锤) tryRitual(ctx unit.Context, s unit.Sense) bool {
 	for i := 0; i < 3; i++ {
 		a := ritualAng(i)
 		pushNail(nailJob{orbit: true, ang: a})
-		x, y := clampInHex(enemy.X+math.Cos(a)*ritualOrbit, enemy.Y+math.Sin(a)*ritualOrbit, nailRadius)
+		x, y := clampInHex(s.Field, enemy.X+math.Cos(a)*ritualOrbit, enemy.Y+math.Sin(a)*ritualOrbit, nailRadius)
 		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindNail,
 			X:       x,
@@ -629,7 +629,7 @@ func (n *钉) tickOrbit(ctx unit.Context, s unit.Sense) {
 }
 
 func (n *钉) placeOrbit(ctx unit.Context, cx, cy float64) {
-	x, y := clampInHex(cx+math.Cos(n.ang)*ritualOrbit, cy+math.Sin(n.ang)*ritualOrbit, nailRadius)
+	x, y := clampInHex(ctx.Field, cx+math.Cos(n.ang)*ritualOrbit, cy+math.Sin(n.ang)*ritualOrbit, nailRadius)
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: x, Y: y}
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 }
@@ -727,8 +727,8 @@ func enemyFighter(s unit.Sense) *unit.Snapshot {
 	return unit.Seek(s)
 }
 
-func clampInHex(x, y, r float64) (float64, float64) {
-	return unit.LiveField().Clamp(x, y, r)
+func clampInHex(field unit.Field, x, y, r float64) (float64, float64) {
+	return field.Clamp(x, y, r)
 }
 
 func (h *钉与锤) nextFSToken(owner uint64) uint64 {
