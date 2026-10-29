@@ -34,5 +34,5 @@ func RewindPresentation(f *IntroFilm) (unit.Presentation, error) {
 	if err != nil {
 		return unit.Presentation{}, err
 	}
-	return unit.Presentation{Pack: KindAcausal, Type: "rewind", Duration: 1 + f.Death/10, Data: data}, nil
+	return unit.Presentation{Pack: KindAcausal, Type: "rewind", Duration: 1 + f.Death/10, Audio: true, Data: data}, nil
 }

@@ -18,6 +18,10 @@ type circle struct {
 	kind int
 }
 
+func isShotBlocker(kind int) bool {
+	return kind == hitWall || kind == hitBody || kind == hitOut
+}
+
 // stepShot 沿这一小段看最先碰上什么。墙、真人、飞出场都只让弹消失。
 func stepShot(x0, y0, x1, y1, bulletR float64, circles []circle, walls []wallSeg, outlineOutside func(x, y float64) (t float64, ok bool)) (kind int, id uint64) {
 	bestT := 2.0
@@ -29,7 +33,10 @@ func stepShot(x0, y0, x1, y1, bulletR float64, circles []circle, walls []wallSeg
 		if t < 0 {
 			t = 0
 		}
-		if t < bestT-1e-9 {
+		earlier := t < bestT-1e-9
+		// 同时接触时优先挡弹，不能由候选顺序决定是否打进重合的影。
+		blockingTie := math.Abs(t-bestT) <= 1e-9 && isShotBlocker(k) && !isShotBlocker(kind)
+		if earlier || blockingTie {
 			bestT = t
 			kind = k
 			id = who

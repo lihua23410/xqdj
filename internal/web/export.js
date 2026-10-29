@@ -143,12 +143,12 @@
     for (const el of playingMedia) {
       const t = (el.__exportAnchorTime || 0) + (frameNo - el.__exportAnchorFrame) / FPS;
       const d = el.duration;
-      if (Number.isFinite(d) && d > 0 && t >= d) {
+      if (Number.isFinite(d) && d > 0 && t >= d && !el.loop) {
         el.__exportPlaying = false;
         playingMedia.delete(el);
         try { el.currentTime = d; } catch (e) { /* ignore */ }
       } else {
-        try { el.currentTime = t; } catch (e) { /* ignore */ }
+        try { el.currentTime = el.loop && Number.isFinite(d) && d > 0 ? t % d : t; } catch (e) { /* ignore */ }
       }
     }
   }

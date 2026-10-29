@@ -120,6 +120,7 @@ type 非因果 struct {
 	fighters []ghostRef
 	minions  []ghostRef
 	shadow   []float64
+	contacts map[uint64]bool // 本体与影的接触，分开后才允许再次反弹
 
 	seenMinion map[uint64]taggedMinion
 	nextIndex  map[minionKey]int
@@ -187,6 +188,7 @@ func (a *非因果) onSense(ctx unit.Context, s unit.Sense) {
 	if a.dead {
 		return
 	}
+	a.bounceGhosts(ctx, s)
 	a.stepBullet(ctx, s)
 }
 

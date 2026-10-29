@@ -1,8 +1,10 @@
 // 非因果私有的探针倒带播放器。公共调度器不解释 death 和轨迹数据。
+const acausalRewindAudio = ((document.currentScript && document.currentScript.dataset.pack) || "/ball/非因果") + "/fx/probe-hum.mp3";
 arena.registerPresentation("rewind", {
   mount(ctx, film) {
     if (!film || !Array.isArray(film.frames) || !film.frames.length || !(film.death >= 0)) throw new Error("无效的非因果演出数据");
     ctx.root.classList.add("acausal-rewind");
+    ctx.playAudio(acausalRewindAudio, { mode: arena.SOUND_MODE.FORCE, loop: true });
     return { film };
   },
   render(instance, elapsed, ctx) {
