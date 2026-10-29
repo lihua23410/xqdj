@@ -4,6 +4,12 @@ window.lookFX = window.lookFX || {};
 window.heroState = window.heroState || {}; // unitId -> {level, exp, need, party}
 
 (function () {
+  const pack = (document.currentScript && document.currentScript.dataset.pack) || "/ball/勇者";
+  const levelupVoice = arena.voice(new Audio(pack + "/fx/levelup.ogg"), {
+    mode: arena.SOUND_MODE.IMMUNE,
+  });
+  levelupVoice.audio.preload = "auto";
+
   function st(id) {
     let s = window.heroState[id];
     if (!s) {
@@ -101,6 +107,9 @@ window.heroState = window.heroState || {}; // unitId -> {level, exp, need, party
   });
 
   arena.registerShot("levelup", (fx, ctx) => {
+    levelupVoice.stop();
+    levelupVoice.reset();
+    levelupVoice.play();
     arena.spawnFx("fx-shock", ctx.x, ctx.y, fx.kind);
     arena.spawnFx("fx-ring", ctx.x, ctx.y, fx.kind);
     arena.burst(ctx.x, ctx.y, fx.kind, 18);
