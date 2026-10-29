@@ -95,3 +95,11 @@ canvas.acausal-bolt {
   height: 100%;
   overflow: visible;
 }
+
+.acausal-rewind .intro-ball {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.88;
+  background: #d7c4ff;
+}

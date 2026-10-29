@@ -166,10 +166,7 @@ type Match struct {
 	skipProbe   bool
 	spawnSilent bool
 	rootN       uint64
-	introUntil  time.Time
-	intro       *introFilm
 	probeTape   *unitpkg.ProbeTape
-	introSent   bool
 	recap       strings.Builder
 	trace       strings.Builder
 	logReady    bool
@@ -188,8 +185,12 @@ type Match struct {
 	wardAbsorb  map[uint64]bool
 
 	// 开场演出与真局初态单独归档，不跟随直播演出回执清除。
-	recordInitial json.RawMessage
-	recordIntro   *introFilm
+	recordInitial       json.RawMessage
+	recordPresentations []replay.Presentation
+	pendingOpening      []replay.Presentation
+	activeOpening       []replay.Presentation
+	openingUntil        time.Time
+	presentationN       uint64
 }
 
 type dmgOffer struct {
@@ -247,33 +248,33 @@ func (m *Match) SnapshotJSON() []byte {
 	return m.snapshotJSONLocked(true)
 }
 
-func (m *Match) snapshotJSONLocked(withIntro bool) []byte {
+func (m *Match) snapshotJSONLocked(withOpening bool) []byte {
 	type ujson struct {
 		unitpkg.Snapshot
 	}
 	msg := struct {
-		Type     string                      `json:"type"`
-		Phase    Phase                       `json:"phase"`
-		Slots    [2][]string                 `json:"slots"`
-		Roster   [2][]string                 `json:"roster"`
-		Team     bool                        `json:"team"`
-		Kinds    []string                    `json:"kinds"`
-		Looks    map[string]unitpkg.Look     `json:"looks"`
-		Packs    map[string]unitpkg.PackInfo `json:"packs"`
-		Winner   string                      `json:"winner"`
-		WinnerID uint64                      `json:"winnerId"`
-		Time     float64                     `json:"time"`
-		Seq      uint64                      `json:"seq"`
-		HexR     float64                     `json:"hexRadius"`
-		Fields   []string                    `json:"fields"`
-		Field    string                      `json:"field"`
-		Shape    string                      `json:"fieldShape"`
-		HitStop  int                         `json:"hitStop"`
-		LogReady bool                        `json:"logReady"`
-		Units    []unitpkg.Snapshot          `json:"units"`
-		Walls    []wallSnap                  `json:"walls"`
-		Effects  []unitpkg.FX                `json:"effects"`
-		Intro    *introFilm                  `json:"intro,omitempty"`
+		Type          string                      `json:"type"`
+		Phase         Phase                       `json:"phase"`
+		Slots         [2][]string                 `json:"slots"`
+		Roster        [2][]string                 `json:"roster"`
+		Team          bool                        `json:"team"`
+		Kinds         []string                    `json:"kinds"`
+		Looks         map[string]unitpkg.Look     `json:"looks"`
+		Packs         map[string]unitpkg.PackInfo `json:"packs"`
+		Winner        string                      `json:"winner"`
+		WinnerID      uint64                      `json:"winnerId"`
+		Time          float64                     `json:"time"`
+		Seq           uint64                      `json:"seq"`
+		HexR          float64                     `json:"hexRadius"`
+		Fields        []string                    `json:"fields"`
+		Field         string                      `json:"field"`
+		Shape         string                      `json:"fieldShape"`
+		HitStop       int                         `json:"hitStop"`
+		LogReady      bool                        `json:"logReady"`
+		Units         []unitpkg.Snapshot          `json:"units"`
+		Walls         []wallSnap                  `json:"walls"`
+		Effects       []unitpkg.FX                `json:"effects"`
+		Presentations []replay.Presentation       `json:"presentations,omitempty"`
 	}{
 		Type:     "state",
 		Phase:    m.phase,
@@ -297,8 +298,8 @@ func (m *Match) snapshotJSONLocked(withIntro bool) []byte {
 		Walls:    make([]wallSnap, 0, len(m.walls)),
 		Effects:  append([]unitpkg.FX(nil), m.fx...),
 	}
-	if withIntro {
-		msg.Intro = m.takeIntroLocked()
+	if withOpening {
+		msg.Presentations = m.takeOpeningLocked()
 	}
 	for _, id := range m.order {
 		u := m.units[id]
@@ -668,9 +669,16 @@ func (m *Match) Start() {
 	}
 	m.phase = PhaseRunning
 	// 演出只存一次；真局初态在第一拍推进之前固定下来。
-	if !m.skipProbe && m.intro.Duration() > 0 {
-		m.recordIntro = m.intro
+	if !m.skipProbe && len(m.pendingOpening) > 0 {
+		m.activeOpening = m.pendingOpening
+		m.pendingOpening = nil
+		m.recordPresentations = append([]replay.Presentation(nil), m.activeOpening...)
 		m.recordInitial = m.snapshotJSONLocked(false)
+		duration := 0.0
+		for _, p := range m.activeOpening {
+			duration += p.Duration
+		}
+		m.openingUntil = time.Now().Add(time.Duration((duration + 2) * float64(time.Second)))
 	}
 }
 
@@ -783,7 +791,9 @@ func (m *Match) End() {
 	if m.phase == PhaseRunning || m.phase == PhasePaused {
 		m.closeLogLocked("中止")
 	}
-	m.introUntil = time.Time{}
+	m.openingUntil = time.Time{}
+	m.activeOpening = nil
+	m.pendingOpening = nil
 	m.logMute = true
 	m.stopAllLocked()
 	m.logMute = false
@@ -931,7 +941,9 @@ func (m *Match) resetLocked() {
 	m.record = nil
 	m.recordDone = false
 	m.recordInitial = nil
-	m.recordIntro = nil
+	m.recordPresentations = nil
+	m.activeOpening = nil
+	m.openingUntil = time.Time{}
 }
 
 func (m *Match) installFieldLocked() {
@@ -2735,7 +2747,7 @@ func (m *Match) Loop(broadcast func([]byte), halt <-chan struct{}) {
 		case <-halt:
 			return
 		case <-ticker.C:
-			if m.holdingIntro() {
+			if m.holdingOpening() {
 				broadcast(m.SnapshotJSON())
 				continue
 			}
@@ -2743,7 +2755,7 @@ func (m *Match) Loop(broadcast func([]byte), halt <-chan struct{}) {
 			m.mu.Lock()
 			snap := m.snapshotJSONLocked(true)
 			recorded := snap
-			if m.takeIntroLocked() != nil {
+			if m.takeOpeningLocked() != nil {
 				recorded = m.snapshotJSONLocked(false)
 			}
 			m.recordSnapshotLocked(recorded)
@@ -2786,5 +2798,5 @@ func (m *Match) RecordFrames() []json.RawMessage {
 func (m *Match) Recording() replay.Recording {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return replay.Recording{Frames: append([]json.RawMessage(nil), m.record...), Initial: m.recordInitial, Intro: m.recordIntro}
+	return replay.Recording{Frames: append([]json.RawMessage(nil), m.record...), Initial: m.recordInitial, Presentations: append([]replay.Presentation(nil), m.recordPresentations...)}
 }

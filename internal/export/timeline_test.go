@@ -8,43 +8,44 @@ import (
 	"xqdj/internal/replay"
 )
 
-func TestExportTimelineWithOptionalProbe(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		film  *replay.IntroFilm
-		extra int
-	}{
-		{"ordinary", nil, 0},
-		{"rewind", &replay.IntroFilm{Death: 2.25, Frames: []replay.IntroFrame{{T: 0}}}, 74},
-		{"no death", &replay.IntroFilm{Death: -1, Frames: []replay.IntroFrame{{}}}, 0},
-		{"empty", &replay.IntroFilm{Death: 1}, 0},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			tl := newTimeline(replay.Recording{Intro: tc.film, Frames: make([]json.RawMessage, 120)})
-			if tl.ProbeFrames != tc.extra || tl.TotalFrames != 300+tc.extra+60+120+300 {
-				t.Fatalf("timeline=%+v", tl)
+func TestExportTimelineWithGenericPresentations(t *testing.T) {
+	for _, durations := range [][]float64{nil, {1.225}, {0.12, 1.1}} {
+		var list []replay.Presentation
+		want := 0
+		for i, d := range durations {
+			list = append(list, replay.Presentation{Pack: "test", Type: "banner", Duration: d, Data: json.RawMessage(`{"message":"hello"}`)})
+			if i == 0 && d == 1.225 {
+				want += 74
+			} else if d == 0.12 {
+				want += 8
+			} else {
+				want += 66
 			}
-		})
+		}
+		tl := newTimeline(replay.Recording{Presentations: list, Frames: make([]json.RawMessage, 120)})
+		if tl.OpeningFrames != want || tl.TotalFrames != 300+want+60+120+300 || len(tl.PresentationFrames) != len(list) {
+			t.Fatalf("timeline=%+v", tl)
+		}
 	}
 }
 
 func TestExportMetadataIsSeparateFromBattleFrames(t *testing.T) {
-	j := &Job{ID: "test", Initial: json.RawMessage(`{"time":0}`), Intro: &replay.IntroFilm{Death: 1, Frames: []replay.IntroFrame{{T: 0}}}, Frames: []json.RawMessage{json.RawMessage(`{"time":1}`)}}
-	j.Timeline = newTimeline(replay.Recording{Intro: j.Intro, Frames: j.Frames})
+	j := &Job{ID: "test", Initial: json.RawMessage(`{"time":0}`), Presentations: []replay.Presentation{{ID: "1", Pack: "test", Type: "banner", Duration: 1.1, Data: json.RawMessage(`{"message":"hello"}`)}}, Frames: []json.RawMessage{json.RawMessage(`{"time":1}`)}}
+	j.Timeline = newTimeline(replay.Recording{Presentations: j.Presentations, Frames: j.Frames})
 	m := &Manager{jobs: map[string]*Job{"test": j}}
 	mux := http.NewServeMux()
 	m.Handle(mux)
 	meta := httptest.NewRecorder()
 	mux.ServeHTTP(meta, httptest.NewRequest("GET", "/api/export/test/meta", nil))
 	var got struct {
-		Initial  json.RawMessage
-		Intro    *replay.IntroFilm
-		Timeline timeline
+		Initial       json.RawMessage
+		Presentations []replay.Presentation
+		Timeline      timeline
 	}
 	if err := json.Unmarshal(meta.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Intro == nil || got.Timeline.ProbeFrames != 66 || string(got.Initial) != string(j.Initial) {
+	if len(got.Presentations) != 1 || got.Timeline.OpeningFrames != 66 || string(got.Initial) != string(j.Initial) || string(got.Presentations[0].Data) != `{"message":"hello"}` {
 		t.Fatalf("metadata=%s", meta.Body.String())
 	}
 	frames := httptest.NewRecorder()

@@ -74,7 +74,7 @@ func TestAcausalProbeFlipsAndDiesOnClock(t *testing.T) {
 	if math.Abs(me.v.X+tape.SpawnVX) > 1e-3 || math.Abs(me.v.Y+tape.SpawnVY) > 1e-3 {
 		t.Fatalf("v=(%v,%v) spawn=(%v,%v)", me.v.X, me.v.Y, tape.SpawnVX, tape.SpawnVY)
 	}
-	if m.intro == nil || m.intro.Death < 0 || len(m.intro.Frames) == 0 {
+	if len(m.activeOpening) != 1 || m.activeOpening[0].Type != "rewind" || m.activeOpening[0].Duration <= 0 {
 		t.Fatal("missing intro")
 	}
 

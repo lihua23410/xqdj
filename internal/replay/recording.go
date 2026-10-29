@@ -3,38 +3,42 @@ package replay
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 )
 
-type IntroBody struct {
-	K string  `json:"k"`
-	S int     `json:"s"`
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-	R float64 `json:"r"`
+// Presentation 是资源包提供的开场演出。Data 仅由该包的播放器解释。
+// ID 由对局在提交时赋值；Audio 为 false 时播放器的音频入口静音。
+type Presentation struct {
+	ID       string          `json:"id"`
+	Pack     string          `json:"pack"`
+	Type     string          `json:"type"`
+	Duration float64         `json:"duration"`
+	Audio    bool            `json:"audio"`
+	Data     json.RawMessage `json:"data"`
 }
 
-type IntroFrame struct {
-	T float64     `json:"t"`
-	B []IntroBody `json:"b"`
-}
-
-type IntroFilm struct {
-	Death  float64      `json:"death"`
-	Frames []IntroFrame `json:"frames"`
-}
-
-// Duration 不含服务端等待浏览器回执的超时余量。
-func (f *IntroFilm) Duration() float64 {
-	if f == nil || len(f.Frames) == 0 || f.Death < 0 || math.IsNaN(f.Death) || math.IsInf(f.Death, 0) {
-		return 0
+func (p Presentation) Validate() error {
+	if p.Pack == "" || p.Type == "" {
+		return fmt.Errorf("presentation needs a pack and type")
 	}
-	return 1 + f.Death/10
+	if p.Duration <= 0 || math.IsNaN(p.Duration) || math.IsInf(p.Duration, 0) {
+		return fmt.Errorf("presentation needs a finite positive duration")
+	}
+	if !json.Valid(p.Data) {
+		return fmt.Errorf("presentation data must be valid JSON")
+	}
+	return nil
 }
 
-// Recording 的 JSON 和演出数据在发布后只读。Frames 不重复存放演出轨迹。
+func (p Presentation) Clone() Presentation {
+	p.Data = append(json.RawMessage(nil), p.Data...)
+	return p
+}
+
+// Recording 的 JSON 在发布后只读。开场演出与比赛帧独立存储。
 type Recording struct {
-	Frames  []json.RawMessage
-	Initial json.RawMessage
-	Intro   *IntroFilm
+	Frames        []json.RawMessage
+	Initial       json.RawMessage
+	Presentations []Presentation
 }

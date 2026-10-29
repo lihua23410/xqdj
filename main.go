@@ -93,6 +93,7 @@ func (h *hub) broadcast(msg []byte) {
 
 type clientMsg struct {
 	Type  string `json:"type"`
+	ID    string `json:"id"`
 	Slot  int    `json:"slot"`
 	Index *int   `json:"index"`
 	Kind  string `json:"kind"`
@@ -177,8 +178,8 @@ func main() {
 				match.SetField(msg.Field)
 			case "start":
 				match.Start()
-			case "intro":
-				match.FinishIntro()
+			case "presentation-end":
+				match.FinishOpening(msg.ID)
 			case "pause":
 				match.Pause()
 			case "end":

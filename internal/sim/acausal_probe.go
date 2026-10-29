@@ -1,9 +1,6 @@
 package sim
 
 import (
-	"time"
-	"xqdj/internal/replay"
-
 	"xqdj/character/acausal"
 	unitpkg "xqdj/internal/unit"
 )
@@ -29,9 +26,9 @@ func (st *probeState) closeUnfinished() {
 	st.drops = drops
 }
 
-type introBody = replay.IntroBody
-type introFrame = replay.IntroFrame
-type introFilm = replay.IntroFilm
+type introBody = 非因果.IntroBody
+type introFrame = 非因果.IntroFrame
+type introFilm = 非因果.IntroFilm
 
 func acausalKind() string { return 非因果.KindAcausal }
 
@@ -51,9 +48,6 @@ func (m *Match) runAcausalProbeLocked() {
 	}
 	if n == 0 {
 		m.probeTape = nil
-		m.intro = nil
-		m.introSent = false
-		m.introUntil = time.Time{}
 		return
 	}
 	probe := newMatch(m.seed, true)
@@ -68,12 +62,14 @@ func (m *Match) runAcausalProbeLocked() {
 	probe.End()
 	tape.Bins = 非因果.Magnitudes(tape.Drops)
 	m.probeTape = tape
-	m.intro = film
-	m.introSent = false
-	m.introUntil = time.Time{}
-	if film != nil && film.Death >= 0 {
-		dur := 1 + film.Death/10
-		m.introUntil = time.Now().Add(time.Duration((dur + 2) * float64(time.Second)))
+	if film != nil {
+		p, err := 非因果.RewindPresentation(film)
+		if err != nil {
+			panic(err)
+		}
+		if _, err = m.queueOpeningLocked(p); err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -91,26 +87,6 @@ func (m *Match) flipAcausalLocked() {
 			u.cruiseFS.dir = u.v.norm()
 		}
 	}
-}
-
-func (m *Match) takeIntroLocked() *introFilm {
-	if m.intro == nil || m.introUntil.IsZero() {
-		return nil
-	}
-	return m.intro
-}
-
-func (m *Match) holdingIntro() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return !m.introUntil.IsZero() && time.Now().Before(m.introUntil)
-}
-
-// FinishIntro 让开场停住的真局开始走。
-func (m *Match) FinishIntro() {
-	m.mu.Lock()
-	m.introUntil = time.Time{}
-	m.mu.Unlock()
 }
 
 type minionBuild struct {

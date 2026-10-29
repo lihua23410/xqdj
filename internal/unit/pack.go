@@ -117,3 +117,6 @@ func (ballFS) Open(name string) (fs.File, error) {
 	}
 	return p.FS.Open(rest)
 }
+
+// HasPack 用于校验演出等扩展描述引用的资源包。登记只发生在 init。
+func HasPack(name string) bool { _, ok := packs[name]; return ok }

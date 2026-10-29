@@ -14,9 +14,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
-	_ "xqdj/character/acausal"
+	非因果 "xqdj/character/acausal"
 	_ "xqdj/character/knight"
 	"xqdj/internal/replay"
 	"xqdj/internal/unit"
@@ -36,12 +37,17 @@ func TestRenderSmoke(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		probe, team bool
-	}{{"ordinary", false, false}, {"probe", true, false}, {"team-probe", true, true}} {
+		banner      bool
+	}{{"ordinary", false, false, false}, {"probe", true, false, false}, {"team-probe", true, true, false}, {"banner", false, false, true}, {"sequence", true, false, true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := smokeRecording(tc.probe, tc.team)
+			if tc.banner {
+				p := replay.Presentation{ID: "banner-1", Pack: "演出测试", Type: "banner", Duration: 0.12, Audio: !tc.probe, Data: json.RawMessage(`{"message":"准备开场"}`)}
+				r.Presentations = append([]replay.Presentation{p}, r.Presentations...)
+			}
 			tl := newTimeline(r)
 			tl.TitleFrames, tl.HoldStartFrames, tl.EndFrames = 3, 2, 3
-			tl.TotalFrames = tl.TitleFrames + tl.ProbeFrames + tl.HoldStartFrames + tl.BattleFrames + tl.EndFrames
+			tl.TotalFrames = tl.TitleFrames + tl.OpeningFrames + tl.HoldStartFrames + tl.BattleFrames + tl.EndFrames
 			dir := t.TempDir()
 			if root := os.Getenv("XQDJ_EXPORT_ARTIFACTS"); root != "" {
 				dir = filepath.Join(root, tc.name)
@@ -51,7 +57,7 @@ func TestRenderSmoke(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
-			j := &Job{ID: tc.name, Frames: r.Frames, Initial: r.Initial, Intro: r.Intro, Timeline: tl, total: tl.TotalFrames, dir: dir, ctx: ctx, cancel: cancel}
+			j := &Job{ID: tc.name, Frames: r.Frames, Initial: r.Initial, Presentations: r.Presentations, Timeline: tl, total: tl.TotalFrames, dir: dir, ctx: ctx, cancel: cancel}
 			m := &Manager{chrome: chrome, ffmpeg: ffmpeg, jobs: map[string]*Job{j.ID: j}}
 			mux := http.NewServeMux()
 			m.Handle(mux)
@@ -75,7 +81,7 @@ func TestRenderSmoke(t *testing.T) {
 			if strings.TrimSpace(string(out)) != strconv.Itoa(j.total) {
 				t.Fatalf("video frames=%s want %d", out, j.total)
 			}
-			first := j.Timeline.TitleFrames + j.Timeline.ProbeFrames + j.Timeline.HoldStartFrames
+			first := j.Timeline.TitleFrames + j.Timeline.OpeningFrames + j.Timeline.HoldStartFrames
 			still := filepath.Join(j.dir, "encoded-battle-first.png")
 			if out, err := exec.CommandContext(ctx, ffmpeg, "-y", "-v", "error", "-i", j.file, "-vf", fmt.Sprintf("select=eq(n\\,%d)", first), "-frames:v", "1", still).CombinedOutput(); err != nil {
 				t.Fatalf("extract battle frame: %v %s", err, out)
@@ -114,10 +120,10 @@ func verifySmokePage(t *testing.T, m *Manager, j *Job, pageURL string, probe, te
 		msg, _ := ch.page.evalString(j.ctx, "String(window.__exportError || '')")
 		t.Fatalf("ready: %v %s", err, msg)
 	}
-	first := j.Timeline.TitleFrames + j.Timeline.ProbeFrames + j.Timeline.HoldStartFrames
+	first := j.Timeline.TitleFrames + j.Timeline.OpeningFrames + j.Timeline.HoldStartFrames
 	step := func(i int, label string) map[string]any {
 		t.Helper()
-		value, err := ch.page.evalString(j.ctx, fmt.Sprintf(`window.__exportStep(%d).then(() => JSON.stringify({intro: document.querySelectorAll('#intro-layer .intro-ball').length,x:document.querySelector('#intro-layer .intro-ball')?.style.left,units:document.querySelectorAll('#units > .ball').length,time:performance.now(),hud:document.getElementById('export-root').style.getPropertyValue('--intro-hud'),nameOpacity:getComputedStyle(document.getElementById('export-name-0')).opacity,rootDisplay:getComputedStyle(document.getElementById('export-root')).display,rootOpacity:getComputedStyle(document.getElementById('export-root')).opacity,arenaOpacity:getComputedStyle(document.getElementById('export-arena')).opacity,audio:JSON.parse(window.__exportAudio())}))`, i))
+		value, err := ch.page.evalString(j.ctx, fmt.Sprintf(`window.__exportStep(%d).then(() => JSON.stringify({intro: document.querySelectorAll('.presentation-layer .intro-ball').length,x:document.querySelector('.presentation-layer .intro-ball')?.style.left,units:document.querySelectorAll('#units > .ball').length,time:performance.now(),voices:soundVoices.size,hud:document.getElementById('export-root').style.getPropertyValue('--intro-hud'),nameOpacity:getComputedStyle(document.getElementById('export-name-0')).opacity,rootDisplay:getComputedStyle(document.getElementById('export-root')).display,rootOpacity:getComputedStyle(document.getElementById('export-root')).opacity,arenaOpacity:getComputedStyle(document.getElementById('export-arena')).opacity,presentation:document.querySelector('.presentation-layer')?.dataset.presentation,banner:document.querySelector('.presentation-layer .test-banner')?.textContent,audio:JSON.parse(window.__exportAudio())}))`, i))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -127,7 +133,13 @@ func verifySmokePage(t *testing.T, m *Manager, j *Job, pageURL string, probe, te
 		}
 		for _, raw := range got["audio"].([]any) {
 			ev := raw.(map[string]any)
-			if ev["frame"].(float64) < float64(first) {
+			minimum := first
+			for _, p := range j.Presentations {
+				if p.Audio {
+					minimum = j.Timeline.TitleFrames
+				}
+			}
+			if ev["frame"].(float64) < float64(minimum) {
 				t.Fatalf("early audio: %s", value)
 			}
 		}
@@ -155,10 +167,18 @@ func verifySmokePage(t *testing.T, m *Manager, j *Job, pageURL string, probe, te
 		}
 		return got
 	}
-	step(0, "")
+	before := step(0, "")
+	rewindStart := j.Timeline.TitleFrames
+	if len(j.Presentations) > 0 && j.Presentations[0].Type == "banner" {
+		banner := step(j.Timeline.TitleFrames, "banner")
+		if banner["banner"] != "准备开场" || banner["presentation"] != "banner" {
+			t.Fatalf("generic banner did not render: %+v", banner)
+		}
+		rewindStart += j.Timeline.PresentationFrames[0]
+	}
 	if probe {
-		forward := step(j.Timeline.TitleFrames+30, "probe-death")
-		rewound := step(j.Timeline.TitleFrames+j.Timeline.ProbeFrames-1, "probe-rewound")
+		forward := step(rewindStart+30, "probe-death")
+		rewound := step(j.Timeline.TitleFrames+j.Timeline.OpeningFrames-1, "probe-rewound")
 		want := float64(2)
 		if team {
 			want = 4
@@ -170,13 +190,16 @@ func verifySmokePage(t *testing.T, m *Manager, j *Job, pageURL string, probe, te
 			t.Fatal("probe advanced the battle clock")
 		}
 	}
-	hold := step(j.Timeline.TitleFrames+j.Timeline.ProbeFrames, "first-hold")
+	hold := step(j.Timeline.TitleFrames+j.Timeline.OpeningFrames, "first-hold")
 	if hold["intro"] != float64(0) {
 		t.Fatal("probe layer survived transition")
 	}
 	battle := step(first, "battle-first")
 	if battle["intro"] != float64(0) || len(battle["audio"].([]any)) == 0 {
 		t.Fatalf("missing battle or first audio: %+v", battle)
+	}
+	if battle["voices"] != before["voices"] {
+		t.Fatal("presentation audio voice leaked after cleanup")
 	}
 	step(first+1, "")
 	step(j.total-1, "winner")
@@ -188,7 +211,11 @@ func verifySmokePage(t *testing.T, m *Manager, j *Job, pageURL string, probe, te
 	if err = json.Unmarshal([]byte(audio), &events); err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 1 || events[0].Frame != first {
+	if len(j.Presentations) > 0 && j.Presentations[0].Audio {
+		if len(events) != 3 || events[0].Frame != j.Timeline.TitleFrames || events[1].Stop == nil || events[1].Frame != j.Timeline.TitleFrames+j.Timeline.OpeningFrames || events[2].Frame != first {
+			t.Fatalf("presentation audio timeline: %s", audio)
+		}
+	} else if len(events) != 1 || events[0].Frame != first {
 		t.Fatalf("first effect duplicated or shifted: %s", audio)
 	}
 }
@@ -202,7 +229,7 @@ func smokeRecording(probe, team bool) replay.Recording {
 	}
 	packs := unit.Packs()
 	looks := unit.Looks()
-	snap := map[string]any{"phase": "running", "slots": slots, "roster": slots, "team": team, "units": units, "looks": looks, "packs": map[string]unit.PackInfo{"非因果": packs["非因果"], "小骑士": packs["小骑士"]}, "field": "六边形", "fieldShape": "hex", "hexRadius": 280, "time": 0, "seq": 0}
+	snap := map[string]any{"phase": "running", "slots": slots, "roster": slots, "team": team, "units": units, "looks": looks, "packs": map[string]unit.PackInfo{"非因果": packs["非因果"], "小骑士": packs["小骑士"], "演出测试": packs["演出测试"]}, "field": "六边形", "fieldShape": "hex", "hexRadius": 280, "time": 0, "seq": 0}
 	initial, _ := json.Marshal(snap)
 	snap["effects"] = []unit.FX{{Name: "impact", Kind: "小骑士", X: 80}}
 	snap["time"], snap["seq"] = 1.0/60, 1
@@ -212,15 +239,29 @@ func smokeRecording(probe, team bool) replay.Recording {
 	f1, _ := json.Marshal(snap)
 	r := replay.Recording{Initial: initial, Frames: []json.RawMessage{f0, f1}}
 	if probe {
-		film := &replay.IntroFilm{Death: 1}
+		film := &非因果.IntroFilm{Death: 1}
 		for _, tm := range []float64{0, 0.5, 1} {
-			var bodies []replay.IntroBody
+			var bodies []非因果.IntroBody
 			for i, u := range units {
-				bodies = append(bodies, replay.IntroBody{K: u.Kind, S: u.Slot, X: u.X + tm*float64(i+1)*60, Y: u.Y, R: u.Radius})
+				bodies = append(bodies, 非因果.IntroBody{K: u.Kind, S: u.Slot, X: u.X + tm*float64(i+1)*60, Y: u.Y, R: u.Radius})
 			}
-			film.Frames = append(film.Frames, replay.IntroFrame{T: tm, B: bodies})
+			film.Frames = append(film.Frames, 非因果.IntroFrame{T: tm, B: bodies})
 		}
-		r.Intro = film
+		p, err := 非因果.RewindPresentation(film)
+		if err != nil {
+			panic(err)
+		}
+		p.ID = "rewind-1"
+		r.Presentations = []replay.Presentation{p}
 	}
 	return r
+}
+
+// 第二个测试播放器使用文本数据，没有死亡时间、轨迹或倒带规则。
+func init() {
+	unit.NewPack("演出测试", fstest.MapFS{"fx/banner.js": {Data: []byte(`arena.registerPresentation("banner", {
+ mount(ctx,data) { const el=document.createElement("div");el.className="test-banner";el.textContent=data.message;el.style.cssText="position:absolute;top:40%;left:20%;font-size:30px;color:white";ctx.root.appendChild(el);ctx.playAudio("/sfx/default-hit.wav",{});return el; },
+ render(el,elapsed) { el.dataset.elapsed=String(elapsed); },
+ destroy(el) { el.remove(); }
+});`)}})
 }

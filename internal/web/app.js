@@ -234,6 +234,10 @@ function createSoundVoice(audio, opts) {
       this.cancelled = true;
       this.stop();
     },
+    dispose() {
+      this.kill();
+      soundVoices.delete(this);
+    },
   };
   voice.effectivePriority = soundEffectivePriority(voice.mode, voice.priority);
   if (options.volume != null) audio.volume = Math.max(0, Math.min(1, Number(options.volume)));
@@ -269,6 +273,9 @@ window.arena = {
   registerShot,
   registerFactions,
   registerOwnHurt,
+  registerPresentation(type, player) {
+    window.presentationPlayer.register(packBaseFromScript(), type, player);
+  },
 };
 
 const packLoads = new Set();
@@ -329,6 +336,15 @@ function applyLookFX(el, kind) {
     if (hook && typeof hook.unmount === "function") hook.unmount(el);
   }
   for (const id of want) el.classList.add("look-" + id);
+}
+
+// 演出和常规节点共用皮肤销毁入口，避免私有挂件遗留到下一段。
+function unmountLookFX(el) {
+  for (const cls of el.classList) {
+    if (!cls.startsWith("look-")) continue;
+    const hook=window.lookFX && window.lookFX[cls.slice(5)];
+    if (hook && typeof hook.unmount==="function") hook.unmount(el);
+  }
 }
 
 function runLookFX(el, u, ctx) {
@@ -1577,80 +1593,39 @@ function onFighterBar(ev) {
   followHeld = false;
 }
 
-let introClip = null;
-let introStart = 0;
-let introPlayed = false;
-let exportIntro = null;
+let openingStart = null;
+let openingKey = "";
+let openingFinished = false;
+let exportOpening = null;
 
-function playIntro(scale, cx, cy) {
-  if (EXPORT) return drawIntro(exportIntro && exportIntro.film, exportIntro && exportIntro.elapsed, scale, cx, cy);
-  if (!introClip && state.intro && state.intro.frames && state.intro.frames.length && state.intro.death >= 0) {
-    introClip = state.intro;
-    introStart = performance.now();
-    introPlayed = false;
-  }
-  const elapsed = (performance.now() - introStart) / 1000;
-  const playing = drawIntro(introClip, elapsed, scale, cx, cy);
-  if (!playing && introClip && !introPlayed) {
-    introPlayed = true;
-    send({ type: "intro" });
-  }
-  return playing;
+function presentationContext(scale, cx, cy) {
+  return {
+    host: hex, scale, cx, cy, mode: EXPORT ? "export" : "live",
+    screenPos, kindColor, paintKind, applyLookFX, runLookFX, unmountLookFX,
+    createVoice: window.arena.playAudio,
+    preview: !!(EXPORT && exportOpening && exportOpening.preview),
+  };
 }
 
-// 正常观战和导出共用画面；导出显式给经过时间，不依赖收到 WS 的时刻。
-function drawIntro(clip, elapsed, scale, cx, cy) {
-  let layer = document.getElementById("intro-layer");
-  const death = clip && Number(clip.death);
-  const playDur = 0.5 + Math.max(0, death) / 10;
-  if (!clip || !clip.frames || !clip.frames.length || !(death >= 0) || elapsed >= playDur + 0.5) {
-    if (layer) {
-      if (window.gsap) window.gsap.killTweensOf(layer.querySelectorAll("*"));
-      layer.remove();
-    }
-    return false;
+function playOpening(scale, cx, cy) {
+  const context=presentationContext(scale,cx,cy);
+  if (EXPORT) return window.presentationPlayer.draw(exportOpening ? [exportOpening.presentation] : [], exportOpening ? exportOpening.elapsed : 0, context);
+  const list=state.presentations || [];
+  const key=list.map((p)=>p.id).join(",");
+  if (key!==openingKey) {
+    window.presentationPlayer.clear();
+    openingKey=key; openingStart=null; openingFinished=false;
   }
-  let t;
-  if (elapsed < 0.5) t = Math.max(0, death - 0.5) + elapsed;
-  else if (elapsed < playDur) t = Math.max(0, death - (elapsed - 0.5) * 10);
-  else t = 0;
-  let frame = clip.frames[0];
-  let best = Infinity;
-  for (const f of clip.frames) {
-    const d = Math.abs(Number(f.t) - t);
-    if (d < best) {
-      best = d;
-      frame = f;
-    }
+  if (!list.length || openingFinished) return false;
+  // 播放器所在资源包全部就绪后才开始计时。
+  if (packLoads.size) return true;
+  if (openingStart===null) openingStart=performance.now();
+  const playing=window.presentationPlayer.draw(list,(performance.now()-openingStart)/1000,context);
+  if (!playing) {
+    openingFinished=true;
+    send({type:"presentation-end",id:list[list.length-1].id});
   }
-  if (!layer && hex) {
-    layer = document.createElement("div");
-    layer.id = "intro-layer";
-    hex.appendChild(layer);
-  }
-  if (!layer) return true;
-  const bodies = frame.b || [];
-  while (layer.childElementCount < bodies.length) {
-    const el = document.createElement("div");
-    el.className = "intro-ball";
-    layer.appendChild(el);
-  }
-  while (layer.childElementCount > bodies.length) layer.lastChild.remove();
-  bodies.forEach((b, i) => {
-    const el = layer.children[i];
-    const r = (b.r || 18) * scale;
-    const [sx, sy] = screenPos(b.x, b.y, scale, cx, cy);
-    el.style.width = `${r * 2}px`;
-    el.style.height = `${r * 2}px`;
-    el.style.left = `${sx}px`;
-    el.style.top = `${sy}px`;
-    el.style.background = kindColor(b.k);
-    el.style.boxShadow = "0 0 10px " + kindColor(b.k);
-    paintKind(el, b.k);
-    applyLookFX(el, b.k);
-    runLookFX(el, { id: "intro-" + i, kind: b.k, x: b.x, y: b.y, radius: b.r || 18, slot: b.s }, {});
-  });
-  return true;
+  return playing;
 }
 
 function renderArena() {
@@ -1663,7 +1638,7 @@ function renderArena() {
   const h = hex.clientHeight || 1;
   const cx = w / 2;
   const cy = h / 2;
-  if (playIntro(scale, cx, cy)) {
+  if (playOpening(scale, cx, cy)) {
     if (unitsEl) unitsEl.style.visibility = "hidden";
     return;
   }
@@ -1888,8 +1863,8 @@ function releaseLobby() {
 function render() {
   const inLobby = state.phase === "select";
   if (inLobby) {
-    introClip = null;
-    introPlayed = false;
+    window.presentationPlayer.clear();
+    openingStart=null; openingKey=""; openingFinished=false;
   }
   if (inLobby && !wasLobby) {
     location.reload();
@@ -1918,8 +1893,8 @@ window.__exportSetState = (snap) => {
   state = snap;
   hexR = snap.hexRadius || 280;
 };
-window.__exportRender = (snap, intro = null) => {
-  exportIntro = intro;
+window.__exportRender = (snap, opening = null) => {
+  exportOpening = opening;
   window.__exportSetState(snap);
   render();
 };

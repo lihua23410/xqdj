@@ -42,20 +42,20 @@ type Manager struct {
 }
 
 type Job struct {
-	mu       sync.Mutex
-	ID       string
-	Frames   []json.RawMessage
-	Initial  json.RawMessage
-	Intro    *replay.IntroFilm
-	Timeline timeline
-	phase    string
-	done     int
-	total    int
-	err      string
-	dir      string
-	file     string
-	cancel   context.CancelFunc
-	ctx      context.Context
+	mu            sync.Mutex
+	ID            string
+	Frames        []json.RawMessage
+	Initial       json.RawMessage
+	Presentations []replay.Presentation
+	Timeline      timeline
+	phase         string
+	done          int
+	total         int
+	err           string
+	dir           string
+	file          string
+	cancel        context.CancelFunc
+	ctx           context.Context
 }
 
 func NewManager(baseURL string, recording func() replay.Recording) *Manager {
@@ -190,16 +190,16 @@ func (m *Manager) handleStart(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	tl := newTimeline(recording)
 	j := &Job{
-		ID:       id,
-		Frames:   frames,
-		Initial:  recording.Initial,
-		Intro:    recording.Intro,
-		Timeline: tl,
-		phase:    "preparing",
-		total:    tl.TotalFrames,
-		dir:      dir,
-		ctx:      ctx,
-		cancel:   cancel,
+		ID:            id,
+		Frames:        frames,
+		Initial:       recording.Initial,
+		Presentations: recording.Presentations,
+		Timeline:      tl,
+		phase:         "preparing",
+		total:         tl.TotalFrames,
+		dir:           dir,
+		ctx:           ctx,
+		cancel:        cancel,
 	}
 	m.mu.Lock()
 	m.jobs[id] = j
@@ -339,18 +339,24 @@ func newID() string {
 
 // timeline 是服务端与导出页面共用的帧数账本。
 type timeline struct {
-	FPS             int `json:"fps"`
-	TitleFrames     int `json:"titleFrames"`
-	ProbeFrames     int `json:"probeFrames"`
-	HoldStartFrames int `json:"holdStartFrames"`
-	EndFrames       int `json:"endFrames"`
-	BattleFrames    int `json:"battleFrames"`
-	TotalFrames     int `json:"totalFrames"`
+	FPS                int   `json:"fps"`
+	TitleFrames        int   `json:"titleFrames"`
+	OpeningFrames      int   `json:"openingFrames"`
+	PresentationFrames []int `json:"presentationFrames"`
+	HoldStartFrames    int   `json:"holdStartFrames"`
+	EndFrames          int   `json:"endFrames"`
+	BattleFrames       int   `json:"battleFrames"`
+	TotalFrames        int   `json:"totalFrames"`
 }
 
 func newTimeline(r replay.Recording) timeline {
-	probe := int(math.Ceil(r.Intro.Duration() * fps))
-	return timeline{FPS: fps, TitleFrames: introFrames, ProbeFrames: probe, HoldStartFrames: holdStart, EndFrames: holdEnd, BattleFrames: len(r.Frames), TotalFrames: introFrames + probe + holdStart + len(r.Frames) + holdEnd}
+	opening := 0
+	segments := make([]int, len(r.Presentations))
+	for i, p := range r.Presentations {
+		segments[i] = int(math.Ceil(p.Duration * fps))
+		opening += segments[i]
+	}
+	return timeline{FPS: fps, TitleFrames: introFrames, OpeningFrames: opening, PresentationFrames: segments, HoldStartFrames: holdStart, EndFrames: holdEnd, BattleFrames: len(r.Frames), TotalFrames: introFrames + opening + holdStart + len(r.Frames) + holdEnd}
 }
 
 func (m *Manager) handleMeta(w http.ResponseWriter, r *http.Request) {
@@ -362,8 +368,8 @@ func (m *Manager) handleMeta(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(struct {
-		Initial  json.RawMessage   `json:"initial,omitempty"`
-		Intro    *replay.IntroFilm `json:"intro,omitempty"`
-		Timeline timeline          `json:"timeline"`
-	}{j.Initial, j.Intro, j.Timeline})
+		Initial       json.RawMessage       `json:"initial,omitempty"`
+		Presentations []replay.Presentation `json:"presentations"`
+		Timeline      timeline              `json:"timeline"`
+	}{j.Initial, j.Presentations, j.Timeline})
 }

@@ -76,8 +76,8 @@
   const clock = window.__clock;
   const realRAF = window.__realRAF;
   // 服务端统一下发帧数账本，演出不占用正式比赛的假时钟。
-  let TOTAL_INTRO, TOTAL_START, TOTAL_END, TOTAL_PROBE, FPS;
-  let initial, probe, probeClockMark;
+  let TOTAL_INTRO, TOTAL_START, TOTAL_END, TOTAL_OPENING, FPS;
+  let initial, presentations, presentationFrames, openingClockMark;
   let battlePrepared = false;
 
   let frames = [];
@@ -433,6 +433,14 @@
     }
   }
 
+  function openingAt(frame) {
+    for (let index = 0; index < presentationFrames.length; index++) {
+      if (frame < presentationFrames[index]) return { presentation: presentations[index], elapsed: frame / FPS };
+      frame -= presentationFrames[index];
+    }
+    throw new Error("演出帧超出时间线");
+  }
+
   async function boot() {
     const base = `/api/export/${encodeURIComponent(job)}`;
     const [res, metaRes] = await Promise.all([
@@ -444,14 +452,16 @@
     const meta = await metaRes.json();
     const tl = meta.timeline;
     TOTAL_INTRO = tl.titleFrames; TOTAL_START = tl.holdStartFrames;
-    TOTAL_END = tl.endFrames; TOTAL_PROBE = tl.probeFrames; FPS = tl.fps;
+    TOTAL_END = tl.endFrames; TOTAL_OPENING = tl.openingFrames; FPS = tl.fps;
     const text = await res.text();
-    frames = text.split("\n").filter(Boolean).map((line) => ({ ...JSON.parse(line), intro: null }));
+    frames = text.split("\n").filter(Boolean).map((line) => ({ ...JSON.parse(line), presentations: [] }));
     if (!frames.length) throw new Error("没有帧");
-    probe = meta.intro;
-    initial = { ...(meta.initial || frames[0]), intro: null, effects: [] };
+    presentations = meta.presentations || [];
+    presentationFrames = tl.presentationFrames;
+    if (presentations.length !== presentationFrames.length) throw new Error("演出与分段不匹配");
+    initial = { ...(meta.initial || frames[0]), presentations: [], effects: [] };
     total = tl.totalFrames;
-    if (total !== TOTAL_INTRO + TOTAL_PROBE + TOTAL_START + frames.length + TOTAL_END) throw new Error("录像与时间线不匹配");
+    if (total !== TOTAL_INTRO + TOTAL_OPENING + TOTAL_START + frames.length + TOTAL_END) throw new Error("录像与时间线不匹配");
     window.__exportTotal = total;
 
     const allPacks = mergePacks([initial, ...frames]);
@@ -471,11 +481,11 @@
     measureLines();
 
     clock.set(0);
-    frameNo = TOTAL_INTRO + TOTAL_PROBE + TOTAL_START;
-    if (TOTAL_PROBE) {
+    frameNo = TOTAL_INTRO + TOTAL_OPENING + TOTAL_START;
+    if (TOTAL_OPENING) {
       audioActive = false;
-      probeClockMark = clock.checkpoint();
-      window.__exportRender(initial, { film: probe, elapsed: 0 });
+      openingClockMark = clock.checkpoint();
+      window.__exportRender(initial, { ...openingAt(0), preview: true });
     } else {
       audioActive = true;
       window.__exportRender(frames[0]);
@@ -483,7 +493,7 @@
     }
     scaleStage();
     pauseAnimations(0);
-    if (!TOTAL_PROBE) {
+    if (!TOTAL_OPENING) {
       clock.run();
       pauseAnimations(0);
       clock.flush(0);
@@ -493,7 +503,7 @@
 
     await new Promise((r) => realRAF(r));
     await new Promise((r) => realRAF(r));
-    if (!TOTAL_PROBE) clock.flush(0);
+    if (!TOTAL_OPENING) clock.flush(0);
     pauseAnimations(0);
     scaleStage();
     applyIntro(0);
@@ -512,18 +522,26 @@
       return;
     }
     finishIntro();
-    if (i < TOTAL_INTRO + TOTAL_PROBE) {
-      audioActive = false;
-      const elapsed = (i - TOTAL_INTRO) / FPS;
-      window.__exportRender(initial, { film: probe, elapsed });
-      pauseAnimations(elapsed * 1000);
+    if (i < TOTAL_INTRO + TOTAL_OPENING) {
+      frameNo = i;
+      audioActive = true;
+      const opening = openingAt(i - TOTAL_INTRO);
+      window.__exportRender(initial, opening);
+      pauseAnimations(opening.elapsed * 1000);
+      tickMedia();
       scaleStage();
+      // 播放器可新建/移除合成层，确保本次绘制完成后再截图。
+      await new Promise((r) => realRAF(r));
       await new Promise((r) => realRAF(r));
       return;
     }
-    const first = TOTAL_INTRO + TOTAL_PROBE + TOTAL_START;
+    const first = TOTAL_INTRO + TOTAL_OPENING + TOTAL_START;
     if (!battlePrepared) {
-      clock.discardSince(probeClockMark);
+      // 先在演出真正结束的帧停止声音，再准备比赛首拍。
+      frameNo = i;
+      audioActive = true;
+      window.presentationPlayer.clear();
+      clock.discardSince(openingClockMark);
       frameNo = first;
       audioActive = true;
       // 首拍的音效记在正式比赛开始处；画面在首帧停留段先准备好。
@@ -544,7 +562,7 @@
       if (fi === 0) {
         audioActive = true;
         frameNo = first;
-        if (TOTAL_PROBE) {
+        if (TOTAL_OPENING) {
           window.__exportRender(frames[0]);
           clock.run(); pauseAnimations(0); clock.flush(0); pauseAnimations(0);
           scaleStage(); updateHp(frames[0]);
