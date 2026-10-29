@@ -5,6 +5,7 @@
 //   revive 从时刻回拨复活时的滴答声（mode 2）
 //   rewind 回拨：旧位置 → 档位拉一条影子，落点闪一下
 //   trip   踩影拉撞：时刻位置爆一圈
+//   overclock 永久耗尽：X/Y = 三秒死亡演出的起止模拟时刻
 const tokeiMomentAudio = new Audio(
   ((document.currentScript && document.currentScript.dataset && document.currentScript.dataset.pack) || "") + "/fx/moment.wav",
 );
@@ -38,6 +39,16 @@ arena.registerShot("clock", (fx) => {
     full: (fx.vx || 0) > 0,
     from: Number(fx.x) || 0,
     to: Number(fx.y) || 0,
+  };
+});
+
+arena.registerShot("overclock", (fx) => {
+  window.tokeiSt = window.tokeiSt || {};
+  const st = window.tokeiSt[fx.unitId] || {};
+  window.tokeiSt[fx.unitId] = {
+    ...st,
+    deathFrom: Number(fx.x) || 0,
+    deathTo: Number(fx.y) || 0,
   };
 });
 

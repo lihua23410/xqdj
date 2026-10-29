@@ -82,12 +82,44 @@ function paintTokei(el, id, ghost) {
   if (minute) minute.style.transform = `rotate(${a.minute}deg)`;
 }
 
+// 以模拟时间计算超频失控：连续加速叠加反向抖动，不用随机数或真实时钟。
+window.tokeiDeathAngles = function (from, until, now) {
+  const p=Math.min(1,Math.max(0,(now-from)/(until-from)));
+  const t=p*3;
+  return {
+    progress:p,
+    hour:500*t+580*t*t+140*Math.sin(19*t),
+    minute:-900*t-900*t*t+220*Math.sin(27*t),
+    jitter:5*Math.sin(33*t),
+    fade:Math.max(0,(p-0.9)/0.1),
+  };
+};
+
 window.lookFX.tokei = {
   unmount(el) {
     el.querySelector(":scope > .tokei-face")?.remove();
+    el.classList.remove("tokei-dying");
+    delete window.tokeiSt[el.id.replace(/^u-/, "")];
+    for (const prop of ["--tokei-death","--tokei-fade","--tokei-jitter"]) el.style.removeProperty(prop);
   },
-  tick(el, u) {
+  tick(el, u, ctx) {
     paintTokei(el, u.id, false);
+    const st = window.tokeiSt[u.id] || {};
+    const dying = Number(st.deathTo) > Number(st.deathFrom);
+    el.classList.toggle("tokei-dying", dying);
+    if (dying) {
+      const start=Number(st.deathFrom)||0;
+      const now=ctx && Number.isFinite(ctx.time) ? ctx.time : tokeiNow();
+      const d=window.tokeiDeathAngles(start,Number(st.deathTo),now);
+      el.style.setProperty("--tokei-death",String(d.progress));
+      el.style.setProperty("--tokei-fade",String(d.fade));
+      el.style.setProperty("--tokei-jitter",`${d.jitter}deg`);
+      const face=el.querySelector(":scope > .tokei-face");
+      face.querySelector(".hand.hour").style.transform=`rotate(${d.hour}deg)`;
+      face.querySelector(".hand.minute").style.transform=`rotate(${d.minute}deg)`;
+    } else {
+      for (const prop of ["--tokei-death","--tokei-fade","--tokei-jitter"]) el.style.removeProperty(prop);
+    }
   },
 };
 

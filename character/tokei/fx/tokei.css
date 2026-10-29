@@ -98,3 +98,27 @@
   from { transform: translate(0, 0) scale(1); opacity: 0.9; }
   to { transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.35); opacity: 0; }
 }
+
+/* 永久耗尽：三秒超频失控。进度来自快照模拟时间，暂停和导出都一致。 */
+.look-tokei.tokei-dying {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.look-tokei.tokei-dying .tokei-face {
+  opacity: calc(1 - var(--tokei-fade, 0));
+  transform: rotate(var(--tokei-jitter, 0deg));
+  background: #29272b;
+  border-color: #ffcdad;
+  box-shadow: 0 0 calc(8px + 14px * var(--tokei-death, 0)) rgba(255, 148, 94, 0.85), inset 0 0 8px #f07540;
+}
+.look-tokei.tokei-dying .tokei-face .hand.hour {
+  background: #ffbc7c;
+  box-shadow: 0 0 4px #ff944d;
+}
+.look-tokei.tokei-dying .tokei-face .hand.minute {
+  background: #f4f2ec;
+  box-shadow: 0 0 5px #fff;
+}
+.look-tokei.tokei-dying .tokei-face .tick {
+  background: #ffcdad;
+}

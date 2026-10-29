@@ -1,7 +1,7 @@
 // 时计：白色时钟，表针就是资源条。
 // 每 8s 时针 +2h；仅当读数落在 2/4/6/8/10/12 且该刻度本场从未落下过时刻下时刻。
 // 无常态弧；敌方踩进时刻判定圈才瞬移冲撞并短窗挂弧。致命伤才回拨（表针 −2h）。
-// 全套只用现有引擎指令拼，零引擎改动。
+// 时刻永久耗尽时，本体播放 3 秒死亡演出后用既有 Despawn 指令退场。
 // 单位：距离 px、速度 px/s、时间 s、角度 度（unit.Deg 转弧度）、伤害 HP 点。
 package 时计
 
@@ -38,9 +38,10 @@ const (
 	arcWindow = 0.5 // 踩影触发后挂弧这么久
 
 	// —— 时刻（存档）——
-	saveGap  = 8.0 // 存档节拍；开场先等满一次
-	handStep = 2   // 每拍时针 +2h；第一档记 2:00
-	handCap  = 12  // 走到 12:00 停针
+	saveGap     = 8.0 // 存档节拍；开场先等满一次
+	handStep    = 2   // 每拍时针 +2h；第一档记 2:00
+	retireDelay = 3.0 // 永久耗尽后的死亡演出
+	handCap     = 12  // 走到 12:00 停针
 
 	// —— 陷阱 ——
 	tripR       = 22.0  // 时刻判定圈半径（比本体 18 略大）= 时刻实体半径
@@ -116,6 +117,8 @@ type 时计 struct {
 	slot     int
 	arcUntil float64 // 踩影临时弧窗口截止
 	arc      unit.AttachState
+	retiring bool
+	retireAt float64 // 时计私有的退场截止时间，不扩展公共快照
 }
 
 type 时计弧 struct{ slot int }
@@ -139,7 +142,16 @@ func (a *时计) Handle(ctx unit.Context, ev unit.Event) {
 	case unit.IncomingDamage:
 		a.hurt(ctx, e)
 	case unit.Sense:
-		a.tick(ctx, e)
+		if a.retiring {
+			a.deathTick(ctx, e.Time)
+		} else {
+			a.tick(ctx, e)
+		}
+	case unit.Stunned:
+		if a.retiring {
+			ctx.Out <- unit.Stun{UnitID: ctx.ID, Hold: false}
+			a.deathTick(ctx, e.Time)
+		}
 	}
 }
 
@@ -156,6 +168,9 @@ func (a *时计) tick(ctx unit.Context, s unit.Sense) {
 		a.syncFx(ctx)
 	}
 	a.bindPins(ctx, s)
+	if a.retireIfExhausted(ctx, s.Time) {
+		return
+	}
 	a.save(ctx, s)
 	a.trap(ctx, s)
 	a.armArc(ctx, s) // 踩影之后再挂，触发当帧就能出第一发弧
@@ -321,6 +336,10 @@ func (a *时计) syncFx(ctx unit.Context) {
 // hurt 两段式伤害的拦截层。回拨只吃致命伤：有档就回拨 + BlockDamage 整包取消；
 // 档空了就照常吃下来——回拨保不了没档的人。
 func (a *时计) hurt(ctx unit.Context, d unit.IncomingDamage) {
+	if a.retiring {
+		unit.BlockHit(ctx, d)
+		return
+	}
 	if a.hp-a.pending-d.Amount <= 1e-9 && len(a.moments) > 0 {
 		a.rewind(ctx, d.Time)
 		unit.BlockHit(ctx, d)
@@ -376,6 +395,7 @@ func (a *时计) rewind(ctx unit.Context, now float64) {
 	a.hp, a.x, a.y = m.hp, m.x, m.y
 	a.nextAt = now + saveGap // 重新吃满 8s 节拍，下一拍从 hand+2 走
 	a.syncFx(ctx)
+	a.retireIfExhausted(ctx, now)
 }
 
 // trap 踩影：敌方战斗机或敌方活随从「进入」某个时刻的判定圈（边沿触发）就把时计拉过去撞。
@@ -454,4 +474,45 @@ func (a *时计) bait(s unit.Sense, m moment) (unit.Snapshot, bool) {
 		}
 	}
 	return best, found
+}
+
+// 永久耗尽看完整的刻度账，不看当前针位：中途用光仍保留空走机制。
+func (a *时计) retireIfExhausted(ctx unit.Context, now float64) bool {
+	if a.retiring {
+		return true
+	}
+	if len(a.moments) > 0 {
+		return false
+	}
+	for hour := handStep; hour <= handCap; hour += handStep {
+		if !a.carved[hour] {
+			return false
+		}
+	}
+	a.retiring = true
+	a.retireAt = now + retireDelay
+	a.arcUntil = 0
+	a.arc = unit.AttachState{}
+	ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindTokeiArc}
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+	ctx.Out <- unit.SetAimPriority{From: ctx.ID, UnitID: ctx.ID, Value: 0}
+	ctx.Out <- unit.NoHealthNumbers{UnitID: ctx.ID, Hold: true}
+	a.deathTick(ctx, now)
+	return true
+}
+
+// 演出用时计现有的 FX 通道传窗口；每拍重发同一窗口，丢帧也不会重开计时。
+// 前端与导出都按快照的模拟时间算针位，不引入公共协议或真实时间定时器。
+func (a *时计) deathTick(ctx unit.Context, now float64) {
+	if now+1e-9 >= a.retireAt {
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+		return
+	}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID}
+	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: 0}
+	ctx.Out <- unit.FX{
+		Name: "overclock", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
+		X: a.retireAt - retireDelay, Y: a.retireAt,
+	}
 }
