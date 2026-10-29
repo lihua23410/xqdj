@@ -1,6 +1,7 @@
 package 回声
 
 import (
+	"math"
 	"testing"
 
 	"xqdj/internal/unit"
@@ -221,6 +222,9 @@ func TestShardCountsButDoesNotDamageBeforeTen(t *testing.T) {
 	if mark.Icon != countIcon {
 		t.Fatalf("扫描图标 = %q", mark.Icon)
 	}
+	if !mark.Hidden {
+		t.Fatal("扫描标记应隐藏，不给通用 HUD 显示")
+	}
 	if _, ok := damageOf(cmds); ok {
 		t.Fatal("不到 10 层不该掉血")
 	}
@@ -232,41 +236,156 @@ func TestShardCountsButDoesNotDamageBeforeTen(t *testing.T) {
 	}
 }
 
-func TestShardDamagesAtTen(t *testing.T) {
-	out := make(chan unit.Cmd, 128)
-	ctx := unit.Context{ID: 3, Kind: KindShard, Out: out}
-	kind := countKind(1)
-	s := &碎片{slot: 0, markKind: kind}
+func TestShardNeverDamages(t *testing.T) {
+	for _, n := range []int{0, 9, 10, 15} {
+		out := make(chan unit.Cmd, 128)
+		ctx := unit.Context{ID: 3, Kind: KindShard, Out: out}
+		kind := countKind(1)
+		s := &碎片{slot: 0, markKind: kind}
 
-	s.Handle(ctx, unit.Collision{Time: 1, Other: echoFoe(9, 9, kind)})
-	cmds := drain(out)
-	if _, ok := stackOf(cmds, 9, kind); !ok {
-		t.Fatal("第 10 枚应把层数补到 10")
-	}
-	d, ok := damageOf(cmds)
-	if !ok {
-		t.Fatal("第 10 枚命中应造成伤害")
-	}
-	if d.Amount != shardDmg || d.To != 9 || !d.NoFreeze {
-		t.Fatalf("伤害 = %+v，应为 %v / 9 / 不停帧", d, shardDmg)
-	}
-	if ping, ok := fxOf(cmds, "echo-ping"); !ok || ping.Amount != 10 {
-		t.Fatalf("锁定那一下的声呐应带 10：%+v %v", ping, ok)
+		s.Handle(ctx, unit.Collision{Time: 1, Other: echoFoe(9, n, kind)})
+		cmds := drain(out)
+		if _, ok := damageOf(cmds); ok {
+			t.Fatalf("n=%d 碎片不该出伤", n)
+		}
+		mark, ok := stackOf(cmds, 9, kind)
+		if !ok || !mark.Hidden {
+			t.Fatalf("n=%d 扫描标记应隐藏：%+v", n, mark)
+		}
+		if ping, ok := fxOf(cmds, "echo-ping"); !ok || ping.Amount != float64(n+1) {
+			t.Fatalf("n=%d 声呐层数不对：%+v %v", n, ping, ok)
+		}
 	}
 }
 
-func TestShardAtTenAddsFreshStackAndDamages(t *testing.T) {
-	out := make(chan unit.Cmd, 128)
-	ctx := unit.Context{ID: 3, Kind: KindShard, Out: out}
+func TestDashWhenLocked(t *testing.T) {
+	out := make(chan unit.Cmd, 256)
+	ctx := unit.Context{ID: 1, Kind: KindEcho, Out: out, Stream: 7}.WithBirths()
+	e := &回声{}
 	kind := countKind(1)
-	s := &碎片{slot: 0, markKind: kind}
+	foe := echoFoe(9, 10, kind)
+	send := func(tm float64, f unit.Snapshot) {
+		e.Handle(ctx, unit.Sense{Time: tm, Self: echoSelf(120, 0, 0), Field: unit.HexField(), Nearby: []unit.Snapshot{f}})
+	}
 
-	s.Handle(ctx, unit.Collision{Time: 1, Other: echoFoe(9, 10, kind)})
+	send(0, foe)   // boot
+	send(0.1, foe) // lock
 	cmds := drain(out)
-	if _, ok := stackOf(cmds, 9, kind); !ok {
-		t.Fatal("已经锁定时也要补新层，旧层靠寿命自己掉")
+	if e.mode != modeLock {
+		t.Fatalf("mode=%d，应锁定", e.mode)
 	}
-	if _, ok := damageOf(cmds); !ok {
-		t.Fatal("已经锁定时应继续造成伤害")
+	if !hasStand(cmds, true) {
+		t.Fatal("锁定应站定")
 	}
+	if n := countSpawns(cmds, KindStar); n != 0 {
+		t.Fatal("锁定后不该发星弹")
+	}
+	if _, ok := fxOf(cmds, "echo-lock"); !ok {
+		t.Fatal("缺少锁定演出")
+	}
+
+	send(0.25, foe) // dash
+	cmds = drain(out)
+	if e.mode != modeDash {
+		t.Fatalf("mode=%d，应突进", e.mode)
+	}
+	if !hasPass(cmds, true) {
+		t.Fatal("突进应穿人")
+	}
+	if !hasDashVelocity(cmds) {
+		t.Fatal("突进速度不对")
+	}
+	if n := countSpawns(cmds, KindStar); n != 0 {
+		t.Fatal("突进时不该发星弹")
+	}
+	if _, ok := fxOf(cmds, "echo-dash"); !ok {
+		t.Fatal("缺少突进演出")
+	}
+
+	moved := foe
+	moved.X, moved.Y = 0, 50
+	send(0.30, moved)
+	cmds = drain(out)
+	if !hasVelDir(cmds, 1, 0) {
+		t.Fatalf("突进没追目标：%+v", cmds)
+	}
+
+	e.Handle(ctx, unit.Collision{Time: 0.30, Other: foe})
+	cmds = drain(out)
+	if d, ok := damageOf(cmds); !ok || d.Amount != ramDmg || d.To != 9 {
+		t.Fatalf("突进撞人伤害=%+v %v", d, ok)
+	}
+	e.Handle(ctx, unit.Collision{Time: 0.32, Other: foe})
+	if _, ok := damageOf(drain(out)); ok {
+		t.Fatal("一次突进只撞一下")
+	}
+
+	e.Handle(ctx, unit.WallHit{Time: 0.50, X: 0, Y: 0, NX: -1, NY: 0, Kind: unit.WallEdge})
+	cmds = drain(out)
+	if e.mode != modeLock {
+		t.Fatalf("mode=%d，突进后应重新锁定", e.mode)
+	}
+	if !hasPass(cmds, false) {
+		t.Fatal("突进后应关掉穿人")
+	}
+	if !hasStand(cmds, false) {
+		t.Fatal("突进后应放下站定")
+	}
+
+	send(0.70, echoFoe(9, 9, kind)) // lock drops
+	cmds = drain(out)
+	if e.mode != modeScan {
+		t.Fatalf("mode=%d，掉锁后应回到扫描", e.mode)
+	}
+	if !hasPass(cmds, false) || !hasStand(cmds, false) {
+		t.Fatal("回扫描应清掉站定/穿人")
+	}
+	if !hasSpeed(cmds, echoSpeed) {
+		t.Fatalf("回扫描应把速度重置成巡航：%+v", cmds)
+	}
+}
+
+func hasStand(cmds []unit.Cmd, hold bool) bool {
+	for _, c := range cmds {
+		if s, ok := c.(unit.Stand); ok && s.Hold == hold {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPass(cmds []unit.Cmd, hold bool) bool {
+	for _, c := range cmds {
+		if p, ok := c.(unit.Pass); ok && p.Hold == hold {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDashVelocity(cmds []unit.Cmd) bool {
+	for _, c := range cmds {
+		if v, ok := c.(unit.SetVelocity); ok && math.Hypot(v.VX, v.VY) >= dashSpeed*0.9 {
+			return true
+		}
+	}
+	return false
+}
+
+func hasVelDir(cmds []unit.Cmd, ux, uy float64) bool {
+	for _, c := range cmds {
+		if v, ok := c.(unit.SetVelocity); ok && math.Abs(v.VX-ux*dashSpeed) < 1 && math.Abs(v.VY-uy*dashSpeed) < 1 {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSpeed(cmds []unit.Cmd, speed float64) bool {
+	for _, c := range cmds {
+		if v, ok := c.(unit.SetVelocity); ok && math.Abs(math.Hypot(v.VX, v.VY)-speed) < 1 {
+			return true
+		}
+	}
+	return false
 }

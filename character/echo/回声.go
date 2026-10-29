@@ -1,8 +1,8 @@
-// Package 回声：看不见、只靠声呐找人的远程。
+// Package 回声：只靠声呐找人的战士。
 //
-// 它平时什么都看不见（Vision 0），只朝自己移动的方向放星弹；星弹炸成 16 枚声呐碎片，
-// 碎片碰到敌人只做一件事：在它身上补一格扫描。每个敌人各有一份 10 秒的扫描窗口，
-// 满 10 格锁定，碎片才开始掉血；窗口到点由引擎清掉。
+// 平时朝移动方向放星弹；星弹炸成 16 枚声呐碎片，碎片碰到敌人只补一格扫描，完全不出伤。
+// 每个敌人各有一份按层寿命的扫描窗口；满 10 格锁定后，回声改成穿人冲墙（狼人式，但不限次数），
+// 不再发星弹；锁定掉回 10 格以下，再回到扫描。
 package 回声
 
 import (
@@ -25,7 +25,7 @@ const (
 	echoRadius = 18.0
 	echoHP     = 90.0
 	echoSpeed  = 165.0
-	echoVision = 0.0 // 盲：感知里只有自己的随从
+	echoVision = 9999.0 // 声呐读全场；但只有扫满 10 层的敌人才算目标
 	echoColor  = "#3b4775"
 
 	// 只有真的在走才攒发射条：站住、被锁在原地都不放。
@@ -42,10 +42,20 @@ const (
 	shardRadius  = 4.0
 	shardLife    = 4.0
 	shardBounces = 8
-	shardDmg     = 3.0
+
+	dashSpeed = 640.0
+	dashLock  = 0.08
+	dashGap   = 0.10
+	ramDmg    = 12.0
 
 	countMax  = 10
-	countLife = 5.0
+	countLife = 10.0
+)
+
+const (
+	modeScan = iota
+	modeLock
+	modeDash
 )
 
 const countIcon = "/ball/" + KindEcho + "/fx/count.svg"
@@ -63,9 +73,9 @@ func init() {
 		Speed:   echoSpeed,
 		Vision:  echoVision,
 		Fighter: true,
-		Look:    unit.Look{Color: echoColor, FX: []string{"echo"}},
-	}, func(unit.SpawnInfo) unit.Actor {
-		return &回声{}
+		Look:    unit.Look{Color: echoColor, Ghost: 220, FX: []string{"echo"}},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &回声{slot: info.Slot}
 	})
 
 	// 星弹：只负责炸，不出伤。
@@ -81,7 +91,7 @@ func init() {
 		return &星弹{owner: info.OwnerID, slot: info.Slot}
 	})
 
-	// 碎片：声呐。在墙上弹，碰到敌人补一格扫描；满 10 格才掉血。
+	// 碎片：声呐。在墙上弹，碰到敌人补一格扫描；满 10 格交给本体突进。
 	p.Register(unit.Spec{
 		Kind:   KindShard,
 		Role:   unit.RoleProjectile,
@@ -109,17 +119,34 @@ func markStacks(o unit.Snapshot, kind string) int {
 	return 0
 }
 
-// 回声本体：瞎的。唯一做的事是按移动方向放星弹，剩下的全交给碎片和引擎的扫描窗口。
+// 回声本体：平时扫，扫满 10 层就换成穿人冲墙（狼人式，不限次数）。
 type 回声 struct {
-	lastTime float64
-	charge   float64
-	booted   bool
+	slot      int
+	lastTime  float64
+	charge    float64
+	booted    bool
+	mode      int
+	modeUntil float64
+	aimX      float64
+	aimY      float64
+	struck    bool
 }
 
 func (e *回声) Handle(ctx unit.Context, ev unit.Event) {
 	switch v := ev.(type) {
 	case unit.IncomingDamage:
 		unit.ConfirmHit(ctx, v)
+	case unit.Collision:
+		if e.mode == modeDash && !e.struck && unit.EnemyTarget(v, e.slot) {
+			e.struck = true
+			ctx.Out <- unit.Damage{From: ctx.ID, To: v.Other.ID, Amount: ramDmg}
+		}
+	case unit.WallHit:
+		if e.mode == modeDash {
+			e.endDash(ctx)
+			e.mode = modeLock
+			e.modeUntil = v.Time + dashGap
+		}
 	case unit.Sense:
 		e.onSense(ctx, v)
 	}
@@ -135,6 +162,15 @@ func (e *回声) onSense(ctx unit.Context, s unit.Sense) {
 	if dt <= 0 || dt > 0.5 {
 		return
 	}
+
+	if target := e.lockTarget(ctx, s); target != nil {
+		e.charge = 0
+		e.tickDash(ctx, s, target)
+		return
+	}
+	if e.mode != modeScan {
+		e.exitDash(ctx)
+	}
 	if math.Hypot(s.Self.VX, s.Self.VY) <= moveEps {
 		return
 	}
@@ -144,6 +180,78 @@ func (e *回声) onSense(ctx unit.Context, s unit.Sense) {
 	}
 	e.charge = 0
 	e.fire(ctx, s)
+}
+
+// lockTarget 找最近的、已经扫满 10 层的敌人。没有就回到扫描。
+func (e *回声) lockTarget(ctx unit.Context, s unit.Sense) *unit.Snapshot {
+	kind := countKind(ctx.ID)
+	var best *unit.Snapshot
+	bestD := math.MaxFloat64
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Slot == s.Self.Slot || o.Nonsolid {
+			continue
+		}
+		if !unit.Hittable(*o, s.Self.Slot) {
+			continue
+		}
+		if markStacks(*o, kind) < countMax {
+			continue
+		}
+		d := math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y)
+		if d < bestD {
+			bestD, best = d, o
+		}
+	}
+	return best
+}
+
+func (e *回声) tickDash(ctx unit.Context, s unit.Sense, target *unit.Snapshot) {
+	switch e.mode {
+	case modeScan:
+		e.aimAt(s, target)
+		e.mode = modeLock
+		e.modeUntil = s.Time + dashLock
+		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID}
+		ctx.Out <- unit.FX{Name: "echo-lock", Kind: KindEcho, UnitID: ctx.ID, X: s.Self.X, Y: s.Self.Y}
+	case modeLock:
+		e.aimAt(s, target)
+		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID}
+		if s.Time+1e-9 >= e.modeUntil {
+			e.mode = modeDash
+			e.struck = false
+			ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+			ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
+			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: e.aimX * dashSpeed, VY: e.aimY * dashSpeed}
+			ctx.Out <- unit.FX{Name: "echo-dash", Kind: KindEcho, UnitID: ctx.ID, X: s.Self.X, Y: s.Self.Y}
+		}
+	case modeDash:
+		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: e.aimX * dashSpeed, VY: e.aimY * dashSpeed}
+	}
+}
+
+func (e *回声) aimAt(s unit.Sense, target *unit.Snapshot) {
+	dx, dy := target.X-s.Self.X, target.Y-s.Self.Y
+	d := math.Hypot(dx, dy)
+	if d < 1e-6 {
+		return
+	}
+	e.aimX, e.aimY = dx/d, dy/d
+}
+
+func (e *回声) endDash(ctx unit.Context) {
+	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
+}
+
+func (e *回声) exitDash(ctx unit.Context) {
+	e.mode = modeScan
+	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: e.aimX * echoSpeed, VY: e.aimY * echoSpeed}
 }
 
 func (e *回声) fire(ctx unit.Context, s unit.Sense) {
@@ -260,12 +368,9 @@ func (s *碎片) Handle(ctx unit.Context, ev unit.Event) {
 			// 层数可以超过 10；10 只是锁定门槛，不是上限。
 			ctx.Out <- unit.StackMark{
 				UnitID: v.Other.ID, Kind: s.markKind, Delta: 1, Icon: countIcon,
-				Lifetime: countLife,
+				Lifetime: countLife, Hidden: true,
 			}
 			stacks++
-			if stacks >= countMax {
-				ctx.Out <- unit.Damage{From: ctx.ID, To: v.Other.ID, Amount: shardDmg, NoFreeze: true}
-			}
 			ctx.Out <- unit.FX{
 				Name: "echo-ping", Kind: KindShard, UnitID: v.Other.ID,
 				X: v.Other.X, Y: v.Other.Y, Amount: float64(stacks),

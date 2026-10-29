@@ -115,7 +115,7 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 | `doppel` | `分身者` | 175 | 0 |
 | `doppel_veteran` | `分身者(百战)` | 0 | 9999 |
 | `dummy` | `靶子` | 165 | 9999 |
-| `echo` | `回声` | 165 | 0 |
+| `echo` | `回声` | 165 | 9999 |
 | `engine` | `内燃机` | 120 | 96 |
 | `fisher` | `钓鱼佬` | 148 | 9999 |
 | `freischutz` | `中转站[Freischutz]` | 160 | 9999 |
@@ -400,7 +400,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 | `MarkFaction` | 给战斗机打派系。`Cycle` 时撞墙（非单位）换派系，同一目标 0.2s 一次；`AmpOut`/`AmpIn` 是角色自己给的倍率（0 = 不改）；`Collect` 凑齐四种时按 `Barrage` 的 kind 朝四周各生成一发（速度用该 kind 的 `Spec.Speed`），或按 `BlastRadius` / `BlastDamage` 炸一次 |
 | `ClearFactionSeen` | 清空 `Collect` 记录，当前派系仍算已出现 |
 | `Heal` | 给战斗机或活随从回血，不超过 MaxHP，不触发 hit-stop。实际增加 ≥ 0.5 才发引擎 `heal` 特效 |
-| `StackMark` | 给单位叠一层状态（Kind / Icon 由角色定）。`Delta` 可为负，减到 0 就消失。`Lifetime` > 0 时每一层从叠上去那一拍起活这么多秒，到点由引擎掉这一层；0 表示不过期 |
+| `StackMark` | 给单位叠一层状态（Kind / Icon 由角色定）。`Delta` 可为负，减到 0 就消失。`Lifetime` > 0 时每一层从叠上去那一拍起活这么多秒，到点由引擎掉这一层；0 表示不过期。`Hidden` 为 true 时只给角色自己的 lookFX 看，不显示在通用状态 HUD；层数与寿命照常 |
 | `ClearMarks` | 清掉该单位指定 Kind 的状态；Kind 为空则全清 |
 | `AddFS` | 加一条**瞬时 FS**：`DX,DY` 是方向，`BaseSpeed` 是速率。持着时引擎每帧把速度写成所有瞬时 FS 的向量和（巡航带子暂停）。`OnWall: true` 撞墙即清；`ExpiresAt: 0` 不过期。同 `Token` 覆盖 |
 | `RemoveFS` | 按 `Token` 撤一条瞬时 FS；撤完自动回到巡航 |
