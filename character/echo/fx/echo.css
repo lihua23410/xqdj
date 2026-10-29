@@ -47,28 +47,6 @@
     0 0 34px rgba(111, 227, 255, 0.4);
 }
 
-/* 平时向外打的声呐底噪。 */
-.ball.fighter.look-echo::after {
-  content: "";
-  position: absolute;
-  inset: -7px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(150, 210, 255, 0.3);
-  animation: echo-hum 1.6s ease-out infinite;
-  pointer-events: none;
-}
-
-@keyframes echo-hum {
-  0% {
-    transform: scale(0.82);
-    opacity: 0.7;
-  }
-  100% {
-    transform: scale(1.3);
-    opacity: 0;
-  }
-}
-
 /* 星弹：金色四角星，自己转，不碰 .ball 的定位 transform。 */
 .ball.look-echo-star {
   background: none;
@@ -235,6 +213,57 @@
   }
   to {
     transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+/* 锁定：一圈收束。 */
+.fx-echo-lock {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  border: 2px solid #bff6ff;
+  box-shadow: 0 0 12px #6fe3ff;
+  animation: echo-lock 0.4s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes echo-lock {
+  0% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+}
+
+/* 突进：一道青色冲刺痕。 */
+.fx-echo-dash {
+  position: absolute;
+  width: 64px;
+  height: 10px;
+  margin: -5px 0 0 -32px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #6fe3ff 35%, #bff6ff 55%, transparent);
+  filter: drop-shadow(0 0 8px #6fe3ff);
+  animation: echo-dash 0.35s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes echo-dash {
+  0% {
+    transform: scaleX(0.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1.6);
     opacity: 0;
   }
 }

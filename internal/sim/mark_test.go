@@ -149,3 +149,17 @@ func TestMarkSnapshotCarriesLifetime(t *testing.T) {
 		t.Fatalf("marks=%+v", got)
 	}
 }
+
+func TestHiddenMarkStaysInSnapshot(t *testing.T) {
+	m, u := newMarkMatch(t, 7)
+	defer m.End()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.time = 0
+	m.stackMarkLocked(unitpkg.StackMark{UnitID: u.id, Kind: "扫描", Delta: 2, Lifetime: 4, Hidden: true})
+	got := u.markList()
+	if len(got) != 1 || got[0].Stacks != 2 || !got[0].Hidden {
+		t.Fatalf("marks=%+v", got)
+	}
+}

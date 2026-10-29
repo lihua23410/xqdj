@@ -11,6 +11,7 @@ type stackMark struct {
 	stacks   int
 	icon     string
 	lifetime float64
+	hidden   bool
 	hits     []float64 // 每层叠上去的绝对时间；只对 Lifetime > 0 的标记有值
 }
 
@@ -31,7 +32,7 @@ func (m *Match) stackMarkLocked(c unitpkg.StackMark) {
 		if c.Delta < 0 {
 			return
 		}
-		cur = &stackMark{kind: c.Kind, icon: c.Icon, lifetime: c.Lifetime}
+		cur = &stackMark{kind: c.Kind, icon: c.Icon, lifetime: c.Lifetime, hidden: c.Hidden}
 		u.marks[c.Kind] = cur
 	}
 	if cur.lifetime > 0 {
@@ -60,6 +61,9 @@ func (m *Match) stackMarkLocked(c unitpkg.StackMark) {
 	}
 	if c.Icon != "" {
 		cur.icon = c.Icon
+	}
+	if c.Hidden {
+		cur.hidden = true
 	}
 	if cur.stacks <= 0 {
 		delete(u.marks, c.Kind)
@@ -153,7 +157,7 @@ func (u *unit) markList() []unitpkg.Mark {
 		}
 		out = append(out, unitpkg.Mark{
 			Kind: m.kind, Stacks: m.stacks, Icon: m.icon,
-			Lifetime: m.lifetime, NextDecayAt: next,
+			Lifetime: m.lifetime, NextDecayAt: next, Hidden: m.hidden,
 		})
 	}
 	if len(out) == 0 {

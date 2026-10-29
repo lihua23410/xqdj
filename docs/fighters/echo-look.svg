@@ -24,10 +24,16 @@
     <path d="M50 20 A27 27 0 0 1 50 60" stroke-width="1" opacity="0.28"/>
   </g>
 
-  <!-- 本体：闭着的眼 -->
+  <!-- 本体：锁定后的眼 -->
   <circle cx="28" cy="40" r="14" fill="url(#echoBody)" stroke="#0d1120" stroke-width="1.4"/>
   <circle cx="28" cy="40" r="13" fill="none" stroke="#bcd8ff" stroke-width="0.7" opacity="0.5"/>
-  <rect x="17" y="38.6" width="22" height="2.8" rx="1.4" fill="#0a1024"/>
+  <ellipse cx="28" cy="40" rx="7" ry="3.2" fill="#0a1024"/>
+  <ellipse cx="28" cy="40" rx="4.6" ry="2" fill="#bff6ff"/>
+  <circle cx="28" cy="40" r="1.1" fill="#fff"/>
+
+  <!-- 突进：一道青色冲刺痕 -->
+  <path d="M41 39 L50 47" stroke="#6fe3ff" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/>
+  <path d="M47 43 L51 47.5 L45 47" fill="none" stroke="#bff6ff" stroke-width="1.4" stroke-linejoin="round"/>
 
   <!-- 星弹 -->
   <use xlink:href="#star" transform="translate(58 15) scale(1.05)"/>

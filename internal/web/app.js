@@ -451,7 +451,7 @@ function fillMarksHud(root, u) {
   root.innerHTML = "";
   const marks = (u && u.marks) || [];
   for (const m of marks) {
-    if (!m || m.stacks <= 0) continue;
+    if (!m || m.stacks <= 0 || m.hidden) continue;
     const wrap = document.createElement("span");
     wrap.className = "status-mark";
     wrap.title = m.kind || "";

@@ -1,7 +1,8 @@
 // 回声的声呐演出。
 //
-// 碎片每碰到敌人一次，在它身上补一格扫描；10 格满 = 锁定，碎片才开始掉血。
-// 扫描窗口由引擎的 mark.until 管：10 秒到点 mark 自己消失，环也跟着收。
+// 碎片每碰到敌人一次，在它身上补一格扫描；碎片完全不出伤。
+// 10 格满 = 锁定，回声改成穿人冲墙（狼人式，不限次数）；锁定掉回 10 格以下再回到扫描。
+// 扫描窗口由引擎的 mark 按层管：每层 10 秒到点自己掉，环也跟着收。
 //
 // 扫描环挂在回声自己的 lookFX 上，每帧读 ctx.units 里敌人的 marks 来画；
 // 这样不用改 app.js，也能在回声死后靠 until 定时器把环收掉。
@@ -139,5 +140,15 @@ window.lookFX = window.lookFX || {};
   // 星弹炸开：金色大圈。
   A.registerShot("echo-burst", function (fx, ctx) {
     A.spawnFx("fx-echo-burst", ctx.x, ctx.y, ctx.kind);
+  });
+
+  // 锁定：一圈收束，表示“找到了”。
+  A.registerShot("echo-lock", function (fx, ctx) {
+    A.spawnFx("fx-echo-lock", ctx.x, ctx.y, ctx.kind);
+  });
+
+  // 突进：一道青色冲刺痕。
+  A.registerShot("echo-dash", function (fx, ctx) {
+    A.spawnFx("fx-echo-dash", ctx.x, ctx.y, ctx.kind);
   });
 })();
