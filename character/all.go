@@ -43,6 +43,7 @@ import (
 	"xqdj/character/slot"
 	"xqdj/character/sot"
 	"xqdj/character/static"
+	"xqdj/character/subpoena"
 	"xqdj/character/tachi"
 	"xqdj/character/tanyongchen"
 	"xqdj/character/tokei"
@@ -196,6 +197,8 @@ const (
 	KindSotStain           = 酒翁.KindSotStain
 	KindSotWine            = 酒翁.KindSotWine
 	KindStaticBall         = 静电魔球.KindStaticBall
+	KindSubpoena           = 传票员.KindSubpoena
+	KindTicket             = 传票员.KindTicket
 	KindTachi              = 太刀.KindTachi
 	KindBell               = 谭泳辰.KindBell
 	KindDomain             = 谭泳辰.KindDomain

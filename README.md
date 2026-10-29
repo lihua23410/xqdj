@@ -103,7 +103,7 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 
 ## 现有战斗机
 
-选人按钮顺序 = `unit.FighterKinds()` = 各包 `init()` 的注册顺序。包的加载顺序是 `all.go` 的 import 顺序，也就是 **目录名字母序**。下表按这个顺序，共 49 只（含靶子）。巡航和视野是 `Spec` 的开局值；对局中改巡航、改视野的不写在这里。行为见 `CONTEXT.md` 和 `战斗机.md`。
+选人按钮顺序 = `unit.FighterKinds()` = 各包 `init()` 的注册顺序。包的加载顺序是 `all.go` 的 import 顺序，也就是 **目录名字母序**。下表按这个顺序，共 50 只（含靶子）。巡航和视野是 `Spec` 的开局值；对局中改巡航、改视野的不写在这里。行为见 `CONTEXT.md` 和 `战斗机.md`。
 
 | 目录 `character/` | Kind | 巡航 | 视野 |
 | --- | --- | ---: | ---: |
@@ -147,6 +147,7 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 | `slot` | `老虎机` | 150 | 9999 |
 | `sot` | `酒翁` | 165 | 9999 |
 | `static` | `静电魔球` | 160 | 280 |
+| `subpoena` | `传票员` | 170 | 9999 |
 | `tachi` | `太刀` | 140 | 9999 |
 | `tanyongchen` | `谭泳辰老先生` | 165 | 9999 |
 | `tokei` | `时计` | 170 | 9999 |
@@ -473,7 +474,7 @@ window.lookFX.glitch = {
 `tick` 的 `ctx` 有 `now`、`scale`、`cx`、`cy`、`units`、`fxRoot`、`spawnGhost`。`guide` 的 `ctx` 有 `scale`、`cx`、`cy`、`units`、`ensureGuide`、`placeSeg`、`seenGuides`。
 
 4. 把短名填进该 kind 的 `Look.FX`。随从可以和主人不同皮肤（残影用 `"glitch-still"`）。
-5. **`window.lookFX` 的短名是全局的**，不按包隔离。不要和别的球撞。`Look.FX` 里已经占用：`archer`、`arrow`、`assassin`、`axe`、`bloodpact`、`bloodpact-bat`、`bond`、`cage`、`chair`、`chamber-lock`、`charcoal`、`chroma`、`crescent`、`dealer`、`drug`、`engine`、`fisher`、`fisher-fish`、`fisher-flood`、`fisher-pond`、`gallows`、`glitch`、`glitch-still`、`godfather`、`hammer`、`hammer-doll`、`hero`、`hero-friend`、`hero-relic`、`hero-slime`、`integrated`、`integrated-shot`、`knight`、`knight-arc`、`maggot`、`maggot-baby`、`maggot-egg`、`maggot-fly`、`mask1`、`mask2`、`mask3`、`meander`、`meander-lit`、`meander-ring`、`mezhou-me`、`mezhou-void`、`mezhou-zhou`、`minion`、`miu`、`miu-arc`、`miu-shot`、`moon`、`nail`、`ningyushi`、`ningyushi-beam`、`ningyushi-bomb`、`ningyushi-doll`、`ningyushi-shot`、`pastor`、`pastor-glyph`、`piper`、`prisoner`、`pull`、`push`、`radar`、`radar-shell`、`radar-shell-sm`、`radar-vet`、`rat`、`reaper`、`relay`、`relay-node`、`relay-shot`、`rocket`、`shadow`、`sickle`、`slash`、`sniper`、`sot`、`sot-stain`、`sot-wine`、`tachi`、`tan-bell`、`tan-domain`、`tan-kunai`、`tan-milk`、`tanyongchen`、`tokei`、`tokei-moment`、`veteran`、`volcano-crater`、`volcano-lava`、`vortex`、`wolf`、`youth`、`youth-shot`。一次性特效的名字按包隔离，皮肤短名不会。
+5. **`window.lookFX` 的短名是全局的**，不按包隔离。不要和别的球撞。`Look.FX` 里已经占用：`archer`、`arrow`、`assassin`、`axe`、`bloodpact`、`bloodpact-bat`、`bond`、`cage`、`chair`、`chamber-lock`、`charcoal`、`chroma`、`crescent`、`dealer`、`drug`、`engine`、`fisher`、`fisher-fish`、`fisher-flood`、`fisher-pond`、`gallows`、`glitch`、`glitch-still`、`godfather`、`hammer`、`hammer-doll`、`hero`、`hero-friend`、`hero-relic`、`hero-slime`、`integrated`、`integrated-shot`、`knight`、`knight-arc`、`maggot`、`maggot-baby`、`maggot-egg`、`maggot-fly`、`mask1`、`mask2`、`mask3`、`meander`、`meander-lit`、`meander-ring`、`mezhou-me`、`mezhou-void`、`mezhou-zhou`、`minion`、`miu`、`miu-arc`、`miu-shot`、`moon`、`nail`、`ningyushi`、`ningyushi-beam`、`ningyushi-bomb`、`ningyushi-doll`、`ningyushi-shot`、`pastor`、`pastor-glyph`、`piper`、`prisoner`、`pull`、`push`、`radar`、`radar-shell`、`radar-shell-sm`、`radar-vet`、`rat`、`reaper`、`relay`、`relay-node`、`relay-shot`、`rocket`、`shadow`、`sickle`、`slash`、`sniper`、`sot`、`sot-stain`、`sot-wine`、`subpoena`、`tachi`、`tan-bell`、`tan-domain`、`tan-kunai`、`tan-milk`、`tanyongchen`、`ticket`、`tokei`、`tokei-moment`、`veteran`、`volcano-crater`、`volcano-lava`、`vortex`、`wolf`、`youth`、`youth-shot`。一次性特效的名字按包隔离，皮肤短名不会。
 6. 卸皮肤时引擎会调 `unmount`。只在「class 被移除」时调（换 kind / 换皮肤）；单位被删或切回选人页不会调，所以不要留下必须靠 `unmount` 才清得掉的常驻子节点。
 
 ### 9. 一次性特效（`unit.FX` + `registerShot`）
@@ -515,6 +516,8 @@ arena.registerShot("shot", (fx, ctx) => {
 `hurt`、`heal`、`swap`、`wall-spawn`、`wall-fade`、`wall`、`impact`、`hit`、`faction`
 
 小骑士瞬移用 `"blink"`，不要叫 `"swap"`（`SwapOwned` 已经发引擎的 `swap`）。墙的出现 / 消失 / 碰撞火花不用角色发，引擎会发。
+
+`shot` 和 `scream`、`attack`、`gear`、`cruise`、`verse`、`carve`、`revive` 是「声音即时通道」的名字（`app.js` 的 `IMMEDIATE_AUDIO`）：钩子会在快照到达时先被调一次，`ctx.audioOnly` 为真、坐标是 0；按帧画的那一遍会跳过它们。拿这些名字画气泡 / 贴图，会画在球场左上角外面且看不见（导出的视频里又是正常的，因为导出没有 WS）。要画东西就自己起个名字。
 
 ### 10. 派系图标
 
