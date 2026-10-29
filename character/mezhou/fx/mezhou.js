@@ -134,27 +134,15 @@ window.mezhouSt = window.mezhouSt || {};
     },
   };
 
-  // 周旋久：状态文字跟主人；血条照抄教父随从 .minion-hp。
+  // 周旋久：状态文字跟主人；生命数字由公共显示负责。
   window.lookFX["mezhou-zhou"] = {
     unmount(el) {
       if (!el) return;
       el.querySelector(":scope > .mezhou-state")?.remove();
-      el.querySelector(":scope > .minion-hp")?.remove();
     },
     tick(el, u) {
       if (!el || !u) return;
       setStateText(el, modeOf(u.ownerId));
-      let wrap = el.querySelector(":scope > .minion-hp");
-      if (!wrap) {
-        wrap = document.createElement("span");
-        wrap.className = "minion-hp";
-        wrap.appendChild(document.createElement("i"));
-        el.appendChild(wrap);
-      }
-      const bar = wrap.querySelector("i");
-      const max = u.maxHp || 1;
-      const hp = Math.max(0, u.hp || 0);
-      if (bar) bar.style.width = `${Math.max(0, Math.min(100, (hp / max) * 100))}%`;
     },
   };
 

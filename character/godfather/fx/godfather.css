@@ -3,25 +3,6 @@
   box-shadow: inset 0 0 0 2px #c9a227, 0 0 10px rgba(201, 162, 39, 0.35);
 }
 
-.minion-hp {
-  position: absolute;
-  left: 50%;
-  top: -7px;
-  width: 120%;
-  height: 4px;
-  transform: translate(-50%, -100%);
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 2px;
-  overflow: hidden;
-  pointer-events: none;
-}
-.minion-hp i {
-  display: block;
-  height: 100%;
-  width: 100%;
-  background: #7dff9a;
-}
-
 .ball.assassin-dash {
   box-shadow: 0 0 16px #ff4a3a, 0 0 28px #8b1e18;
 }

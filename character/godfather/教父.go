@@ -91,7 +91,7 @@ func init() {
 		Speed:  minionCruise,
 		Vision: assassinVision,
 		Mortal: true,
-		Look:   unit.Look{Color: assassinColor, Ghost: 280, FX: []string{"minion", "assassin"}},
+		Look:   unit.Look{Color: assassinColor, Ghost: 280, FX: []string{"assassin"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &暗杀者{owner: info.OwnerID, slot: info.Slot, attacks: assassinHits}
 	})
@@ -103,7 +103,7 @@ func init() {
 		Speed:  minionCruise,
 		Vision: sniperVision,
 		Mortal: true,
-		Look:   unit.Look{Color: sniperColor, FX: []string{"minion", "sniper"}},
+		Look:   unit.Look{Color: sniperColor, FX: []string{"sniper"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &狙击者{owner: info.OwnerID, slot: info.Slot, shots: sniperShots}
 	})
@@ -115,7 +115,7 @@ func init() {
 		Speed:  minionCruise,
 		Vision: dealerVision,
 		Mortal: true,
-		Look:   unit.Look{Color: dealerColor, FX: []string{"minion", "dealer"}},
+		Look:   unit.Look{Color: dealerColor, FX: []string{"dealer"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &贩卖者{owner: info.OwnerID, slot: info.Slot, left: dealerDrops}
 	})

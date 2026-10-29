@@ -63,25 +63,6 @@
   height: 100%;
   overflow: visible;
 }
-.ball.look-hammer-doll > .stand-hp {
-  position: absolute;
-  left: 50%;
-  top: -10px;
-  width: 130%;
-  height: 4px;
-  transform: translate(-50%, -100%);
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 2px;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 5;
-}
-.ball.look-hammer-doll > .stand-hp i {
-  display: block;
-  height: 100%;
-  width: 100%;
-  background: #8a3030;
-}
 @keyframes stand-hover {
   0%, 100% { transform: translate(-50%, -52%) rotate(-3deg); }
   50% { transform: translate(-50%, -58%) rotate(4deg); }

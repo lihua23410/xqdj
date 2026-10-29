@@ -30,19 +30,7 @@ function expireStench() {
   }
 }
 
-function maggotHP(el, u) {
-  if (!el || !u) return;
-  let tag = el.querySelector(":scope > .maggot-hp");
-  if (!tag) {
-    tag = document.createElement("span");
-    tag.className = "maggot-hp";
-    el.appendChild(tag);
-  }
-  tag.textContent = String(Math.round(u.hp));
-}
-
 function maggotUnmount(el) {
-  el?.querySelector(":scope > .maggot-hp")?.remove();
   el?.querySelector(":scope > .maggot-body")?.remove();
   el?.querySelector(":scope > .fly-body")?.remove();
 }
@@ -115,7 +103,6 @@ window.lookFX.maggot = { tick() {}, unmount() {} };
 window.lookFX["maggot-baby"] = {
   tick(el, u) {
     if (!el || !u) return;
-    maggotHP(el, u);
     const body = ensureBabyBody(el);
     const ang = Math.atan2(-(u.vy || 0), u.vx || 1);
     body.style.setProperty("--ang", `${ang}rad`);
@@ -128,7 +115,6 @@ window.lookFX["maggot-baby"] = {
 window.lookFX["maggot-fly"] = {
   tick(el, u) {
     if (!el || !u) return;
-    maggotHP(el, u);
     const body = ensureFlyBody(el);
     const ang = Math.atan2(-(u.vy || 0), u.vx || 1);
     body.style.setProperty("--ang", `${ang}rad`);
@@ -151,7 +137,6 @@ window.lookFX["maggot-fly"] = {
 };
 window.lookFX["maggot-egg"] = {
   tick(el, u) {
-    maggotHP(el, u);
     expireStench();
   },
   unmount: maggotUnmount,

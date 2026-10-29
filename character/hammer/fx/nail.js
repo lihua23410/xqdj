@@ -172,16 +172,10 @@ window.lookFX["hammer-doll"] = {
   unmount(el) {
     el?.querySelector(":scope > .stand-art")?.remove();
     el?.querySelector(":scope > .stand-aura")?.remove();
-    el?.querySelector(":scope > .stand-hp")?.remove();
   },
   tick(el, u) {
     if (!el || !el.classList.contains("look-hammer-doll")) return;
     ensureChild(el, "stand-aura");
     ensureChild(el, "stand-art", STAND_SVG);
-    const bar = ensureChild(el, "stand-hp", "<i></i>");
-    const fill = bar.querySelector("i");
-    const max = u.maxHp || 1;
-    const hp = Math.max(0, u.hp || 0);
-    if (fill) fill.style.width = `${Math.max(0, Math.min(100, (hp / max) * 100))}%`;
   },
 };

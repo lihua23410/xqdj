@@ -1,38 +1,9 @@
 window.lookFX = window.lookFX || {};
 
-function ensureHP(el) {
-  let wrap = el.querySelector(":scope > .minion-hp");
-  if (wrap) return wrap;
-  wrap = document.createElement("span");
-  wrap.className = "minion-hp";
-  const i = document.createElement("i");
-  wrap.appendChild(i);
-  el.appendChild(wrap);
-  return wrap;
-}
-
-function tickHP(el, u) {
-  if (!el || !u) return;
-  const wrap = ensureHP(el);
-  const i = wrap.querySelector("i");
-  const max = u.maxHp || 1;
-  const hp = Math.max(0, u.hp || 0);
-  if (i) i.style.width = `${Math.max(0, Math.min(100, (hp / max) * 100))}%`;
-}
-
 window.lookFX.godfather = {
   tick(el) {
     if (!el) return;
     el.classList.toggle("look-godfather", true);
-  },
-};
-
-window.lookFX.minion = {
-  unmount(el) {
-    el?.querySelector(":scope > .minion-hp")?.remove();
-  },
-  tick(el, u) {
-    tickHP(el, u);
   },
 };
 

@@ -640,6 +640,9 @@ body[data-page="team"] .kinds { max-height: 360px; overflow: auto; }
 }
 .hp-float {
   position: absolute;
+  border: 0;
+  width: auto;
+  height: auto;
   color: #fff;
   font-size: 13px;
   font-variant-numeric: tabular-nums;

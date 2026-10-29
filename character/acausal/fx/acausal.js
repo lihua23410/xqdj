@@ -11,7 +11,7 @@ function acausalSourceKind(u) {
   return "";
 }
 
-function acausalWear(el, u) {
+function acausalWear(el, u, ctx) {
   const kind = acausalSourceKind(u) || "非因果";
   paintKind(el, kind);
   for (const name of lookOf(kind).fx || []) {
@@ -19,7 +19,7 @@ function acausalWear(el, u) {
     if (!id || id === "acausal" || id === "acausal-ghost") continue;
     el.classList.add("look-" + id);
     const hook = window.lookFX && window.lookFX[id];
-    if (hook && typeof hook.tick === "function") hook.tick(el, Object.assign({}, u, { kind }));
+    if (hook && typeof hook.tick === "function") hook.tick(el, Object.assign({}, u, { kind }), ctx);
   }
   el.style.opacity = "0.32";
 }
@@ -28,14 +28,9 @@ function paintGhostHP(u, ctx) {
   for (const g of ctx.units || []) {
     if (g.ownerId !== u.id) continue;
     if (g.kind !== "非因果战斗机影" && g.kind !== "非因果活随从影" && g.kind !== "非因果自身影") continue;
-    const el = ctx.ensureGuide("acausal-hp-" + g.id, "acausal-hp");
+    const el = ctx.ensureGuide("acausal-hp-" + g.id, "hp-float");
     if (ctx.seenGuides) ctx.seenGuides.add(el.id);
-    const hp = Math.max(0, Math.round(Number(g.hp) || 0));
-    el.textContent = String(hp);
-    const r = (g.radius || 18) * ctx.scale;
-    const [sx, sy] = screenPos(g.x, g.y, ctx.scale, ctx.cx, ctx.cy);
-    el.style.left = `${sx}px`;
-    el.style.top = `${sy - r - 2}px`;
+    arena.drawHealthNumber(el, g, ctx);
   }
 }
 
@@ -357,8 +352,8 @@ window.lookFX["acausal-shot"] = {
 };
 
 window.lookFX["acausal-ghost"] = {
-  tick(el, u) {
-    acausalWear(el, u);
+  tick(el, u, ctx) {
+    acausalWear(el, u, ctx);
   },
   unmount(el) {
     el.style.opacity = "";

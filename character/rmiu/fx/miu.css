@@ -1,21 +1,5 @@
 /* R.缪 / 缪 前端特效 */
 
-/* 头顶血量数字：与主程序给战斗机画的 hp-float 同款 */
-.miu-hp-num {
-  position: absolute;
-  left: 50%;
-  top: -4px;
-  transform: translate(-50%, -100%);
-  color: #fff;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  text-shadow: 0 1px 2px #000, 0 0 6px #000;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 3;
-}
-
 .ball.look-miu {
   background: radial-gradient(circle at 35% 30%, #ffffff 0%, #f0f0f0 55%, #c8c8c8 100%);
   box-shadow:

@@ -47,27 +47,6 @@
   box-shadow: 0 0 14px #a06bf588, inset 0 0 0 2px #ffffff55;
 }
 
-/* 与教父随从同款头顶血条。 */
-.ball.look-mezhou-zhou > .minion-hp {
-  position: absolute;
-  left: 50%;
-  top: -7px;
-  width: 120%;
-  height: 4px;
-  transform: translate(-50%, -100%);
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 2px;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 6;
-}
-.ball.look-mezhou-zhou > .minion-hp i {
-  display: block;
-  height: 100%;
-  width: 100%;
-  background: #7dff9a;
-}
-
 .ball.look-mezhou-zhou > .mezhou-state {
   top: -18px;
 }

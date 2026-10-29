@@ -267,6 +267,7 @@ window.arena = {
   lookOf,
   kindColor,
   screenPos,
+  drawHealthNumber,
   spawnFx,
   burst,
   spawnGhostFrom,
@@ -490,6 +491,16 @@ function placeMarks(u, sx, sy, r) {
 
 function screenPos(x, y, scale, cx, cy) {
   return [cx + x * scale, cy - y * scale];
+}
+
+// 公共生命读数；私产可选择生命来源，数字样式、取整与位置只在这里维护。
+function drawHealthNumber(el, u, ctx, hp = u.hp) {
+  const value = Number(hp) || 0;
+  el.classList.add("hp-float");
+  el.textContent = String(value > 0 ? Math.max(1, Math.round(value)) : 0);
+  const [x, y] = screenPos(u.x, u.y, ctx.scale, ctx.cx, ctx.cy);
+  el.style.left = `${x}px`;
+  el.style.top = `${y - u.radius * ctx.scale - 4}px`;
 }
 
 function dmgPop(amount) {
@@ -1746,26 +1757,25 @@ function renderArena() {
       spawnGhost: spawnGhostFrom,
     });
     const shareHP = !!look.shareHp;
-    const shownHP = shareHP
-      ? fighters.find((f) => f.slot === u.slot)?.hp ?? u.hp
-      : u.hp;
+    const source = shareHP ? (state.units || []).find((o) => o.id === u.ownerId) : u;
+    const shownHP = source?.hp;
     const prev = prevHP.get(u.id);
     if (prev != null && shownHP < prev - 0.5) {
       burst(sx, sy, u.kind, 8);
     }
-    const showHP = (u.role === "fighter" || shareHP) && !u.noHealthNumbers;
-    if (showHP) prevHP.set(u.id, shownHP);
+    const showHP = (u.role === "fighter" || u.mortal || shareHP) && !u.noHealthNumbers && shownHP != null;
+    // 活随从只补生命读数，保留原有战斗机/共享生命的受伤火花范围。
+    if (showHP && (u.role === "fighter" || shareHP)) prevHP.set(u.id, shownHP);
+    else prevHP.delete(u.id);
     let tag = document.getElementById(`hp-${u.id}`);
     if (showHP) {
       if (!tag) {
         tag = document.createElement("span");
         tag.id = `hp-${u.id}`;
         tag.className = "hp-float";
-        unitsEl.appendChild(tag);
       }
-      tag.textContent = String(Math.round(shownHP));
-      tag.style.left = `${sx}px`;
-      tag.style.top = `${sy - r - 4}px`;
+      if (tag.parentNode !== layer) layer.appendChild(tag);
+      drawHealthNumber(tag, u, { scale, cx, cy }, shownHP);
     } else if (tag) {
       tag.remove();
     }
