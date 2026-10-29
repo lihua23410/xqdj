@@ -72,6 +72,38 @@ func TestAllyFighterPicksBellForOwner(t *testing.T) {
 	}
 }
 
+func TestPickupEligibility(t *testing.T) {
+	for _, kind := range []string{KindBell, KindKunai} {
+		for _, tc := range []struct {
+			name  string
+			owner uint64
+			role  string
+			slot  int
+			x     float64
+			want  bool
+		}{
+			{name: "同边战斗机", owner: 1, role: unit.RoleFighter, x: 80, want: true},
+			{name: "同边战斗机未接触", owner: 1, role: unit.RoleFighter, x: 140},
+			{name: "敌方战斗机", owner: 1, role: unit.RoleFighter, slot: 1, x: 80},
+			{name: "同边活随从", owner: 1, role: unit.RoleMinion, x: 80},
+			{name: "他人的物品", owner: 2, role: unit.RoleFighter, x: 80},
+		} {
+			t.Run(kind+"/"+tc.name, func(t *testing.T) {
+				a := &谭泳辰老先生{boot: true, nextAttackAt: 2}
+				other := unit.Snapshot{ID: 3, Role: tc.role, Slot: tc.slot, X: tc.x, Radius: 18, Mortal: tc.role == unit.RoleMinion}
+				item := unit.Snapshot{ID: 8, Kind: kind, Role: unit.RoleHelper, OwnerID: tc.owner, Slot: 0, X: 80, Radius: 14}
+				cmds := sensePickup(a, tanSelf(0, 0), []unit.Snapshot{other, item})
+				if a.hasBell != (tc.want && kind == KindBell) || a.hasKunai != (tc.want && kind == KindKunai) {
+					t.Fatalf("hasBell=%v hasKunai=%v, want pickup=%v for %s", a.hasBell, a.hasKunai, tc.want, kind)
+				}
+				if got := hasDespawn(cmds, item.ID); got != tc.want {
+					t.Fatalf("despawn=%v, want %v", got, tc.want)
+				}
+			})
+		}
+	}
+}
+
 func TestEnemyFighterDoesNotPick(t *testing.T) {
 	a := &谭泳辰老先生{boot: true}
 	foe := unit.Snapshot{

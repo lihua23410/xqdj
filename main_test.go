@@ -25,12 +25,12 @@ func TestStaticAndWSStart(t *testing.T) {
 		if err != nil {
 			return
 		}
-		h.add(conn)
+		s := h.add(conn)
 		defer func() {
 			h.remove(conn)
 			_ = conn.Close()
 		}()
-		_ = h.send(conn, match.SnapshotJSON())
+		h.send(s, match.SnapshotJSON())
 		for {
 			_, data, err := conn.ReadMessage()
 			if err != nil {

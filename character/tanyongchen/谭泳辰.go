@@ -226,8 +226,20 @@ func (t *谭泳辰老先生) tryPickup(ctx unit.Context, s unit.Sense) {
 		if o.Kind != KindBell && o.Kind != KindKunai {
 			continue
 		}
-		// 只有谭泳辰本人能捡，队友和敌人都不能。
-		if math.Hypot(o.X-t.x, o.Y-t.y) > tanRadius+o.Radius+pickupSlack {
+		// 本人或同边战斗机碰到都算给主人捡到，活随从和敌方不算。
+		picked := math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) <= s.Self.Radius+o.Radius+pickupSlack
+		if !picked {
+			for _, ally := range s.Nearby {
+				if ally.Role != unit.RoleFighter || ally.Slot != s.Self.Slot {
+					continue
+				}
+				if math.Hypot(o.X-ally.X, o.Y-ally.Y) <= ally.Radius+o.Radius+pickupSlack {
+					picked = true
+					break
+				}
+			}
+		}
+		if !picked {
 			continue
 		}
 		switch o.Kind {
