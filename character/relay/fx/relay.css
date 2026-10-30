@@ -1,24 +1,61 @@
-.ball.look-relay {
-  background: radial-gradient(
-    circle at 50% 50%,
-    #ffe1a8 0 16%,
-    #e0a04a 17% 48%,
-    #8a5a28 100%
-  );
-  box-shadow: 0 0 12px #e0a04a, inset 0 0 0 2px #a86a30;
+/* Original relay palette only: amber, cream and copper brown. */
+.ball.look-relay, .ball.look-relay-node {
+  --relay-tx:0; --relay-rx:0;
+  background:radial-gradient(circle at 42% 36%,#ffe1a8,#e0a04a 48%,#8a5a28);
+  box-shadow:0 0 8px #e0a04a55,inset 0 0 0 1px #c4843a;
+  overflow:visible;
 }
-
 .ball.look-relay-node {
-  opacity: 0.4;
-  background: radial-gradient(
-    circle at 50% 50%,
-    #ffe7b0 0 22%,
-    #6e4a28 23% 100%
-  );
-  box-shadow: inset 0 0 0 1px #c4843a;
+  opacity:.92;
+  background:radial-gradient(circle at 44% 38%,#8a5a28,#6e4a28 72%);
+  box-shadow:inset 0 0 0 1px #c4843a;
 }
+.relay-face { position:absolute;inset:0;width:100%;height:100%;fill:none;stroke-linejoin:round;stroke-linecap:round;pointer-events:none; }
+.relay-bezel { stroke:#c4843a;stroke-width:3; }
+.relay-shell-seam { stroke:#c4843a;stroke-width:1.5; }
+.relay-vents { stroke:#8a5a28;stroke-width:2.5; }
+.relay-switch-ports { fill:#6e4a28;stroke:#c4843a;stroke-width:1.5; }
+.relay-contacts { stroke:#e0a04a;stroke-width:1.5; }
+.relay-uplinks { fill:#8a5a28;stroke:#ffe1a8;stroke-width:1.5; }
+.relay-routing { stroke:#6e4a28;stroke-width:4.5; }
+.relay-led-link { fill:#72d879;stroke:#6e4a28;stroke-width:1.5;opacity:calc(.6 + var(--relay-tx)*.4); }
+.relay-led-diag { fill:#b64b3b;stroke:#6e4a28;stroke-width:1.5; }
+.look-relay-node .relay-routing { stroke:#ffe7b0;stroke-width:4; }
+.look-relay-node .relay-vents { stroke:#c4843a; }
+.relay-status { position:absolute;inset:-5%;border:1px solid #ffc14a;border-radius:50%;opacity:calc(var(--relay-rx)*.65);pointer-events:none; }
+.relay-sending .relay-contacts { stroke:#ffc14a; }
+.relay-receiving .relay-uplinks { stroke:#ffe7b0; }
+.relay-receiving .relay-led-diag,.relay-online .relay-led-diag { fill:#72d879; }
+.relay-receiving .relay-bezel,.relay-online .relay-bezel { stroke:#ffe1a8; }
+.relay-online .relay-led-link { opacity:1; }
+.relay-online .relay-status { opacity:.55; }
 
-.ball.look-relay-shot {
-  background: #ffc14a;
-  box-shadow: 0 0 8px #ffc14a;
-}
+.ball.look-relay-shot { background:transparent;box-shadow:none;overflow:visible;border-radius:0; }
+.relay-datagram { position:absolute;inset:0;pointer-events:none;font:700 var(--relay-font,10px)/1 ui-monospace,Consolas,monospace;color:#ffc14a; }
+.relay-bits { position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:inherit;letter-spacing:-.06em;white-space:nowrap;text-shadow:0 0 3px #ffc14a88; }
+.relay-bits span:first-child { opacity:var(--relay-bit-0,1); }
+.relay-bits span+span { opacity:var(--relay-bit-1,.45); }
+.relay-packet-tail { position:absolute;left:50%;top:50%;transform:rotate(var(--relay-angle,0rad)); }
+.relay-packet-tail i { position:absolute;left:calc(-1.1em - var(--relay-shift,0em));top:0;transform:translate(-50%,-50%) rotate(calc(-1 * var(--relay-angle,0rad)));font:inherit;font-size:.8em;font-style:normal;opacity:.45; }
+.relay-packet-tail i:nth-child(2) { left:calc(-2.1em - var(--relay-shift,0em));opacity:.23;font-size:.65em; }
+.relay-packet-tail i:nth-child(3) { left:calc(-3.1em - var(--relay-shift,0em));opacity:.1;font-size:.55em; }
+.guide.relay-topology { position:absolute;left:0;top:0;width:100%;height:100%;border:0;transform:none;pointer-events:none; }
+.relay-map { width:100%;height:100%;overflow:visible; }
+.relay-adjacency { stroke:#c4843a;stroke-width:.65;stroke-opacity:.12;stroke-dasharray:2 7; }
+.relay-route { stroke:#ffc14a;stroke-width:1;stroke-dasharray:3 11;stroke-linecap:round; }
+
+.fx-relay-neighbor,.fx-relay-tx,.fx-relay-rx,.fx-relay-hit { width:var(--relay-size,24px);height:var(--relay-size,24px);pointer-events:none; }
+.fx-relay-neighbor { border:1px solid #ffc14a;border-radius:50%;animation:relay-hello .65s ease-out forwards; }
+.fx-relay-neighbor span { position:absolute;left:50%;top:-12px;transform:translateX(-50%);font:8px ui-monospace,monospace;letter-spacing:1px;color:#ffe1a8;text-shadow:0 1px 3px #6e4a28; }
+.fx-relay-tx { border:1px solid #ffc14a;border-radius:50%;animation:relay-send .28s ease-out forwards; }
+.fx-relay-rx { border:1px solid #ffe7b0;border-radius:50%;animation:relay-receive .32s ease-out forwards; }
+.fx-relay-hit { animation:relay-hit .32s ease-out forwards; }
+.fx-relay-hit::before { content:"01";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:700 12px ui-monospace,Consolas,monospace;color:#ffc14a; }
+.fx-relay-hit i { position:absolute;left:47%;top:0;width:6%;height:20%;background:#e0a04a;transform-origin:50% 250%; }
+.fx-relay-hit i:nth-child(2) { transform:rotate(90deg); }
+.fx-relay-hit i:nth-child(3) { transform:rotate(180deg); }
+.fx-relay-hit i:nth-child(4) { transform:rotate(270deg); }
+@keyframes relay-hello { 0% {opacity:0;transform:translate(-50%,-50%) scale(.6)} 18% {opacity:.65} 100% {opacity:0;transform:translate(-50%,-50%) scale(1.4)} }
+@keyframes relay-send { from {opacity:.5;transform:translate(-50%,-50%) scale(.7)} to {opacity:0;transform:translate(-50%,-50%) scale(1.3)} }
+@keyframes relay-receive { from {opacity:.6;transform:translate(-50%,-50%) scale(1.3)} to {opacity:0;transform:translate(-50%,-50%) scale(.5)} }
+@keyframes relay-hit { from {opacity:1;transform:translate(-50%,-50%) scale(.6)} to {opacity:0;transform:translate(-50%,-50%) scale(1.5)} }

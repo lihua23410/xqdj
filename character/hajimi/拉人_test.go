@@ -15,6 +15,7 @@ func TestBootPutsCatOnOrbit(t *testing.T) {
 	cat.Handle(ctx, unit.Sense{Time: 0, Self: self})
 	var vel *unit.SetVelocity
 	var force *unit.Force
+	meows := 0
 	for _, c := range drain(out) {
 		switch v := c.(type) {
 		case unit.SetVelocity:
@@ -25,6 +26,10 @@ func TestBootPutsCatOnOrbit(t *testing.T) {
 				cp := v
 				force = &cp
 			}
+		case unit.FX:
+			if v.Name == "hajimi-meow" && v.Kind == KindHajimi && v.UnitID == ctx.ID {
+				meows++
+			}
 		}
 	}
 	if vel == nil || vel.VY < 100 || math.Abs(vel.VX) > 30 {
@@ -32,6 +37,15 @@ func TestBootPutsCatOnOrbit(t *testing.T) {
 	}
 	if force == nil || force.AX >= 0 {
 		t.Fatalf("引力该指向场心: %+v", force)
+	}
+	if meows != 1 {
+		t.Fatalf("开场猫叫次数=%d，应为 1", meows)
+	}
+	cat.Handle(ctx, unit.Sense{Time: 0.1, Self: self})
+	for _, cmd := range drain(out) {
+		if fx, ok := cmd.(unit.FX); ok && fx.Name == "hajimi-meow" {
+			t.Fatal("猫叫不应随感知帧重复")
+		}
 	}
 }
 

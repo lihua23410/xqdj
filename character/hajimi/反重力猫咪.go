@@ -114,6 +114,10 @@ func (a *哈基米) onSense(ctx unit.Context, s unit.Sense) {
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
 		ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: math.Hypot(vx, vy)}
 		ctx.Out <- unit.NoFrameFreeze{UnitID: ctx.ID, Hold: true}
+		ctx.Out <- unit.FX{
+			Name: "hajimi-meow", Kind: KindHajimi, UnitID: ctx.ID, Slot: s.Self.Slot,
+			X: x, Y: y,
+		}
 	} else {
 		// 速率被谁改掉就留在那个值上，巡航不把它拉回空间站速度，轨道才会往下掉。
 		ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: math.Hypot(s.Self.VX, s.Self.VY)}

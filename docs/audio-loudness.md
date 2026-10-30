@@ -43,3 +43,7 @@
 原始文件备份在 `tmp/audio-volume-backup/`（已被 `.gitignore` 的 `/tmp/` 覆盖）。
 
 回声的声呐提示与状态提示使用独立的分级音量：密集扫描、反弹、衰减音更轻，锁定和有效撞击更清楚；极短音按真峰值控制，不强行拉到 -15.7 LUFS。逐文件测量与处理参数见 `character/echo/fx/audio-sources.json`，播放约定与 CC0 来源见同目录 `README.md`。
+
+反重力猫咪的单声猫叫为 -13.5 LUFS、播放音量 1.0，完整星光为 -20 LUFS，短闪光按 -8dBFS 真峰值控制；各事件统一限频。详细测量见 `character/hajimi/fx/audio-sources.json`，猫叫的 CC0 来源和星光的 CC BY 3.0 署名见同目录 `ATTRIBUTION.md`。
+
+中转站的邻居上线音约 -21 LUFS，收发短音按 -11 / -10 dBTP、命中按 -7 dBTP 控制；收发共用 0.16 秒限频，避免拓扑增大后声音过密。详细测量和 CC0 素材来源见 `character/relay/fx/audio-sources.json` 与同目录 `README.md`。

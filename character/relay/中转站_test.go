@@ -262,20 +262,70 @@ func TestShotDamagesWithoutDespawn(t *testing.T) {
 	foe := unit.Snapshot{ID: 3, Role: unit.RoleFighter, Slot: 1, X: 10, Y: 0, Radius: 18}
 	b.Handle(c, unit.Collision{Time: 1, Other: foe})
 	cmds := drain(out)
-	if len(cmds) != 1 {
+	if len(cmds) != 2 {
 		t.Fatalf("cmds=%v", cmds)
 	}
 	d, ok := cmds[0].(unit.Damage)
 	if !ok || d.Amount != shotDamage || d.To != 3 {
 		t.Fatalf("damage=%v", cmds[0])
 	}
+	fx, ok := cmds[1].(unit.FX)
+	if !ok || fx.Name != "relay-hit" || fx.X != foe.X || fx.Y != foe.Y || fx.Kind != KindRelay {
+		t.Fatalf("hit FX=%v", cmds[1])
+	}
 	b.Handle(c, unit.Collision{Time: 1.05, Other: foe})
 	if len(drain(out)) != 0 {
 		t.Fatal("inside 0.1s")
 	}
 	b.Handle(c, unit.Collision{Time: 1.1, Other: foe})
-	if len(drain(out)) != 1 {
+	if len(drain(out)) != 2 {
 		t.Fatal("after 0.1s")
+	}
+}
+
+func TestRoutingPresentationTracksRealNextHop(t *testing.T) {
+	resetPass()
+	out := make(chan unit.Cmd, 16)
+	n := &随从{owner: 1, slot: 0}
+	self := nodeSnap(4, 0, 0)
+	near := fighterSnap(1, 40, 0)
+	c := ctx(out)
+	c.ID = self.ID
+	n.Handle(c, unit.Sense{Time: 1, Self: self, Nearby: []unit.Snapshot{near, nodeSnap(9, 200, 0)}})
+	cmds := drain(out)
+	sp := onlySpawn(t, cmds, KindRelayShot)
+	join, forward := 0, 0
+	for _, cmd := range cmds {
+		if fx, ok := cmd.(unit.FX); ok {
+			switch fx.Name {
+			case "relay-join":
+				join++
+				if fx.UnitID != self.ID || fx.Kind != KindRelay {
+					t.Fatalf("neighbor FX=%+v", fx)
+				}
+			case "relay-forward":
+				forward++
+				if fx.UnitID != self.ID || fx.Amount != float64(sp.OwnerID) || fx.VX != near.X || fx.VY != near.Y {
+					t.Fatalf("route FX must follow chosen spawn: %+v vs %+v", fx, sp)
+				}
+			}
+		}
+	}
+	if join != 1 || forward != 1 {
+		t.Fatalf("join=%d forward=%d", join, forward)
+	}
+	n.Handle(c, unit.Sense{Time: 1.1, Self: self, Nearby: []unit.Snapshot{near}})
+	if len(drain(out)) != 0 {
+		t.Fatal("idle neighbor must not repeat cues")
+	}
+	shot := aimed(20, self.X, self.Y, near.ID, self.ID, nil)
+	n.Handle(c, unit.Sense{Time: 2, Self: self, Nearby: []unit.Snapshot{near, shot}})
+	cmds = drain(out)
+	if len(cmds) != 2 {
+		t.Fatalf("absorb with no next hop: %v", cmds)
+	}
+	if fx, ok := cmds[1].(unit.FX); !ok || fx.Name != "relay-arrive" || fx.UnitID != self.ID {
+		t.Fatalf("arrival FX=%v", cmds[1])
 	}
 }
 

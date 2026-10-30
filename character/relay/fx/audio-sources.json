@@ -1,0 +1,58 @@
+[
+  {
+    "file": "neighbor.wav",
+    "author": "Kenney (Kenney Vleugels)",
+    "license": "CC0-1.0",
+    "source_page": "https://opengameart.org/content/63-digital-sound-effects-lasers-phasers-space-etc",
+    "original_file": "digital/twoTone2.mp3",
+    "source_sha256": "51721f5bab45fa80d2e5b490fbc0e503374ab13fd1931f6f788469b6b4cf825d",
+    "output_sha256": "b9fcfe08a1ce8500d14b18c274029c3a7f984e5c7000f7416293928553932967",
+    "processing": "atrim=duration=1.498,asetpts=PTS-STARTPTS,atempo=2,highpass=f=140,lowpass=f=6000:p=2,afade=t=in:d=0.004,afade=t=out:st=0.724:d=0.025,volume=13.90000dB",
+    "duration_seconds": 0.761043,
+    "integrated_lufs": -21.0,
+    "true_peak_dbfs": -8.9,
+    "verified_on": "2026-10-30"
+  },
+  {
+    "file": "forward.wav",
+    "author": "Kenney (Kenney Vleugels)",
+    "license": "CC0-1.0",
+    "source_page": "https://kenney.nl/assets/interface-sounds",
+    "original_file": "interface/Audio/pluck_001.ogg",
+    "source_sha256": "be97ec4893a02d6eccfb678daa76c83e34cb2583b834ec2593d2641def739fa4",
+    "output_sha256": "fcdc75e45b9c42b95c6ec10a218a1133d810706d82af038a73f0a2ed7151d341",
+    "processing": "atrim=duration=0.102,asetpts=PTS-STARTPTS,atempo=1,highpass=f=140,lowpass=f=6000:p=2,afade=t=in:d=0.004,afade=t=out:st=0.07699999999999999:d=0.025,volume=-5.90000dB",
+    "duration_seconds": 0.094989,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -11.0,
+    "verified_on": "2026-10-30"
+  },
+  {
+    "file": "ack.wav",
+    "author": "Kenney (Kenney Vleugels)",
+    "license": "CC0-1.0",
+    "source_page": "https://kenney.nl/assets/interface-sounds",
+    "original_file": "interface/Audio/confirmation_003.ogg",
+    "source_sha256": "3091bf0be0497f825769ee0733ca7bdc3bcd59bd6c6e8f2ba8f93d580ff38022",
+    "output_sha256": "5806d85790054f310f7c56fa14644d70ab9cfa745a38f17863c268536dd7cb44",
+    "processing": "atrim=duration=0.322,asetpts=PTS-STARTPTS,atempo=1.6,highpass=f=140,lowpass=f=6000:p=2,afade=t=in:d=0.004,afade=t=out:st=0.17625:d=0.025,volume=-5.30000dB",
+    "duration_seconds": 0.202721,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -10.0,
+    "verified_on": "2026-10-30"
+  },
+  {
+    "file": "hit.wav",
+    "author": "Kenney (Kenney Vleugels)",
+    "license": "CC0-1.0",
+    "source_page": "https://kenney.nl/assets/sci-fi-sounds",
+    "original_file": "sci-fi/Audio/impactMetal_004.ogg",
+    "source_sha256": "0032710d1fc88c217946cd54492f275eb4363bb8025a4bc1b7ce08df7b3c60de",
+    "output_sha256": "da983eb933360e66e543565adb36eb654061ae36a04a02ba2d27a9971dae3c6d",
+    "processing": "atrim=duration=0.3,asetpts=PTS-STARTPTS,atempo=1.25,highpass=f=140,lowpass=f=6000:p=2,afade=t=in:d=0.004,afade=t=out:st=0.215:d=0.025,volume=3.00000dB",
+    "duration_seconds": 0.241587,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -7.0,
+    "verified_on": "2026-10-30"
+  }
+]

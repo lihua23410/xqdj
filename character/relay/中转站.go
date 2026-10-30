@@ -56,7 +56,7 @@ func init() {
 	p.Register(unit.Spec{
 		Kind: KindRelayShot, Role: unit.RoleProjectile, Radius: shotRadius, MaxHP: 1,
 		Speed: shotSpeed, Vision: 9999, Fighter: false, PassWalls: true,
-		Look: unit.Look{Color: shotColor, Glow: true, Trail: true, FX: []string{"relay-shot"}},
+		Look: unit.Look{Color: shotColor, FX: []string{"relay-shot"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &中转弹{slot: info.Slot, target: info.OwnerID}
 	})
@@ -117,6 +117,7 @@ func (n *随从) Handle(ctx unit.Context, ev unit.Event) {
 	if !n.ready {
 		n.ready = true
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+		ctx.Out <- unit.FX{Name: "relay-join", UnitID: ctx.ID, Kind: KindRelay, X: s.Self.X, Y: s.Self.Y, Slot: n.slot}
 		pass(ctx, s, n.owner, n.slot, 0, newTrack())
 	}
 	catch(ctx, s, n.owner, n.slot)
@@ -138,6 +139,7 @@ func catch(ctx unit.Context, s unit.Sense, owner uint64, slot int) bool {
 		}
 		tr.mark(s.Self.ID)
 		ctx.Out <- unit.Despawn{UnitID: o.ID}
+		ctx.Out <- unit.FX{Name: "relay-arrive", UnitID: s.Self.ID, Kind: KindRelay, X: s.Self.X, Y: s.Self.Y, Slot: slot}
 		pass(ctx, s, owner, slot, sender, tr)
 		caught = true
 	}
@@ -176,6 +178,9 @@ func pass(ctx unit.Context, s unit.Sense, owner uint64, slot int, sender uint64,
 		OwnerID: target.ID,
 		Slot:    slot,
 	})
+	// Amount carries the actual next-hop ID for the private topology overlay.
+	ctx.Out <- unit.FX{Name: "relay-forward", UnitID: s.Self.ID, Kind: KindRelay,
+		X: s.Self.X, Y: s.Self.Y, VX: target.X, VY: target.Y, Slot: slot, Amount: float64(target.ID)}
 }
 
 func choose(self unit.Snapshot, nearby []unit.Snapshot, owner, sender uint64, tr *hopTrack) *unit.Snapshot {
@@ -443,6 +448,8 @@ func (b *中转弹) Handle(ctx unit.Context, ev unit.Event) {
 			return
 		}
 		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: shotDamage}
+		ctx.Out <- unit.FX{Name: "relay-hit", UnitID: ctx.ID, Kind: KindRelay,
+			X: e.Other.X, Y: e.Other.Y, Slot: b.slot, Amount: shotDamage}
 		b.hitReadyAt = e.Time + shotHitCD
 	}
 }

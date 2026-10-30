@@ -1,1 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><defs><radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffe1a8"/><stop offset="16%" stop-color="#ffe1a8"/><stop offset="17%" stop-color="#e0a04a"/><stop offset="48%" stop-color="#e0a04a"/><stop offset="100%" stop-color="#8a5a28"/></radialGradient></defs><circle cx="28" cy="28" r="24" fill="url(#g)"/><circle cx="28" cy="28" r="23" fill="none" stroke="#a86a30" stroke-width="2"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 100 100" fill="none" style="--relay-tx:0;--relay-rx:0"><defs><radialGradient id="relay-amber" cx="42%" cy="36%"><stop stop-color="#ffe1a8"/><stop offset="48%" stop-color="#e0a04a"/><stop offset="100%" stop-color="#8a5a28"/></radialGradient></defs><style>.relay-bezel { stroke:#c4843a;stroke-width:3; }
+.relay-shell-seam { stroke:#c4843a;stroke-width:1.5; }
+.relay-vents { stroke:#8a5a28;stroke-width:2.5; }
+.relay-switch-ports { fill:#6e4a28;stroke:#c4843a;stroke-width:1.5; }
+.relay-contacts { stroke:#e0a04a;stroke-width:1.5; }
+.relay-uplinks { fill:#8a5a28;stroke:#ffe1a8;stroke-width:1.5; }
+.relay-routing { stroke:#6e4a28;stroke-width:4.5; }
+.relay-led-link { fill:#72d879;stroke:#6e4a28;stroke-width:1.5;opacity:calc(.6 + var(--relay-tx)*.4); }
+.relay-led-diag { fill:#b64b3b;stroke:#6e4a28;stroke-width:1.5; }
+.look-relay-node .relay-routing { stroke:#ffe7b0;stroke-width:4; }
+.look-relay-node .relay-vents { stroke:#c4843a; }
+</style><circle cx="50" cy="50" r="48" fill="url(#relay-amber)"/>
+      <circle class="relay-bezel" cx="50" cy="50" r="47"/>
+      <path class="relay-shell-seam" d="M14 61Q50 78 86 61"/>
+      <g transform="rotate(-42 50 50)">
+      <path class="relay-switch-ports" d="M45 73h10v10H45z"/>
+      <path class="relay-contacts" d="M48 80h4"/>
+    </g><g transform="rotate(-21 50 50)">
+      <path class="relay-switch-ports" d="M45 73h10v10H45z"/>
+      <path class="relay-contacts" d="M48 80h4"/>
+    </g><g transform="rotate(0 50 50)">
+      <path class="relay-switch-ports" d="M45 73h10v10H45z"/>
+      <path class="relay-contacts" d="M48 80h4"/>
+    </g><g transform="rotate(21 50 50)">
+      <path class="relay-switch-ports" d="M45 73h10v10H45z"/>
+      <path class="relay-contacts" d="M48 80h4"/>
+    </g><g transform="rotate(42 50 50)">
+      <path class="relay-switch-ports" d="M45 73h10v10H45z"/>
+      <path class="relay-contacts" d="M48 80h4"/>
+    </g>
+      <path class="relay-vents" d="m19 37 5 2m-7 5 6 2m54-7 5-2m-5 9 6-2"/>
+      <path class="relay-uplinks" d="M38 16h9v12h-9zM53 16h9v12h-9z"/>
+      <path class="relay-routing" d="M31 44h36l-7-7m7 18H31l7 7"/>
+      <circle class="relay-led-link" cx="31" cy="25" r="2.8"/>
+      <circle class="relay-led-diag" cx="69" cy="25" r="2.8"/>
+    </svg>

@@ -108,7 +108,7 @@
   to { transform: scale(1.6); opacity: 0; }
 }
 
-/* 10 秒反重力脉冲：覆盖超大范围的双层旋转力场。 */
+/* 每 20 秒开启三秒反重力脉冲：覆盖超大范围的双层旋转力场。 */
 .fx-hajimi-field, .fx-hajimi-field-ring {
   width: var(--r, 840px);
   height: var(--r, 840px);
