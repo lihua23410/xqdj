@@ -43,22 +43,22 @@ arena.registerShot("dash", (fx, ctx) => {
   knightPix(x, y, kind, d, d * 1.3, knightDoomBurst(14));
 });
 
+function knightSlitBurst(ctx, offset, size) {
+  const pixel = 36 * (ctx.scale || 1) / 32;
+  const d = size * pixel;
+  // ctx.y 是球心；火根比球心高 2 个钢盔像素，整团火只放在火根上方。
+  knightPix(ctx.x + offset * pixel, ctx.y - 2 * pixel - d / 2, ctx.kind, d, d, knightDoomBurst(size));
+}
+
 arena.registerShot("lock", (fx, ctx) => {
-  const { x, y, kind, scale } = ctx;
-  const d = 44 * (scale || 1);
-  knightPix(x, y, kind, d, d * 1.35, knightDoomBurst(16));
+  knightSlitBurst(ctx, 0, 18);
 });
 
 arena.registerShot("lock-hit", (fx, ctx) => {
-  const { x, y, kind } = ctx;
-  for (let i = 0; i < 4; i++) {
-    const a = (Math.PI * 2 * i) / 4 + 0.4;
-    knightPix(x + Math.cos(a) * 10, y + Math.sin(a) * 10, kind, 16, 20, knightDoomBurst(8));
-  }
+  for (const offset of [-8, 0, 8]) knightSlitBurst(ctx, offset, 8);
 });
 
 arena.registerShot("lock-end", (fx, ctx) => {
-  const { x, y, kind, scale } = ctx;
-  const d = 36 * (scale || 1);
-  knightPix(x, y, kind, d, d, knightDoomDisc(10));
+  const pixel = 36 * (ctx.scale || 1) / 32;
+  knightPix(ctx.x, ctx.y - 3.5 * pixel, ctx.kind, 26 * pixel, 3 * pixel, knightDoomStrip(26));
 });

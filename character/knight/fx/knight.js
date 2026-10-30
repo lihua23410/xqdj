@@ -1,5 +1,42 @@
 window.lookFX = window.lookFX || {};
 
+// 覆盖式像素钢盔直接构成整个可见轮廓；短盔缨可外溢，暗红仅从目缝透出。
+// 球皮不参与原有火焰、火环或战斗状态计算。
+const KNIGHT_SHELL_SVG = `<svg viewBox="0 0 32 32" aria-hidden="true" shape-rendering="crispEdges">
+  <g class="knight-crest">
+    <path fill="#3e0812" d="M15 2V0h4v-1h6v-2h5v1h2v3h-2V0h-5v2h-6v2Z"/>
+    <path fill="#8f152a" d="M19 0h6v-2h4v1h2v1h-6v2h-6Z"/>
+    <path fill="#b32a3e" d="M25-2h4v1h-4Z"/>
+  </g>
+  <path fill="#202d3b" d="M11 0h10v1h4v2h3v3h2v4h1v4h1v9h-1v3h-2v3h-4v2h-5v1h-8v-1H7v-2H3v-3H1v-4H0V11h1V7h2V4h3V2h5Z"/>
+  <path fill="#879bac" d="M11 1h10v1h4v2h2v3h2v4h1v11h-1v4h-2v2h-3v2h-4v1h-8v-1H8v-2H4v-3H2v-4H1V11h1V8h2V5h3V3h4Z"/>
+  <path fill="#ced8df" d="M11 2h7v9H2V9h2V6h3V4h4Z"/>
+  <path fill="#f3f6f8" d="M11 2h7v1h-7v2H8v2H5V6h2V4h4Z"/>
+  <path fill="#61758b" d="M20 3h4v2h2v3h2v4H18V2h2Z"/>
+  <path fill="#aebdca" d="M16 2h2v9h-2Z"/>
+  <path fill="#e5edf2" d="M3 11h26v1H3Z"/>
+  <path fill="#080e18" d="M2 12h28v3h-3v1H5v-1H2Z"/>
+  <path fill="#600010" d="M3 13h26v1h-3v1H6v-1H3Z"/>
+  <path fill="#8f152a" d="M7 13h18v1H7Z"/>
+  <path fill="#b32a3e" d="M11 13h9v1h-9Z"/>
+  <path fill="#98a9b7" d="M3 16h26v6h-1v4h-3v3h-5v1h-8v-1H8v-2H5v-3H3Z"/>
+  <path fill="#cad4dd" d="M4 17h10v11H9v-2H6v-3H4Z"/>
+  <path fill="#5c7186" d="M18 16h11v6h-1v4h-3v3h-5v1h-2Z"/>
+  <path fill="#e5edf2" d="M15 16h1v13h-1Z"/>
+  <path fill="#7e94a7" d="M16 16h2v13h-2Z"/>
+  <path fill="#33475b" d="M23 18h2v1h-2Zm0 3h2v1h-2Zm0 3h2v1h-2Z"/>
+  <path fill="#edf3f6" d="M4 10h1v1H4Zm23 0h1v1h-1ZM2 17h1v2H2Zm27 0h1v2h-1Z"/>
+</svg>`;
+
+function knightShell(el) {
+  if (el.querySelector(":scope > .knight-shell")) return;
+  const shell = document.createElement("span");
+  shell.className = "knight-shell";
+  shell.setAttribute("aria-hidden", "true");
+  shell.innerHTML = KNIGHT_SHELL_SVG;
+  el.appendChild(shell);
+}
+
 function knightLocking(u) {
   const marks = (u && u.marks) || [];
   return marks.some((m) => m && m.kind === "锁血" && m.stacks > 0);
@@ -41,45 +78,46 @@ const KNIGHT_DOOM_H = 22;
 // 火焰传播改编自 https://github.com/filipedeschamps/doom-fire-algorithm
 // 许可全文见同目录 doom-fire-LICENSE（Copyright (c) 2019 Filipe Deschamps）。
 const KNIGHT_DOOM_COLORS = [
-  "#070002",
-  "#1a0006",
-  "#2e000a",
-  "#4a000c",
-  "#5c0012",
-  "#6e1020",
-  "#7a1828",
-  "#8a2030",
+  "#090003",
+  "#220008",
+  "#3c000d",
+  "#600010",
+  "#780017",
+  "#8f152a",
+  "#9f1f34",
+  "#b32a3e",
 ];
+
+// 对齐钢盔 32px 网格：目缝宽 26px，火根落在 y=14，火苗只向上绘制。
+const KNIGHT_LOCK_W = 26;
+const KNIGHT_LOCK_H = 18;
 
 function knightIgnite(el) {
   if (el.querySelector(":scope > .knight-doom")) return;
   const canvas = document.createElement("canvas");
   canvas.className = "knight-doom";
-  canvas.width = KNIGHT_DOOM_W;
-  canvas.height = KNIGHT_DOOM_H;
+  canvas.width = KNIGHT_LOCK_W;
+  canvas.height = KNIGHT_LOCK_H;
   const ctx = canvas.getContext("2d");
-  const cells = new Uint8Array(KNIGHT_DOOM_W * KNIGHT_DOOM_H);
-  const last = KNIGHT_DOOM_H - 1;
-  for (let x = 0; x < KNIGHT_DOOM_W; x++) cells[last * KNIGHT_DOOM_W + x] = KNIGHT_DOOM_COLORS.length - 1;
+  const cells = new Uint8Array(KNIGHT_LOCK_W * KNIGHT_LOCK_H);
+  const last = KNIGHT_LOCK_H - 1;
+  for (let x = 0; x < KNIGHT_LOCK_W; x++) cells[last * KNIGHT_LOCK_W + x] = KNIGHT_DOOM_COLORS.length - 1;
   let alive = true;
   canvas._knightStop = () => { alive = false; };
   el.appendChild(canvas);
   const step = () => {
     if (!alive || !canvas.isConnected) return;
-    knightDoomStep(cells, KNIGHT_DOOM_W, KNIGHT_DOOM_H);
-    const img = ctx.createImageData(KNIGHT_DOOM_W, KNIGHT_DOOM_H);
+    knightDoomStep(cells, KNIGHT_LOCK_W, KNIGHT_LOCK_H);
+    const img = ctx.createImageData(KNIGHT_LOCK_W, KNIGHT_LOCK_H);
     for (let i = 0; i < cells.length; i++) {
-      const x = i % KNIGHT_DOOM_W;
-      const y = (i / KNIGHT_DOOM_W) | 0;
+      const x = i % KNIGHT_LOCK_W;
+      const y = (i / KNIGHT_LOCK_W) | 0;
       const hex = KNIGHT_DOOM_COLORS[cells[i]] || KNIGHT_DOOM_COLORS[0];
       const n = parseInt(hex.slice(1), 16);
-      const nx = (x + 0.5) / KNIGHT_DOOM_W * 2 - 1;
-      const ny = (y + 0.5) / KNIGHT_DOOM_H;
-      const ex = nx / 0.92;
-      const ey = (ny - 0.58) / 0.5;
-      const r2 = ex * ex + ey * ey;
-      let fade = r2 >= 1 ? 0 : 1 - Math.max(0, (r2 - 0.35) / 0.65);
-      fade *= Math.min(1, ny / 0.2);
+      const nx = (x + 0.5) / KNIGHT_LOCK_W * 2 - 1;
+      const ny = (y + 0.5) / KNIGHT_LOCK_H;
+      const halfWidth = 0.55 + 0.45 * ny;
+      const fade = Math.max(0, Math.min(1, (halfWidth - Math.abs(nx)) * 8)) * Math.min(1, ny / 0.22);
       const o = i * 4;
       img.data[o] = (n >> 16) & 255;
       img.data[o + 1] = (n >> 8) & 255;
@@ -429,12 +467,14 @@ function knightRingTick(el, u, ctx) {
 
 window.lookFX.knight = {
   unmount(el) {
+    el?.querySelector(":scope > .knight-shell")?.remove();
     knightClearLock(el);
     knightClearRing(el);
     const id = knightId(el);
     if (id && window.knightRing) delete window.knightRing[id];
   },
   tick(el, u, ctx) {
+    knightShell(el);
     knightRingTick(el, u, ctx);
     if (!knightLocking(u)) {
       knightClearLock(el);

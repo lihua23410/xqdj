@@ -36,11 +36,27 @@
 
 .ball.look-knight {
   overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+.ball.look-knight > .knight-shell {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 1;
+}
+.knight-shell > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  image-rendering: pixelated;
 }
 .ball.look-knight.locking {
   box-shadow: none;
 }
-/* DOOM 火焰：filipedeschamps/doom-fire-algorithm。像素从球底往上烧，平涂，比 #ff2a2a 更深。 */
+/* DOOM 火焰：filipedeschamps/doom-fire-algorithm。火环与目缝锁血火焰独立。 */
 .ball.look-knight > .knight-ring {
   position: absolute;
   left: 50%;
@@ -55,10 +71,10 @@
 .ball.look-knight > .knight-doom {
   position: absolute;
   left: 50%;
-  bottom: 6%;
-  width: 130%;
-  height: 190%;
-  transform: translateX(-50%);
+  top: 43.75%; /* 钢盔目缝 y=14/32，作为火焰下沿。 */
+  width: 81.25%; /* 26/32 */
+  height: 56.25%; /* 18/32 */
+  transform: translate(-50%, -100%);
   image-rendering: pixelated;
   pointer-events: none;
   z-index: 3;
