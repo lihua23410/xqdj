@@ -1,0 +1,40 @@
+# 教父音效
+
+以短促、克制的黑帮电影质感配合教父和三种活随从：入场一声皮鞋落地，暗杀者一记短刀掠过，狙击者一声有分量的单发步枪，贩卖者投放时箱扣轻响并伴随纸袋摩擦，退场两声更轻、更急的脚步。声音不常驻循环。
+
+## 素材与许可
+
+全部素材在 2026-10-30 核对为 **CC0 1.0 Universal**，允许免费商用、修改与再分发，不强制署名。这里仍保留作者、来源、处理参数和文件哈希。完整许可见 `LICENSE-CC0-1.0.txt`；逐项许可核验记录见 `license/`；详细来源和处理图见 `audio-sources.json`。
+
+- `arrival.wav`、`retreat.wav`：Rvgerxini 的 [Walking on hard surface](https://freesound.org/people/Rvgerxini/sounds/462179/)，皮鞋在硬质地面上的实录。分别截成单步与两步，作为入场和退场的装饰提示。
+- `slash.wav`：potentjello 的 [Knife Swish 2.wav](https://freesound.org/people/potentjello/sounds/194023/)，短促的金属刀声，轻微加速并削减过尖的高频。
+- `sniper.wav`：LeMudCrab 的 [Sniper Shot](https://freesound.org/people/LeMudCrab/sounds/163460/)，高威力步枪的单发实录；保留枪声瞬态，压柔尖峰并收短尾音。
+- `deal.wav`：rsellick 的 [briefcase latch open close click.wav](https://freesound.org/people/rsellick/sounds/545521/) 与 peakSOULREAPER 的 [paper bag.wav](https://freesound.org/people/peakSOULREAPER/sounds/362277/)，将箱扣与药房纸袋摩擦截短、错开叠合，配合提箱晃动与粉末散落。
+
+使用的是上述作者公开提供的高质量 MP3 预览，并非需登录下载的原始 WAV。所有处理已烘焙为 44.1 kHz、单声道、16-bit PCM WAV；运行时不变速、不变调、不外链播放。
+
+## 前端触发
+
+`godfather.js` 的教父 `guide` 调用包内 `audio.js`，按各只教父的 `ownerId` 观察现有快照；不新增后端事件，不修改后端或公共前端代码。
+
+- 新增所属活随从：播放一次 `arrival.wav`。
+- 已知暗杀者由巡航进入进攻速度档位：播放一次 `slash.wav`；不是命中声。退场标记和退场速度均会排除该音。
+- 新增所属狙击弹：播放一次 `sniper.wav`。
+- 新增所属药物：播放一次 `deal.wav`。
+- 已知活随从收到现有负值 `aim` 退场提示：播放一次 `retreat.wav`；仅有高速移动不触发退场音。
+
+第一份快照仅建立基线，中途进入不补播已在场单位的动作。暂停时不重复播放；时间回退后清空基线、冷却并停止旧声音。新增实体的声音以观众实际收到的快照为准：若弹体在两份快照之间已产生并消失，不凭空补一声枪响。
+
+各声音使用 2 个实例，通过现有 `arena.voice` 仲裁，重触发为 `stop → reset → play`。枪声使用 IMMUNE；刀声使用 PREEMPT（mode 1），优先级 199；入场、投放、退场使用 NORMAL，优先级分别为 220、215、225。每类共享限频，分别为 0.25、0.12、0.07、0.18、0.25 秒，避免团队赛重复教父造成声音过密。普通观战与视频导出使用同一路径，导出可记录这些 WAV 的播放意图。
+
+## 音量与试听
+
+播放音量：入场 0.4、刀声 0.8、枪声 0.8、投放 0.6、退场 0.35。短音按真峰值控制，依次为 -8、-5、-2、-7、-9 dBTP；枪声尝试对齐项目 -15.7 LUFS 基准，但优先满足峰值上限，最终测得 -20.6 LUFS。极短音的 -70 LUFS 测量结果不表示文件静音。
+
+试听见项目文档 `docs/godfather-sfx-preview.wav`，顺序为入场、刀声、枪声、投放、退场，使用与游戏一致的播放音量。它是各动作的顺序试听，不是实际对局录音。
+
+## 验证
+
+- 语法、所属关系、单次触发、暂停、时间回退和多教父限频检查通过。
+- 五个嵌入后的 HTTP 音源与包内 WAV 哈希一致；格式、峰值上限和许可记录检查通过。
+- 2026-10-30 首次接入时（刀声使用 NORMAL / 205）实测教父对靶子并导出 1729 帧 MP4，成片包含 AAC 音轨。该局记录入场 6 次、刀声 4 次、枪声 1 次、投放 2 次、退场 2 次；不存在相同音源在同一帧重复播放，且均不循环、不改变播放速度。

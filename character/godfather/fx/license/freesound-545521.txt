@@ -1,0 +1,10 @@
+Title: briefcase latch open close click.wav
+Author: rsellick
+Source page: https://freesound.org/people/rsellick/sounds/545521/
+License shown on source page: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Verified on: 2026-10-30
+Retrieved audio: public high-quality MP3 preview
+Audio URL: https://cdn.freesound.org/previews/545/545521_6233742-hq.mp3
+Audio SHA-256: a1a3c70cec070ce0e6895e76439a2e6ecbdf11a6ad8be9b22484c28f5e717838
+Source page SHA-256: a5c2b007a7b175d0a97b991aed410548c487d11a71f9e024325628bcef3b6e2d

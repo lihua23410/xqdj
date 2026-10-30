@@ -1,0 +1,10 @@
+Title: Sniper Shot
+Author: LeMudCrab
+Source page: https://freesound.org/people/LeMudCrab/sounds/163460/
+License shown on source page: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Verified on: 2026-10-30
+Retrieved audio: public high-quality MP3 preview
+Audio URL: https://cdn.freesound.org/previews/163/163460_2263027-hq.mp3
+Audio SHA-256: d9477173e08e11ba392ca212a2af0ef2592e30c9b1b78fb8586c508c0e982cdc
+Source page SHA-256: 7ee9dc451d77a1537fee1f5761b8215d23b7c8757fd662a321b7282da04a297d

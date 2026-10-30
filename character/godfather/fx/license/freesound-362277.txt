@@ -1,0 +1,10 @@
+Title: paper bag.wav
+Author: peakSOULREAPER
+Source page: https://freesound.org/people/peakSOULREAPER/sounds/362277/
+License shown on source page: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Verified on: 2026-10-30
+Retrieved audio: public high-quality MP3 preview
+Audio URL: https://cdn.freesound.org/previews/362/362277_6645472-hq.mp3
+Audio SHA-256: a71e2b5bd6aaddaf84a168a401c8f431b329f992b81ee569f14c960ec5db14b6
+Source page SHA-256: 38114291e512c6c26f14bdd539dcf1983d146ecd47084207418d3525b382f8b2

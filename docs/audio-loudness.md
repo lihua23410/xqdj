@@ -47,3 +47,5 @@
 反重力猫咪的单声猫叫为 -13.5 LUFS、播放音量 1.0，完整星光为 -20 LUFS，短闪光按 -8dBFS 真峰值控制；各事件统一限频。详细测量见 `character/hajimi/fx/audio-sources.json`，猫叫的 CC0 来源和星光的 CC BY 3.0 署名见同目录 `ATTRIBUTION.md`。
 
 中转站的邻居上线音约 -21 LUFS，收发短音按 -11 / -10 dBTP、命中按 -7 dBTP 控制；收发共用 0.16 秒限频，避免拓扑增大后声音过密。详细测量和 CC0 素材来源见 `character/relay/fx/audio-sources.json` 与同目录 `README.md`。
+
+教父的入场、短刀、步枪、箱扣与纸包、退场声均来自已核对的 CC0 素材。各文件真峰值分别控制为 -8、-5、-2、-7、-9 dBTP，播放音量分别为 0.4、0.8、0.8、0.6、0.35；枪声受峰值上限约束，最终为 -20.6 LUFS。短音保留瞬态，按事件限频，不强行抬到统一积分响度。逐文件来源、处理参数与测量见 `character/godfather/fx/audio-sources.json`，触发约定见同目录 `README.md`。

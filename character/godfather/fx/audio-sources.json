@@ -1,0 +1,126 @@
+[
+  {
+    "file": "arrival.wav",
+    "license": "CC0-1.0",
+    "verified_on": "2026-10-30",
+    "sources": [
+      {
+        "id": "462179",
+        "title": "Walking on hard surface",
+        "author": "Rvgerxini",
+        "source_page": "https://freesound.org/people/Rvgerxini/sounds/462179/",
+        "download_url": "https://cdn.freesound.org/previews/462/462179_9453283-hq.mp3",
+        "download_format": "public high-quality MP3 preview",
+        "source_sha256": "3fa78ba7000191625764155077451f95bf08bc63e775bea99c406c11e573ec14"
+      }
+    ],
+    "processing_graph": "[0:a]atrim=start=19:duration=0.24,asetpts=PTS-STARTPTS,highpass=f=100,lowpass=f=4800,afade=t=in:d=0.003,afade=t=out:st=0.19:d=0.05[a]",
+    "normalization_gain_db": -7.5,
+    "duration_seconds": 0.24,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -8.0,
+    "playback_volume": 0.4,
+    "output_sha256": "9f2bccfc7ddc873f9d7e93f111e68c4888711bf06b4be16ae8b8b55d4ba3c095"
+  },
+  {
+    "file": "slash.wav",
+    "license": "CC0-1.0",
+    "verified_on": "2026-10-30",
+    "sources": [
+      {
+        "id": "194023",
+        "title": "Knife Swish 2.wav",
+        "author": "potentjello",
+        "source_page": "https://freesound.org/people/potentjello/sounds/194023/",
+        "download_url": "https://cdn.freesound.org/previews/194/194023_3022224-hq.mp3",
+        "download_format": "public high-quality MP3 preview",
+        "source_sha256": "5e66a956341795122a6d878c0b116e35aaf1255eeabd82d5f2d8ce0b38e6143f"
+      }
+    ],
+    "processing_graph": "[0:a]atrim=duration=0.399,asetpts=PTS-STARTPTS,atempo=1.12,highpass=f=160,lowpass=f=6500,afade=t=in:d=0.002,afade=t=out:st=0.31:d=0.045[a]",
+    "normalization_gain_db": 12.3,
+    "duration_seconds": 0.374875,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -5.0,
+    "playback_volume": 0.8,
+    "output_sha256": "70ad257063c5b544be95fc14cfe5ab1a21f33b7ccecf3a129a43581f76127cf4"
+  },
+  {
+    "file": "sniper.wav",
+    "license": "CC0-1.0",
+    "verified_on": "2026-10-30",
+    "sources": [
+      {
+        "id": "163460",
+        "title": "Sniper Shot",
+        "author": "LeMudCrab",
+        "source_page": "https://freesound.org/people/LeMudCrab/sounds/163460/",
+        "download_url": "https://cdn.freesound.org/previews/163/163460_2263027-hq.mp3",
+        "download_format": "public high-quality MP3 preview",
+        "source_sha256": "d9477173e08e11ba392ca212a2af0ef2592e30c9b1b78fb8586c508c0e982cdc"
+      }
+    ],
+    "processing_graph": "[0:a]atrim=duration=0.672,asetpts=PTS-STARTPTS,highpass=f=70,lowpass=f=6500,acompressor=threshold=0.22:ratio=2.5:attack=2:release=70,afade=t=in:d=0.001,afade=t=out:st=0.58:d=0.092[a]",
+    "normalization_gain_db": 2.8,
+    "duration_seconds": 0.671995,
+    "integrated_lufs": -20.6,
+    "true_peak_dbfs": -2.0,
+    "playback_volume": 0.8,
+    "output_sha256": "60a292261f23600bce6a131b8ab9a7cbf43ad54320af7a8cd341c9aef36277a6"
+  },
+  {
+    "file": "deal.wav",
+    "license": "CC0-1.0",
+    "verified_on": "2026-10-30",
+    "sources": [
+      {
+        "id": "545521",
+        "title": "briefcase latch open close click.wav",
+        "author": "rsellick",
+        "source_page": "https://freesound.org/people/rsellick/sounds/545521/",
+        "download_url": "https://cdn.freesound.org/previews/545/545521_6233742-hq.mp3",
+        "download_format": "public high-quality MP3 preview",
+        "source_sha256": "a1a3c70cec070ce0e6895e76439a2e6ecbdf11a6ad8be9b22484c28f5e717838"
+      },
+      {
+        "id": "362277",
+        "title": "paper bag.wav",
+        "author": "peakSOULREAPER",
+        "source_page": "https://freesound.org/people/peakSOULREAPER/sounds/362277/",
+        "download_url": "https://cdn.freesound.org/previews/362/362277_6645472-hq.mp3",
+        "download_format": "public high-quality MP3 preview",
+        "source_sha256": "a71e2b5bd6aaddaf84a168a401c8f431b329f992b81ee569f14c960ec5db14b6"
+      }
+    ],
+    "processing_graph": "[0:a]atrim=start=2.225:duration=0.24,asetpts=PTS-STARTPTS,highpass=f=160,lowpass=f=5500,afade=t=in:d=0.003,afade=t=out:st=0.19:d=0.05[l];[1:a]atrim=start=19.715:duration=0.38,asetpts=PTS-STARTPTS,highpass=f=220,lowpass=f=5200,volume=2,afade=t=in:d=0.015,afade=t=out:st=0.30:d=0.08,adelay=60[p];[l][p]amix=inputs=2:normalize=0[a]",
+    "normalization_gain_db": -2.2,
+    "duration_seconds": 0.44,
+    "integrated_lufs": -29.2,
+    "true_peak_dbfs": -7.0,
+    "playback_volume": 0.6,
+    "output_sha256": "b8ec4c73a24fd0c2b3c10538781b09c5f330bf82f18f90b577c89127481a016e"
+  },
+  {
+    "file": "retreat.wav",
+    "license": "CC0-1.0",
+    "verified_on": "2026-10-30",
+    "sources": [
+      {
+        "id": "462179",
+        "title": "Walking on hard surface",
+        "author": "Rvgerxini",
+        "source_page": "https://freesound.org/people/Rvgerxini/sounds/462179/",
+        "download_url": "https://cdn.freesound.org/previews/462/462179_9453283-hq.mp3",
+        "download_format": "public high-quality MP3 preview",
+        "source_sha256": "3fa78ba7000191625764155077451f95bf08bc63e775bea99c406c11e573ec14"
+      }
+    ],
+    "processing_graph": "[0:a]asplit=2[s1][s2];[s1]atrim=start=18.04:duration=0.20,asetpts=PTS-STARTPTS,highpass=f=100,lowpass=f=4800,afade=t=in:d=0.003,afade=t=out:st=0.15:d=0.05[l];[s2]atrim=start=19:duration=0.23,asetpts=PTS-STARTPTS,highpass=f=100,lowpass=f=4800,volume=0.7,afade=t=in:d=0.003,afade=t=out:st=0.18:d=0.05,adelay=160[r];[l][r]amix=inputs=2:normalize=0[a]",
+    "normalization_gain_db": -7.2,
+    "duration_seconds": 0.39,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -9.0,
+    "playback_volume": 0.35,
+    "output_sha256": "f923daae574782b753fe68adf2a511b9adb6ae0690b81c6f659d999eb35359e6"
+  }
+]

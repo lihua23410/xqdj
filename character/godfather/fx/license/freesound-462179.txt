@@ -1,0 +1,10 @@
+Title: Walking on hard surface
+Author: Rvgerxini
+Source page: https://freesound.org/people/Rvgerxini/sounds/462179/
+License shown on source page: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Verified on: 2026-10-30
+Retrieved audio: public high-quality MP3 preview
+Audio URL: https://cdn.freesound.org/previews/462/462179_9453283-hq.mp3
+Audio SHA-256: 3fa78ba7000191625764155077451f95bf08bc63e775bea99c406c11e573ec14
+Source page SHA-256: ecb5c437c8cdbc7a13a6cd30d839ba526dc830acee0ef8eb823ffc597ad63628

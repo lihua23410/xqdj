@@ -1,0 +1,10 @@
+Title: Knife Swish 2.wav
+Author: potentjello
+Source page: https://freesound.org/people/potentjello/sounds/194023/
+License shown on source page: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Verified on: 2026-10-30
+Retrieved audio: public high-quality MP3 preview
+Audio URL: https://cdn.freesound.org/previews/194/194023_3022224-hq.mp3
+Audio SHA-256: 5e66a956341795122a6d878c0b116e35aaf1255eeabd82d5f2d8ce0b38e6143f
+Source page SHA-256: 7dc05030dcd39c9a904ee307236c851ba240f8cb3a28750bbcdba44024a18db2

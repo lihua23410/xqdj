@@ -1,13 +1,17 @@
 (function () {
   window.godfatherAim = window.godfatherAim || {};
 
-  arena.registerShot("aim", (fx) => {
+  arena.registerShot("aim", (fx, ctx) => {
     if (!fx || fx.unitId == null) return;
     if ((fx.amount || 0) < 0) {
-      delete window.godfatherAim[fx.unitId];
+      window.godfatherAim[fx.unitId] = {
+        ...window.godfatherAim[fx.unitId], p: -1, leaving: true, time: ctx?.time || 0,
+      };
       return;
     }
-    window.godfatherAim[fx.unitId] = { tx: fx.vx, ty: fx.vy, p: fx.amount || 0 };
+    window.godfatherAim[fx.unitId] = {
+      tx: fx.vx, ty: fx.vy, p: fx.amount || 0, leaving: false, time: ctx?.time || 0,
+    };
   });
 
   arena.registerShot("scream", (fx, ctx) => {
