@@ -41,3 +41,5 @@
 内燃机普通攻击在统一响度后单独削减了高频并压柔瞬态，播放音量为 0.5；这项例外不再拉回 -15.7 LUFS。滤镜见 `character/engine/fx/README.md`。
 
 原始文件备份在 `tmp/audio-volume-backup/`（已被 `.gitignore` 的 `/tmp/` 覆盖）。
+
+回声的声呐提示与状态提示使用独立的分级音量：密集扫描、反弹、衰减音更轻，锁定和有效撞击更清楚；极短音按真峰值控制，不强行拉到 -15.7 LUFS。逐文件测量与处理参数见 `character/echo/fx/audio-sources.json`，播放约定与 CC0 来源见同目录 `README.md`。

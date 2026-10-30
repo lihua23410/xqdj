@@ -91,6 +91,7 @@ func (e *回声) syncLocks(ctx unit.Context, s unit.Sense) {
 		e.locks[o.ID] = &scanLock{until: s.Time + lockLife}
 		ctx.Out <- unit.ClearMarks{UnitID: o.ID, Kind: scanKind}
 		ctx.Out <- unit.StackMark{UnitID: o.ID, Kind: freezeKind, Delta: countMax, Icon: countIcon, Lifetime: lockLife, Hidden: true}
+		echoSound(ctx, "echo-found", o.X, o.Y)
 	}
 	for id := range e.locks {
 		if !live[id] {

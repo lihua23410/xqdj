@@ -5,6 +5,7 @@ const vm = require('node:vm');
 
 function setup() {
   const timers = new Map();
+  const shots = {}, audioEvents = [], voices = [];
   let timerID = 0;
   function element(classes = []) {
     const names = new Set(classes);
@@ -20,9 +21,25 @@ function setup() {
       remove() { if (this.parentElement) this.parentElement.children = this.parentElement.children.filter(x => x !== this); },
     };
   }
-  const arena = { screenPos: (x, y) => [x, y], registerShot() {} };
+  const arena = {
+    SOUND_MODE: { NORMAL: 0, PREEMPT: 1, IMMUNE: 2, FORCE: 3 },
+    screenPos: (x, y) => [x, y],
+    registerShot(name, fn) { shots[name] = fn; },
+    spawnFx: () => element(),
+    voice(audio, options) {
+      const voice = {
+        audio, options,
+        stop() { audioEvents.push(['stop', audio.src]); },
+        reset() { audio.currentTime = 0; audioEvents.push(['reset', audio.src]); },
+        play() { audioEvents.push(['play', audio.src, audio.volume, audio.currentTime]); },
+      };
+      voices.push(voice);
+      return voice;
+    },
+  };
   const sandbox = {
     window: { arena }, document: { createElement: () => element() },
+    Audio: class { constructor(src) { this.src = src; this.currentTime = 0; this.volume = 1; } },
     setTimeout(fn, delay) { const id = ++timerID; timers.set(id, { fn, delay }); return id; },
     clearTimeout(id) { timers.delete(id); },
   };
@@ -32,7 +49,7 @@ function setup() {
     time, scale: 1, cx: 0, cy: 0, fxRoot: root,
     units: [{ id: 9, slot: 1, radius: 18, x: 50, y: 0, marks }],
   });
-  return { root, owner, tick, timers };
+  return { root, owner, tick, timers, shots, audioEvents, voices };
 }
 
 test('full ring stays bright for six seconds, clears, then displays the next scan cycle', () => {
@@ -69,4 +86,58 @@ test('another echo lock does not draw or light this echo ring', () => {
   tick(1, [{ kind: '回声计数2锁定', stacks: 10, lifetime: 6, nextDecayAt: 7 }]);
   assert.equal(root.children[0].children.length, 0);
   assert.equal(owner.classList.contains('echo-locked'), false);
+});
+
+test('enabled sounds retrigger from the start while dash and release stay silent', () => {
+  const { shots, audioEvents, voices } = setup();
+  const expected = {
+    'echo-scan':'scan', 'echo-fire':'fire', 'echo-burst':'burst', 'echo-ping':'ping',
+    'echo-found':'lock', 'echo-lock':'aim', 'echo-ram':'ram',
+    'echo-wall':'wall', 'echo-bounce':'bounce', 'echo-fade':'fade',
+  };
+  for (const voice of voices) voice.audio.currentTime = 0.2;
+  for (const [event, file] of Object.entries(expected)) {
+    audioEvents.length = 0;
+    shots[event]({ amount: 3 }, { x: 0, y: 0, kind: '回声', time: 1 });
+    assert.deepEqual(audioEvents.map(e => e[0]), ['stop', 'reset', 'play'], event);
+    assert.ok(audioEvents[2][1].endsWith(`/fx/${file}.wav`), event);
+    assert.equal(audioEvents[2][3], 0, event);
+    assert.ok(audioEvents[2][2] > 0 && audioEvents[2][2] <= 1, event);
+  }
+  assert.ok(voices.filter(v => v.audio.src.endsWith('/lock.wav')).every(v => v.options.mode === 2));
+  assert.ok(voices.filter(v => v.audio.src.endsWith('/ram.wav')).every(v => v.options.mode === 1 && v.options.priority === 130));
+  audioEvents.length = 0;
+  shots['echo-dash']({}, { x: 0, y: 0, time: 2 });
+  assert.equal(audioEvents.length, 0);
+  assert.equal(shots['echo-release'], undefined);
+  assert.equal(voices.some(v => /\/(dash|release)\.wav$/.test(v.audio.src)), false);
+});
+
+test('sonar storms are limited by match time without hiding lock and ram cues', () => {
+  const { shots, audioEvents } = setup();
+  const ctx = time => ({ x: 0, y: 0, kind: '回声', time });
+  for (let i = 0; i < 16; i++) shots['echo-ping']({ amount: 9 }, ctx(1));
+  assert.equal(audioEvents.filter(e => e[0] === 'play').length, 1);
+  shots['echo-ping']({ amount: 9 }, ctx(1.06));
+  shots['echo-found']({}, ctx(1.06));
+  shots['echo-ram']({}, ctx(1.06));
+  assert.equal(audioEvents.filter(e => e[0] === 'play').length, 4);
+  // A tenth visual ping must not duplicate the authoritative lock sound.
+  shots['echo-ping']({ amount: 10 }, ctx(1.2));
+  assert.equal(audioEvents.filter(e => e[0] === 'play').length, 4);
+  // New matches reset simulation time and must not inherit the previous cooldown.
+  shots['echo-ping']({ amount: 1 }, ctx(0));
+  assert.equal(audioEvents.filter(e => e[0] === 'play').length, 5);
+});
+
+test('scan decay makes a quiet release cue, without replaying a frozen lock', () => {
+  const { tick, audioEvents } = setup();
+  const scan = n => [{ kind: '回声计数1', stacks:n, lifetime:10, nextDecayAt:11 }];
+  tick(1, scan(3));
+  tick(2, scan(2));
+  assert.equal(audioEvents.filter(e => e[0] === 'play' && e[1].endsWith('/fade.wav')).length, 1);
+  audioEvents.length = 0;
+  tick(3, [{kind:'回声计数1锁定',stacks:10,lifetime:6,nextDecayAt:9}]);
+  tick(4, [{kind:'回声计数1锁定',stacks:10,lifetime:6,nextDecayAt:9}]);
+  assert.equal(audioEvents.length, 0);
 });

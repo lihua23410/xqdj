@@ -132,6 +132,7 @@ type 回声 struct {
 	aimY      float64
 	struck    bool
 	locks     map[uint64]*scanLock
+	x, y      float64
 }
 
 func (e *回声) Handle(ctx unit.Context, ev unit.Event) {
@@ -146,6 +147,7 @@ func (e *回声) Handle(ctx unit.Context, ev unit.Event) {
 		if e.mode == modeDash && !e.struck && unit.EnemyTarget(v, e.slot) {
 			e.struck = true
 			ctx.Out <- unit.Damage{From: ctx.ID, To: v.Other.ID, Amount: ramDmg}
+			echoSound(ctx, "echo-ram", v.Other.X, v.Other.Y)
 		}
 	case unit.WallHit:
 		e.expireLocks(ctx, v.Time)
@@ -157,6 +159,7 @@ func (e *回声) Handle(ctx unit.Context, ev unit.Event) {
 			e.endDash(ctx)
 			e.mode = modeLock
 			e.modeUntil = v.Time + dashGap
+			echoSound(ctx, "echo-wall", v.X, v.Y)
 		}
 	case unit.Sense:
 		e.onSense(ctx, v)
@@ -166,8 +169,10 @@ func (e *回声) Handle(ctx unit.Context, ev unit.Event) {
 func (e *回声) onSense(ctx unit.Context, s unit.Sense) {
 	dt := s.Time - e.lastTime
 	e.lastTime = s.Time
+	e.x, e.y = s.Self.X, s.Self.Y
 	if !e.booted {
 		e.booted = true
+		echoSound(ctx, "echo-scan", e.x, e.y)
 		return
 	}
 	e.syncLocks(ctx, s)
@@ -283,6 +288,12 @@ func (e *回声) fire(ctx unit.Context, s unit.Sense) {
 		VX: ux * starSpeed, VY: uy * starSpeed,
 		OwnerID: ctx.ID, Slot: s.Self.Slot,
 	})
+	echoSound(ctx, "echo-fire", x, y)
+}
+
+// Sound-only FX stay in this pack and follow the same live/export event path.
+func echoSound(ctx unit.Context, name string, x, y float64) {
+	ctx.Out <- unit.FX{Name: name, Kind: KindEcho, UnitID: ctx.ID, X: x, Y: y}
 }
 
 // 星弹：一个会飞的声呐浮标。撞墙、撞人、撞弹都算引爆，炸完自己消失。
@@ -306,6 +317,7 @@ func (a *星弹) Handle(ctx unit.Context, ev unit.Event) {
 			return
 		}
 		if v.Time-a.bornAt >= starLife {
+			echoSound(ctx, "echo-fade", v.Self.X, v.Self.Y)
 			a.die(ctx)
 		}
 	case unit.Collision:
@@ -369,12 +381,16 @@ func (s *碎片) Handle(ctx unit.Context, ev unit.Event) {
 			return
 		}
 		if v.Time-s.bornAt >= shardLife {
+			echoSound(ctx, "echo-fade", v.Self.X, v.Self.Y)
 			s.die(ctx)
 		}
 	case unit.WallHit:
 		s.bounces++
 		if s.bounces > shardBounces {
+			echoSound(ctx, "echo-fade", v.X, v.Y)
 			s.die(ctx)
+		} else {
+			echoSound(ctx, "echo-bounce", v.X, v.Y)
 		}
 	case unit.Collision:
 		if unit.Hittable(v.Other, s.slot) && markStacks(v.Other, lockedKind(s.markKind)) == 0 && markStacks(v.Other, s.markKind) < countMax {

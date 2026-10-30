@@ -12,6 +12,52 @@ window.lookFX = window.lookFX || {};
   const A = window.arena;
   if (!A) return;
 
+  const base = document.currentScript?.dataset.pack || "/ball/回声";
+  const modes = A.SOUND_MODE;
+  const sounds = {};
+  const definitions = {
+    scan: { mode: modes.NORMAL, priority: 210, volume: 0.65 },
+    fire: { mode: modes.NORMAL, priority: 205, volume: 0.65, voices: 2 },
+    burst: { mode: modes.NORMAL, priority: 205, volume: 0.6, voices: 2, gap: 0.08 },
+    ping: { mode: modes.IMMUNE, volume: 0.55, voices: 3, gap: 0.06 },
+    lock: { mode: modes.IMMUNE, volume: 0.8, voices: 2, gap: 0.12 },
+    aim: { mode: modes.IMMUNE, volume: 0.45, voices: 2 },
+    ram: { mode: modes.PREEMPT, priority: 130, volume: 0.85, voices: 2 },
+    wall: { mode: modes.IMMUNE, volume: 0.55, voices: 2, gap: 0.08 },
+    bounce: { mode: modes.NORMAL, priority: 220, volume: 0.3, voices: 2, gap: 0.09 },
+    fade: { mode: modes.NORMAL, priority: 220, volume: 0.3, gap: 0.15 },
+  };
+  for (const [name, options] of Object.entries(definitions)) {
+    const pool = Array.from({ length: options.voices || 1 }, () => {
+      const audio = new Audio(base + "/fx/" + name + ".wav");
+      audio.preload = "auto";
+      return A.voice(audio, options);
+    });
+    sounds[name] = { pool, next: 0, last: -Infinity, gap: options.gap || 0, volume: options.volume };
+  }
+
+  function playSound(name, ctx, amount = 1) {
+    const sound = sounds[name];
+    const now = Number.isFinite(ctx?.time) ? ctx.time : performance.now() / 1000;
+    const elapsed = now - sound.last;
+    // Match time gives live play and exports the same limit; a new match may reset it.
+    if (elapsed >= 0 && elapsed + 1e-9 < sound.gap) return;
+    sound.last = now;
+    const voice = sound.pool[sound.next++ % sound.pool.length];
+    voice.stop();
+    voice.reset();
+    voice.audio.volume = sound.volume * Math.max(0, Math.min(1, amount));
+    voice.play();
+  }
+
+  for (const [event, sound] of Object.entries({
+    "echo-scan": "scan", "echo-fire": "fire", "echo-found": "lock",
+    "echo-ram": "ram", "echo-wall": "wall",
+    "echo-bounce": "bounce", "echo-fade": "fade",
+  })) {
+    A.registerShot(event, (fx, ctx) => playSound(sound, ctx));
+  }
+
   const rings = new Map(); // "owner:target" -> { el, owner, target, timer }
   let host = null;
 
@@ -119,6 +165,7 @@ window.lookFX = window.lookFX || {};
         const full = mark.stacks >= 10;
         locked = locked || full;
         if (mark.stacks > ring.prev) ring.lastAt = ctx.time;
+        if (!full && !ring.lockUntil && mark.stacks < ring.prev) playSound("fade", ctx);
         ring.prev = mark.stacks;
         ring.el.style.setProperty(
           "--scan",
@@ -135,7 +182,10 @@ window.lookFX = window.lookFX || {};
 
       for (const key of Array.from(rings.keys())) {
         const ring = rings.get(key);
-        if (ring && ring.owner === u.id && !seen.has(key)) drop(key);
+        if (ring && ring.owner === u.id && !seen.has(key)) {
+          if (!ring.lockUntil && ring.prev > 0) playSound("fade", ctx);
+          drop(key);
+        }
       }
 
       el.classList.toggle("echo-locked", locked);
@@ -144,17 +194,21 @@ window.lookFX = window.lookFX || {};
 
   // 碎片命中：落点一圈声呐；第 10 格那一圈变白。
   A.registerShot("echo-ping", function (fx, ctx) {
+    // The authoritative six-second window emits echo-found; the tenth ping stays visual.
+    if ((fx.amount || 0) < 10) playSound("ping", ctx, 0.6 + Math.max(0, fx.amount || 0) * 0.04);
     const el = A.spawnFx("fx-echo-ping", ctx.x, ctx.y, ctx.kind);
     if (el) el.classList.toggle("locked", (fx.amount || 0) >= 10);
   });
 
   // 星弹炸开：金色大圈。
   A.registerShot("echo-burst", function (fx, ctx) {
+    playSound("burst", ctx);
     A.spawnFx("fx-echo-burst", ctx.x, ctx.y, ctx.kind);
   });
 
   // 锁定：一圈收束，表示“找到了”。
   A.registerShot("echo-lock", function (fx, ctx) {
+    playSound("aim", ctx);
     A.spawnFx("fx-echo-lock", ctx.x, ctx.y, ctx.kind);
   });
 
