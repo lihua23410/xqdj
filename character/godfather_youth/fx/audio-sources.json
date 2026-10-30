@@ -1,0 +1,53 @@
+[
+  {
+    "file": "pistol.wav",
+    "author": "DeltaCode",
+    "title": "handgun-one-shot.wav",
+    "license": "CC0-1.0",
+    "source_page": "https://freesound.org/people/DeltaCode/sounds/668348/",
+    "download_url": "https://cdn.freesound.org/previews/668/668348_3271378-hq.mp3",
+    "download_format": "public high-quality MP3 preview",
+    "source_sha256": "dde238f5f024e6236ea6baa3ba610da34eff8997c02e5efc5dfd9cc18bd95980",
+    "output_sha256": "ab21a41cd35bbe301f42703bdc68c16f9670a476bc926262132b71e52f6e1552",
+    "processing": "atrim=duration=0.17,asetpts=PTS-STARTPTS,highpass=f=120,lowpass=f=6500,acompressor=threshold=0.2:ratio=2:attack=1:release=35,afade=t=in:d=0.001,afade=t=out:st=0.10:d=0.07,volume=1.90000dB",
+    "duration_seconds": 0.17,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -5.0,
+    "playback_volume": 0.65,
+    "verified_on": "2026-10-30"
+  },
+  {
+    "file": "inject.wav",
+    "author": "taure",
+    "title": "syringe.wav",
+    "license": "CC0-1.0",
+    "source_page": "https://freesound.org/people/taure/sounds/465495/",
+    "download_url": "https://cdn.freesound.org/previews/465/465495_2940947-hq.mp3",
+    "download_format": "public high-quality MP3 preview",
+    "source_sha256": "6b2fb0f09aa180c60506348ae52b2e25bda2fb3ca168e8e54db40dfc0ead2bef",
+    "output_sha256": "52db53bccbd898fca89ddf0036b1c4ca13dab44c965ef3e2f1555d67a1cbc7ff",
+    "processing": "atrim=start=2.78:duration=0.28,asetpts=PTS-STARTPTS,highpass=f=220,lowpass=f=5000,afade=t=in:d=0.004,afade=t=out:st=0.20:d=0.08,volume=-8.10000dB",
+    "duration_seconds": 0.28,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -8.0,
+    "playback_volume": 0.55,
+    "verified_on": "2026-10-30"
+  },
+  {
+    "file": "rush.wav",
+    "author": "spycrah",
+    "title": "Knife/sword swing",
+    "license": "CC0-1.0",
+    "source_page": "https://freesound.org/people/spycrah/sounds/471097/",
+    "download_url": "https://cdn.freesound.org/previews/471/471097_9856191-hq.mp3",
+    "download_format": "public high-quality MP3 preview",
+    "source_sha256": "2aebde083f273dd530c5dd70caa348b8579761a243628288f9171abdc75df4c3",
+    "output_sha256": "28acd8f90e278d85b9c7e2a008d137c33ef767a9f8fc28b389ab033f841cfc89",
+    "processing": "atrim=start=1.74:duration=0.32,asetpts=PTS-STARTPTS,atempo=1.1,highpass=f=180,lowpass=f=5500,afade=t=in:d=0.008,afade=t=out:st=0.24:d=0.05,volume=21.70000dB",
+    "duration_seconds": 0.308912,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -10.0,
+    "playback_volume": 0.45,
+    "verified_on": "2026-10-30"
+  }
+]

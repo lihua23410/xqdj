@@ -5,61 +5,26 @@ const local = new WeakMap();
 const minions = new Set(["教父暗杀者", "教父狙击者", "教父贩卖者"]);
 let lastUnits;
 
-const crest = '<path class="gf-crest" d="m29 70 5-5 5 5-5 7zM34 68v5"/>';
-const portraits = {
-  boss: `<circle class="gf-rim" cx="50" cy="50" r="47"/>
-    <path fill="#101419" stroke="#5a5141" stroke-width="1.5" d="M12 79Q24 61 39 58h22q16 4 27 21L73 91H27Z"/>
-    <path fill="#e5dbc7" d="m38 55 12 7 12-7-7 33H45Z"/>
-    <path fill="#24262a" stroke="#6e6657" stroke-width="1.5" d="m36 55-9 13 12 5-5 5 14 12Zm28 0 9 13-12 5 5 5-14 12Z"/>
-    <path fill="#772c35" stroke="#bf7371" stroke-width="1" d="m41 62 9 3 9-3v9l-9-3-9 3z"/>
-    <path fill="#8d3038" d="m71 65 4-3 4 3-1 6-6 1-3-3z"/>
-    <path stroke="#655b4c" stroke-width="1.2" d="m22 79 4 5m52-5-4 5M49 75v9"/>
-    <path fill="#14171a" stroke="#75674d" stroke-width="1.8" d="m28 16 11-4 11 5 12-5 10 4 4 22H24Z"/>
-    <path fill="#6f2932" d="m25 30 25 3 25-3 1 8H24Z"/>
-    <path fill="#0a0d11" stroke="#a78b55" stroke-width="1.7" d="M15 37q35 12 70 0l-4 7q-31 10-62 0Z"/>
-    <path stroke="#cbb68a" stroke-width="1.2" opacity=".7" d="m33 21 6-3 10 4"/>
-    ${crest}`,
-  assassin: `<circle class="gf-rim" cx="50" cy="50" r="47"/>
-    <path fill="#23212a" stroke="#76656b" stroke-width="1.7" d="M16 43Q20 16 50 13q30 3 34 30L69 37H31Z"/>
-    <path fill="#100f16" d="m19 40 16-6 15 6 16-6 15 6-7 22H27Z"/>
-    <path stroke="#e8d7bd" stroke-width="3" stroke-linecap="round" d="m32 45 9 2m18 0 9-2"/>
-    <path fill="#4f202c" stroke="#ac5559" stroke-width="1.4" d="m20 56 30 7 30-7-8 19-22 9-22-9Z"/>
-    <path stroke="#8b424c" stroke-width="1.5" d="m31 64 19 5 19-5m-30 9 11 3"/>
-    <path fill="#171a21" d="m29 79 21 7 21-7 9 8-20 8H40l-20-8Z"/>${crest}`,
-  sniper: `<circle class="gf-rim" cx="50" cy="50" r="47"/>
-    <path fill="#343e49" stroke="#8b9399" stroke-width="1.7" d="M18 42q2-26 32-27 30 1 32 27L65 35H35Z"/>
-    <path fill="#151b23" stroke="#596673" stroke-width="1.5" d="m17 42 19-7 14 5 14-5 19 7-7 17H24Z"/>
-    <path stroke="#bdc3bd" stroke-width="2.6" d="m30 44 11 1"/>
-    <circle fill="#121920" stroke="#cbb88d" stroke-width="2.5" cx="65" cy="44" r="8"/>
-    <circle class="gf-optic" cx="65" cy="44" r="4.5"/>
-    <path fill="#2b343b" stroke="#748087" stroke-width="1.3" d="m23 60 27 8 27-8-7 22-20 10-20-10Z"/>
-    <path stroke="#151d24" stroke-width="3" d="m31 68 19 6 19-6"/>${crest}`,
-  dealer: `<circle class="gf-rim" cx="50" cy="50" r="47"/>
-    <path fill="#303c2f" stroke="#99a082" stroke-width="1.7" d="m24 22 13-8h28l11 17-1 9H23Z"/>
-    <path fill="#1b241e" stroke="#adac88" stroke-width="1.8" d="M17 36q35-7 67 0l-8 6H25Z"/>
-    <path fill="#161e1c" d="m25 46 17-3 8 4 8-4 17 3-3 11-14 2-8-6-8 6-14-2Z"/>
-    <path stroke="#dbd3b8" stroke-width="1.7" d="m29 47 10-1m23 0 8 1"/>
-    <path fill="#2a3429" stroke="#777c5c" stroke-width="1.4" d="m17 82 18-20 15 5 15-5 18 20-16 11H33Z"/>
-    <path fill="#cabf9e" d="m37 61 13 6 13-6-13 24Z"/>
-    <path fill="#43322b" d="m47 68 6 1-1 14-4 4-3-5Z"/>${crest}`,
+const cores = {
+  boss: `<circle class="gf-rim" cx="50" cy="50" r="46.5"/>
+    <path class="gf-command-arc" d="M72 12A44 44 0 0 1 94 48M28 88A44 44 0 0 1 7 58"/>
+    <path class="gf-command-mark" d="m34 63 20-25h10M43 68 64 42"/>`,
+  assassin: `<circle class="gf-rim" cx="50" cy="50" r="46.5"/>
+    <path class="gf-role-accent" d="M74 13A43 43 0 0 1 93 44"/>
+    <path class="gf-assassin-mark" d="m31 64 17-24m-5 28 19-28m-7 22 13-19"/>`,
+  sniper: `<circle class="gf-rim" cx="50" cy="50" r="46.5"/>
+    <path class="gf-focus-arc" d="M26 79A38 38 0 0 1 72 19"/>
+    <path class="gf-sniper-mark" d="m33 65 30-30M47 35h16v16M33 51v14h14"/>`,
+  dealer: `<circle class="gf-rim" cx="50" cy="50" r="46.5"/>
+    <path class="gf-role-accent" d="M73 13A43 43 0 0 1 93 45"/>
+    <path class="gf-dealer-mark" d="M33 37h26v14H45v14h20"/>`,
 };
-const blade = `<g class="gf-blade"><path fill="#35232a" stroke="#b3875a" stroke-width="2" d="M66 61h17v8H66z"/>
-  <path stroke="#c4ad7e" stroke-width="3" d="M82 56v18"/>
-  <path fill="#d4dadd" stroke="#667580" stroke-width="1.5" d="m85 60 35 5-35 5Z"/>
-  <path stroke="#fff4df" stroke-width="1.5" d="m87 61 28 4"/></g>
-  <path class="gf-blade-wake" d="M91 49q-25-11-50-5m44 38q-27 8-49 2"/>`;
-const rifle = `<g class="gf-rifle-body"><path fill="#47372d" stroke="#9b8968" stroke-width="1.8" d="m52 57 15-9 19 3v9H68l-14 7Z"/>
-  <path fill="#27303a" stroke="#89929a" stroke-width="1.8" d="M76 48h30v10H76zM103 50h23v5h-23z"/>
-  <path stroke="#b9bcb0" stroke-width="2" d="M86 45v-6h14v6m-7 14 5 12"/>
-  <path stroke="#141b22" stroke-width="4" d="M125 48v9"/>
-  <path stroke="#bba67c" stroke-width="1.3" d="M80 50h19"/></g>
-  <path class="gf-muzzle" d="m127 52 8-5-2 4 12 1-12 2 2 4Z"/>`;
-const briefcase = `<g class="gf-case"><path fill="none" stroke="#c2a97a" stroke-width="3" d="M83 65v-7h14v7"/>
-  <rect fill="#49372d" stroke="#c2a377" stroke-width="2" x="71" y="65" width="42" height="29" rx="4"/>
-  <path stroke="#7d634a" stroke-width="2" d="M72 75h40m-31-8v25m22-25v25"/>
-  <path fill="#dfca94" d="M88 73h7v7h-7z"/></g>
-  <g class="gf-drop-dust" fill="#f0e7d3"><circle cx="105" cy="99" r="3"/><circle cx="116" cy="91" r="2"/>
-  <circle cx="120" cy="103" r="2.5"/><circle cx="99" cy="106" r="1.7"/></g>`;
+const assassinMotion = `<path class="gf-assassin-wake" d="M22 36Q-4 32-38 36M15 50H-54M22 64Q-4 68-38 64"/>`;
+const sniperPulse = `<path class="gf-recoil-mark" d="m85 43 6 7-6 7"/>
+  <path class="gf-shot-pulse" d="M98 50h21m-15-8 9 4m-9 12 9-4"/>`;
+const dealerRelease = `<circle class="gf-drop-wave" cx="50" cy="50" r="33"/>
+  <g class="gf-drop-dust"><circle cx="34" cy="96" r="2.5"/><circle cx="46" cy="105" r="1.8"/>
+    <circle cx="59" cy="99" r="2.7"/><circle cx="69" cy="108" r="1.6"/></g>`;
 const powder = `<svg viewBox="0 0 100 100" aria-hidden="true">
   <ellipse cx="49" cy="74" rx="38" ry="10" fill="#06080a" opacity=".35"/>
   <path fill="#eee9dd" opacity=".16" d="m8 68 17-17 22-4 27 7 20 20-13 11-27 2-29-5Z"/>
@@ -78,19 +43,19 @@ const powder = `<svg viewBox="0 0 100 100" aria-hidden="true">
     <circle cx="6" cy="64" r="1.2"/><circle cx="38" cy="29" r="1.1"/></g>
 </svg>`;
 
-function art(el, role, weapon) {
-  if (el.querySelector(":scope > .gf-portrait")) return;
-  const face = document.createElement("span");
-  face.className = "gf-portrait";
-  face.setAttribute("aria-hidden", "true");
-  face.innerHTML = `<svg viewBox="0 0 100 100">${portraits[role]}</svg>`;
-  el.appendChild(face);
-  if (weapon) {
-    const prop = document.createElement("span");
-    prop.className = `gf-prop gf-${role}-prop`;
-    prop.setAttribute("aria-hidden", "true");
-    prop.innerHTML = `<svg viewBox="0 0 100 100">${weapon}</svg>`;
-    el.appendChild(prop);
+function art(el, role, overlay) {
+  if (el.querySelector(":scope > .gf-core")) return;
+  const mark = document.createElement("span");
+  mark.className = "gf-core";
+  mark.setAttribute("aria-hidden", "true");
+  mark.innerHTML = `<svg viewBox="0 0 100 100">${cores[role]}</svg>`;
+  el.appendChild(mark);
+  if (overlay) {
+    const layer = document.createElement("span");
+    layer.className = `gf-action gf-${role}-action`;
+    layer.setAttribute("aria-hidden", "true");
+    layer.innerHTML = `<svg viewBox="0 0 100 100">${overlay}</svg>`;
+    el.appendChild(layer);
   }
 }
 function frame(el, u, ctx) {
@@ -129,7 +94,7 @@ function newOwned(s, units, u, kind, key) {
 }
 function unmount(el) {
   if (!el) return;
-  el.querySelectorAll(":scope > .gf-portrait, :scope > .gf-prop, :scope > .sniper-laser").forEach(n => n.remove());
+  el.querySelectorAll(":scope > .gf-core, :scope > .gf-action, :scope > .sniper-laser").forEach(n => n.remove());
   el.classList.remove("assassin-dash", "gf-retiring", "minion-leave");
   for (const name of [...el.style]) if (name.startsWith("--gf-")) el.style.removeProperty(name);
   local.delete(el);
@@ -154,7 +119,7 @@ hooks.assassin = {
   unmount,
   tick(el, u, ctx = {}) {
     if (!el || !u) return;
-    art(el, "assassin", blade);
+    art(el, "assassin", assassinMotion);
     frame(el, u, ctx);
     const leaving = retiring(el, u);
     const speed = Math.hypot(u.vx || 0, u.vy || 0);
@@ -166,7 +131,7 @@ hooks.sniper = {
   unmount,
   tick(el, u, ctx = {}) {
     if (!el || !u) return;
-    art(el, "sniper", rifle);
+    art(el, "sniper", sniperPulse);
     const s = frame(el, u, ctx);
     retiring(el, u);
     if (newOwned(s, ctx.units, u, "教父狙击弹", "rounds")) s.shot = s.time;
@@ -277,13 +242,12 @@ hooks.dealer = {
   unmount,
   tick(el, u, ctx = {}) {
     if (!el || !u) return;
-    art(el, "dealer", briefcase);
+    art(el, "dealer", dealerRelease);
     const s = frame(el, u, ctx);
     retiring(el, u);
     if (newOwned(s, ctx.units, u, "教父药物", "drugs")) s.drop = s.time;
     const drop = pulse(s.time, s.drop, 0.45);
     el.style.setProperty("--gf-drop", drop.toFixed(3));
-    el.style.setProperty("--gf-case-angle", `${(-drop * 18).toFixed(2)}deg`);
     el.style.setProperty("--gf-dust-y", `${((1 - drop) * 9).toFixed(2)}px`);
   },
 };

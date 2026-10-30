@@ -1,64 +1,105 @@
 .ball.look-youth {
-  background: radial-gradient(circle at 35% 30%, #5c534c 0%, #3a322c 55%, #241c18 100%);
-  box-shadow: inset 0 0 0 2px #c9a227, 0 0 0 4px #6e2424, 0 0 10px rgba(201, 162, 39, 0.35);
+  background: radial-gradient(circle at 33% 27%, #4e423c, #211d1e 58%, #0d1218);
+  box-shadow: inset 0 0 0 1px #b5965b, 0 0 0 1px #54232e, 0 1px 5px #0008;
+  overflow: visible;
+  isolation: isolate;
+}
+.ball.look-youth.youth-buff {
+  box-shadow: inset 0 0 0 1px #ddbf7d, 0 0 0 1.5px #c85b50, 0 0 7px #ce574d44;
+}
+.youth-core, .youth-emitter, .youth-motion {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+}
+.youth-core { z-index: 1; }
+.youth-emitter { z-index: 2; transform: rotate(var(--youth-emitter-angle, 0rad)); }
+.youth-core svg, .youth-emitter svg, .youth-motion svg {
+  display: block;
+  width: 100%;
+  height: 100%;
   overflow: visible;
 }
-
-.ball.look-youth.youth-buff {
-  box-shadow: inset 0 0 0 2px #c9a227, 0 0 0 4px #ff5a4a, 0 0 16px rgba(255, 90, 74, 0.85);
+.youth-rim { fill: none; stroke: #cdb174; stroke-width: 1.2; opacity: .72; }
+.youth-accent, .youth-accent-dim { fill: none; stroke: #8b3a49; stroke-width: 4; }
+.youth-accent-dim { stroke-width: 2; opacity: .5; }
+.youth-mark { fill: none; stroke: #d0b379; stroke-width: 3; stroke-linecap: square; }
+.youth-mark-offset { fill: none; stroke: #8f784f; stroke-width: 1; }
+.youth-buff .youth-accent { stroke: #f27a63; }
+.youth-buff .youth-accent-dim { stroke: #da6557; opacity: .8; }
+.youth-buff .youth-mark { stroke: #eed19a; }
+.youth-inject-flare {
+  fill: none;
+  stroke: #efd39c;
+  stroke-width: 1.5;
+  opacity: var(--youth-inject, 0);
 }
-
-.youth-ring {
+.youth-recoil-mark {
+  fill: none;
+  stroke: #b99a62;
+  stroke-width: 2;
+  opacity: .7;
+  transform: translateX(var(--youth-recoil, 0px));
+}
+.youth-shot-pulse {
+  fill: none;
+  stroke: #ffe1a2;
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: var(--youth-flash, 0);
+}
+.youth-emitter-hot .youth-shot-pulse { stroke: #ff9a74; }
+.youth-motion {
+  z-index: 0;
+  transform: rotate(var(--youth-move-angle, 0rad));
+  opacity: 0;
+}
+.youth-motion path { fill: none; stroke: #c6ae83; stroke-width: 1.7; stroke-linecap: round; }
+.youth-moving-fast > .youth-motion { opacity: .55; }
+.youth-buff > .youth-motion path { stroke: #ef8971; }
+.youth-buff.youth-moving-fast > .youth-motion { opacity: .85; }
+.youth-doses {
+  position: absolute;
+  left: 50%;
+  top: 106%;
+  display: flex;
+  gap: var(--youth-dose-gap, 1.5px);
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 3;
+}
+.youth-doses i {
+  display: block;
+  width: var(--youth-dose-w, 5px);
+  height: var(--youth-dose-h, 7px);
+}
+.youth-doses svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.youth-cell-frame { fill: #12171d; stroke: #7f7057; stroke-width: 1.5; }
+.youth-cell-fill { fill: #d9bf87; opacity: 0; }
+.youth-doses .full .youth-cell-frame { stroke: #c3a76e; }
+.youth-doses .full .youth-cell-fill { opacity: .95; }
+.youth-doses .spent { filter: drop-shadow(0 0 calc(4px * var(--youth-inject, 0)) #f4bc80); }
+.youth-doses-unknown .youth-cell-frame { stroke-dasharray: 3 3; opacity: .5; }
+.ball.look-youth-shot {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.youth-streak {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 160%;
-  height: 160%;
-  margin: -80% 0 0 -80%;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  border-top-color: #ff5a4a;
-  border-right-color: #ff8a72;
-  transform: rotate(var(--ang, 0rad));
+  display: block;
+  width: var(--youth-streak-w, 11px);
+  height: calc(var(--youth-streak-w, 11px) * .36);
+  transform: translate(-50%, -50%) rotate(var(--youth-streak-angle, 0rad));
   pointer-events: none;
 }
-
-.youth-doses {
-  position: absolute;
-  inset: 0;
-  animation: youth-orbit 3.2s linear infinite;
-  pointer-events: none;
-}
-
-.youth-doses i {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  margin: -3.5px 0 0 -3.5px;
-  border-radius: 50%;
-  box-sizing: border-box;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  background: transparent;
-}
-
-.youth-doses i.full {
-  background: #fff;
-  border-color: #fff;
-  box-shadow: 0 0 6px #fff;
-}
-
-@keyframes youth-orbit {
-  to { transform: rotate(360deg); }
-}
-
-.ghost.youth-ghost {
-  background: radial-gradient(circle at 35% 30%, #8a7a68 0%, #3a322c 55%, #241c18 100%);
-  box-shadow: inset 0 0 0 2px #c9a227, 0 0 0 4px #ff5a4a, 0 0 16px rgba(255, 90, 74, 0.9);
-  opacity: 0.9;
-  animation: ghost-fade 0.42s linear forwards;
-}
-
-.ball.look-youth-shot {
-  background: #c9a227;
-  box-shadow: 0 0 6px rgba(201, 162, 39, 0.8);
-}
+.youth-streak svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.youth-streak-core { fill: none; stroke: #d9b56c; stroke-width: 9; stroke-linecap: round; }
+.youth-streak-edge { fill: none; stroke: #fff0c1; stroke-width: 3; stroke-linecap: round; }
+.youth-bullet-buffed .youth-streak-core { stroke: #f28760; }
+.youth-bullet-buffed .youth-streak-edge { stroke: #ffe2a4; }

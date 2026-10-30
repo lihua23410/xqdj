@@ -1,88 +1,64 @@
 .ball:is(.look-godfather, .look-assassin, .look-sniper, .look-dealer) {
   overflow: visible;
   isolation: isolate;
-  background: radial-gradient(circle at 34% 25%, #424044, #1a1b21 58%, #080b10);
-  box-shadow: inset 0 0 0 1px #a28b61, 0 2px 5px #0009;
+  box-shadow: inset 0 0 0 1px #a58e61, 0 1px 5px #0008;
 }
 .ball.look-godfather {
-  background: radial-gradient(circle at 34% 25%, #4c4140, #211b1b 58%, #0b0d12);
-  box-shadow: inset 0 0 0 1px #c4a264, 0 1px 5px #000b, 0 0 8px #c4a26422;
+  background: radial-gradient(circle at 33% 27%, #41362d, #191619 58%, #090d13);
+  box-shadow: inset 0 0 0 1px #b99b61, 0 0 6px #bb995522, 0 1px 5px #0008;
 }
 .ball.look-assassin {
-  background: radial-gradient(circle at 34% 25%, #70404a, #3c1c2a 58%, #150e19);
-  box-shadow: inset 0 0 0 1px #a56463, 0 2px 5px #0009;
+  background: radial-gradient(circle at 33% 27%, #64343f, #301923 58%, #140e18);
 }
 .ball.look-sniper {
-  background: radial-gradient(circle at 34% 25%, #7c8790, #37434f 58%, #17222c);
-  box-shadow: inset 0 0 0 1px #9da8ad, 0 2px 5px #0009;
+  background: radial-gradient(circle at 33% 27%, #66717d, #303d4b 58%, #14202c);
 }
 .ball.look-dealer {
-  background: radial-gradient(circle at 34% 25%, #737857, #3b4632 58%, #18251f);
-  box-shadow: inset 0 0 0 1px #a29a6e, 0 2px 5px #0009;
+  background: radial-gradient(circle at 33% 27%, #62694a, #323e2c 58%, #14221c);
 }
-.gf-portrait, .gf-prop {
+.gf-core, .gf-action {
   position: absolute;
   inset: 0;
   display: block;
   pointer-events: none;
   transform-origin: 50% 50%;
 }
-.gf-portrait { z-index: 1; }
-.gf-prop { z-index: 2; }
-.gf-portrait svg, .gf-prop svg {
+.gf-core { z-index: 1; }
+.gf-action { z-index: 2; }
+.gf-core svg, .gf-action svg {
   display: block;
   width: 100%;
   height: 100%;
   overflow: visible;
 }
-.gf-rim { fill: none; stroke: #c4a264; stroke-width: 1.5; opacity: .8; }
-.look-assassin .gf-rim { stroke: #c08b83; }
-.look-sniper .gf-rim { stroke: #c0c9c8; }
-.look-dealer .gf-rim { stroke: #c3b58b; }
-.gf-crest { fill: #9e834e; stroke: #e4c891; stroke-width: 1.2; }
-.look-godfather .gf-crest {
-  filter: drop-shadow(0 0 calc(7px * var(--gf-call, 0)) #ffe3a0);
-  fill: color-mix(in srgb, #9e834e, #fff0bd calc(var(--gf-call, 0) * 100%));
-}
-.gf-assassin-prop, .gf-sniper-prop { transform: rotate(var(--gf-angle, 0rad)); }
-.gf-blade-wake {
+.gf-rim { fill: none; stroke: #bfa56e; stroke-width: 1.2; opacity: .75; }
+.look-assassin .gf-rim { stroke: #c08a80; }
+.look-sniper .gf-rim { stroke: #bac4c8; }
+.look-dealer .gf-rim { stroke: #b8b18b; }
+.gf-command-arc { fill: none; stroke: #a78c56; stroke-width: 2; }
+.gf-command-mark {
   fill: none;
-  stroke: #f2aaa0;
+  stroke: color-mix(in srgb, #c8aa6e, #fff0bb calc(var(--gf-call, 0) * 100%));
   stroke-width: 2.5;
-  stroke-linecap: round;
-  opacity: 0;
+  stroke-linecap: square;
+  filter: drop-shadow(0 0 calc(4px * var(--gf-call, 0)) #f4d29a);
 }
-.ball.look-assassin.assassin-dash {
-  box-shadow: inset 0 0 0 1px #ffc2a8, 0 0 9px #c4414688;
-}
-.assassin-dash .gf-blade { filter: drop-shadow(0 0 4px #ffb6a1); }
-.assassin-dash .gf-blade-wake { opacity: .85; }
-.gf-optic {
-  fill: #eb655d;
-  filter: drop-shadow(0 0 calc(1px + 4px * var(--gf-focus, 0)) #ff7063);
-}
-.gf-rifle-body { transform: translateX(var(--gf-recoil, 0px)); }
-.gf-muzzle {
-  fill: #fff2c6;
-  stroke: #ffc173;
-  stroke-width: 1;
-  opacity: var(--gf-shot, 0);
-  filter: drop-shadow(0 0 3px #ffb96a);
-}
-.gf-case {
-  transform-box: view-box;
-  transform-origin: 84px 63px;
-  transform: rotate(var(--gf-case-angle, 0deg));
-}
-.gf-drop-dust {
-  opacity: var(--gf-drop, 0);
-  transform: translateY(var(--gf-dust-y, 0px));
-}
-.gf-retiring > :is(.gf-portrait, .gf-prop) {
-  filter: saturate(.35);
-  opacity: .72;
-}
-
+.gf-role-accent { fill: none; stroke: #b89965; stroke-width: 3; opacity: .65; }
+.look-assassin .gf-role-accent { stroke: #c06a68; }
+.gf-assassin-mark { fill: none; stroke: #dba295; stroke-width: 2.4; stroke-linecap: square; }
+.gf-sniper-mark { fill: none; stroke: #d3d5be; stroke-width: 2; }
+.gf-focus-arc { fill: none; stroke: #ec9987; stroke-width: 1.8; opacity: calc(.2 + .7 * var(--gf-focus, 0)); }
+.gf-dealer-mark { fill: none; stroke: #c8bd8d; stroke-width: 2.4; stroke-linejoin: miter; }
+.gf-assassin-action, .gf-sniper-action { transform: rotate(var(--gf-angle, 0rad)); }
+.gf-assassin-wake { fill: none; stroke: #e49a89; stroke-width: 1.8; stroke-linecap: round; opacity: 0; }
+.ball.look-assassin.assassin-dash { box-shadow: inset 0 0 0 1px #eab199, 0 0 7px #c4414655; }
+.assassin-dash .gf-assassin-wake { opacity: .85; }
+.assassin-dash .gf-assassin-mark { stroke: #f6c2aa; }
+.gf-recoil-mark { fill: none; stroke: #d1c7a4; stroke-width: 2; transform: translateX(var(--gf-recoil, 0px)); }
+.gf-shot-pulse { fill: none; stroke: #ffdab0; stroke-width: 2; stroke-linecap: round; opacity: var(--gf-shot, 0); }
+.gf-drop-wave { fill: none; stroke: #d5c996; stroke-width: 1.5; opacity: var(--gf-drop, 0); }
+.gf-drop-dust { fill: #eee9da; opacity: var(--gf-drop, 0); transform: translateY(var(--gf-dust-y, 0px)); }
+.gf-retiring > :is(.gf-core, .gf-action) { filter: saturate(.35); opacity: .65; }
 /* 教父狙击弹：细长钨芯穿甲弹，弹头朝速度方向。 */
 .ball.look-ap {
   background: transparent;

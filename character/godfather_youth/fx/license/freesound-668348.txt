@@ -1,0 +1,9 @@
+Title: handgun-one-shot.wav
+Author: DeltaCode
+Source page: https://freesound.org/people/DeltaCode/sounds/668348/
+License shown on source page: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Verified on: 2026-10-30
+Public HQ MP3 preview: https://cdn.freesound.org/previews/668/668348_3271378-hq.mp3
+Audio SHA-256: dde238f5f024e6236ea6baa3ba610da34eff8997c02e5efc5dfd9cc18bd95980
+Source page SHA-256: 17029a39485d9dfea3ca23618dcecff5bb8c43fdb60e2303f8ac9d3f7f721905

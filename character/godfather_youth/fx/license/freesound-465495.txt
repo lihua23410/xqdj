@@ -1,0 +1,9 @@
+Title: syringe.wav
+Author: taure
+Source page: https://freesound.org/people/taure/sounds/465495/
+License shown on source page: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Verified on: 2026-10-30
+Public HQ MP3 preview: https://cdn.freesound.org/previews/465/465495_2940947-hq.mp3
+Audio SHA-256: 6b2fb0f09aa180c60506348ae52b2e25bda2fb3ca168e8e54db40dfc0ead2bef
+Source page SHA-256: ba7894de3bbba6ed3f84fd00e8e9bf5b7a8ea29835ced1c4ea4ab30d69721827

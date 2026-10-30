@@ -1,1 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><defs><radialGradient id="g" cx="35%" cy="30%" r="50%"><stop offset="0%" stop-color="#5c534c"/><stop offset="55%" stop-color="#3a322c"/><stop offset="100%" stop-color="#241c18"/></radialGradient></defs><circle cx="28" cy="28" r="24" fill="url(#g)"/><circle cx="28" cy="28" r="23" fill="none" stroke="#c9a227" stroke-width="2"/><circle cx="28" cy="28" r="24.75" fill="none" stroke="#6e2424" stroke-width="4"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><defs><radialGradient id="youth-doc-body" cx="33%" cy="27%"><stop stop-color="#4e423c"/><stop offset=".58" stop-color="#211d1e"/><stop offset="1" stop-color="#0d1218"/></radialGradient></defs><style>.youth-rim{fill:none;stroke:#cdb174;stroke-width:1.2;opacity:.72}.youth-accent,.youth-accent-dim{fill:none;stroke:#8b3a49;stroke-width:4}.youth-accent-dim{stroke-width:2;opacity:.5}.youth-mark{fill:none;stroke:#d0b379;stroke-width:3;stroke-linecap:square}.youth-mark-offset{fill:none;stroke:#8f784f;stroke-width:1}.youth-inject-flare,.youth-shot-pulse{opacity:0}.youth-recoil-mark{fill:none;stroke:#b99a62;stroke-width:2;opacity:.7}.youth-cell-frame{fill:#12171d;stroke:#c3a76e;stroke-width:1.5}.youth-cell-fill{fill:#d9bf87}</style><g transform="translate(5 2) scale(.46)"><circle cx="50" cy="50" r="50" fill="url(#youth-doc-body)"/>
+    <circle class="youth-rim" cx="50" cy="50" r="46.5"/>
+    <path class="youth-accent" d="M75 14A44 44 0 0 1 94 48"/>
+    <path class="youth-accent-dim" d="M25 87A43 43 0 0 1 12 70"/>
+    <path class="youth-mark" d="M39 63 61 36"/>
+    <path class="youth-mark-offset" d="m34 68 10-12m12-7 9-11"/>
+    <circle class="youth-inject-flare" cx="50" cy="50" r="51"/>
+
+    <path class="youth-recoil-mark" d="m86 43 5 7-5 7"/>
+    <path class="youth-shot-pulse" d="M98 50h15m-10-7 7 3m-7 11 7-3"/>
+  </g><svg x="20" y="48" width="4" height="5.5" viewBox="0 0 20 24" aria-hidden="true">
+    <rect class="youth-cell-frame" x="3" y="3" width="14" height="18" rx="1.5"/>
+    <rect class="youth-cell-fill" x="6" y="6" width="8" height="12" rx=".5"/>
+  </svg><svg x="26" y="48" width="4" height="5.5" viewBox="0 0 20 24" aria-hidden="true">
+    <rect class="youth-cell-frame" x="3" y="3" width="14" height="18" rx="1.5"/>
+    <rect class="youth-cell-fill" x="6" y="6" width="8" height="12" rx=".5"/>
+  </svg><svg x="32" y="48" width="4" height="5.5" viewBox="0 0 20 24" aria-hidden="true">
+    <rect class="youth-cell-frame" x="3" y="3" width="14" height="18" rx="1.5"/>
+    <rect class="youth-cell-fill" x="6" y="6" width="8" height="12" rx=".5"/>
+  </svg></svg>

@@ -1,0 +1,9 @@
+Title: Knife/sword swing
+Author: spycrah
+Source page: https://freesound.org/people/spycrah/sounds/471097/
+License shown on source page: CC0 1.0 Universal
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Verified on: 2026-10-30
+Public HQ MP3 preview: https://cdn.freesound.org/previews/471/471097_9856191-hq.mp3
+Audio SHA-256: 2aebde083f273dd530c5dd70caa348b8579761a243628288f9171abdc75df4c3
+Source page SHA-256: 86e4ed1da816d60266051ffc8294d4e893d1785e591bce1d14ba124b09bead06

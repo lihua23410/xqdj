@@ -1,6 +1,18 @@
-# 教父音效
+# 教父前端与音效
 
 以短促、克制的黑帮电影质感配合教父和三种活随从：入场一声皮鞋落地，暗杀者一记短刀掠过，狙击者一声有分量的单发步枪，贩卖者投放时箱扣轻响并伴随纸袋摩擦，退场两声更轻、更急的脚步。声音不常驻循环。
+
+## 抽象造型
+
+与教父(青年)统一为圆球、切线、弧段、缺口和散点。教父和三种活随从不画脸、身体、服饰、刀枪或提箱。原有粉末与狙击弹外观保持不变。
+
+- 教父：深黑球体、双弧与叠切线，补员时切线短亮。
+- 暗杀者：暗赤球体与短斜线，冲刺时赤色掠过线变亮，退场压暗。
+- 狙击者：冷灰球体、错位刻线与细弧，保留双线收束瞄准；开火用几何短闪。
+- 贩卖者：褐绿球体与阶梯折线，投放时出现短环与散点。
+- 药物与狙击弹：保留原有白色粉末堆和铜被甲穿甲弹，不作造型调整。
+
+只修改包内前端，不改后端、公共渲染器或其他包。音效与触发逻辑沿用，暗杀者攻击音仍为 PREEMPT / 199。
 
 ## 素材与许可
 
@@ -9,7 +21,7 @@
 - `arrival.wav`、`retreat.wav`：Rvgerxini 的 [Walking on hard surface](https://freesound.org/people/Rvgerxini/sounds/462179/)，皮鞋在硬质地面上的实录。分别截成单步与两步，作为入场和退场的装饰提示。
 - `slash.wav`：potentjello 的 [Knife Swish 2.wav](https://freesound.org/people/potentjello/sounds/194023/)，短促的金属刀声，轻微加速并削减过尖的高频。
 - `sniper.wav`：LeMudCrab 的 [Sniper Shot](https://freesound.org/people/LeMudCrab/sounds/163460/)，高威力步枪的单发实录；保留枪声瞬态，压柔尖峰并收短尾音。
-- `deal.wav`：rsellick 的 [briefcase latch open close click.wav](https://freesound.org/people/rsellick/sounds/545521/) 与 peakSOULREAPER 的 [paper bag.wav](https://freesound.org/people/peakSOULREAPER/sounds/362277/)，将箱扣与药房纸袋摩擦截短、错开叠合，配合提箱晃动与粉末散落。
+- `deal.wav`：rsellick 的 [briefcase latch open close click.wav](https://freesound.org/people/rsellick/sounds/545521/) 与 peakSOULREAPER 的 [paper bag.wav](https://freesound.org/people/peakSOULREAPER/sounds/362277/)，将箱扣与药房纸袋摩擦截短、错开叠合，配合投放脉冲与粉末散点。
 
 使用的是上述作者公开提供的高质量 MP3 预览，并非需登录下载的原始 WAV。所有处理已烘焙为 44.1 kHz、单声道、16-bit PCM WAV；运行时不变速、不变调、不外链播放。
 
@@ -35,6 +47,7 @@
 
 ## 验证
 
+- 抽象造型已核对放大图、实战尺寸和实际对局；粉末与狙击弹的 SVG、尺寸、样式和钩子代码均与改造前一致。
 - 语法、所属关系、单次触发、暂停、时间回退和多教父限频检查通过。
 - 五个嵌入后的 HTTP 音源与包内 WAV 哈希一致；格式、峰值上限和许可记录检查通过。
 - 2026-10-30 首次接入时（刀声使用 NORMAL / 205）实测教父对靶子并导出 1729 帧 MP4，成片包含 AAC 音轨。该局记录入场 6 次、刀声 4 次、枪声 1 次、投放 2 次、退场 2 次；不存在相同音源在同一帧重复播放，且均不循环、不改变播放速度。
