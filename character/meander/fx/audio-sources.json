@@ -1,0 +1,43 @@
+[
+  {
+    "file": "attack.wav",
+    "title": "Magic Wand Glitter",
+    "author": "qubodup (Iwan Gabovitch)",
+    "source_components": [
+      "chimes bar (CC0) by urupin",
+      "Instrument_chimes_quick_soft.aif (CC0) by vrodge"
+    ],
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source_page": "https://freesound.org/people/qubodup/sounds/211624/",
+    "download_url": "https://cdn.freesound.org/previews/211/211624_71257-hq.mp3",
+    "source_format": "Public HQ MP3 preview of the original FLAC",
+    "source_sha256": "119d79d37ffc41f580e1b570e036229e550d4fd3abbe037b80c79d5bba3b0992",
+    "source_page_sha256": "694a41566f691904825dd00f8b6bb9d26df4fad8e26d68d0ec91addd10abe4a8",
+    "output_sha256": "bb07ed79025a57b149771e22b14b89fd3cc81efa843edbb5372e604c8576a3ee",
+    "processing": "atrim=start=0.5:duration=0.096,asetpts=PTS-STARTPTS,asetrate=19200,aresample=44100,highpass=f=180,equalizer=f=2800:t=q:w=0.9:g=-4,lowpass=f=3000:p=2,lowpass=f=3000:p=2,aecho=0.8:0.65:24|51|86:0.18|0.10|0.05,atrim=duration=0.32,acompressor=threshold=0.055:ratio=2.4:attack=2:release=45,afade=t=in:d=0.018,afade=t=out:st=0.20:d=0.12,volume=20.10000dB",
+    "duration_seconds": 0.32,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -6.1,
+    "verified_on": "2026-10-31",
+    "note": "Lowered source chimes and softened sharp highs with a double 3kHz low-pass, 18ms fade-in and gentle transient compression; true peak reduced to -6.1dBFS."
+  },
+  {
+    "file": "switch.wav",
+    "title": "digital_whoosh_soft.wav",
+    "author": "ludvique",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source_page": "https://freesound.org/people/ludvique/sounds/71852/",
+    "download_url": "https://cdn.freesound.org/previews/71/71852_1062668-hq.mp3",
+    "source_format": "Public HQ MP3 preview of the original WAV",
+    "source_sha256": "8663fefd66229df03e73d837f4ba0f5c279de32df6ec520a81b256e8bbf63193",
+    "source_page_sha256": "68a800d6ee3b6e41b7f000b3b966062ca0a445b7a371a61e4624fa60924ced41",
+    "output_sha256": "d2e3a5f135de6e661c6914fea6f43547cca08549e05dcfac78e800cc00c7a249",
+    "processing": "atrim=start=0.04:duration=0.55,asetpts=PTS-STARTPTS,asetrate=34398,aresample=44100,highpass=f=90,lowpass=f=1800:p=2,acompressor=threshold=0.12:ratio=2:attack=8:release=70,aecho=0.8:0.7:70|130:0.12|0.06,atrim=duration=0.82,afade=t=in:d=0.025,afade=t=out:st=0.6:d=0.22,volume=8.00000dB",
+    "duration_seconds": 0.82,
+    "integrated_lufs": -15.7,
+    "true_peak_dbfs": -6.5,
+    "verified_on": "2026-10-31"
+  }
+]

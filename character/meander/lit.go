@@ -28,6 +28,7 @@ func (a *点亮) Handle(ctx unit.Context, ev unit.Event) {
 	if a.hitAt == nil {
 		a.hitAt = map[uint64]float64{}
 	}
+	attacked := false
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if !unit.Hittable(*o, a.slot) {
@@ -52,6 +53,14 @@ func (a *点亮) Handle(ctx unit.Context, ev unit.Event) {
 			To:       o.ID,
 			Amount:   litDamage,
 			NoFreeze: true,
+		}
+		attacked = true
+	}
+	// 同拍刮到多个目标只响一次；冷却、场外和墙内均不空响。
+	if attacked {
+		ctx.Out <- unit.FX{
+			Name: "attack", Kind: KindLit, UnitID: ctx.ID,
+			X: a.cx, Y: a.cy, Slot: a.slot, Amount: s.Time,
 		}
 	}
 }

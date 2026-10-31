@@ -27,6 +27,7 @@ const (
 
 	arriveR     = 12.0
 	junctionCD  = 0.18
+	minRingStay = 2.0
 	offRailSlop = 3.0
 )
 
@@ -86,17 +87,18 @@ type 迷走 struct {
 	slot   int
 	x, y   float64
 
-	hasLastJ  bool
-	lastJX    float64
-	lastJY    float64
-	ignoreJ   float64
-	litID     uint64
-	ringIDs   []uint64
-	drifts    []ringDrift
-	mid       midPoint
-	lastT     float64
-	rng       *rand.Rand
-	flipUntil float64
+	hasLastJ    bool
+	lastJX      float64
+	lastJY      float64
+	ignoreJ     float64
+	ringReadyAt float64 // 当前环允许换环的最早时间
+	litID       uint64
+	ringIDs     []uint64
+	drifts      []ringDrift
+	mid         midPoint
+	lastT       float64
+	rng         *rand.Rand
+	flipUntil   float64
 }
 
 func (a *迷走) Handle(ctx unit.Context, ev unit.Event) {
@@ -112,9 +114,9 @@ func (a *迷走) Handle(ctx unit.Context, ev unit.Event) {
 			a.boot(ctx, e)
 			return
 		}
-		a.stepDrift(e)
+		carry := a.stepDrift(e)
 		a.syncHelpers(ctx, e)
-		a.rail(ctx, e)
+		a.rail(ctx, e, carry)
 	case unit.WallHit:
 		a.flipSpin(e.Time)
 		a.turnMid(e)
@@ -212,6 +214,7 @@ func (a *迷走) boot(ctx unit.Context, s unit.Sense) {
 	})
 
 	a.ring = nearestRing(m.rings, s.Self.X, s.Self.Y)
+	a.ringReadyAt = s.Time + minRingStay
 	if a.rng.Float64() < 0.5 {
 		a.spin = 1
 	} else {
@@ -225,17 +228,28 @@ func (a *迷走) boot(ctx unit.Context, s unit.Sense) {
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: cruise}
 }
 
-func (a *迷走) stepDrift(s unit.Sense) {
+// stepDrift 返回当前环圆心的位移，骑轨时须完整带走，避免它抵消沿环前进。
+func (a *迷走) stepDrift(s unit.Sense) pt {
 	dt := 0.0
 	if a.lastT > 0 {
 		dt = s.Time - a.lastT
 	}
 	a.lastT = s.Time
 	if dt <= 0 || dt > 0.5 {
-		return
+		return pt{}
+	}
+	riding := a.ring >= 0 && a.ring < len(a.maze.rings)
+	var before ring
+	if riding {
+		before = a.maze.rings[a.ring]
 	}
 	driftCenters(a.maze.rings, a.drifts, &a.mid, s.Field, a.rng, s.Time, dt)
 	a.maze.junc = fieldJunctions(s.Field, a.maze.rings)
+	if !riding {
+		return pt{}
+	}
+	after := a.maze.rings[a.ring]
+	return pt{x: after.x - before.x, y: after.y - before.y}
 }
 
 func (a *迷走) syncHelpers(ctx unit.Context, s unit.Sense) {
@@ -307,29 +321,38 @@ func (a *迷走) syncHelpers(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-func (a *迷走) rail(ctx unit.Context, s unit.Sense) {
+func (a *迷走) rail(ctx unit.Context, s unit.Sense, carry pt) {
 	if len(a.maze.rings) == 0 {
 		return
 	}
+	previousRing := a.ring
 	if a.spin == 0 {
 		a.spin = 1
 	}
+	// 先保留相对旧圆心已走过的进度，再随圆心平移到新位置。
+	x, y := s.Self.X+carry.x, s.Self.Y+carry.y
 	if a.ring < 0 || a.ring >= len(a.maze.rings) {
-		a.ring = nearestRing(a.maze.rings, s.Self.X, s.Self.Y)
+		a.ring = nearestRing(a.maze.rings, x, y)
+		a.ringReadyAt = s.Time + minRingStay
 	}
 	r := a.maze.rings[a.ring]
-	dist := math.Hypot(s.Self.X-r.x, s.Self.Y-r.y)
-	if math.Abs(dist-r.r) > offRailSlop || dist < 1e-6 {
-		a.ring = nearestRing(a.maze.rings, s.Self.X, s.Self.Y)
+	dist := math.Hypot(x-r.x, y-r.y)
+	// 最短停留期间，漂移或外力离轨也只纠正回当前环，不能借最近环绕过限制。
+	if s.Time+1e-9 >= a.ringReadyAt && (math.Abs(dist-r.r) > offRailSlop || dist < 1e-6) {
+		next := nearestRing(a.maze.rings, x, y)
+		if next != a.ring {
+			a.ring = next
+			a.ringReadyAt = s.Time + minRingStay
+		}
 		r = a.maze.rings[a.ring]
 	}
-	px, py, ang := pointOnRing(r, s.Self.X, s.Self.Y)
+	px, py, ang := pointOnRing(r, x, y)
 	if jx, jy, hopped := a.tryJunction(s, px, py); hopped {
 		px, py = jx, jy
 		r = a.maze.rings[a.ring]
 		px, py, ang = pointOnRing(r, px, py)
 	}
-	if math.Hypot(s.Self.X-px, s.Self.Y-py) > 0.5 {
+	if math.Hypot(s.Self.X-px, s.Self.Y-py) > 1e-6 {
 		ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: px, Y: py}
 	}
 	speed := math.Hypot(s.Self.VX, s.Self.VY)
@@ -341,10 +364,16 @@ func (a *迷走) rail(ctx unit.Context, s unit.Sense) {
 	}
 	vx, vy := tangentVel(r, ang, a.spin, speed)
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
+	if previousRing >= 0 && previousRing < len(a.maze.rings) && a.ring != previousRing {
+		ctx.Out <- unit.FX{
+			Name: "meander-switch", Kind: KindMeander, UnitID: ctx.ID,
+			X: px, Y: py, Slot: s.Self.Slot, Amount: s.Time,
+		}
+	}
 }
 
 func (a *迷走) tryJunction(s unit.Sense, x, y float64) (jx, jy float64, ok bool) {
-	if s.Time+1e-9 < a.ignoreJ {
+	if s.Time+1e-9 < a.ignoreJ || s.Time+1e-9 < a.ringReadyAt {
 		return 0, 0, false
 	}
 	best := -1
@@ -372,6 +401,9 @@ func (a *迷走) tryJunction(s unit.Sense, x, y float64) (jx, jy float64, ok boo
 		exits = []exit{{ring: a.ring, spin: -a.spin}}
 	}
 	pick := exits[a.rng.IntN(len(exits))]
+	if pick.ring != a.ring {
+		a.ringReadyAt = s.Time + minRingStay
+	}
 	a.ring = pick.ring
 	a.spin = pick.spin
 	a.hasLastJ = true

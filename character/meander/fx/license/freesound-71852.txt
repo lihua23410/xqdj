@@ -1,0 +1,9 @@
+Title: digital_whoosh_soft.wav
+Author: ludvique
+Source page: https://freesound.org/people/ludvique/sounds/71852/
+License shown on source page: Creative Commons 0 (CC0 1.0 Universal)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Verified on: 2026-10-31
+Source audio SHA-256: 8663fefd66229df03e73d837f4ba0f5c279de32df6ec520a81b256e8bbf63193
+Source page SHA-256: 68a800d6ee3b6e41b7f000b3b966062ca0a445b7a371a61e4624fa60924ced41
+Public HQ MP3 preview: https://cdn.freesound.org/previews/71/71852_1062668-hq.mp3

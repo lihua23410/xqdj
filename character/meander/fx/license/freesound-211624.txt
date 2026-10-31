@@ -1,0 +1,11 @@
+Title: Magic Wand Glitter
+Author: qubodup (Iwan Gabovitch)
+Source page: https://freesound.org/people/qubodup/sounds/211624/
+License shown on source page: Creative Commons 0 (CC0 1.0 Universal)
+Source-page declaration: CC0 since 2026-06-06.
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Underlying recordings: chimes bar (CC0) by urupin; Instrument_chimes_quick_soft.aif (CC0) by vrodge.
+Verified on: 2026-10-31
+Source audio SHA-256: 119d79d37ffc41f580e1b570e036229e550d4fd3abbe037b80c79d5bba3b0992
+Source page SHA-256: 694a41566f691904825dd00f8b6bb9d26df4fad8e26d68d0ec91addd10abe4a8
+Public HQ MP3 preview: https://cdn.freesound.org/previews/211/211624_71257-hq.mp3

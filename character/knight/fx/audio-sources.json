@@ -1,0 +1,23 @@
+[
+  {
+    "file": "blink.wav",
+    "title": "Swosh / Whoosh / Air Cut",
+    "author": "qubodup",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source_page": "https://freesound.org/people/qubodup/sounds/60030/",
+    "download_url": "https://cdn.freesound.org/previews/60/60030_71257-hq.mp3",
+    "source_format": "Public HQ MP3 preview of the original FLAC",
+    "source_sha256": "0301adf448c60b80c09b89df57510fd09949d6b15bb457ef7c9e70999b8a2ad0",
+    "source_page_sha256": "17728106ae65803d0dbe2fc54b19ac179cc9eeee7d44d343eb0805380a39ba69",
+    "output_sha256": "27b24d5cfabea4d10120dc67c7aa054c0e66332231a62a36d772b6e44ac46e48",
+    "processing": "atrim=start=0.025:duration=0.36,asetpts=PTS-STARTPTS,atempo=1.1,highpass=f=110,lowpass=f=4200:p=2,acompressor=threshold=0.12:ratio=2:attack=3:release=40,afade=t=in:d=0.006,afade=t=out:st=0.24:d=0.09,volume=4.60000dB",
+    "duration_seconds": 0.341905,
+    "integrated_lufs": -70.0,
+    "true_peak_dbfs": -3.1,
+    "playback_mode": 2,
+    "playback_priority": 0,
+    "playback_volume": 1,
+    "verified_on": "2026-10-31"
+  }
+]

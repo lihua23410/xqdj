@@ -1,5 +1,14 @@
 window.knightRing = window.knightRing || {};
 
+const knightBlinkBase = document.currentScript?.dataset.pack || "/ball/小骑士";
+const knightBlinkVoices = Array.from({ length: 3 }, () => {
+  const audio = new Audio(`${knightBlinkBase}/fx/blink.wav`);
+  audio.preload = "auto";
+  audio.load();
+  return arena.voice(audio, { mode: arena.SOUND_MODE.IMMUNE, priority: 0, volume: 1 });
+});
+let knightBlinkNext = 0;
+
 arena.registerShot("fire-ring", (fx) => {
   if (!fx || fx.unitId == null) return;
   window.knightRing[fx.unitId] = {
@@ -18,6 +27,13 @@ arena.registerShot("fire-ring", (fx) => {
 });
 
 arena.registerShot("blink", (fx, ctx) => {
+  if (!ctx.visualOnly) {
+    const voice = knightBlinkVoices[knightBlinkNext++ % knightBlinkVoices.length];
+    voice.stop();
+    voice.reset();
+    voice.play();
+  }
+  if (ctx.audioOnly) return;
   const { x, y, kind, scale } = ctx;
   const d = 36 * (scale || 1);
   const ghostAt = (px, py) => {

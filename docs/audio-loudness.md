@@ -33,6 +33,9 @@
 | `character/ranged/fx/shot.wav` | 原型机_远程发射 | -17.3 | -1.0 |
 | `character/tokei/fx/moment.wav` | 时计留下时刻 | -15.7 | -4.2 |
 | `character/tokei/fx/revive.wav` | 时计回拨复活 | -19.6 | -1.0 |
+| `character/meander/fx/attack.wav` | 迷走亮盘攻击（0.32 秒，降调与高频柔化） | -70.0 | -6.1 |
+| `character/meander/fx/switch.wav` | 迷走换环（低柔气流，0.82 秒） | -15.7 | -6.5 |
+| `character/knight/fx/blink.wav` | 小骑士瞬移冲锋破空（约 0.34 秒） | -70.0 | -3.1 |
 
 `default-impact.wav` 只有 0.16 秒，积分响度对这类极短点击没有意义；它已按真峰值
 限制到 -1.0 dBFS，听感上是一次短促碰撞。`character/melee/fx/attack.wav` 同样只有
@@ -41,6 +44,10 @@
 内燃机普通攻击在统一响度后单独削减了高频并压柔瞬态，播放音量为 0.5；这项例外不再拉回 -15.7 LUFS。滤镜见 `character/engine/fx/README.md`。
 
 原始文件备份在 `tmp/audio-volume-backup/`（已被 `.gitignore` 的 `/tmp/` 覆盖）。
+
+迷走的亮盘攻击使用 CC0 风铃素材；已降调并通过两级 3kHz 低通、18ms 淡入与轻压缩柔化高频和起音，真峰值降至 -6.1dBFS，不再抬回原音量。换环使用另取的 CC0 低柔气流素材，已降调并通过 1.8kHz 低通柔化高频；攻击为 mode 1 / priority 199，换环为 mode 2。80ms 内的密集攻击事件合并；换环不与攻击互相抢占。逐文件来源、滤镜、SHA-256 和测量见 `character/meander/fx/audio-sources.json`，许可说明见同目录 `README.md`。
+
+小骑士的瞬移冲锋破空声来自 CC0 竹棍破空录音，仅实际 `blink` 时播放一次，采用 mode 2。4.2kHz 低通与轻压缩柔化高频，约 0.34 秒短音按真峰值 -3.1dBFS 控制；逐文件来源、滤镜、SHA-256 和测量见 `character/knight/fx/audio-sources.json`，许可说明见同目录 `README.md`。
 
 回声的声呐提示与状态提示使用独立的分级音量：密集扫描、反弹、衰减音更轻，锁定和有效撞击更清楚；极短音按真峰值控制，不强行拉到 -15.7 LUFS。逐文件测量与处理参数见 `character/echo/fx/audio-sources.json`，播放约定与 CC0 来源见同目录 `README.md`。
 

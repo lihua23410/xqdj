@@ -1,0 +1,9 @@
+Title: Swosh / Whoosh / Air Cut
+Author: qubodup
+Source page: https://freesound.org/people/qubodup/sounds/60030/
+License shown on source page: Creative Commons 0 (CC0 1.0 Universal)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+Verified on: 2026-10-31
+Source audio SHA-256: 0301adf448c60b80c09b89df57510fd09949d6b15bb457ef7c9e70999b8a2ad0
+Source page SHA-256: 17728106ae65803d0dbe2fc54b19ac179cc9eeee7d44d343eb0805380a39ba69
+Public HQ MP3 preview: https://cdn.freesound.org/previews/60/60030_71257-hq.mp3
