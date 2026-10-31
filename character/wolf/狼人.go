@@ -22,22 +22,23 @@ const (
 	wolfVision = 9999.0
 
 	wolfDamage    = 8.0
-	wolfHitCD     = 0.1
+	wolfHitCD     = 0.3
 	wolfArcInner  = wolfRadius
 	wolfArcOuter  = wolfRadius + 6
 	wolfArcSpan   = 110.0
 	wolfBiteBase  = 6.0
-	wolfBiteCD    = 0.3
 	wolfBiteSpan  = 150.0
 	wolfBiteTime  = 6.0
-	wolfDashSpeed = 320.0
-	wolfDashLock  = 0.1
+	wolfDashSpeed = 640.0
+	wolfDashLock  = 0.3
 	wolfDashLen   = 180.0
 	wolfFanKeep   = 0.4
 
 	moonRadius = 34.0
 	phaseCount = 8
 	fullMoon   = 4 // 新月0 娥眉1 上弦2 盈凸3 满月4 亏凸5 下弦6 残月7
+	moonDry    = 10.0
+	howlHold   = 1.0
 
 	wolfColor = "#f4f1ea"
 	moonColor = "#e8d9a0"
@@ -80,7 +81,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  unit.Deg(wolfArcSpan),
 		ArcInner: wolfArcInner,
-		Look:     unit.Look{Color: wolfColor, Overlay: true},
+		Look:     unit.Look{Color: wolfColor, Overlay: true, FX: []string{"wolf-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &狼弧{slot: info.Slot, dmg: wolfDamage}
 	})
@@ -95,7 +96,7 @@ func init() {
 		Attach:   true,
 		ArcSpan:  unit.Deg(wolfBiteSpan),
 		ArcInner: wolfArcInner,
-		Look:     unit.Look{Color: "#ffd0c8", Overlay: true},
+		Look:     unit.Look{Color: "#ffd0c8", Overlay: true, FX: []string{"wolf-arc"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return newBiteArc(info)
 	})
@@ -124,7 +125,7 @@ func newBiteArc(info unit.SpawnInfo) *狼弧 {
 	return &狼弧{slot: info.Slot, dmg: takeBite(info.Stream)}
 }
 
-// biteNone 游荡积月相；biteLock 站定锁敌 0.1s；biteDash 沿锁定方向冲 180。
+// biteNone 游荡积月相；biteLock 站定锁敌 0.3s；biteDash 沿锁定方向冲 180。
 const (
 	biteNone = iota
 	biteLock
@@ -139,6 +140,8 @@ type 狼人 struct {
 	biteDmg    float64
 	biteHits   int
 	biteArc    bool
+	dashArmed  bool
+	biteCut    bool
 	lockUntil  float64
 	dashLeft   float64
 	dashX      float64
@@ -148,6 +151,9 @@ type 狼人 struct {
 	x, y       float64
 	insideMoon map[uint64]bool
 	booted     bool
+	phaseAt    float64
+	howling    bool
+	howlUntil  float64
 }
 
 type 月亮 struct{}
@@ -181,6 +187,7 @@ func (w *狼人) Handle(ctx unit.Context, ev unit.Event) {
 		w.noteBite(ctx.ID, e)
 		w.checkTouches(ctx, e)
 		w.tickBite(ctx, e)
+		w.tickHowl(ctx, e)
 		w.syncArc(ctx, e)
 	}
 }
@@ -212,6 +219,7 @@ func (w *狼人) bootMoon(ctx unit.Context, s unit.Sense) {
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
 	})
+	w.phaseAt = s.Time
 	w.emitPhase(ctx)
 }
 
@@ -251,10 +259,51 @@ func (w *狼人) onTouch(ctx unit.Context, s unit.Sense) {
 }
 
 func (w *狼人) advance(ctx unit.Context, s unit.Sense) {
+	wasHowl := w.howling
+	w.howling = false
 	w.phase = (w.phase + 1) % phaseCount
+	w.phaseAt = s.Time
 	w.emitPhase(ctx)
 	if w.phase == fullMoon {
 		w.startBite(ctx, s)
+		return
+	}
+	if wasHowl {
+		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
+	}
+}
+
+func (w *狼人) tickHowl(ctx unit.Context, s unit.Sense) {
+	if !w.booted || w.biting() {
+		return
+	}
+	if w.howling {
+		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+		if s.Time+1e-9 < w.howlUntil {
+			return
+		}
+		w.howling = false
+		w.advance(ctx, s)
+		if !w.biting() {
+			ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
+		}
+		return
+	}
+	if s.Time+1e-9 < w.phaseAt+moonDry {
+		return
+	}
+	w.howling = true
+	w.howlUntil = s.Time + howlHold
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+	ctx.Out <- unit.FX{
+		Name:   "howl",
+		Kind:   ctx.Kind,
+		UnitID: ctx.ID,
+		X:      s.Self.X,
+		Y:      s.Self.Y,
+		Slot:   s.Self.Slot,
 	}
 }
 
@@ -283,6 +332,7 @@ func (w *狼人) startBite(ctx unit.Context, s unit.Sense) {
 func (w *狼人) beginLock(ctx unit.Context, t float64) {
 	w.bite = biteLock
 	w.lockUntil = t + wolfDashLock
+	w.dropBiteArc(ctx)
 	w.holdPass(ctx, true)
 	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
@@ -309,6 +359,7 @@ func (w *狼人) endSegment(ctx unit.Context, t float64, wall bool, nx, ny float
 func (w *狼人) finishBite(ctx unit.Context, wall bool, nx, ny float64) {
 	w.bite = biteNone
 	w.phase = 0
+	w.dropBiteArc(ctx)
 	w.emitPhase(ctx)
 	w.holdPass(ctx, false)
 	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
@@ -340,21 +391,38 @@ func (w *狼人) landBite() {
 }
 
 func (w *狼人) noteBite(id uint64, s unit.Sense) {
-	if !w.biting() {
+	has := unit.HasOwned(s, id, KindWolfBite)
+	if w.biteCut {
+		if !has {
+			w.biteCut = false
+			w.biteArc = false
+		}
+		return
+	}
+	if w.bite != biteDash {
 		w.biteArc = false
 		return
 	}
-	has := unit.HasOwned(s, id, KindWolfBite)
 	if w.biteArc && !has {
 		w.landBite()
 	}
 	w.biteArc = has
 }
 
+// dropBiteArc 冲刺结束就把这一道撕咬弧摘掉。自己摘的不算咬中。
+func (w *狼人) dropBiteArc(ctx unit.Context) {
+	if w.dashArmed || w.biteArc {
+		w.biteCut = true
+	}
+	w.dashArmed = false
+	ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindWolfBite}
+}
+
 func (w *狼人) emitPhase(ctx unit.Context) {
 	ctx.Out <- unit.FX{
 		Name:   "phase",
 		Kind:   ctx.Kind,
+		UnitID: ctx.ID,
 		Slot:   w.slot,
 		Amount: float64(w.phase),
 		X:      0,
@@ -428,15 +496,33 @@ func (w *狼人) updateAim(s unit.Sense) {
 }
 
 func (w *狼人) syncArc(ctx unit.Context, s unit.Sense) {
-	want, drop, cd := KindWolfArc, KindWolfBite, wolfHitCD
+	if w.bite == biteDash {
+		if unit.HasOwned(s, ctx.ID, KindWolfArc) {
+			ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindWolfArc}
+		}
+		if w.dashArmed || unit.HasOwned(s, ctx.ID, KindWolfBite) {
+			w.dashArmed = true
+			return
+		}
+		w.spawnArc(ctx, s, KindWolfBite)
+		w.dashArmed = true
+		w.biteArc = true
+		return
+	}
+	if unit.HasOwned(s, ctx.ID, KindWolfBite) {
+		w.biteCut = true
+		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindWolfBite}
+	}
+	w.dashArmed = false
 	if w.biting() {
-		want, drop, cd = KindWolfBite, KindWolfArc, wolfBiteCD
+		if unit.HasOwned(s, ctx.ID, KindWolfArc) {
+			ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: KindWolfArc}
+		}
+		w.arc = unit.AttachState{}
+		return
 	}
-	if unit.HasOwned(s, ctx.ID, drop) {
-		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: drop}
-	}
-	if unit.RearmAttach(s, ctx.ID, want, cd, &w.arc) {
-		w.spawnArc(ctx, s, want)
+	if unit.RearmAttach(s, ctx.ID, KindWolfArc, wolfHitCD, &w.arc) {
+		w.spawnArc(ctx, s, KindWolfArc)
 	}
 }
 

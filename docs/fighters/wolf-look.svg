@@ -1,1 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="24" fill="#f4f1ea" stroke="#e8d9a0" stroke-width="2"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="-13 -17 128 128" role="img" aria-label="骨白圆球外长出尖耳、鬃毛和獠牙">
+  <defs><radialGradient id="pelt" cx="32%" cy="23%" r="80%"><stop stop-color="#fffdf4"/><stop offset=".36" stop-color="#f4f1ea"/><stop offset=".72" stop-color="#dce0dc"/><stop offset="1" stop-color="#929da4"/></radialGradient></defs>
+  <g fill="#d3d5d2" stroke="#f4f1ea" stroke-width=".8" stroke-linejoin="round">
+    <path d="M10 25-2 31 5 42-8 47 3 55-4 67 10 65 9 79 24 72 24 55Z"/>
+    <path d="m90 25 12 6-7 11 13 5-11 8 7 12-14-2 1 14-15-7V55Z"/>
+    <path d="m28 88 7 15 8-5 7 9 7-9 8 5 7-15Z"/>
+  </g>
+  <path fill="#e9e9e1" stroke="#c0c6c7" stroke-linejoin="round" d="M10 25 20-13 40 7Q22 12 10 25Zm80 0L80-13 60 7q18 5 30 18Z"/>
+  <path fill="#707a83" d="m17 15 5-17 10 11Zm66 0L78-2 68 9Z"/>
+  <path fill="none" stroke="#fff9e9" stroke-width="1.5" d="m13 20 7-30 15 16m52 14-7-30-15 16"/>
+  <circle cx="50" cy="50" r="50" fill="url(#pelt)"/>
+  <g fill="#fff9e9" stroke="#b5b7ae" stroke-width=".7">
+    <path d="M94 28Q104 31 108 49L99 40Z"/>
+    <path d="M94 72Q104 69 108 51L99 60Z"/>
+  </g>
+</svg>

@@ -1,0 +1,20 @@
+.ball.arc.look-wolf-arc {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+  opacity: 1;
+}
+.wolf-arc-art { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.wolf-arc-field { fill: #f4f1ea; fill-opacity: .09; }
+.wolf-claw { fill: #f4f1ea; }
+.wolf-claw-0 { opacity: .95; }
+.wolf-claw-1 { opacity: .75; }
+.wolf-claw-2 { opacity: .5; }
+.wolf-arc-glint { fill: none; stroke: #fff9e9; stroke-width: .7; opacity: calc(var(--wolf-snap, 0) * .8); }
+.wolf-bite-arc .wolf-arc-field { fill: #a63d3d; fill-opacity: .24; }
+.wolf-jaw-rim { fill: none; stroke: #ffd0c8; stroke-width: .75; }
+.wolf-gum { fill: none; stroke: #ba605a; stroke-width: 1.4; }
+.wolf-arc-fang { fill: #fff4e4; stroke: #ffd0c8; stroke-width: .15; transform: scale(calc(1 - var(--wolf-snap, 0) * .035)); }
+.wolf-jaw-edge { fill: none; stroke: #e99888; stroke-width: .5; opacity: .6; }

@@ -68,14 +68,20 @@
     });
   }
 
-  window.wolfMoonPhase = window.wolfMoonPhase || {};
-
-  arena.registerShot("phase", (fx, ctx) => {
-    window.wolfMoonPhase[fx.slot] = fx.amount | 0;
-    arena.spawnFx("fx-ring", ctx.x, ctx.y, fx.kind);
-  });
+  // 月相反馈由月亮皮肤在真实落点显示，不在场心额外画圈。
+  arena.registerShot("phase", () => {});
 
   window.wolfRaging = window.wolfRaging || {};
+
+  arena.registerShot("howl", (fx, ctx) => {
+    if (!arena || !arena.spawnFx) return;
+    const scale = ctx.scale || 1;
+    const lift = 18 * scale * 1.5 + 14;
+    const el = arena.spawnFx("fx-wolf-howl", ctx.x, ctx.y - lift, fx.kind);
+    if (!el) return;
+    el.style.color = "#fff";
+    el.textContent = "嗷唔";
+  });
 
   arena.registerShot("rage", (fx) => {
     if (fx.amount > 0) {

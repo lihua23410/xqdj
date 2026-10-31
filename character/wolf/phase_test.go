@@ -23,8 +23,8 @@ func TestBootSpawnsMoonAtCenter(t *testing.T) {
 		t.Fatalf("moon (%v,%v) not walkable", sp.X, sp.Y)
 	}
 	ph := mustPhase(t, cmds)
-	if ph.Amount != 0 {
-		t.Fatalf("initial phase=%v", ph.Amount)
+	if ph.Amount != 0 || ph.UnitID != 1 {
+		t.Fatalf("initial phase=%+v", ph)
 	}
 }
 
@@ -150,18 +150,18 @@ func TestFullMoonStartsLockThenDash(t *testing.T) {
 	}
 	_ = drain(out)
 
-	touch(w, ctx, 4.1, false)
+	touch(w, ctx, 4.3, false)
 	if w.bite != biteDash {
-		t.Fatalf("after 0.1s lock bite=%d want dash", w.bite)
+		t.Fatalf("after 0.3s lock bite=%d want dash", w.bite)
 	}
 	_ = drain(out)
 
-	w.Handle(ctx, unit.Sense{Time: 4.2, Self: selfAt(10, 0), Nearby: []unit.Snapshot{moon, enemy}})
+	w.Handle(ctx, unit.Sense{Time: 4.4, Self: selfAt(10, 0), Nearby: []unit.Snapshot{moon, enemy}})
 	if cmds := drain(out); hasPhase(cmds) {
 		t.Fatalf("dash should lock phase: %v", cmds)
 	}
 
-	w.Handle(ctx, unit.Sense{Time: 4.3, Self: selfAt(40, 0), Nearby: []unit.Snapshot{moon, enemy}})
+	w.Handle(ctx, unit.Sense{Time: 4.5, Self: selfAt(40, 0), Nearby: []unit.Snapshot{moon, enemy}})
 	cmds := drain(out)
 	vel := lastVel(cmds)
 	if vel == nil {
@@ -289,15 +289,15 @@ func TestWallEndsDashAndRelocks(t *testing.T) {
 	}
 
 	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 90, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
-	w.Handle(ctx, unit.Sense{Time: 3.05, Self: selfAt(200, 0), Nearby: []unit.Snapshot{enemy}})
+	w.Handle(ctx, unit.Sense{Time: 3.2, Self: selfAt(200, 0), Nearby: []unit.Snapshot{enemy}})
 	if w.bite != biteLock {
-		t.Fatalf("still locking at 0.05s bite=%d", w.bite)
+		t.Fatalf("still locking at 0.2s bite=%d", w.bite)
 	}
 	_ = drain(out)
 
-	w.Handle(ctx, unit.Sense{Time: 3.1, Self: selfAt(200, 0), Nearby: []unit.Snapshot{enemy}})
+	w.Handle(ctx, unit.Sense{Time: 3.3, Self: selfAt(200, 0), Nearby: []unit.Snapshot{enemy}})
 	if w.bite != biteDash {
-		t.Fatalf("dash after 0.1s lock bite=%d", w.bite)
+		t.Fatalf("dash after 0.3s lock bite=%d", w.bite)
 	}
 }
 
@@ -412,43 +412,55 @@ func TestFanKeepOnlyWhileDashing(t *testing.T) {
 }
 
 func TestBiteDamageStepsAndCarries(t *testing.T) {
-	out := make(chan unit.Cmd, 16)
+	out := make(chan unit.Cmd, 32)
 	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}.WithBirths()
-	w := dashingWolf()
+	w := bootedWolf()
+	w.phase = fullMoon
+	w.bite = biteLock
+	w.biteUntil = 100
+	w.lockUntil = 1
 	w.biteDmg = wolfBiteBase
 	hold := selfAt(0, 0)
 
-	w.Handle(ctx, unit.Sense{Time: 1, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})
-	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 1, Self: hold})
+	sp := lastBiteSpawn(drain(out))
+	if sp == nil || w.bite != biteDash {
+		t.Fatalf("dash should spawn one bite arc, bite=%d spawn=%v", w.bite, sp != nil)
+	}
+	if got := newBiteArc(unit.SpawnInfo{Stream: sp.Stream}); got.dmg != wolfBiteBase {
+		t.Fatalf("first arc dmg=%v", got.dmg)
+	}
+	w.Handle(ctx, unit.Sense{Time: 1.05, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})
+	if lastBiteSpawn(drain(out)) != nil {
+		t.Fatal("one dash should not spawn a second arc")
+	}
 	w.Handle(ctx, unit.Sense{Time: 1.1, Self: hold})
 	if w.biteHits != 1 || w.biteDmg != wolfBiteBase {
 		t.Fatalf("after first hit hits=%d dmg=%v", w.biteHits, w.biteDmg)
 	}
+	if lastBiteSpawn(drain(out)) != nil {
+		t.Fatal("a hit should not rearm during the same dash")
+	}
+	w.Handle(ctx, unit.Sense{Time: 1.2, Self: selfAt(wolfDashLen, 0)})
+	if w.bite != biteLock {
+		t.Fatalf("distance should end the dash bite=%d", w.bite)
+	}
 	_ = drain(out)
-	w.Handle(ctx, unit.Sense{Time: 1.4, Self: hold})
-	sp := lastBiteSpawn(drain(out))
+	w.Handle(ctx, unit.Sense{Time: 1.5, Self: hold})
+	sp = lastBiteSpawn(drain(out))
 	if sp == nil {
-		t.Fatal("second arc missing")
+		t.Fatal("next dash should spawn the second arc")
 	}
 	if got := newBiteArc(unit.SpawnInfo{Stream: sp.Stream}); got.dmg != wolfBiteBase {
 		t.Fatalf("second arc dmg=%v", got.dmg)
 	}
-
-	w.Handle(ctx, unit.Sense{Time: 1.5, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})
+	w.Handle(ctx, unit.Sense{Time: 1.55, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})
 	_ = drain(out)
 	w.Handle(ctx, unit.Sense{Time: 1.6, Self: hold})
 	if w.biteHits != 0 || w.biteDmg != wolfBiteBase+1 {
 		t.Fatalf("after second hit hits=%d dmg=%v", w.biteHits, w.biteDmg)
 	}
 	_ = drain(out)
-	w.Handle(ctx, unit.Sense{Time: 1.9, Self: hold})
-	sp = lastBiteSpawn(drain(out))
-	if sp == nil {
-		t.Fatal("third arc missing")
-	}
-	if got := newBiteArc(unit.SpawnInfo{Stream: sp.Stream}); got.dmg != wolfBiteBase+1 {
-		t.Fatalf("third arc dmg=%v", got.dmg)
-	}
 
 	w.biteUntil = 2
 	w.bite = biteLock
@@ -467,9 +479,12 @@ func TestBiteDamageStepsAndCarries(t *testing.T) {
 		t.Fatalf("next round bite=%d hits=%d dmg=%v", w.bite, w.biteHits, w.biteDmg)
 	}
 	_ = drain(out)
-	w.Handle(ctx, unit.Sense{Time: 3.05, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})
+	w.lockUntil = 3
+	w.Handle(ctx, unit.Sense{Time: 3.3, Self: hold})
 	_ = drain(out)
-	w.Handle(ctx, unit.Sense{Time: 3.06, Self: hold})
+	w.Handle(ctx, unit.Sense{Time: 3.35, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})
+	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 3.4, Self: hold})
 	if w.biteHits != 0 || w.biteDmg != wolfBiteBase+1 {
 		t.Fatalf("carried odd hit hits=%d dmg=%v", w.biteHits, w.biteDmg)
 	}
@@ -486,6 +501,92 @@ func TestMoonTouchIgnoredDuringBite(t *testing.T) {
 	}
 	if cmds := drain(out); hasPhase(cmds) {
 		t.Fatalf("bite should lock phase: %v", cmds)
+	}
+}
+
+func TestHowlAfterTenDrySeconds(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := bootedWolf()
+	w.phaseAt = 0
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+
+	w.Handle(ctx, unit.Sense{Time: 9.9, Self: selfAt(0, 0)})
+	if cmds := drain(out); howlOf(cmds) != nil || w.howling {
+		t.Fatal("未满 10 秒不该嗷唔")
+	}
+
+	w.Handle(ctx, unit.Sense{Time: 10, Self: selfAt(3, 4)})
+	cmds := drain(out)
+	fx := howlOf(cmds)
+	if fx == nil || fx.X != 3 || fx.Y != 4 {
+		t.Fatalf("howl=%+v", fx)
+	}
+	if w.phase != 0 || !w.howling {
+		t.Fatalf("phase=%d howling=%v", w.phase, w.howling)
+	}
+	if vel := lastVel(cmds); vel == nil || vel.VX != 0 || vel.VY != 0 {
+		t.Fatalf("howl should stand: %+v", vel)
+	}
+	if s := lastStand(cmds); s == nil || !s.Hold {
+		t.Fatalf("stand=%+v", s)
+	}
+
+	w.Handle(ctx, unit.Sense{Time: 10.9, Self: selfAt(3, 4)})
+	if cmds := drain(out); howlOf(cmds) != nil || w.phase != 0 {
+		t.Fatal("这一秒里不该再嚎，也不该提前加月相")
+	}
+
+	w.Handle(ctx, unit.Sense{Time: 11, Self: selfAt(3, 4)})
+	cmds = drain(out)
+	if w.howling || w.phase != 1 {
+		t.Fatalf("howling=%v phase=%d", w.howling, w.phase)
+	}
+	if howlOf(cmds) != nil {
+		t.Fatal("加月相那拍不该再飘一次")
+	}
+	if s := lastStand(cmds); s == nil || s.Hold {
+		t.Fatalf("howl should release stand: %+v", s)
+	}
+}
+
+func TestHowlIntoFullMoonStartsBite(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := bootedWolf()
+	w.phase = fullMoon - 1
+	w.phaseAt = 0
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	w.Handle(ctx, unit.Sense{Time: 10, Self: selfAt(0, 0)})
+	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 11, Self: selfAt(0, 0)})
+	if w.phase != fullMoon || w.bite != biteLock {
+		t.Fatalf("phase=%d bite=%d", w.phase, w.bite)
+	}
+}
+
+func TestTouchDuringHowlDoesNotDouble(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := bootedWolf()
+	w.phaseAt = 0
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	w.Handle(ctx, unit.Sense{Time: 10, Self: selfAt(80, 0)})
+	_ = drain(out)
+	touch(w, ctx, 10.2, true)
+	if w.howling || w.phase != 1 {
+		t.Fatalf("howling=%v phase=%d", w.howling, w.phase)
+	}
+}
+
+func TestNoHowlDuringBite(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := dashingWolf()
+	w.phaseAt = 0
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	w.Handle(ctx, unit.Sense{Time: 20, Self: selfAt(0, 0)})
+	if w.howling || w.phase != fullMoon {
+		t.Fatalf("howling=%v phase=%d", w.howling, w.phase)
+	}
+	if howlOf(drain(out)) != nil {
+		t.Fatal("撕咬里不该嗷唔")
 	}
 }
 
@@ -612,6 +713,27 @@ func lastBiteSpawn(cmds []unit.Cmd) *unit.Spawn {
 		}
 	}
 	return sp
+}
+
+func howlOf(cmds []unit.Cmd) *unit.FX {
+	for _, c := range cmds {
+		if fx, ok := c.(unit.FX); ok && fx.Name == "howl" {
+			cp := fx
+			return &cp
+		}
+	}
+	return nil
+}
+
+func lastStand(cmds []unit.Cmd) *unit.Stand {
+	var s *unit.Stand
+	for _, c := range cmds {
+		if v, ok := c.(unit.Stand); ok {
+			cp := v
+			s = &cp
+		}
+	}
+	return s
 }
 
 func lastPass(cmds []unit.Cmd) *unit.Pass {

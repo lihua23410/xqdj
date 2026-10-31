@@ -1,6 +1,52 @@
+.ball.look-wolf {
+  background: #f4f1ea;
+  overflow: visible;
+  box-shadow: 0 0 11px #f4f1ea45;
+}
+.wolf-body, .wolf-body > svg, .wolf-pelt { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.wolf-body, .wolf-body > svg { overflow: visible; }
+.wolf-mane { fill: #d3d5d2; stroke: #f4f1ea; stroke-width: .8; stroke-linejoin: round; }
+.wolf-ear-shell { fill: #e9e9e1; stroke: #c0c6c7; stroke-width: 1; stroke-linejoin: round; }
+.wolf-ear-fold { fill: #707a83; }
+.wolf-ear-edge { fill: none; stroke: #fff9e9; stroke-width: 1.5; stroke-linejoin: round; }
+.wolf-pelt {
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 32% 23%, #fffdf4 0%, #f4f1ea 36%, #dce0dc 69%, #929da4 100%);
+  box-shadow: inset 1px 1px 2px #fff9e9a0, inset -1px -2px 4px #626f7830;
+}
+.wolf-pelt::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: #fff9e9; opacity: var(--wolf-flash, 0); }
+.wolf-canine { fill: #fff9e9; stroke: #b5b7ae; stroke-width: .7; }
+.wolf-small-fang { fill: #fff9e9; opacity: 0; }
+.wolf-upper-jaw { transform: translateY(calc(var(--wolf-jaw, .4px) * -1)); }
+.wolf-lower-jaw { transform: translateY(var(--wolf-jaw, .4px)); }
+.wolf-jaws { opacity: .65; }
 .ball.look-wolf.wolf-rage {
-  box-shadow: 0 0 18px #fff, 0 0 42px #ff6a4a, 0 0 70px #ff2a2a;
-  filter: contrast(1.12) saturate(1.15);
+  box-shadow: 0 0 13px #ffd0c880, 0 0 29px rgb(235 81 63 / calc(var(--wolf-rage) * .55));
+}
+.wolf-rage .wolf-pelt {
+  background: radial-gradient(ellipse at 32% 23%, #fff9e9 0%, #f4e7df 39%, #d6b1aa 78%, #9f6968 100%);
+  box-shadow: inset 1px 1px 2px #fff9e9b0, inset -2px -2px 5px #803d4138;
+}
+.wolf-rage .wolf-mane { fill: #d6b4ab; stroke: #fff1e0; transform: scale(1.035); transform-origin: 50px 50px; }
+.wolf-rage .wolf-ear-fold { fill: #994b4e; }
+.wolf-rage .wolf-ear-edge { stroke: #ffd0c8; }
+.wolf-rage .wolf-jaws, .wolf-rage .wolf-small-fang { opacity: 1; }
+.wolf-rage .wolf-canine { stroke: #c87d70; stroke-width: 1; }
+
+.fx-wolf-howl {
+  position: absolute;
+  font: 700 15px/1.2 sans-serif;
+  color: #fff !important;
+  text-shadow: 0 1px 2px #000, 0 0 6px #000;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: wolf-howl 1.1s ease-out forwards;
+}
+
+@keyframes wolf-howl {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.85); }
+  100% { opacity: 0; transform: translate(-50%, -85%) scale(1.05); }
 }
 
 .wolf-cutin {
