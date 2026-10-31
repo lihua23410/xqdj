@@ -1466,11 +1466,13 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 		credit:    m.creditOfLocked(c.From),
 	}
 	m.noteOfferLocked(c)
+	var arc float64
 	if from := m.units[c.From]; from != nil {
 		off := m.pendingDmg[token]
 		off.atkSpeed = from.v.len()
 		off.atkImpulse = impulseSpeeds(from)
 		m.pendingDmg[token] = off
+		arc = from.arcSpan
 	}
 	{
 		off := m.pendingDmg[token]
@@ -1479,11 +1481,12 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 		m.pendingDmg[token] = off
 	}
 	m.send(u, unitpkg.IncomingDamage{
-		Token:  token,
-		From:   c.From,
-		Amount: c.Amount,
-		Time:   m.time,
-		Speed:  u.v.len(),
+		Token:   token,
+		From:    c.From,
+		Amount:  c.Amount,
+		Time:    m.time,
+		Speed:   u.v.len(),
+		ArcSpan: arc,
 	})
 }
 

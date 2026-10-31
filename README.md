@@ -361,6 +361,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
   - `unit.ConfirmHit(ctx, d)` / `unit.BlockHit(ctx, d)`：自己拆 `IncomingDamage` 时用。
   - 减伤：自己 `ConfirmDamage{Token, UnitID: ctx.ID, Amount: 更小的值}`。`Amount` 只能比报价更小，不能抬高。
   - `IncomingDamage.Speed` 是挨打当时受害者的速率（近战减伤、R.缪的闪避都用这个）。
+  - `IncomingDamage.ArcSpan` 是报价那一瞬间来源的扇环张角，0 表示不是扇环。`d.FromFan()` 判断是不是扇环；`d.KeepFan(keep)` 在是扇环时把数额乘 `keep`（夹在 0 到 1），子弹、本体相撞和场地伤原额返回。减完仍自己发 `ConfirmDamage`。
 - `Sense` 每帧都有（hit-stop / `Stun` 期间不发）：`Time`、`Self`（自己的快照）、`Nearby`（视野内；自己的随从始终在内）、`Field`（当前场地）。快照带 `AimPriority`。**索敌**用 `unit.Seek(s)`（默认只挑敌方、瞄准优先度 1–255 越小越先、相同则当下最近；带挡视线标签的墙和单位压住球心连线段的目标跳过，见 CONTEXT.md「挡视线」；场地预放墙不带标签）；额外过滤用 `unit.SeekIf`（同样查视线）；自己扫 Nearby 时用 `unit.Aimable`（不查视线，自己扫的照常隔墙进行）。不要写死 `RoleFighter`。有锁的技能自己决定何时重锁，引擎不另做全局锁。同槽可瞄准（如缪锁己方缪）自己写，不走 `Seek`。**出伤**仍用 `unit.Hittable` / `unit.EnemyTarget`（敌方战斗机或敌方活随从），和可瞄准分开：瞄准优先度 0 仍可能被扫到、撞到。改优先度用 `unit.SetAim(ctx, id, v)`（会填 `From: ctx.ID`），或自己发 `SetAimPriority`。雷达扫射、镰刀刮、墙刮不挑人，只看出伤。朝一个点走、直线被 `Walls` 挡住时用 `unit.Detour`：改朝第一截挡路墙离目标更近的端点外侧，并记住这一侧 0.3 秒；返回的是点，角色自己 `SetVelocity`。每截墙都算，不看挡视线。场边不绕。
 - `Collision` 只在相撞时来。`NX,NY` 是从 `Other` 指向自己的法线。`Other` 是对方快照。贴身出伤不要在战斗机的 `Collision` 里 `Damage`，挂 `Attach` 扇环弹，弹自己打人。可用 `unit.RearmAttach` / `unit.SpawnAttach`。
 - `WallHit` 撞场边、硬墙、胶囊墙时来，`Kind` 区分三者（`unit.WallEdge` / `WallHard` / `WallCapsule`）。`PassWalls` / `Attach` / `Shell` 的单位不会撞墙。撞墙那一帧会清掉带 `OnWall` 的瞬时 FS。
@@ -383,7 +384,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 | `SetArcSpan` | 改自己这发 `Attach` 扇环弹的张角（弧度）。近战用这个跟速度走 |
 | `SetRadius` | 改自己的碰撞半径。≤0 被丢掉。花冠长大用这个；快照 `radius` 会跟着变，前端按这个画 |
 | `SetHP` | 直接设置当前 / 最大血量，不发治疗特效，置 0 也不会移除单位。活随从动态初始化血量用 |
-| `Damage` | 向战斗机或活随从报价伤害。引擎发 `IncomingDamage`，必须 `ConfirmDamage` 才会扣血。带 `MarkKind` 时，真正掉血那一拍才叠状态；格挡 / 吸收不叠。`MarkIcon` 用绝对路径，如 `/ball/地慧星/status/jianhen.png`。确认时 `NoFreeze` 为真，这记不停帧 |
+| `Damage` | 向战斗机或活随从报价伤害。引擎发 `IncomingDamage`，必须 `ConfirmDamage` 才会扣血。报价带上来源当时的 `ArcSpan`（扇环张角，0 表示不是扇环），用 `FromFan` / `KeepFan` 减扇环伤。带 `MarkKind` 时，真正掉血那一拍才叠状态；格挡 / 吸收不叠。`MarkIcon` 用绝对路径，如 `/ball/地慧星/status/jianhen.png`。确认时 `NoFreeze` 为真，这记不停帧 |
 | `ConfirmDamage` | 确认一笔报价；只有 `0 < Amount < 原值` 才生效，`Amount <= 0` 视为不改（取消用 `BlockDamage`） |
 | `BlockDamage` | 取消一笔报价 |
 | `Spawn` | 生成非 fighter 单位。`Fighter: true` 的 Kind 会被引擎丢掉。填 `OwnerID: ctx.ID`、`Slot: Self.Slot`，死时随从一起消失 |

@@ -210,12 +210,30 @@ type Kill struct {
 }
 
 // IncomingDamage 引擎准备扣血。战斗机必须回 ConfirmDamage 才会真正掉 HP；回 BlockDamage 则整包取消。
+// ArcSpan 是报价那一瞬间来源单位的扇环张角；0 表示来源不是扇环。任何战斗机都能读，不专属于某一套。
 type IncomingDamage struct {
-	Token  uint64
-	From   uint64
-	Amount float64
-	Time   float64
-	Speed  float64
+	Token   uint64
+	From    uint64
+	Amount  float64
+	Time    float64
+	Speed   float64
+	ArcSpan float64
+}
+
+// FromFan 这记伤害的来源是扇环。飞出去的弹、本体相撞、场地伤都不是。
+func (d IncomingDamage) FromFan() bool { return d.ArcSpan != 0 }
+
+// KeepFan 来源是扇环时保留 keep 比例，keep 夹在 0 到 1。其余来源原额返回。
+func (d IncomingDamage) KeepFan(keep float64) float64 {
+	if !d.FromFan() {
+		return d.Amount
+	}
+	if keep < 0 {
+		keep = 0
+	} else if keep > 1 {
+		keep = 1
+	}
+	return d.Amount * keep
 }
 
 type ConfirmDamage struct {

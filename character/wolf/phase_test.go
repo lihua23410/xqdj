@@ -121,7 +121,7 @@ func TestFighterAndMinionEachCount(t *testing.T) {
 }
 
 func TestCloneDoesNotAdvancePhase(t *testing.T) {
-	out := make(chan unit.Cmd, 8)
+	out := make(chan unit.Cmd, 32)
 	w := bootedWolf()
 	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
 	clone := unit.Snapshot{ID: 3, Role: unit.RoleClone, Slot: 1, X: 8, Y: 0, Radius: 18}
@@ -145,23 +145,23 @@ func TestFullMoonStartsLockThenDash(t *testing.T) {
 		_ = drain(out)
 	}
 	touch(w, ctx, 4, true)
-	if w.phase != fullMoon || w.bite != biteLock || w.dashesLeft != wolfDashCount {
-		t.Fatalf("phase=%d bite=%d left=%d", w.phase, w.bite, w.dashesLeft)
+	if w.phase != fullMoon || w.bite != biteLock || abs(w.biteUntil-10) > 1e-9 {
+		t.Fatalf("phase=%d bite=%d until=%v", w.phase, w.bite, w.biteUntil)
 	}
 	_ = drain(out)
 
-	touch(w, ctx, 4.5, false)
+	touch(w, ctx, 4.1, false)
 	if w.bite != biteDash {
-		t.Fatalf("after lock window bite=%d want dash", w.bite)
+		t.Fatalf("after 0.1s lock bite=%d want dash", w.bite)
 	}
 	_ = drain(out)
 
-	w.Handle(ctx, unit.Sense{Time: 4.6, Self: selfAt(10, 0), Nearby: []unit.Snapshot{moon, enemy}})
+	w.Handle(ctx, unit.Sense{Time: 4.2, Self: selfAt(10, 0), Nearby: []unit.Snapshot{moon, enemy}})
 	if cmds := drain(out); hasPhase(cmds) {
 		t.Fatalf("dash should lock phase: %v", cmds)
 	}
 
-	w.Handle(ctx, unit.Sense{Time: 4.7, Self: selfAt(40, 0), Nearby: []unit.Snapshot{moon, enemy}})
+	w.Handle(ctx, unit.Sense{Time: 4.3, Self: selfAt(40, 0), Nearby: []unit.Snapshot{moon, enemy}})
 	cmds := drain(out)
 	vel := lastVel(cmds)
 	if vel == nil {
@@ -180,7 +180,7 @@ func TestLockTracksThenDashFreezesAim(t *testing.T) {
 	w := bootedWolf()
 	w.phase = fullMoon
 	w.bite = biteLock
-	w.dashesLeft = wolfDashCount
+	w.biteUntil = 100
 	w.lockUntil = 1.1
 	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
 
@@ -228,7 +228,7 @@ func TestLockTracksThenDashFreezesAim(t *testing.T) {
 }
 
 func TestDashIgnoresPersonKeepsGoing(t *testing.T) {
-	out := make(chan unit.Cmd, 8)
+	out := make(chan unit.Cmd, 32)
 	w := dashingWolf()
 	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
 	w.Handle(ctx, unit.Collision{
@@ -236,11 +236,29 @@ func TestDashIgnoresPersonKeepsGoing(t *testing.T) {
 		Other: unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 40, Y: 0, Radius: 18},
 		NX:    1,
 	})
-	if w.bite != biteDash || w.dashesLeft != wolfDashCount {
-		t.Fatalf("person should not end dash bite=%d left=%d", w.bite, w.dashesLeft)
+	if w.bite != biteDash {
+		t.Fatalf("person should not end dash bite=%d", w.bite)
 	}
 	if cmds := drain(out); len(cmds) != 0 {
 		t.Fatalf("collision should be ignored: %v", cmds)
+	}
+}
+
+func TestNoTargetDashesLastAim(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := bootedWolf()
+	w.bite = biteLock
+	w.biteUntil = 100
+	w.lockUntil = 1
+	w.aimX = 1
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	w.Handle(ctx, unit.Sense{Time: 1, Self: selfAt(0, 0)})
+	if w.bite != biteDash || w.aimX != 1 {
+		t.Fatalf("bite=%d aimX=%v", w.bite, w.aimX)
+	}
+	vel := lastVel(drain(out))
+	if vel == nil || vel.VX <= 0 {
+		t.Fatalf("should dash last aim: %+v", vel)
 	}
 }
 
@@ -250,49 +268,106 @@ func TestWallEndsDashAndRelocks(t *testing.T) {
 	w.x, w.y = 200, 0
 	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
 	w.Handle(ctx, unit.WallHit{Time: 3, NX: 1, NY: 0})
-	if w.bite != biteLock || w.dashesLeft != wolfDashCount-1 {
-		t.Fatalf("bite=%d left=%d", w.bite, w.dashesLeft)
+	if w.bite != biteLock {
+		t.Fatalf("bite=%d", w.bite)
 	}
 	cmds := drain(out)
-	if p := lastPass(cmds); p == nil || p.Hold {
-		t.Fatalf("wall should drop pass: %+v", p)
+	if p := lastPass(cmds); p == nil || !p.Hold {
+		t.Fatalf("wall should keep pass for the rest of the bite: %+v", p)
 	}
 	vel := lastVel(cmds)
 	if vel == nil || vel.VX != 0 || vel.VY != 0 {
 		t.Fatalf("wall should stop for next lock: %+v", vel)
 	}
-	if abs(w.lockUntil-(3+wolfDashSeek)) > 1e-9 {
-		t.Fatalf("relock until=%v want %v", w.lockUntil, 3+wolfDashSeek)
+	if abs(w.lockUntil-(3+wolfDashLock)) > 1e-9 {
+		t.Fatalf("relock until=%v want %v", w.lockUntil, 3+wolfDashLock)
 	}
 
 	w.Handle(ctx, unit.WallHit{Time: 3, NX: 0, NY: 1})
-	if w.dashesLeft != wolfDashCount-1 {
-		t.Fatalf("second wall while locking should not count: left=%d", w.dashesLeft)
+	if w.bite != biteLock {
+		t.Fatalf("second wall while locking should not dash: bite=%d", w.bite)
 	}
 
 	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 90, Y: 0, Radius: 18, AimPriority: unit.DefaultFighterAim}
-	w.Handle(ctx, unit.Sense{Time: 3.3, Self: selfAt(200, 0), Nearby: []unit.Snapshot{enemy}})
+	w.Handle(ctx, unit.Sense{Time: 3.05, Self: selfAt(200, 0), Nearby: []unit.Snapshot{enemy}})
 	if w.bite != biteLock {
-		t.Fatalf("still seeking at 0.3s bite=%d", w.bite)
+		t.Fatalf("still locking at 0.05s bite=%d", w.bite)
 	}
 	_ = drain(out)
 
-	w.Handle(ctx, unit.Sense{Time: 3.35, Self: selfAt(200, 0), Nearby: []unit.Snapshot{enemy}})
+	w.Handle(ctx, unit.Sense{Time: 3.1, Self: selfAt(200, 0), Nearby: []unit.Snapshot{enemy}})
 	if w.bite != biteDash {
-		t.Fatalf("dash after 0.35s seek bite=%d", w.bite)
+		t.Fatalf("dash after 0.1s lock bite=%d", w.bite)
 	}
 }
 
-func TestFifthWallResetsNewMoon(t *testing.T) {
+func TestDistanceEndsDashAndRelocks(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := dashingWolf()
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	w.Handle(ctx, unit.Sense{Time: 2, Self: selfAt(wolfDashLen, 0)})
+	if w.bite != biteLock {
+		t.Fatalf("full distance should relock bite=%d", w.bite)
+	}
+	if w.phase != fullMoon {
+		t.Fatalf("phase=%d", w.phase)
+	}
+}
+
+func TestClockDuringLockEndsBite(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := bootedWolf()
+	w.bite = biteLock
+	w.phase = fullMoon
+	w.biteUntil = 1
+	w.lockUntil = 5
+	w.aimX = 1
+	w.biteDmg = 9
+	w.biteHits = 1
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	w.Handle(ctx, unit.Sense{Time: 1, Self: selfAt(0, 0)})
+	if w.biting() || w.phase != 0 {
+		t.Fatalf("bite=%d phase=%d", w.bite, w.phase)
+	}
+	if w.biteDmg != 9 || w.biteHits != 1 {
+		t.Fatalf("dmg=%v hits=%d", w.biteDmg, w.biteHits)
+	}
+	vel := lastVel(drain(out))
+	if vel == nil || vel.VX <= 0 {
+		t.Fatalf("cruise along aim: %+v", vel)
+	}
+}
+
+func TestClockDuringDashFinishesSegment(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := dashingWolf()
+	w.biteUntil = 1
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	w.Handle(ctx, unit.Sense{Time: 2, Self: selfAt(40, 0)})
+	if w.bite != biteDash || w.phase != fullMoon {
+		t.Fatalf("tail should keep dashing bite=%d phase=%d", w.bite, w.phase)
+	}
+	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 2.1, Self: selfAt(40+wolfDashLen, 0)})
+	if w.biting() || w.phase != 0 {
+		t.Fatalf("after the tail bite=%d phase=%d", w.bite, w.phase)
+	}
+	vel := lastVel(drain(out))
+	if vel == nil || vel.VX <= 0 {
+		t.Fatalf("distance end cruises along aim: %+v", vel)
+	}
+}
+
+func TestWallAfterClockResetsNewMoon(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	w := dashingWolf()
-	w.dashesLeft = 1
+	w.biteUntil = 1
 	w.phase = fullMoon
 	w.slot = 0
 	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
 	w.Handle(ctx, unit.WallHit{Time: 8, NX: 1, NY: 0})
-	if w.biting() || w.phase != 0 || w.dashesLeft != 0 {
-		t.Fatalf("after fifth wall bite=%d phase=%d left=%d", w.bite, w.phase, w.dashesLeft)
+	if w.biting() || w.phase != 0 {
+		t.Fatalf("after wall bite=%d phase=%d", w.bite, w.phase)
 	}
 	cmds := drain(out)
 	if got := lastPhase(cmds); got != 0 {
@@ -303,7 +378,7 @@ func TestFifthWallResetsNewMoon(t *testing.T) {
 	}
 	vel := lastVel(cmds)
 	if vel == nil {
-		t.Fatal("fifth wall should return to cruise speed")
+		t.Fatal("wall should return to cruise speed")
 	}
 	if got := math.Hypot(vel.VX, vel.VY); abs(got-wolfSpeed) > 1e-6 {
 		t.Fatalf("after bite speed=%v want cruise %v", got, wolfSpeed)
@@ -317,8 +392,91 @@ func TestFifthWallResetsNewMoon(t *testing.T) {
 	}
 }
 
+func TestFanKeepOnlyWhileDashing(t *testing.T) {
+	out := make(chan unit.Cmd, 4)
+	w := dashingWolf()
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	w.Handle(ctx, unit.IncomingDamage{Token: 1, Amount: 10, ArcSpan: 1})
+	if got := lastConfirm(drain(out)); got == nil || abs(got.Amount-4) > 1e-9 {
+		t.Fatalf("dash fan=%+v", got)
+	}
+	w.Handle(ctx, unit.IncomingDamage{Token: 2, Amount: 10})
+	if got := lastConfirm(drain(out)); got == nil || got.Amount != 10 {
+		t.Fatalf("dash bullet=%+v", got)
+	}
+	w.bite = biteLock
+	w.Handle(ctx, unit.IncomingDamage{Token: 3, Amount: 10, ArcSpan: 1})
+	if got := lastConfirm(drain(out)); got == nil || got.Amount != 10 {
+		t.Fatalf("lock fan=%+v", got)
+	}
+}
+
+func TestBiteDamageStepsAndCarries(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}.WithBirths()
+	w := dashingWolf()
+	w.biteDmg = wolfBiteBase
+	hold := selfAt(0, 0)
+
+	w.Handle(ctx, unit.Sense{Time: 1, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})
+	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 1.1, Self: hold})
+	if w.biteHits != 1 || w.biteDmg != wolfBiteBase {
+		t.Fatalf("after first hit hits=%d dmg=%v", w.biteHits, w.biteDmg)
+	}
+	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 1.4, Self: hold})
+	sp := lastBiteSpawn(drain(out))
+	if sp == nil {
+		t.Fatal("second arc missing")
+	}
+	if got := newBiteArc(unit.SpawnInfo{Stream: sp.Stream}); got.dmg != wolfBiteBase {
+		t.Fatalf("second arc dmg=%v", got.dmg)
+	}
+
+	w.Handle(ctx, unit.Sense{Time: 1.5, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})
+	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 1.6, Self: hold})
+	if w.biteHits != 0 || w.biteDmg != wolfBiteBase+1 {
+		t.Fatalf("after second hit hits=%d dmg=%v", w.biteHits, w.biteDmg)
+	}
+	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 1.9, Self: hold})
+	sp = lastBiteSpawn(drain(out))
+	if sp == nil {
+		t.Fatal("third arc missing")
+	}
+	if got := newBiteArc(unit.SpawnInfo{Stream: sp.Stream}); got.dmg != wolfBiteBase+1 {
+		t.Fatalf("third arc dmg=%v", got.dmg)
+	}
+
+	w.biteUntil = 2
+	w.bite = biteLock
+	w.lockUntil = 9
+	w.Handle(ctx, unit.Sense{Time: 2, Self: hold})
+	if w.biting() || w.biteDmg != wolfBiteBase+1 || w.biteHits != 0 {
+		t.Fatalf("finish dmg=%v hits=%d biting=%v", w.biteDmg, w.biteHits, w.biting())
+	}
+	_ = drain(out)
+
+	w.biteHits = 1
+	w.biteDmg = wolfBiteBase
+	w.phase = fullMoon - 1
+	touch(w, ctx, 3, true)
+	if w.bite != biteLock || w.biteHits != 1 || w.biteDmg != wolfBiteBase {
+		t.Fatalf("next round bite=%d hits=%d dmg=%v", w.bite, w.biteHits, w.biteDmg)
+	}
+	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 3.05, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})
+	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 3.06, Self: hold})
+	if w.biteHits != 0 || w.biteDmg != wolfBiteBase+1 {
+		t.Fatalf("carried odd hit hits=%d dmg=%v", w.biteHits, w.biteDmg)
+	}
+}
+
 func TestMoonTouchIgnoredDuringBite(t *testing.T) {
-	out := make(chan unit.Cmd, 8)
+	out := make(chan unit.Cmd, 32)
 	w := dashingWolf()
 	w.phase = fullMoon
 	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
@@ -336,7 +494,14 @@ func bootedWolf() *狼人 {
 }
 
 func dashingWolf() *狼人 {
-	return &狼人{booted: true, bite: biteDash, dashesLeft: wolfDashCount, aimX: 1, phase: fullMoon}
+	return &狼人{
+		booted: true, bite: biteDash, aimX: 1, phase: fullMoon,
+		biteUntil: 100, dashLeft: wolfDashLen,
+	}
+}
+
+func biteArcSnap() unit.Snapshot {
+	return unit.Snapshot{ID: 7, Kind: KindWolfBite, OwnerID: 1, Role: unit.RoleProjectile}
 }
 
 func selfAt(x, y float64) unit.Snapshot {
@@ -425,6 +590,28 @@ func lastVel(cmds []unit.Cmd) *unit.SetVelocity {
 		}
 	}
 	return vel
+}
+
+func lastConfirm(cmds []unit.Cmd) *unit.ConfirmDamage {
+	var d *unit.ConfirmDamage
+	for _, c := range cmds {
+		if v, ok := c.(unit.ConfirmDamage); ok {
+			cp := v
+			d = &cp
+		}
+	}
+	return d
+}
+
+func lastBiteSpawn(cmds []unit.Cmd) *unit.Spawn {
+	var sp *unit.Spawn
+	for _, c := range cmds {
+		if s, ok := c.(unit.Spawn); ok && s.Kind == KindWolfBite {
+			cp := s
+			sp = &cp
+		}
+	}
+	return sp
 }
 
 func lastPass(cmds []unit.Cmd) *unit.Pass {

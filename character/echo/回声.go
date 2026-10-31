@@ -120,7 +120,7 @@ func markStacks(o unit.Snapshot, kind string) int {
 	return 0
 }
 
-// 回声本体：平时扫，扫满 10 层就换成穿人冲墙（狼人式，不限次数）。
+// 回声本体：平时扫，扫满 10 层就换成穿人冲墙，窗口内不限次数。
 type 回声 struct {
 	slot      int
 	lastTime  float64

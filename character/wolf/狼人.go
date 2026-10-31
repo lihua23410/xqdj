@@ -3,6 +3,7 @@ package 狼人
 import (
 	"embed"
 	"math"
+	"sync"
 	"xqdj/internal/unit"
 )
 
@@ -25,13 +26,14 @@ const (
 	wolfArcInner  = wolfRadius
 	wolfArcOuter  = wolfRadius + 6
 	wolfArcSpan   = 110.0
-	wolfBiteDmg   = 13.0
+	wolfBiteBase  = 6.0
 	wolfBiteCD    = 0.3
 	wolfBiteSpan  = 150.0
-	wolfDashSpeed = 640.0
+	wolfBiteTime  = 6.0
+	wolfDashSpeed = 320.0
 	wolfDashLock  = 0.1
-	wolfDashSeek  = 0.35
-	wolfDashCount = 5
+	wolfDashLen   = 180.0
+	wolfFanKeep   = 0.4
 
 	moonRadius = 34.0
 	phaseCount = 8
@@ -95,11 +97,34 @@ func init() {
 		ArcInner: wolfArcInner,
 		Look:     unit.Look{Color: "#ffd0c8", Overlay: true},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &狼弧{slot: info.Slot, dmg: wolfBiteDmg}
+		return newBiteArc(info)
 	})
 }
 
-// biteNone 游荡积月相；biteLock 站定锁敌（开撕咬 0.1s，撞墙后 0.35s）；biteDash 沿锁定方向冲到墙。
+// bitePending 把这一发撕咬弧的伤害交到它的出生流号上。工厂取走。不进引擎。
+var bitePending sync.Map
+
+func putBite(stream uint64, dmg float64) {
+	bitePending.Store(stream, dmg)
+}
+
+func takeBite(stream uint64) float64 {
+	v, ok := bitePending.LoadAndDelete(stream)
+	if !ok {
+		return wolfBiteBase
+	}
+	dmg, _ := v.(float64)
+	if dmg <= 0 {
+		return wolfBiteBase
+	}
+	return dmg
+}
+
+func newBiteArc(info unit.SpawnInfo) *狼弧 {
+	return &狼弧{slot: info.Slot, dmg: takeBite(info.Stream)}
+}
+
+// biteNone 游荡积月相；biteLock 站定锁敌 0.1s；biteDash 沿锁定方向冲 180。
 const (
 	biteNone = iota
 	biteLock
@@ -110,8 +135,14 @@ type 狼人 struct {
 	arc        unit.AttachState
 	phase      int
 	bite       int
-	dashesLeft int
+	biteUntil  float64
+	biteDmg    float64
+	biteHits   int
+	biteArc    bool
 	lockUntil  float64
+	dashLeft   float64
+	dashX      float64
+	dashY      float64
 	aimX, aimY float64
 	slot       int
 	x, y       float64
@@ -138,20 +169,28 @@ func (a *狼弧) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 func (w *狼人) Handle(ctx unit.Context, ev unit.Event) {
-	if unit.AcceptHit(ctx, ev) {
-		return
-	}
 	switch e := ev.(type) {
+	case unit.IncomingDamage:
+		w.onHit(ctx, e)
 	case unit.WallHit:
 		w.onWall(ctx, e)
 	case unit.Sense:
 		w.slot = e.Self.Slot
 		w.x, w.y = e.Self.X, e.Self.Y
 		w.bootMoon(ctx, e)
+		w.noteBite(ctx.ID, e)
 		w.checkTouches(ctx, e)
 		w.tickBite(ctx, e)
 		w.syncArc(ctx, e)
 	}
+}
+
+func (w *狼人) onHit(ctx unit.Context, d unit.IncomingDamage) {
+	amt := d.Amount
+	if w.bite == biteDash {
+		amt = d.KeepFan(wolfFanKeep)
+	}
+	ctx.Out <- unit.ConfirmDamage{Token: d.Token, UnitID: ctx.ID, Amount: amt}
 }
 
 func (w *狼人) biting() bool { return w.bite != biteNone }
@@ -220,10 +259,14 @@ func (w *狼人) advance(ctx unit.Context, s unit.Sense) {
 }
 
 func (w *狼人) startBite(ctx unit.Context, s unit.Sense) {
+	if w.biteDmg == 0 {
+		w.biteDmg = wolfBiteBase
+	}
 	w.bite = biteLock
-	w.dashesLeft = wolfDashCount
+	w.biteUntil = s.Time + wolfBiteTime
 	w.lockUntil = s.Time + wolfDashLock
 	w.updateAim(s)
+	w.holdPass(ctx, true)
 	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 	ctx.Out <- unit.FX{
@@ -237,34 +280,42 @@ func (w *狼人) startBite(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-func (w *狼人) beginLock(t float64) {
+func (w *狼人) beginLock(ctx unit.Context, t float64) {
 	w.bite = biteLock
-	w.lockUntil = t + wolfDashSeek
+	w.lockUntil = t + wolfDashLock
+	w.holdPass(ctx, true)
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 }
 
 func (w *狼人) onWall(ctx unit.Context, e unit.WallHit) {
 	if w.bite != biteDash {
 		return
 	}
-	w.dashesLeft--
-	if w.dashesLeft > 0 {
-		w.beginLock(e.Time)
-		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
-		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
-		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
-		return
-	}
-	w.finishBite(ctx, e)
+	w.endSegment(ctx, e.Time, true, e.NX, e.NY)
 }
 
-func (w *狼人) finishBite(ctx unit.Context, e unit.WallHit) {
+func (w *狼人) endSegment(ctx unit.Context, t float64, wall bool, nx, ny float64) {
+	if w.bite != biteDash {
+		return
+	}
+	if t+1e-9 >= w.biteUntil {
+		w.finishBite(ctx, wall, nx, ny)
+		return
+	}
+	w.beginLock(ctx, t)
+}
+
+func (w *狼人) finishBite(ctx unit.Context, wall bool, nx, ny float64) {
 	w.bite = biteNone
-	w.dashesLeft = 0
 	w.phase = 0
 	w.emitPhase(ctx)
-	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
+	w.holdPass(ctx, false)
 	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
-	vx, vy := cruiseOffWall(w.aimX, w.aimY, e.NX, e.NY)
+	vx, vy := w.cruiseAlongAim()
+	if wall {
+		vx, vy = cruiseOffWall(w.aimX, w.aimY, nx, ny)
+	}
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
 	ctx.Out <- unit.FX{
 		Name:   "rage",
@@ -275,6 +326,29 @@ func (w *狼人) finishBite(ctx unit.Context, e unit.WallHit) {
 		Slot:   w.slot,
 		Amount: 0,
 	}
+}
+
+func (w *狼人) landBite() {
+	if w.biteDmg == 0 {
+		w.biteDmg = wolfBiteBase
+	}
+	w.biteHits++
+	if w.biteHits >= 2 {
+		w.biteHits = 0
+		w.biteDmg++
+	}
+}
+
+func (w *狼人) noteBite(id uint64, s unit.Sense) {
+	if !w.biting() {
+		w.biteArc = false
+		return
+	}
+	has := unit.HasOwned(s, id, KindWolfBite)
+	if w.biteArc && !has {
+		w.landBite()
+	}
+	w.biteArc = has
 }
 
 func (w *狼人) emitPhase(ctx unit.Context) {
@@ -292,17 +366,41 @@ func (w *狼人) tickBite(ctx unit.Context, s unit.Sense) {
 	if !w.biting() {
 		return
 	}
+	w.holdPass(ctx, true)
 	if w.bite == biteLock {
 		w.updateAim(s)
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+		if s.Time+1e-9 >= w.biteUntil {
+			w.finishBite(ctx, false, 0, 0)
+			return
+		}
 		if s.Time+1e-9 >= w.lockUntil {
-			w.bite = biteDash
-			ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
-			ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
-			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: w.aimX * wolfDashSpeed, VY: w.aimY * wolfDashSpeed}
+			w.beginDash(ctx, s)
 		}
 		return
 	}
+	w.steerDash(ctx)
+	w.dashLeft -= math.Hypot(s.Self.X-w.dashX, s.Self.Y-w.dashY)
+	w.dashX, w.dashY = s.Self.X, s.Self.Y
+	if w.dashLeft <= 1e-6 {
+		w.endSegment(ctx, s.Time, false, 0, 0)
+	}
+}
+
+func (w *狼人) beginDash(ctx unit.Context, s unit.Sense) {
+	w.bite = biteDash
+	w.dashLeft = wolfDashLen
+	w.dashX, w.dashY = s.Self.X, s.Self.Y
+	w.steerDash(ctx)
+	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
+}
+
+func (w *狼人) holdPass(ctx unit.Context, hold bool) {
+	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: hold}
+}
+
+func (w *狼人) steerDash(ctx unit.Context) {
+	w.holdPass(ctx, true)
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: w.aimX * wolfDashSpeed, VY: w.aimY * wolfDashSpeed}
 }
 
@@ -338,8 +436,27 @@ func (w *狼人) syncArc(ctx unit.Context, s unit.Sense) {
 		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: drop}
 	}
 	if unit.RearmAttach(s, ctx.ID, want, cd, &w.arc) {
-		unit.SpawnAttach(ctx, s, want)
+		w.spawnArc(ctx, s, want)
 	}
+}
+
+func (w *狼人) spawnArc(ctx unit.Context, s unit.Sense, kind string) {
+	sp := ctx.Born(unit.Spawn{
+		Kind:    kind,
+		X:       s.Self.X,
+		Y:       s.Self.Y,
+		VX:      s.Self.VX,
+		VY:      s.Self.VY,
+		OwnerID: ctx.ID,
+		Slot:    s.Self.Slot,
+	})
+	if kind == KindWolfBite {
+		if w.biteDmg == 0 {
+			w.biteDmg = wolfBiteBase
+		}
+		putBite(sp.Stream, w.biteDmg)
+	}
+	ctx.Out <- sp
 }
 
 func findMoon(s unit.Sense, owner uint64) *unit.Snapshot {
@@ -358,6 +475,15 @@ func enemyOf(s unit.Sense) *unit.Snapshot {
 
 func touching(a, b unit.Snapshot) bool {
 	return math.Hypot(a.X-b.X, a.Y-b.Y) <= a.Radius+b.Radius+1e-6
+}
+
+func (w *狼人) cruiseAlongAim() (float64, float64) {
+	ax, ay := w.aimX, w.aimY
+	if math.Hypot(ax, ay) < 1e-6 {
+		ax, ay = 1, 0
+	}
+	n := math.Hypot(ax, ay)
+	return ax / n * wolfSpeed, ay / n * wolfSpeed
 }
 
 func cruiseOffWall(ax, ay, nx, ny float64) (float64, float64) {
