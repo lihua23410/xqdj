@@ -22,6 +22,9 @@ type Spec struct {
 	ArcSpan     float64 // 扇环张角（弧度）。0 = 不是扇环。2π = 整圈细环
 	ArcInner    float64 // 扇环内径。外径用 Radius。角色自己填
 	Look        Look
+
+	// 指定 Kind 的直属单位在场时，拒绝一切速度与瞬时推动；位置修正和瞬移照常。
+	ZeroVelocityWhileOwned string
 }
 
 type factory func(SpawnInfo) Actor

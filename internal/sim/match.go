@@ -56,6 +56,8 @@ type unit struct {
 	aimPriority     uint8
 	pass            bool
 	stand           bool
+	zeroOwnedKind   string
+	velocityLocked  bool
 	stun            bool
 	held            bool
 	holdUntil       float64
@@ -1131,6 +1133,7 @@ func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot in
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
 	}
+	u.zeroOwnedKind = spec.ZeroVelocityWhileOwned
 	if spec.Role == unitpkg.RoleFighter || spec.Cruise {
 		u.cruiseFS = newCruiseFS(v, spec.Speed)
 		u.syncCruise()
@@ -1145,6 +1148,7 @@ func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot in
 	u.stream = stream
 	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds, Stream: stream, Field: m.liveFieldLocked()}.WithBirths()
 	go runActor(u, ctx)
+	m.refreshOwnedVelocityLockLocked(owner, kind)
 	return u
 }
 
@@ -1161,6 +1165,9 @@ func (u *unit) aimFace() {
 }
 
 func (u *unit) setVel(v vec) {
+	if u.velocityLocked {
+		v = vec{}
+	}
 	u.v = v
 	u.aimFace()
 }
@@ -1663,7 +1670,7 @@ func (m *Match) stickFollowersLocked() {
 			continue
 		}
 		u.p = owner.p
-		u.v = owner.v
+		u.setVel(owner.v)
 		if u.attach {
 			if u.v.len2() > 1e-8 {
 				u.face = u.v.norm()
@@ -1826,7 +1833,9 @@ func (m *Match) swapOwnedLocked(bodyID uint64) {
 	keepVel := body.stun
 	body.p, other.p = other.p, body.p
 	if !keepVel {
-		body.v, other.v = other.v, body.v
+		bodyVel, otherVel := body.v, other.v
+		body.setVel(otherVel)
+		other.setVel(bodyVel)
 	}
 	m.noteSwapLocked(body, other, keepVel)
 }
@@ -1861,6 +1870,7 @@ func (m *Match) removeLocked(u *unit) {
 	for _, o := range extras {
 		m.removeLocked(o)
 	}
+	m.refreshOwnedVelocityLockLocked(u.owner, u.kind)
 }
 
 type pairID struct{ a, b uint64 }

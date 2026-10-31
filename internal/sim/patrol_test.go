@@ -38,9 +38,9 @@ func TestPatrolMarkerCycle(t *testing.T) {
 		patrol, _ := patrolUnits(m)
 		mk := patrolMarkerOf(m)
 		if patrol != nil && mk != nil {
-			if got := math.Hypot(mk.v.X, mk.v.Y); got < 1 {
+			if got := math.Hypot(mk.v.X, mk.v.Y); got > 1e-6 {
 				m.mu.Unlock()
-				t.Fatalf("marker thrown with zero speed")
+				t.Fatalf("marker launch speed=%v, want 0", got)
 			}
 			if math.Hypot(patrol.v.X, patrol.v.Y) > 1e-6 {
 				m.mu.Unlock()
@@ -54,7 +54,7 @@ func TestPatrolMarkerCycle(t *testing.T) {
 		if tm > deadline {
 			t.Fatalf("marker never thrown by t=%v", tm)
 		}
-		waitTicks(m, 3)
+		waitTicks(m, 1)
 	}
 
 	// 相位二：去程持续加速。撞墙只改方向不改速率，两拍速率必须升高。
@@ -73,7 +73,7 @@ func TestPatrolMarkerCycle(t *testing.T) {
 		sp2 = math.Hypot(mk.v.X, mk.v.Y)
 	}
 	m.mu.Unlock()
-	if sp1 <= 0 || sp2 <= sp1 {
+	if sp2 <= sp1 {
 		t.Fatalf("marker not accelerating: sp1=%v sp2=%v", sp1, sp2)
 	}
 

@@ -90,6 +90,15 @@ type Stunned struct {
 	Until float64
 }
 
+// OwnedPresenceChanged 通知 ZeroVelocityWhileOwned 所指定 Kind 的直属单位
+// 从无到有或从有到无；不受眩晕和视野限制。Time 是实际出生/离场时刻。
+type OwnedPresenceChanged struct {
+	Time        float64
+	Kind        string
+	Present     bool
+	SelfStunned bool
+}
+
 type Cmd any
 
 // SetVelocity 改自己的速度向量。若身上巡航 FS 的 M ≠ 1，写入后再乘 M。

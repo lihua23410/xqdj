@@ -1,5 +1,5 @@
 // 巡回朝随机方向丢出标识物后站定。标识物一路加速、撞墙反弹，
-// 直到撞中敌方才折返；折返一路继续加速、继续撞人出伤，回到巡回身边消失。
+// 撞中敌方或去程满 5 秒时折返；折返一路继续加速、继续撞人出伤，回到巡回身边消失。
 // 巡回收回标识物后恢复巡航，5 秒后再丢。
 package 巡回
 
@@ -27,12 +27,12 @@ const (
 
 	firstThrowDelay = 0.8
 	throwCD         = 5.0
-	markStartSpeed  = 300.0
-	markAccel       = 320.0
+	markStartSpeed  = 0.0
+	// 从静止起步，4 秒达到原伤害公式中 26 伤对应的速率（约 1857.14）。
+	markFullDamageAfter = 4.0
+	markAccel           = (dmgMax/dmgPerSpeed - markStartSpeed) / markFullDamageAfter
 	// 去程兜底：一直没撞到人也折返，别让巡回站成雕像。
-	markTimeout = 10.0
-	// 回程兜底：被墙反复别住时认丢这一枚，主人照样恢复。
-	returnTimeout = 6.0
+	markTimeout = 5.0
 	// 伤害随撞击时速走：飞得越久砸得越重（反重力弹先例）。
 	dmgPerSpeed = 0.014
 	dmgMin      = 8.0
@@ -58,6 +58,8 @@ func init() {
 		Vision:  0,
 		Fighter: true,
 		Look:    unit.Look{Color: patrolColor, FX: []string{"patrol"}},
+
+		ZeroVelocityWhileOwned: KindPatrolMarker,
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &巡回{slot: info.Slot, rng: unit.NewRNG(info.Stream)}
 	})
@@ -69,19 +71,19 @@ func init() {
 		Speed:   0,
 		Vision:  markVision,
 		Fighter: false,
-		Look:    unit.Look{Color: markColor, Glow: true, Trail: true, Overlay: true, FX: []string{"patrolmark"}},
+		Look:    unit.Look{Color: markColor, Overlay: true, FX: []string{"patrolmark"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &标识物{owner: info.OwnerID, slot: info.Slot, speed: markStartSpeed}
 	})
 }
 
-// 巡回本体：视野 0 也看得见自己的标识物（随从始终进感知），
-// 所以靠轮询 Nearby 判断标识物是否已经回来。
+// 巡回本体：站定跟随自己全部标识物的实际在场状态，眩晕期间也更新。
 type 巡回 struct {
-	slot        int
-	rng         *rand.Rand
-	waiting     bool
-	nextThrowAt float64
+	slot          int
+	rng           *rand.Rand
+	waiting       bool
+	resumePending bool
+	nextThrowAt   float64
 }
 
 func (a *巡回) Handle(ctx unit.Context, ev unit.Event) {
@@ -91,15 +93,19 @@ func (a *巡回) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.Sense:
 		a.onSense(ctx, e)
+	case unit.OwnedPresenceChanged:
+		a.onOwnedPresence(ctx, e)
 	}
 }
 
 func (a *巡回) onSense(ctx unit.Context, s unit.Sense) {
 	if a.waiting {
-		if a.markerAlive(ctx, s) {
-			return
-		}
-		a.resume(ctx, s)
+		return
+	}
+	// 最后一颗弹在眩晕中离场，冷却从离场起算；能再次行动时才恢复移动。
+	if a.resumePending {
+		a.resumePending = false
+		a.resumeMovement(ctx)
 		return
 	}
 	if !a.thrownOnce(s) {
@@ -119,14 +125,29 @@ func (a *巡回) thrownOnce(s unit.Sense) bool {
 	return true
 }
 
-func (a *巡回) markerAlive(ctx unit.Context, s unit.Sense) bool {
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.Kind == KindPatrolMarker && o.OwnerID == ctx.ID {
-			return true
-		}
+func (a *巡回) onOwnedPresence(ctx unit.Context, e unit.OwnedPresenceChanged) {
+	if e.Kind != KindPatrolMarker {
+		return
 	}
-	return false
+	if e.Present {
+		if !a.waiting {
+			ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
+			ctx.Out <- unit.StackMark{UnitID: ctx.ID, Kind: markOutKind, Delta: 1}
+		}
+		a.waiting = true
+		a.resumePending = false
+		return
+	}
+	if !a.waiting {
+		return
+	}
+	a.waiting = false
+	a.nextThrowAt = e.Time + throwCD
+	a.resumePending = e.SelfStunned
+	ctx.Out <- unit.ClearMarks{UnitID: ctx.ID, Kind: markOutKind}
+	if !a.resumePending {
+		a.resumeMovement(ctx)
+	}
 }
 
 func (a *巡回) throw(ctx unit.Context, s unit.Sense) {
@@ -151,10 +172,7 @@ func (a *巡回) throw(ctx unit.Context, s unit.Sense) {
 	a.waiting = true
 }
 
-func (a *巡回) resume(ctx unit.Context, s unit.Sense) {
-	a.waiting = false
-	a.nextThrowAt = s.Time + throwCD
-	ctx.Out <- unit.ClearMarks{UnitID: ctx.ID, Kind: markOutKind}
+func (a *巡回) resumeMovement(ctx unit.Context) {
 	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
 	ang := a.rng.Float64() * 2 * math.Pi
 	ux, uy := math.Cos(ang), math.Sin(ang)
@@ -170,9 +188,10 @@ type 标识物 struct {
 
 	booted bool
 	speed  float64
+	dirX   float64
+	dirY   float64
 	lastT  float64
 	bornAt float64
-	flipAt float64
 
 	returning  bool
 	struck     map[uint64]bool
@@ -198,6 +217,17 @@ func (b *标识物) onSense(ctx unit.Context, s unit.Sense) {
 		b.booted = true
 		b.lastT = s.Time
 		b.bornAt = s.Time
+		// 初速为 0 时，从出生点相对主人的偏移还原随机出手方向。
+		dx, dy := s.Self.VX, s.Self.VY
+		if math.Hypot(dx, dy) < 1e-6 {
+			if owner := ownerOf(s, b.owner); owner != nil {
+				dx, dy = s.Self.X-owner.X, s.Self.Y-owner.Y
+			}
+		}
+		b.dirX, b.dirY = 1, 0
+		if n := math.Hypot(dx, dy); n > 1e-6 {
+			b.dirX, b.dirY = dx/n, dy/n
+		}
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
 		return
 	}
@@ -212,10 +242,11 @@ func (b *标识物) onSense(ctx unit.Context, s unit.Sense) {
 		b.homeward(ctx, s, dt)
 		return
 	}
-	if s.Time-b.bornAt < markTimeout {
+	if s.Time-b.bornAt+1e-9 < markTimeout {
 		if n := math.Hypot(s.Self.VX, s.Self.VY); n > 1e-6 {
-			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: s.Self.VX / n * b.speed, VY: s.Self.VY / n * b.speed}
+			b.dirX, b.dirY = s.Self.VX/n, s.Self.VY/n
 		}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: b.dirX * b.speed, VY: b.dirY * b.speed}
 		return
 	}
 	b.flip(s.Time)
@@ -223,12 +254,14 @@ func (b *标识物) onSense(ctx unit.Context, s unit.Sense) {
 
 // homeward 回程：朝巡回当前位置直线加速；被墙别住时 Detour 绕端点。
 func (b *标识物) homeward(ctx unit.Context, s unit.Sense, dt float64) {
-	if s.Time-b.flipAt > returnTimeout {
-		b.arrive(ctx, s.Self.X, s.Self.Y)
-		return
-	}
 	owner := ownerOf(s, b.owner)
 	if owner == nil {
+		return
+	}
+	dist := math.Hypot(owner.X-s.Self.X, owner.Y-s.Self.Y)
+	catch := s.Self.Radius + owner.Radius + catchPad
+	if dist <= catch {
+		b.arrive(ctx, owner.X, owner.Y)
 		return
 	}
 	wx, wy, hold := unit.Detour(s.Self.X, s.Self.Y, s.Self.Radius, owner.X, owner.Y, s.Walls, b.detour, s.Time)
@@ -238,13 +271,13 @@ func (b *标识物) homeward(ctx unit.Context, s unit.Sense, dt float64) {
 	if n < 1e-6 {
 		return
 	}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * b.speed, VY: dy / n * b.speed}
-
-	dist := math.Hypot(owner.X-s.Self.X, owner.Y-s.Self.Y)
-	catch := s.Self.Radius + owner.Radius + catchPad
-	if dist <= catch || dist <= b.speed*dt {
-		b.arrive(ctx, owner.X, owner.Y)
+	// 最后一段只飞到当前路点，避免高速越过主人；必须真的靠近才接回，
+	// 不能因为理论上这一拍够远就隔墙消失。
+	speed := b.speed
+	if dt > 0 && n/dt < speed {
+		speed = n / dt
 	}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * speed, VY: dy / n * speed}
 }
 
 func (b *标识物) arrive(ctx unit.Context, x, y float64) {
@@ -254,7 +287,6 @@ func (b *标识物) arrive(ctx unit.Context, x, y float64) {
 
 func (b *标识物) flip(t float64) {
 	b.returning = true
-	b.flipAt = t
 	b.struck = make(map[uint64]bool)
 	b.hitReadyAt = t + hitPaceCD
 }

@@ -121,7 +121,7 @@ func (u *unit) skipDecel() bool {
 	if u == nil {
 		return true
 	}
-	if u.held {
+	if u.held || u.velocityLocked {
 		return true
 	}
 	if len(u.fsList) > 0 {
@@ -292,7 +292,7 @@ func (m *Match) applyImpulseLocked() {
 
 func (m *Match) applyAddFSLocked(c unitpkg.AddFS) {
 	u := m.units[c.UnitID]
-	if u == nil || u.stopped {
+	if u == nil || u.stopped || u.velocityLocked {
 		return
 	}
 	speed := c.BaseSpeed

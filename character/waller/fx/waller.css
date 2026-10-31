@@ -1,0 +1,32 @@
+.ball.look-waller {
+  background: radial-gradient(circle at 34% 27%, color-mix(in srgb, currentColor 85%, white), currentColor 52%, color-mix(in srgb, currentColor 62%, #28231d));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 60%, white),
+    inset 0 0 9px #30271940, 0 0 9px color-mix(in srgb, currentColor 24%, transparent);
+}
+.waller-shell {
+  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+  fill: none; stroke: #58472f; stroke-width: 1.8;
+}
+.waller-rim { stroke: #f5e7cd; stroke-width: 1; opacity: 0.68; }
+.waller-dial { transform-origin: 50px 50px; transform: rotate(var(--waller-turn, 0deg)); opacity: 0.6; }
+.waller-dial circle { stroke-dasharray: 41 17; stroke-width: 1.4; }
+.waller-core {
+  transform-origin: 50px 50px; transform: scale(calc(1 - var(--waller-pulse, 0) * 0.12));
+}
+.waller-frame { stroke: #f5e7cd; stroke-width: 2.3; opacity: calc(0.65 + var(--waller-pulse, 0) * 0.35); }
+.waller-joint { fill: #69533530; stroke-width: 2.5; }
+.waller-cross { stroke: #f5e7cd; stroke-width: 1.5; opacity: calc(0.65 + var(--waller-pulse, 0) * 0.35); }
+.guide.waller-link { border-top-width: 1px; opacity: calc(0.2 + var(--waller-pulse, 0) * 0.25); }
+.guide.waller-hint {
+  border-top-width: 1.5px; opacity: calc(0.5 + var(--waller-pulse, 0) * 0.45);
+  filter: drop-shadow(0 0 2px currentColor);
+}
+.guide.waller-hint::before, .guide.waller-hint::after {
+  content: ""; position: absolute; top: -5px; width: 1.5px; height: 9px;
+  background: currentColor;
+}
+.guide.waller-hint::before { left: 0; }
+.guide.waller-hint::after { right: 0; }
+.guide.waller-state { display: none; border: 0; transform: translate(-50%, -50%); }
+.waller-state svg { width: 100%; height: 100%; overflow: visible; fill: currentColor; }
+.waller-state rect { stroke: #f5e7cd; stroke-width: 0.5; }

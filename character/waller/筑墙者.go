@@ -1,6 +1,7 @@
 package 筑墙者
 
 import (
+	"embed"
 	"math"
 	"xqdj/internal/unit"
 )
@@ -19,8 +20,11 @@ const (
 	wallDamage   = 3.5
 )
 
+//go:embed fx
+var assets embed.FS
+
 func init() {
-	p := unit.NewPack(KindWaller, nil)
+	p := unit.NewPack(KindWaller, assets)
 	p.Register(unit.Spec{
 		Kind:    KindWaller,
 		Role:    unit.RoleFighter,
@@ -29,7 +33,7 @@ func init() {
 		Speed:   wallerSpeed,
 		Vision:  wallerVision,
 		Fighter: true,
-		Look:    unit.Look{Color: "#c4a36a", WallGuide: wallLen},
+		Look:    unit.Look{Color: "#c4a36a", WallGuide: wallLen, FX: []string{"waller"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &筑墙者{nextBuild: wallEvery}
 	})
@@ -75,6 +79,11 @@ func (w *筑墙者) Handle(ctx unit.Context, ev unit.Event) {
 		Radius:  wallRadius,
 		Life:    wallLife,
 		Amount:  wallDamage,
+	}
+	// 只给观众的施放反馈；墙的参数、落点与节拍仍由上面的命令决定。
+	ctx.Out <- unit.FX{
+		Name: "waller-build", Kind: ctx.Kind, UnitID: ctx.ID,
+		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot, Amount: s.Time,
 	}
 	w.nextBuild = s.Time + wallEvery
 }
