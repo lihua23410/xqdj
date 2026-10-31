@@ -44,7 +44,7 @@ func init() {
 		Speed:   wardenSpeed,
 		Vision:  wardenVision,
 		Fighter: true,
-		Look:    unit.Look{Color: "#8b9cb3"},
+		Look:    unit.Look{Color: "#8b9cb3", FX: []string{"warden"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &盾士{refreshAt: shieldRefresh}
 	})
@@ -57,7 +57,7 @@ func init() {
 		Vision:  0,
 		Fighter: false,
 		Shell:   true,
-		Look:    unit.Look{Color: "#8b9cb3", Ring: true, Overlay: true},
+		Look:    unit.Look{Color: "#8b9cb3", Ring: true, Overlay: true, FX: []string{"warden-shield"}},
 	}, func(unit.SpawnInfo) unit.Actor {
 		return &盾{}
 	})
@@ -69,7 +69,7 @@ func init() {
 		Speed:   shardMaxSpeed,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: "#8b9cb3"},
+		Look:    unit.Look{Color: "#8b9cb3", FX: []string{"warden-shard"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &盾碎片{owner: info.OwnerID, slot: info.Slot, dmg: fullShardDmg}
 	})
@@ -81,7 +81,7 @@ func init() {
 		Speed:   shardMaxSpeed,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: "#c47a4a"},
+		Look:    unit.Look{Color: "#c47a4a", FX: []string{"warden-shard"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &盾碎片{owner: info.OwnerID, slot: info.Slot, dmg: weakShardDmg}
 	})
@@ -162,7 +162,7 @@ func (s *盾士) breakFull(ctx unit.Context) {
 
 func (s *盾士) burst(ctx unit.Context, kind string, n int) {
 	ctx.Out <- unit.FX{
-		Name: "shatter", Kind: kind,
+		Name: "shatter", Kind: kind, UnitID: ctx.ID,
 		X: s.x, Y: s.y, Slot: s.slot,
 	}
 	if s.rng == nil {

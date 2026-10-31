@@ -1,0 +1,55 @@
+.ball.look-warden {
+  background: radial-gradient(circle at 31% 24%, #b9c7d7, #8b9cb3 39%, #4f6077 100%);
+  box-shadow: inset 0 0 0 1px #cbd8e4a0, inset 0 -3px 6px #26344766, 0 0 5px #8b9cb333;
+}
+.warden-body, .warden-shield-art, .warden-fragment { position: absolute; inset: 0; pointer-events: none; }
+.warden-body svg, .warden-shield-art svg, .warden-fragment svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.warden-body svg { fill: none; }
+.warden-armor-shadow { fill: #344459; opacity: 0.28; }
+.warden-armor-light { fill: #d5dfeb; opacity: 0.2; }
+.warden-body-rim { stroke: #cbd8e4; stroke-width: 1.3; opacity: 0.5; }
+.warden-center-plate { fill: #71869f; stroke: #36475d; stroke-width: 1.5; }
+.warden-center-edge { stroke: #d9e4ef; stroke-width: 1.2; opacity: 0.65; }
+.warden-rivets { fill: #d9e4ef; stroke: #52657d; stroke-width: 0.8; }
+.warden-body-flash { fill: #edf5ff; opacity: calc(var(--warden-flash, 0) * 0.82); }
+.warden-covered .warden-body-rim { opacity: 0.85; }
+.ball.ring.look-warden-shield { border: 0; background: none; box-shadow: none; opacity: 1; }
+.warden-shield-art svg { fill: none; }
+.warden-shield-contour { stroke: #b8cadd; stroke-width: 1.8; opacity: 0.8; }
+.warden-shield-piece {
+  transform-origin: 50px 50px;
+  transform: rotate(var(--sector)) translateY(calc(-4px * var(--warden-assemble, 0)));
+}
+.warden-shield-piece path {
+  fill: #8b9cb3; fill-opacity: 0.84; stroke: #e0eaf5;
+  stroke-width: calc(0.9 + var(--warden-assemble, 0) * 1.5);
+  filter: drop-shadow(0 0 1px #cbd8e455);
+}
+.guide.warden-state { display: none; border: 0; transform: translate(-50%, -50%); }
+.warden-state svg { width: 100%; height: 100%; overflow: visible; }
+.warden-burst-halo { fill: #eef6ff; opacity: calc(var(--warden-flash, 0) * 0.75); }
+.warden-shock-arcs {
+  fill: none; stroke: #e6f0ff; stroke-width: 1.2;
+  transform: scale(calc(0.8 + var(--warden-phase, 0) * 0.85));
+  opacity: calc(var(--warden-fade, 0) * 0.8);
+}
+.warden-burst-piece {
+  fill: currentColor; fill-opacity: 0.3; stroke: #e3edf8; stroke-width: 0.5;
+  opacity: var(--warden-fade, 0);
+  transform: rotate(var(--sector)) translateY(calc(-17px * var(--warden-phase, 0))) rotate(calc(var(--spin) * var(--warden-phase, 0)));
+}
+.warden-burst-weak .warden-burst-halo { fill: #dec1a5; opacity: calc(var(--warden-flash, 0) * 0.24); }
+.warden-burst-weak .warden-shock-arcs { stroke: #d5a17a; opacity: calc(var(--warden-fade, 0) * 0.24); }
+.warden-burst-weak .warden-burst-piece {
+  stroke: #d8ad89; fill-opacity: 0.18;
+  transform: rotate(var(--sector)) translateY(calc(-8px * var(--warden-phase, 0))) rotate(calc(var(--spin) * var(--warden-phase, 0) * 0.5));
+}
+.ball.look-warden-shard { background: transparent; box-shadow: none; }
+.warden-fragment-face { fill: currentColor; stroke: #3c4d62; stroke-width: 0.9; stroke-linejoin: bevel; }
+.warden-fragment-facet { fill: color-mix(in srgb, currentColor 56%, white); }
+.warden-fragment-edge { fill: none; stroke: #e2ebf5; stroke-width: 0.7; }
+.warden-weak .warden-fragment-face { stroke: #69462f; stroke-width: 0.7; }
+.warden-weak .warden-fragment-edge { stroke: #f0c6a2; stroke-width: 0.6; }
+.guide.warden-shard-trail { inset: 0; width: 100%; height: 100%; border: 0; transform: none; }
+.warden-shard-trail svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.warden-shard-trail path { fill: currentColor; }

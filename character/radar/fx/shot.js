@@ -1,12 +1,5 @@
 (function () {
-  window.radarBeam = window.radarBeam || {};
-
-  arena.registerShot("beam", (fx) => {
-    if (!fx || fx.unitId == null) return;
-    window.radarBeam[fx.unitId] = {
-      dx: fx.vx || 0,
-      dy: fx.vy || 0,
-      len: fx.amount || 0,
-    };
-  });
+  // 私有 guide 钩子按快照接收 beam，并随单位清理状态。
+  // 此处登记以阻止通用层为持续激光生成一次性特效节点。
+  arena.registerShot("beam", () => {});
 })();

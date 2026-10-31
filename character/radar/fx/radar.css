@@ -1,25 +1,45 @@
 .ball.look-radar {
   overflow: visible;
-  background: radial-gradient(
-    circle at 50% 50%,
-    #7dffb3 0%,
-    #3eb87a 42%,
-    #1f4d3a 100%
-  );
-  box-shadow: 0 0 14px #3eb87a, 0 0 28px color-mix(in srgb, #5cff9f 40%, transparent);
+  background: radial-gradient(circle at 35% 28%, #3eb87a 0%, #1f4d3a 72%);
+  box-shadow: inset 0 0 0 1px #7dffb34d, inset 0 0 7px #1f4d3a,
+    0 0 7px #3eb87a55;
 }
+.radar-glass {
+  position: absolute; inset: 0; overflow: hidden; border-radius: 50%;
+  pointer-events: none;
+}
+.radar-glass svg { display: block; width: 100%; height: 100%; fill: none; }
+.radar-inner-rim { stroke: #7dffb3; stroke-width: 0.9; opacity: 0.3; }
+.radar-phosphor {
+  stroke: #7dffb3; stroke-width: 5; stroke-linecap: round;
+  opacity: var(--radar-phosphor, 0.84);
+  filter: drop-shadow(0 0 2px #5cff9f88);
+}
+.radar-phosphor-link { stroke: #5cff9f; stroke-width: 2; opacity: 0.4; }
+.radar-wire { stroke: #1f4d3a; stroke-width: 1.5; opacity: 0.75; }
+.radar-glass-edge { stroke: #b8ffd9; stroke-width: 1.4; stroke-linecap: round; opacity: 0.4; }
+.radar-scanlines {
+  position: absolute; inset: 0; opacity: 0.28;
+  background: repeating-linear-gradient(0deg, #1f4d3a66 0 1px, transparent 1px 3px);
+}
+.guide.radar-state { display: none; border: 0; }
 .radar-beam {
   position: absolute;
   left: 50%;
   top: 50%;
   width: var(--len, 200px);
-  height: 3px;
-  margin-top: -1.5px;
-  border-radius: 1px;
-  background: linear-gradient(90deg, #b8ffd9 0%, #5cff9f 18%, #3eb87a 70%, transparent);
-  box-shadow: 0 0 8px #5cff9f, 0 0 18px color-mix(in srgb, #5cff9f 55%, transparent);
+  height: 2px;
+  margin-top: -1px;
+  background: linear-gradient(90deg, #b8ffd9 0%, #5cff9f 18%, #3eb87a 100%);
+  box-shadow: 0 0 3px #5cff9f88, 0 0 7px #3eb87a55;
   transform-origin: 0 50%;
   transform: rotate(var(--ang, -90deg));
   pointer-events: none;
   z-index: 2;
 }
+.radar-tip {
+  position: absolute; right: 0; top: 50%; width: 3px; height: 3px;
+  transform: translate(50%, -50%); border-radius: 50%; background: #b8ffd9;
+  box-shadow: 0 0 3px #5cff9f, 0 0 5px #3eb87a88;
+}
+.radar-tip[hidden] { display: none; }
