@@ -1,6 +1,36 @@
 // 只读真实的盾/碎片快照与带归属的破盾事件；所有动效使用对局时间。
 (function () {
   const hooks = window.lookFX = window.lookFX || {};
+  const audioBase = document.currentScript?.dataset.pack || "/ball/盾士";
+  const voices = new Map();
+  const sounded = new Set();
+  let soundTime = -Infinity;
+  function syncSoundTime(time) {
+    if (time < soundTime) {
+      for (const voice of voices.values()) { voice.stop(); voice.reset(); }
+    }
+    if (time !== soundTime) sounded.clear();
+    soundTime = time;
+  }
+  function playShatter(fx, ctx = {}) {
+    if (!fx || ctx.visualOnly || (fx.kind !== "盾碎片" && fx.kind !== "弱化碎片")) return;
+    const time = Number.isFinite(ctx.time) ? ctx.time : 0;
+    syncSoundTime(time);
+    const key = `${fx.unitId ?? "unknown"}:${fx.kind}`;
+    if (sounded.has(key)) return;
+    sounded.add(key);
+    let voice = voices.get(key);
+    if (!voice) {
+      const file = fx.kind === "弱化碎片" ? "shatter-weak.wav" : "shatter-full.wav";
+      const audio = new Audio(`${audioBase}/fx/${file}`);
+      audio.preload = "auto";
+      voice = arena.voice(audio, { mode: arena.SOUND_MODE.IMMUNE, priority: 0, volume: 1.0 });
+      voices.set(key, voice);
+    }
+    voice.stop();
+    voice.reset();
+    voice.play();
+  }
   const body = `<svg viewBox="0 0 100 100" aria-hidden="true">
     <path class="warden-armor-shadow" d="M50 5 87 27 95 61 67 91 28 88 6 58 15 25Z"/>
     <path class="warden-armor-light" d="M15 25 50 5 47 40 6 58Z"/>
@@ -47,6 +77,7 @@
     guide(u, ctx) {
       const node = ctx.ensureGuide(`warden-state-${u.id}`, "warden-state");
       const time = ctx.time || 0;
+      syncSoundTime(time);
       if (!node._warden || time < node._warden.time) {
         node._warden = { time, shield: null, known: false, shieldAt: -Infinity, burstAt: -Infinity, mode: "full", key: "" };
         node.innerHTML = burst;
@@ -165,6 +196,6 @@
       el.classList.remove("warden-weak");
     },
   };
-  // 持续表现由快照钩子绘制，避免旧版的通用圆环、散点叠加。
-  arena.registerShot("shatter", () => {});
+  // 画面由快照钩子绘制；声音只跟随真实碎盾事件，不因重复渲染重播。
+  arena.registerShot("shatter", playShatter);
 })();

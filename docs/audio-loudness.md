@@ -36,6 +36,8 @@
 | `character/meander/fx/attack.wav` | 迷走亮盘攻击（0.32 秒，降调与高频柔化） | -70.0 | -6.1 |
 | `character/meander/fx/switch.wav` | 迷走换环（低柔气流，0.82 秒） | -15.7 | -6.5 |
 | `character/knight/fx/blink.wav` | 小骑士瞬移冲锋破空（约 0.34 秒） | -70.0 | -3.1 |
+| `character/warden/fx/shatter-full.wav` | 盾士强破盾（金属碎裂，0.28 秒） | -70.0 | -1.1 |
+| `character/warden/fx/shatter-weak.wav` | 盾士旧盾换新（薄甲剥落，0.18 秒） | -70.0 | -1.0 |
 
 `default-impact.wav` 只有 0.16 秒，积分响度对这类极短点击没有意义；它已按真峰值
 限制到 -1.0 dBFS，听感上是一次短促碰撞。`character/melee/fx/attack.wav` 同样只有
@@ -58,3 +60,5 @@
 教父的入场、短刀、步枪、箱扣与纸包、退场声均来自已核对的 CC0 素材。各文件真峰值分别控制为 -8、-5、-2、-7、-9 dBTP，播放音量分别为 0.4、0.8、0.8、0.6、0.35；枪声受峰值上限约束，最终为 -20.6 LUFS。短音保留瞬态，按事件限频，不强行抬到统一积分响度。逐文件来源、处理参数与测量见 `character/godfather/fx/audio-sources.json`，触发约定见同目录 `README.md`。
 
 教父(青年)的手枪、针剂与掠过声均来自已核对的 CC0 素材，真峰值分别控制为 -5、-8、-10 dBTP，播放音量为 0.65、0.55、0.45。三类短音分别按 0.075、0.3、0.12 秒限频，不强行抬高极短音的积分响度；逐文件来源和测量见 `character/godfather_youth/fx/audio-sources.json`。
+
+盾士的两种碎盾音为项目原创的确定性金属模态/带限噪声合成，不使用外部采样；均使用 mode 2、priority 0、volume 1.0。两段均不足 0.3 秒，积分响度 -70 LUFS 不代表静音，按真峰值约 -1 dBFS 控制。来源、许可、生成脚本与 SHA-256 见 `character/warden/fx/README.md` 和 `audio-sources.json`。
