@@ -73,10 +73,7 @@ const (
 	KindCharcoal           = 炭翁.KindCharcoal
 	KindCharcoalEmber      = 炭翁.KindCharcoalEmber
 	KindCoalesce           = 凝聚体.KindCoalesce
-	KindMassHeavy          = 凝聚体.KindMassHeavy
-	KindMassMedium         = 凝聚体.KindMassMedium
-	KindMassShot           = 凝聚体.KindMassShot
-	KindMassSmall          = 凝聚体.KindMassSmall
+	KindMassBlock          = 凝聚体.KindMassBlock
 	KindShot               = 凝聚体.KindShot
 	KindClone              = 分身者.KindClone
 	KindCloneArc           = 分身者.KindCloneArc

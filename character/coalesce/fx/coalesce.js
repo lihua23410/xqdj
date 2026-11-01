@@ -1,15 +1,13 @@
-// 凝聚体前端：液态主体、质量读数、凝块回收与速度抵押反馈。
+// 凝聚体前端：液态主体、质量守恒碎块、压缩弹与受击破裂反馈。
 window.coalesceSt = window.coalesceSt || {};
 window.lookFX = window.lookFX || {};
 
 (function () {
   const hooks = window.lookFX;
-  const chunkValues = {
-    "凝聚体小凝块": 3,
-    "凝聚体中凝块": 6,
-    "凝聚体重凝块": 10,
-    "凝聚体弹块": 12,
-  };
+  function chunkMass(kind) {
+    const match = String(kind || "").match(/^凝聚体质量块(\d+)$/);
+    return match ? Math.max(1, Math.min(12, Number(match[1]) || 1)) : 1;
+  }
 
   function state(id) {
     let s = window.coalesceSt[id];
@@ -18,7 +16,6 @@ window.lookFX = window.lookFX || {};
         time: -Infinity,
         compressUntil: -Infinity,
         absorbUntil: -Infinity,
-        denied: new Map(),
       };
       window.coalesceSt[id] = s;
     }
@@ -28,7 +25,6 @@ window.lookFX = window.lookFX || {};
   function sync(id, time) {
     const s = state(id);
     if (Number.isFinite(time) && time + 1e-6 < s.time) {
-      s.denied.clear();
       s.compressUntil = -Infinity;
       s.absorbUntil = -Infinity;
     }
@@ -97,29 +93,6 @@ window.lookFX = window.lookFX || {};
       el.classList.toggle("coalesce-compressing", timeOf(ctx) < s.compressUntil);
       el.classList.toggle("coalesce-absorbing", timeOf(ctx) < s.absorbUntil);
     },
-    guide(u, ctx) {
-      if (!u || !ctx || !ctx.ensureGuide || !window.arena) return;
-      const s = sync(u.id, ctx.time);
-      const time = timeOf(ctx);
-      for (const [targetId, until] of s.denied) {
-        if (until <= time) {
-          s.denied.delete(targetId);
-          continue;
-        }
-        const target = (ctx.units || []).find((o) => o && o.id === targetId);
-        if (!target) continue;
-        const [x, y] = arena.screenPos(target.x, target.y, ctx.scale, ctx.cx, ctx.cy);
-        const node = ctx.ensureGuide(`coalesce-weight-${u.id}-${targetId}`, "coalesce-weight-ring");
-        node.className = "guide coalesce-weight-ring";
-        node.style.left = `${x}px`;
-        node.style.top = `${y}px`;
-        node.style.width = `${(target.radius + 14) * 2}px`;
-        node.style.height = `${(target.radius + 14) * 2}px`;
-        node.style.setProperty("--ang", "0rad");
-        node.style.setProperty("--kind", arena.kindColor(u.kind));
-        ctx.seenGuides.add(node.id);
-      }
-    },
   };
 
   hooks["coalesce-chunk"] = {
@@ -129,11 +102,12 @@ window.lookFX = window.lookFX || {};
     },
     tick(el, u) {
       if (!el) return;
-      const value = chunkValues[u.kind] || 3;
-      el.classList.toggle("coalesce-mass-small", value === 3);
-      el.classList.toggle("coalesce-mass-medium", value === 6);
-      el.classList.toggle("coalesce-mass-heavy", value === 10);
-      el.classList.toggle("coalesce-mass-shot", value === 12);
+      const value = chunkMass(u.kind);
+      el.classList.toggle("coalesce-mass-small", value === 1);
+      el.classList.toggle("coalesce-mass-mid", value >= 2 && value <= 4);
+      el.classList.toggle("coalesce-mass-lump", value >= 5 && value <= 8);
+      el.classList.toggle("coalesce-mass-shot", value >= 9);
+      el.dataset.mass = String(value);
       const art = ensure(el, "coalesce-drop-art");
       if (!art.firstElementChild) {
         art.innerHTML = '<span class="coalesce-drop-core"></span><i></i><i></i><i></i>';
@@ -169,19 +143,18 @@ window.lookFX = window.lookFX || {};
     spawnEffect(ctx, "fx-coalesce-shed");
   });
 
+  arena.registerShot("coalesce-burst", (fx, ctx) => {
+    const node = spawnEffect(ctx, "fx-coalesce-burst");
+    if (node) node.style.setProperty("--burst-mass", String(Math.min(24, Number(fx.amount) || 1)));
+    if (ctx && window.arena) arena.burst(ctx.x, ctx.y, fx.kind, 13);
+  });
+
   arena.registerShot("coalesce-absorb", (fx, ctx) => {
     const s = state(fx.unitId);
     s.absorbUntil = timeOf(ctx) + 0.24;
     spawnEffect(ctx, "fx-coalesce-absorb");
   });
 
-  arena.registerShot("coalesce-deny", (fx, ctx) => {
-    const s = state(fx.unitId);
-    const targetId = Math.round(Number(fx.vx) || 0);
-    if (targetId) s.denied.set(targetId, timeOf(ctx) + 2.8);
-    spawnEffect(ctx, "fx-coalesce-deny");
-    if (ctx && window.arena) arena.burst(ctx.x, ctx.y, fx.kind, 8);
-  });
 
   arena.registerShot("coalesce-collide", (fx, ctx) => {
     const node = spawnEffect(ctx, "fx-coalesce-collide");
@@ -196,5 +169,10 @@ window.lookFX = window.lookFX || {};
 
   arena.registerShot("coalesce-return", (fx, ctx) => {
     spawnEffect(ctx, "fx-coalesce-return");
+  });
+
+  arena.registerShot("coalesce-chunk-break", (fx, ctx) => {
+    spawnEffect(ctx, "fx-coalesce-chunk-break");
+    if (ctx && window.arena) arena.burst(ctx.x, ctx.y, fx.kind, 7);
   });
 })();
