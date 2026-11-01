@@ -4,7 +4,6 @@ package 炭翁
 import (
 	"embed"
 	"math"
-	"sync"
 
 	"xqdj/internal/unit"
 )
@@ -97,7 +96,7 @@ func newBrain() *brain {
 	}
 }
 
-var orphans sync.Map // owner id -> *brain
+// owner id -> *brain
 
 type 炭翁 struct {
 	brain *brain
@@ -141,7 +140,7 @@ func (a *炭翁) onSense(ctx unit.Context, s unit.Sense) {
 	died := a.brain.catchUp(ctx, s)
 	if died {
 		if a.brain.hasForeign() {
-			if _, loaded := orphans.LoadOrStore(ctx.ID, a.brain); !loaded {
+			if _, loaded := stateFor(ctx.State).orphans.LoadOrStore(ctx.ID, a.brain); !loaded {
 				ctx.Out <- ctx.Born(unit.Spawn{
 					Kind: KindCharcoalEmber,
 					X:    s.Self.X, Y: s.Self.Y,
@@ -437,7 +436,8 @@ func (h *烬) Handle(ctx unit.Context, ev unit.Event) {
 	if !ok {
 		return
 	}
-	v, loaded := orphans.Load(h.token)
+	shared := stateFor(ctx.State)
+	v, loaded := shared.orphans.Load(h.token)
 	if !loaded {
 		ctx.Out <- unit.FX{Name: "coals", Kind: KindCharcoal, UnitID: ctx.ID, Amount: -1}
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
@@ -446,7 +446,7 @@ func (h *烬) Handle(ctx unit.Context, ev unit.Event) {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if o.ID == h.token && o.HP > timeEps {
-			orphans.Delete(h.token)
+			shared.orphans.Delete(h.token)
 			ctx.Out <- unit.FX{Name: "coals", Kind: KindCharcoal, UnitID: ctx.ID, Amount: -1}
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return
@@ -455,7 +455,7 @@ func (h *烬) Handle(ctx unit.Context, ev unit.Event) {
 	b := v.(*brain)
 	b.expireForeign(ctx, s.Time)
 	if !b.hasForeign() {
-		orphans.Delete(h.token)
+		shared.orphans.Delete(h.token)
 		ctx.Out <- unit.FX{Name: "coals", Kind: KindCharcoal, UnitID: ctx.ID, Amount: -1}
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		return

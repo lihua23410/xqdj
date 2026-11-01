@@ -23,9 +23,11 @@ func drain(out chan unit.Cmd) []unit.Cmd {
 }
 
 func TestBootHidesAndSpawnsShadows(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	a := &百战{}
-	a.Handle(unit.Context{ID: 1, Kind: KindDoppelVeteran, Out: out}, unit.Sense{
+	a.Handle(unit.Context{State: matchState, ID: 1, Kind: KindDoppelVeteran, Out: out}, unit.Sense{
 		Time: 0,
 		Self: unit.Snapshot{ID: 1, Slot: 0, X: 10, Y: -5, HP: bodyHP, MaxHP: bodyHP},
 	})
@@ -48,6 +50,8 @@ func TestBootHidesAndSpawnsShadows(t *testing.T) {
 }
 
 func TestShadowDeathLeviesBody(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	a := &百战{
 		knownShadow: map[uint64]struct{}{10: {}, 11: {}},
@@ -55,7 +59,7 @@ func TestShadowDeathLeviesBody(t *testing.T) {
 	alive := []unit.Snapshot{
 		{ID: 11, Kind: KindShadow, OwnerID: 1},
 	}
-	a.syncShadowDeaths(unit.Context{ID: 1, Kind: KindDoppelVeteran, Out: out}, alive)
+	a.syncShadowDeaths(unit.Context{State: matchState, ID: 1, Kind: KindDoppelVeteran, Out: out}, alive)
 	cmds := drain(out)
 	if !hasDamageNoFreeze(cmds, 1, 1, levyAmount) {
 		t.Fatalf("want body levy on shadow death: %v", cmds)
@@ -80,6 +84,8 @@ func TestShadowGhostAboveGatherBelowDash(t *testing.T) {
 }
 
 func TestReformSnapsOrbitSpeedToCruise(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	a := &百战{}
 	// 环转切向约 ωr ≈ 251，重整不得原速带进自由飞
@@ -89,13 +95,28 @@ func TestReformSnapsOrbitSpeedToCruise(t *testing.T) {
 		{ID: 10, Kind: KindShadow, OwnerID: 1, VX: orbitSp, VY: 0},
 		{ID: 11, Kind: KindShadow, OwnerID: 1, VX: 0, VY: 0},
 	}
-	a.beginReform(unit.Context{ID: 1, Kind: KindDoppelVeteran, Out: out}, 3, shadows)
+	a.beginReform(unit.Context{State: matchState, ID: 1, Kind: KindDoppelVeteran, Out: out}, 3, shadows)
 	cmds := drain(out)
 	if !hasCruiseVel(cmds, 10, shadowCruise) {
 		t.Fatalf("orbit leftover must snap to cruise: %v", cmds)
 	}
 	if !hasCruiseVel(cmds, 11, shadowCruise) {
 		t.Fatalf("stopped shadow must kick cruise: %v", cmds)
+	}
+}
+
+func TestReformDoesNotClearAnotherVeteransGuard(t *testing.T) {
+	matchState := &unit.MatchState{}
+
+	setStackGuard(matchState, 42, true)
+	defer setStackGuard(matchState, 42, false)
+	out := make(chan unit.Cmd, 16)
+	a := &百战{}
+	a.beginReform(unit.Context{State: matchState, ID: 1, Out: out}, 3, []unit.Snapshot{
+		{ID: 10, Kind: KindShadow, OwnerID: 1, VX: shadowCruise},
+	})
+	if !isStackGuarded(matchState, 42) {
+		t.Fatal("reforming one veteran cleared another veteran's guard")
 	}
 }
 
@@ -114,11 +135,13 @@ func hasCruiseVel(cmds []unit.Cmd, id uint64, cruise float64) bool {
 }
 
 func TestShadowBlocksDuringWeiDash(t *testing.T) {
-	startDash(42, 1, 0, weiDashSp, 100, weiDamage, true, true, 0)
-	defer clearDash(42)
+	matchState := &unit.MatchState{}
+
+	startDash(matchState, 42, 1, 0, weiDashSp, 100, weiDamage, true, true, 0)
+	defer clearDash(matchState, 42)
 	out := make(chan unit.Cmd, 8)
 	sh := &战影{owner: 1, slot: 0}
-	sh.Handle(unit.Context{ID: 42, Kind: KindShadow, Out: out}, unit.IncomingDamage{
+	sh.Handle(unit.Context{State: matchState, ID: 42, Kind: KindShadow, Out: out}, unit.IncomingDamage{
 		Token: 9, From: 99, Amount: 20, Time: 1,
 	})
 	cmds := drain(out)
@@ -128,6 +151,8 @@ func TestShadowBlocksDuringWeiDash(t *testing.T) {
 }
 
 func TestDieVolleyLaunchesDash(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 64)
 	shadows := []unit.Snapshot{
 		{ID: 10, Kind: KindShadow, OwnerID: 1, Slot: 0, X: 0, Y: 0, Radius: shadowRadius, HP: shadowHP, Mortal: true},
@@ -148,7 +173,7 @@ func TestDieVolleyLaunchesDash(t *testing.T) {
 		passing:    map[uint64]bool{},
 		standing:   map[uint64]bool{},
 	}
-	ctx := unit.Context{ID: 1, Kind: KindDoppelVeteran, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindDoppelVeteran, Out: out}
 	a.Handle(ctx, unit.Sense{
 		Time:   dieWait,
 		Self:   unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP, Vision: bodyVision},
@@ -158,14 +183,14 @@ func TestDieVolleyLaunchesDash(t *testing.T) {
 	if a.phase != phaseDieVolley {
 		t.Fatalf("want die volley, got phase %d", a.phase)
 	}
-	if getDash(11) == nil {
+	if getDash(matchState, 11) == nil {
 		t.Fatalf("first shadow should start dash: cmds=%v", cmds)
 	}
 	if !hasSetVel(cmds, 11) {
 		t.Fatalf("body should drive dash velocity for id 11: %v", cmds)
 	}
-	clearDash(11)
-	clearDash(10)
+	clearDash(matchState, 11)
+	clearDash(matchState, 10)
 }
 
 func hasSetVel(cmds []unit.Cmd, id uint64) bool {
@@ -197,6 +222,8 @@ func TestDrawMoveBagCoversAllThree(t *testing.T) {
 }
 
 func TestZhouGatherTimesOutNearWall(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 64)
 	a := &百战{
 		booted:     true,
@@ -215,7 +242,7 @@ func TestZhouGatherTimesOutNearWall(t *testing.T) {
 		{ID: 10, Kind: KindShadow, OwnerID: 1, Slot: 0, X: 250, Y: 0, Radius: shadowRadius, HP: shadowHP, Mortal: true},
 		{ID: 11, Kind: KindShadow, OwnerID: 1, Slot: 0, X: 0, Y: 0, Radius: shadowRadius, HP: shadowHP, Mortal: true},
 	}
-	ctx := unit.Context{ID: 1, Kind: KindDoppelVeteran, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindDoppelVeteran, Out: out}
 	a.Handle(ctx, unit.Sense{
 		Time:   zhouGatherMax,
 		Self:   unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP, Vision: bodyVision},
@@ -229,6 +256,8 @@ func TestZhouGatherTimesOutNearWall(t *testing.T) {
 }
 
 func TestDieWaitPinsFrozenStack(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	a := &百战{
 		booted:     true,
@@ -247,7 +276,7 @@ func TestDieWaitPinsFrozenStack(t *testing.T) {
 		{ID: 10, Kind: KindShadow, OwnerID: 1, Slot: 0, X: 90, Y: 90, Radius: shadowRadius, HP: shadowHP, Mortal: true},
 		{ID: 11, Kind: KindShadow, OwnerID: 1, Slot: 0, X: 91, Y: 91, Radius: shadowRadius, HP: shadowHP, Mortal: true},
 	}
-	ctx := unit.Context{ID: 1, Kind: KindDoppelVeteran, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindDoppelVeteran, Out: out}
 	a.Handle(ctx, unit.Sense{
 		Time:   1,
 		Self:   unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP},
@@ -269,6 +298,8 @@ func hasTeleportTo(cmds []unit.Cmd, id uint64, x, y float64) bool {
 }
 
 func TestZhouGatherWalksNotFlashOrbit(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 64)
 	a := &百战{
 		booted:   true,
@@ -286,7 +317,7 @@ func TestZhouGatherWalksNotFlashOrbit(t *testing.T) {
 		{ID: 11, Kind: KindShadow, OwnerID: 1, Slot: 0, X: 120, Y: 0, Radius: shadowRadius, HP: shadowHP, Mortal: true},
 		{ID: 12, Kind: KindShadow, OwnerID: 1, Slot: 0, X: -120, Y: 0, Radius: shadowRadius, HP: shadowHP, Mortal: true},
 	}
-	ctx := unit.Context{ID: 1, Kind: KindDoppelVeteran, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindDoppelVeteran, Out: out}
 	a.Handle(ctx, unit.Sense{
 		Time:   0.1,
 		Self:   unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP, Vision: bodyVision},
@@ -303,6 +334,8 @@ func TestZhouGatherWalksNotFlashOrbit(t *testing.T) {
 }
 
 func TestReformPicksAMove(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 64)
 	a := &百战{
 		booted:     true,
@@ -312,7 +345,7 @@ func TestReformPicksAMove(t *testing.T) {
 		rng:        rand.New(rand.NewPCG(1, 2)),
 		moveBag:    []int{0}, // 强制下一抽为围刺
 	}
-	ctx := unit.Context{ID: 1, Kind: KindDoppelVeteran, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindDoppelVeteran, Out: out}
 	shadows := []unit.Snapshot{
 		{ID: 10, Kind: KindShadow, OwnerID: 1, Slot: 0, X: 48, Y: 0, Radius: shadowRadius, HP: shadowHP, Mortal: true},
 		{ID: 11, Kind: KindShadow, OwnerID: 1, Slot: 0, X: 0, Y: 48, Radius: shadowRadius, HP: shadowHP, Mortal: true},
@@ -333,11 +366,13 @@ func TestReformPicksAMove(t *testing.T) {
 }
 
 func TestDieStackBlocksDamage(t *testing.T) {
-	setStackGuard(42, true)
-	defer setStackGuard(42, false)
+	matchState := &unit.MatchState{}
+
+	setStackGuard(matchState, 42, true)
+	defer setStackGuard(matchState, 42, false)
 	out := make(chan unit.Cmd, 8)
 	sh := &战影{owner: 1, slot: 0}
-	sh.Handle(unit.Context{ID: 42, Kind: KindShadow, Out: out}, unit.IncomingDamage{
+	sh.Handle(unit.Context{State: matchState, ID: 42, Kind: KindShadow, Out: out}, unit.IncomingDamage{
 		Token: 3, From: 99, Amount: 20, Time: 1,
 	})
 	cmds := drain(out)
@@ -347,10 +382,12 @@ func TestDieStackBlocksDamage(t *testing.T) {
 }
 
 func TestZhouOrbitDealsSeven(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	a := &百战{slot: 0, orbitHitAt: map[uint64]map[uint64]float64{}}
 	enemy := unit.Snapshot{ID: 99, Kind: "敌", Role: unit.RoleFighter, Slot: 1, X: 10, Y: 0, Radius: 18}
-	a.scrapeOrbitAt(unit.Context{ID: 1, Kind: KindDoppelVeteran, Out: out}, unit.Sense{
+	a.scrapeOrbitAt(unit.Context{State: matchState, ID: 1, Kind: KindDoppelVeteran, Out: out}, unit.Sense{
 		Time:   1,
 		Self:   unit.Snapshot{ID: 1, Slot: 0},
 		Nearby: []unit.Snapshot{enemy},
@@ -362,6 +399,8 @@ func TestZhouOrbitDealsSeven(t *testing.T) {
 }
 
 func TestWeiPauseFreezesCenter(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	a := &百战{
 		booted:      true,
@@ -381,7 +420,7 @@ func TestWeiPauseFreezesCenter(t *testing.T) {
 	shadows := []unit.Snapshot{
 		{ID: 10, Kind: KindShadow, OwnerID: 1, Slot: 0, X: 120, Y: 0, Radius: shadowRadius, HP: shadowHP, Mortal: true},
 	}
-	ctx := unit.Context{ID: 1, Kind: KindDoppelVeteran, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindDoppelVeteran, Out: out}
 	a.Handle(ctx, unit.Sense{
 		Time: 1,
 		Self: unit.Snapshot{ID: 1, Slot: 0, HP: bodyHP, MaxHP: bodyHP, Vision: bodyVision},
@@ -451,39 +490,43 @@ func hasDamageNoFreeze(cmds []unit.Cmd, from, to uint64, amount float64) bool {
 }
 
 func TestZhouDashSurvivesHit(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	const id uint64 = 42
-	startDash(id, 1, 0, zhouDashSp, zhouDashLen, zhouDamage, false, false, 0)
-	defer clearDash(id)
+	startDash(matchState, id, 1, 0, zhouDashSp, zhouDashLen, zhouDamage, false, false, 0)
+	defer clearDash(matchState, id)
 
 	sh := &战影{owner: 1, slot: 0}
-	sh.Handle(unit.Context{ID: id, Kind: KindShadow, Out: out}, unit.IncomingDamage{
+	sh.Handle(unit.Context{State: matchState, ID: id, Kind: KindShadow, Out: out}, unit.IncomingDamage{
 		Token: 1, From: 99, Amount: 1, Time: 0.1,
 	})
-	if j := getDash(id); j == nil || j.isDone() {
+	if j := getDash(matchState, id); j == nil || j.isDone() {
 		t.Fatal("轴突不挡伤冲刺挨打后不得 finish")
 	}
 }
 
 func TestDieDashHitKeepsJob(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	const id uint64 = 42
-	startDash(id, 1, 0, dieDashSp, 5000, dieDamage, false, false, 0)
-	defer clearDash(id)
+	startDash(matchState, id, 1, 0, dieDashSp, 5000, dieDamage, false, false, 0)
+	defer clearDash(matchState, id)
 
-	j := getDash(id)
-	j.tick(unit.Context{ID: id, Kind: KindShadow, Out: out}, id, unit.Sense{Time: 0.05})
+	j := getDash(matchState, id)
+	j.tick(unit.Context{State: matchState, ID: id, Kind: KindShadow, Out: out}, id, unit.Sense{Time: 0.05})
 	_ = drain(out)
 
 	sh := &战影{owner: 1, slot: 0}
-	sh.Handle(unit.Context{ID: id, Kind: KindShadow, Out: out}, unit.IncomingDamage{
+	sh.Handle(unit.Context{State: matchState, ID: id, Kind: KindShadow, Out: out}, unit.IncomingDamage{
 		Token: 7, From: 99, Amount: 5, Time: 0.05,
 	})
 	_ = drain(out)
-	if getDash(id) == nil || getDash(id).isDone() {
+	if getDash(matchState, id) == nil || getDash(matchState, id).isDone() {
 		t.Fatal("hit must not finish/clear non-blocking dash")
 	}
-	getDash(id).tick(unit.Context{ID: id, Kind: KindShadow, Out: out}, id, unit.Sense{Time: 0.1})
+	getDash(matchState, id).tick(unit.Context{State: matchState, ID: id, Kind: KindShadow, Out: out}, id, unit.Sense{Time: 0.1})
 	cmds := drain(out)
 	if !hasSetVel(cmds, id) {
 		t.Fatalf("dash tick should still write dash speed: %v", cmds)
@@ -491,14 +534,16 @@ func TestDieDashHitKeepsJob(t *testing.T) {
 }
 
 func TestDashTickThenWallFinishKeepsCruiseLast(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	const id uint64 = 77
-	startDash(id, 1, 0, dieDashSp, 5000, dieDamage, false, false, 0)
-	defer clearDash(id)
+	startDash(matchState, id, 1, 0, dieDashSp, 5000, dieDamage, false, false, 0)
+	defer clearDash(matchState, id)
 
-	getDash(id).tick(unit.Context{ID: id, Kind: KindShadow, Out: out}, id, unit.Sense{Time: 0.05})
+	getDash(matchState, id).tick(unit.Context{State: matchState, ID: id, Kind: KindShadow, Out: out}, id, unit.Sense{Time: 0.05})
 	sh := &战影{owner: 1, slot: 0}
-	sh.Handle(unit.Context{ID: id, Kind: KindShadow, Out: out}, unit.WallHit{
+	sh.Handle(unit.Context{State: matchState, ID: id, Kind: KindShadow, Out: out}, unit.WallHit{
 		Time: 0.05, NX: -1, NY: 0,
 	})
 	cmds := drain(out)

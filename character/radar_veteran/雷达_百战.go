@@ -6,7 +6,6 @@ import (
 	"embed"
 	"math"
 	"math/rand/v2"
-	"sync"
 
 	"xqdj/internal/unit"
 )
@@ -104,31 +103,8 @@ func init() {
 			FX:      []string{"radar-shell-sm"},
 		},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return newShell(info, smallDelay, smallDamage, smallRadius, smallKnockSp, smallKnockDur, popArmWait())
+		return newShell(info, smallDelay, smallDamage, smallRadius, smallKnockSp, smallKnockDur, birthArmWait(info))
 	})
-}
-
-// SpawnInfo 不带自定义字段；小炮击起前摇延迟经队列在 Spawn 前推入、工厂弹出。
-var (
-	armMu    sync.Mutex
-	armWaits []float64
-)
-
-func pushArmWait(v float64) {
-	armMu.Lock()
-	armWaits = append(armWaits, v)
-	armMu.Unlock()
-}
-
-func popArmWait() float64 {
-	armMu.Lock()
-	defer armMu.Unlock()
-	if len(armWaits) == 0 {
-		return 0
-	}
-	v := armWaits[0]
-	armWaits = armWaits[1:]
-	return v
 }
 
 const (
@@ -338,10 +314,9 @@ func (a *百战) hangSmall(ctx unit.Context, s unit.Sense, mx, my float64) {
 			arm += a.rng.Float64() * smallGapMax
 		}
 		x, y := scatterNear(mx, my, smallScatter, a.rng)
-		pushArmWait(arm)
 		a.noteLaunch(s, false, arm, float64(i-1)*10)
 		ctx.Out <- ctx.Born(unit.Spawn{
-			Kind: KindSmallBarrage, X: x, Y: y,
+			Kind: KindSmallBarrage, X: x, Y: y, Data: arm,
 			OwnerID: ctx.ID, Slot: s.Self.Slot,
 		})
 	}
@@ -665,3 +640,5 @@ func sweepAlong(px, py, ux, uy, reach, hx, hy, hr, halfW float64) (along float64
 	}
 	return along, true
 }
+
+func birthArmWait(info unit.SpawnInfo) float64 { wait, _ := info.Data.(float64); return wait }

@@ -20,7 +20,9 @@ func TestBodyIsDarkBlue(t *testing.T) {
 }
 
 func TestShotAimsAtAPerson(t *testing.T) {
-	resetLive()
+	matchState := &unit.MatchState{}
+
+	resetLive(matchState)
 	out := make(chan unit.Cmd, 16)
 	a := &中转站{rng: unit.NewRNG(1)}
 	self := unit.Snapshot{
@@ -31,17 +33,17 @@ func TestShotAimsAtAPerson(t *testing.T) {
 		ID: 2, Role: unit.RoleFighter, Slot: 1, AimPriority: 15,
 		X: 0, Y: 100, Radius: 18,
 	}
-	a.Handle(ctx(out), unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{person}})
+	a.Handle(ctx(matchState, out), unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{person}})
 	if shotOf(drain(out)) != nil {
 		t.Fatal("放站那一拍不该开枪")
 	}
-	a.Handle(ctx(out), unit.Sense{Time: fireDelay, Self: self, Nearby: []unit.Snapshot{person}})
+	a.Handle(ctx(matchState, out), unit.Sense{Time: fireDelay, Self: self, Nearby: []unit.Snapshot{person}})
 	wind := drain(out)
 	if shotOf(wind) != nil || !stood(wind) || !facing(wind, 0, 1) {
 		t.Fatalf("windup should stand and aim, cmds=%+v", wind)
 	}
 	person.X, person.Y = 100, 0
-	a.Handle(ctx(out), unit.Sense{Time: fireDelay + aimWind, Self: self, Nearby: []unit.Snapshot{person}})
+	a.Handle(ctx(matchState, out), unit.Sense{Time: fireDelay + aimWind, Self: self, Nearby: []unit.Snapshot{person}})
 	sp := shotOf(drain(out))
 	if sp == nil || sp.X != self.X || sp.Y != self.Y || sp.VX <= 0 || math.Abs(sp.VY) > sp.VX {
 		t.Fatalf("shot should leave the body toward the aimed person, spawn=%+v", sp)
@@ -49,14 +51,16 @@ func TestShotAimsAtAPerson(t *testing.T) {
 }
 
 func TestOpeningScattersSixNodes(t *testing.T) {
-	resetLive()
+	matchState := &unit.MatchState{}
+
+	resetLive(matchState)
 	out := make(chan unit.Cmd, 16)
 	a := &中转站{rng: unit.NewRNG(7)}
 	self := unit.Snapshot{
 		ID: 1, Kind: KindFrei, Role: unit.RoleFighter, Slot: 0,
 		X: 0, Y: 0, Radius: bodyRadius,
 	}
-	a.Handle(ctx(out), unit.Sense{Time: 0, Self: self})
+	a.Handle(ctx(matchState, out), unit.Sense{Time: 0, Self: self})
 	var nodes []unit.Spawn
 	for _, c := range drain(out) {
 		sp, ok := c.(unit.Spawn)
@@ -76,12 +80,14 @@ func TestOpeningScattersSixNodes(t *testing.T) {
 }
 
 func TestMissReprisesOnceFromANode(t *testing.T) {
-	resetLive()
+	matchState := &unit.MatchState{}
+
+	resetLive(matchState)
 	out := make(chan unit.Cmd, 8)
 	b := &弹{owner: 1, slot: 0, damage: 8, used: map[uint64]bool{}, seen: true, rng: unit.NewRNG(1)}
 	node := nodeAt(4, 10, 0)
 	person := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 10, Y: 80, Radius: 18}
-	b.Handle(ctx(out), unit.Sense{
+	b.Handle(ctx(matchState, out), unit.Sense{
 		Self:   unit.Snapshot{X: 0, Y: -640, VX: 0, VY: 1040, Radius: shotRadius},
 		Nearby: []unit.Snapshot{node, person},
 	})
@@ -93,7 +99,7 @@ func TestMissReprisesOnceFromANode(t *testing.T) {
 		t.Fatalf("inherited velocity=%+v", sp)
 	}
 	b2 := &弹{owner: 1, slot: 0, damage: shotDamage, used: map[uint64]bool{}, rng: unit.NewRNG(2)}
-	b2.Handle(ctx(out), unit.Sense{
+	b2.Handle(ctx(matchState, out), unit.Sense{
 		Self:   unit.Snapshot{X: sp.X, Y: sp.Y, VX: sp.VX, VY: sp.VY, Radius: shotRadius},
 		Nearby: []unit.Snapshot{node, person},
 	})
@@ -101,7 +107,7 @@ func TestMissReprisesOnceFromANode(t *testing.T) {
 		t.Fatalf("damage=%v spent=%v", b2.damage, b2.spent)
 	}
 	drain(out)
-	b2.Handle(ctx(out), unit.Sense{
+	b2.Handle(ctx(matchState, out), unit.Sense{
 		Self:   unit.Snapshot{X: 0, Y: -640, VX: sp.VX, VY: sp.VY, Radius: shotRadius},
 		Nearby: []unit.Snapshot{node, person},
 	})
@@ -111,9 +117,11 @@ func TestMissReprisesOnceFromANode(t *testing.T) {
 }
 
 func TestRepriseDamageIsReadyAtBirth(t *testing.T) {
-	resetLive()
+	matchState := &unit.MatchState{}
+
+	resetLive(matchState)
 	out := make(chan unit.Cmd, 4)
-	parent := unit.Context{ID: 1, Kind: KindFrei, Out: out, Stream: 9}.WithBirths()
+	parent := unit.Context{State: matchState, ID: 1, Kind: KindFrei, Out: out, Stream: 9}.WithBirths()
 	b := &弹{owner: 1, slot: 0, damage: 8, used: map[uint64]bool{}, seen: true, rng: unit.NewRNG(1)}
 	node := nodeAt(4, 10, 0)
 	person := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 10, Y: 80, Radius: 18}
@@ -125,7 +133,7 @@ func TestRepriseDamageIsReadyAtBirth(t *testing.T) {
 	if sp == nil || sp.Stream == 0 {
 		t.Fatalf("spawn=%+v", sp)
 	}
-	born := unit.NewActor(KindFreiShot, unit.SpawnInfo{OwnerID: 1, Slot: 0, Stream: sp.Stream})
+	born := unit.NewActor(KindFreiShot, unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Stream: sp.Stream})
 	shot, ok := born.(*弹)
 	if !ok || shot.damage != 8 || !shot.spent {
 		t.Fatalf("birth damage=%v spent=%v ok=%v", shot.damage, shot.spent, ok)
@@ -133,12 +141,14 @@ func TestRepriseDamageIsReadyAtBirth(t *testing.T) {
 }
 
 func TestHitPersonDoesNotReprise(t *testing.T) {
-	resetLive()
+	matchState := &unit.MatchState{}
+
+	resetLive(matchState)
 	out := make(chan unit.Cmd, 4)
 	b := &弹{owner: 1, slot: 0, damage: 8, used: map[uint64]bool{}, seen: true, hitPerson: true, rng: unit.NewRNG(1)}
 	node := nodeAt(4, 10, 0)
 	person := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 10, Y: 80, Radius: 18}
-	b.Handle(ctx(out), unit.Sense{
+	b.Handle(ctx(matchState, out), unit.Sense{
 		Self:   unit.Snapshot{X: 0, Y: -640, VX: 0, VY: 1040},
 		Nearby: []unit.Snapshot{node, person},
 	})
@@ -148,12 +158,14 @@ func TestHitPersonDoesNotReprise(t *testing.T) {
 }
 
 func TestPassDoublesSpeedAndDamageWithoutTurning(t *testing.T) {
-	resetLive()
+	matchState := &unit.MatchState{}
+
+	resetLive(matchState)
 	out := make(chan unit.Cmd, 4)
 	b := &弹{owner: 1, slot: 0, damage: shotDamage, used: map[uint64]bool{}, seen: true, lx: -40, ly: 0}
 	node := unit.Snapshot{ID: 4, Kind: KindFreiNode, OwnerID: 1, X: 0, Y: 0, Radius: nodeRadius}
 	self := unit.Snapshot{ID: 9, Kind: KindFreiShot, X: 40, Y: 0, VX: shotSpeed, VY: 0, Radius: shotRadius}
-	b.Handle(ctx(out), unit.Sense{Self: self, Nearby: []unit.Snapshot{node}})
+	b.Handle(ctx(matchState, out), unit.Sense{Self: self, Nearby: []unit.Snapshot{node}})
 	v := onlyVel(t, drain(out))
 	if math.Abs(v.VY) > 1e-9 || v.VX <= shotSpeed {
 		t.Fatalf("velocity=%+v", v)
@@ -167,7 +179,9 @@ func TestPassDoublesSpeedAndDamageWithoutTurning(t *testing.T) {
 }
 
 func TestLinearScanCatchesAJumpOverTheStation(t *testing.T) {
-	resetLive()
+	matchState := &unit.MatchState{}
+
+	resetLive(matchState)
 	if !crossed(-80, 0, 80, 0, 0, 0, nodeRadius+shotRadius) {
 		t.Fatal("segment through the station should hit")
 	}
@@ -176,7 +190,7 @@ func TestLinearScanCatchesAJumpOverTheStation(t *testing.T) {
 	}
 	out := make(chan unit.Cmd, 4)
 	n := &站{gate: newGate(1), slot: 0, booted: true}
-	c := ctx(out)
+	c := ctx(matchState, out)
 	far := shotAt(20, -80, 0)
 	n.Handle(c, unit.Sense{Time: 1, Self: nodeAt(4, 0, 0), Nearby: []unit.Snapshot{far}})
 	if n.gate.left != durability || hasDespawn(drain(out)) {
@@ -193,10 +207,12 @@ func TestLinearScanCatchesAJumpOverTheStation(t *testing.T) {
 }
 
 func TestStationVanishesAfterThreeShots(t *testing.T) {
-	resetLive()
+	matchState := &unit.MatchState{}
+
+	resetLive(matchState)
 	out := make(chan unit.Cmd, 4)
 	n := &站{gate: newGate(1), slot: 0, booted: true}
-	c := ctx(out)
+	c := ctx(matchState, out)
 	self := nodeAt(4, 0, 0)
 	for i := 0; i < durability; i++ {
 		id := uint64(30 + i)
@@ -220,10 +236,12 @@ func TestStationVanishesAfterThreeShots(t *testing.T) {
 }
 
 func TestSameShotSpendsOneUse(t *testing.T) {
-	resetLive()
+	matchState := &unit.MatchState{}
+
+	resetLive(matchState)
 	out := make(chan unit.Cmd, 4)
 	n := &站{gate: newGate(1), slot: 0, booted: true}
-	c := ctx(out)
+	c := ctx(matchState, out)
 	self := nodeAt(4, 0, 0)
 	n.Handle(c, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{shotAt(20, -30, 0)}})
 	drain(out)
@@ -235,8 +253,8 @@ func TestSameShotSpendsOneUse(t *testing.T) {
 	}
 }
 
-func ctx(out chan unit.Cmd) unit.Context {
-	return unit.Context{ID: 1, Kind: KindFrei, Out: out}
+func ctx(matchState *unit.MatchState, out chan unit.Cmd) unit.Context {
+	return unit.Context{State: matchState, ID: 1, Kind: KindFrei, Out: out}
 }
 
 func nodeAt(id uint64, x, y float64) unit.Snapshot {

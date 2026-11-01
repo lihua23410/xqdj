@@ -300,7 +300,7 @@ func sealOf(cmds []unit.Cmd) (unit.Spawn, seal, bool) {
 	for i := range cmds {
 		s, ok := cmds[i].(unit.Spawn)
 		if ok && s.Kind == kindSeal {
-			g, ok := takeSeal(s.Stream)
+			g, ok := s.Data.(seal)
 			return s, g, ok
 		}
 	}

@@ -8,10 +8,12 @@ import (
 )
 
 func TestLockoutBlocksOtherSkillsAndRegen(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillAtkFan)
 	a.energy = 2
 	out := make(chan unit.Cmd, 64)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	enemy := foe(80, 0)
 
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
@@ -51,10 +53,12 @@ func TestLockoutBlocksOtherSkillsAndRegen(t *testing.T) {
 }
 
 func TestEnergyRegensAfterLock(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillNone)
 	a.energy = 1
 	out := make(chan unit.Cmd, 16)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	enemy := foe(200, 0)
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	_ = drain(out)
@@ -71,10 +75,12 @@ func TestEnergyRegensAfterLock(t *testing.T) {
 }
 
 func TestRegenPausesDuringSkillLock(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillNone)
 	a.energy = 3
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	far := foe(200, 0)
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{far}})
 	_ = drain(out)
@@ -103,10 +109,12 @@ func TestRegenPausesDuringSkillLock(t *testing.T) {
 }
 
 func TestWallDoesNotRefillEnergy(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillNone)
 	a.energy = 1.2
 	out := make(chan unit.Cmd, 16)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.Handle(ctx, unit.WallHit{Time: 1, NX: 1, NY: 0})
 	if math.Abs(a.energy-1.2) > 1e-6 {
 		t.Fatalf("wall should not restore energy, energy=%v", a.energy)
@@ -114,10 +122,12 @@ func TestWallDoesNotRefillEnergy(t *testing.T) {
 }
 
 func TestNoEnergyNoSkillCast(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillFan)
 	a.energy = 0.05
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
 	cmds := drain(out)
 	if hasSpawn(cmds, KindNingyushiDoll) {
@@ -126,9 +136,11 @@ func TestNoEnergyNoSkillCast(t *testing.T) {
 }
 
 func TestFanHitsThenMisses(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillAtkFan)
 	out := make(chan unit.Cmd, 64)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	enemy := foe(80, 0)
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	cmds := drain(out)
@@ -157,9 +169,11 @@ func TestFanHitsThenMisses(t *testing.T) {
 }
 
 func TestRectKnockback(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillAtkRect)
 	out := make(chan unit.Cmd, 64)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	enemy := foe(70, 0)
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	_ = drain(out)
@@ -202,16 +216,18 @@ func TestRectKnockback(t *testing.T) {
 }
 
 func TestSpecial22NeedsIdleDoll(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillN22)
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
 	if math.Abs(a.energy-energyMax) > 1e-6 {
 		t.Fatalf("empty special 22 must not spend, energy=%v", a.energy)
 	}
 	doll := unit.Snapshot{ID: 9, Kind: KindNingyushiDoll, Role: unit.RoleHelper, OwnerID: 1, X: 40, Y: 0, Radius: dollRadius, Slot: 0}
-	setState(9, dollIdle)
-	t.Cleanup(func() { dropState(9) })
+	setState(matchState, 9, dollIdle)
+	t.Cleanup(func() { dropState(matchState, 9) })
 	a.Handle(ctx, unit.Sense{Time: 0.05, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0), doll}})
 	if math.Abs(a.energy-(energyMax-1)) > 1e-6 {
 		t.Fatalf("idle doll should allow special 22, energy=%v", a.energy)
@@ -219,12 +235,14 @@ func TestSpecial22NeedsIdleDoll(t *testing.T) {
 }
 
 func TestNumberCardUpgradesSlot(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillNone)
 	a.hand = []uint8{SkillN22}
 	a.deck = []uint8{}
 	a.hx, a.hy = 1, 0
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.locked = false
 	a.Handle(ctx, unit.Sense{Time: 0, Self: meVX(0, 0, 80, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
 	_ = drain(out)
@@ -242,6 +260,8 @@ func TestNumberCardUpgradesSlot(t *testing.T) {
 }
 
 func TestCardPickNotAlwaysFirst(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	seen := map[uint8]int{}
 	for i := 0; i < 40; i++ {
 		a := fighter(SkillNone)
@@ -250,7 +270,7 @@ func TestCardPickNotAlwaysFirst(t *testing.T) {
 		a.deck = []uint8{}
 		a.hx, a.hy = 1, 0
 		out := make(chan unit.Cmd, 32)
-		ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out, Stream: uint64(i + 1)}
+		ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out, Stream: uint64(i + 1)}
 		a.Handle(ctx, unit.Sense{Time: 0, Self: meVX(0, 0, 40, 0), Nearby: []unit.Snapshot{foe(60, 0)}})
 		_ = drain(out)
 		if len(a.hand) != 1 {
@@ -264,9 +284,11 @@ func TestCardPickNotAlwaysFirst(t *testing.T) {
 }
 
 func TestChargeOnHitAndSpend(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillPlace)
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(200, 0)}})
 	_ = drain(out)
 	if math.Abs(a.progress-cardFill) > 1e-6 {
@@ -280,13 +302,15 @@ func TestChargeOnHitAndSpend(t *testing.T) {
 }
 
 func TestGuardIgnoresFacing(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillNone)
 	a.energy = 5
 	a.hx, a.hy = 1, 0
 	a.x, a.y = 0, 0
 	a.nearby = []unit.Snapshot{foe(-80, 0)}
 	out := make(chan unit.Cmd, 16)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.Handle(ctx, unit.IncomingDamage{Token: 7, From: 2, Amount: 10, Time: 1})
 	cmds := drain(out)
 	if !hasConfirm(cmds, 7, 10*frontDR) {
@@ -312,8 +336,10 @@ func TestGuardIgnoresFacing(t *testing.T) {
 }
 
 func TestDeckCounts(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillNone)
-	a.ensureRNG(unit.Context{ID: 1})
+	a.ensureRNG(unit.Context{State: matchState, ID: 1})
 	a.initDeckLocked()
 	if len(a.deck) != 20 {
 		t.Fatalf("deck size=%d", len(a.deck))
@@ -331,10 +357,12 @@ func TestDeckCounts(t *testing.T) {
 }
 
 func TestN24N62LockedUntilCard(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillN24)
 	a.hx, a.hy = 1, 0
 	out := make(chan unit.Cmd, 16)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: meVX(0, 0, 80, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
 	if hasSpawn(drain(out), KindNingyushiDoll) {
 		t.Fatal("[24] should be empty before card")
@@ -347,10 +375,12 @@ func TestN24N62LockedUntilCard(t *testing.T) {
 }
 
 func TestSpell24RushesTowardEnemy(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillN24)
 	a.level[SkillN24] = 1
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
 	cmds := drain(out)
 	if countSpawn(cmds, KindNingyushiDoll) != spell24N {
@@ -368,10 +398,12 @@ func TestSpell24RushesTowardEnemy(t *testing.T) {
 }
 
 func TestSpell24CollisionDumpsRemaining(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillN24)
 	a.level[SkillN24] = 1
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
 	_ = drain(out)
 	a.force = SkillNone
@@ -387,10 +419,12 @@ func TestSpell24CollisionDumpsRemaining(t *testing.T) {
 }
 
 func TestSpell24EndsOnWall(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillN24)
 	a.level[SkillN24] = 1
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
 	_ = drain(out)
 	a.force = SkillNone
@@ -414,9 +448,11 @@ func TestSpell24EndsOnWall(t *testing.T) {
 }
 
 func TestCallOnSpecialAndSpell(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillPlace)
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(200, 0)}})
 	if lastNamed(drain(out), "call") != nil {
 		t.Fatal("unnamed skills should not shout")
@@ -438,11 +474,12 @@ func TestCallOnSpecialAndSpell(t *testing.T) {
 }
 
 func TestIdleDollHasNoRangeAndDoesNotRecall(t *testing.T) {
-	resetQueues()
-	pushDoll(dollSpec{mode: dollIdle})
-	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	matchState := &unit.MatchState{}
+
+	spec := dollSpec{mode: dollIdle}
+	d := newDoll(unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: spec})
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNingyushiDoll, Out: out}
 	owner := me(0, 0)
 	d.Handle(ctx, unit.Sense{Time: 0, Self: dollSnap(9, 80, 0), Nearby: []unit.Snapshot{owner, foe(120, 0)}})
 	cmds := drain(out)
@@ -454,15 +491,16 @@ func TestIdleDollHasNoRangeAndDoesNotRecall(t *testing.T) {
 	if hasTeleport(cmds, 9) {
 		t.Fatalf("待命人偶 should stay put: %v", cmds)
 	}
-	dropState(9)
+	dropState(matchState, 9)
 }
 
 func TestStrikeDollRecallsAfterAttack(t *testing.T) {
-	resetQueues()
-	pushDoll(dollSpec{mode: dollStrike, recallAt: 1.1})
-	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	matchState := &unit.MatchState{}
+
+	spec := dollSpec{mode: dollStrike, recallAt: 1.1}
+	d := newDoll(unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: spec})
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNingyushiDoll, Out: out}
 	owner := me(0, 0)
 	self := dollSnap(9, 108, 0)
 	d.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{owner}})
@@ -478,15 +516,16 @@ func TestStrikeDollRecallsAfterAttack(t *testing.T) {
 	if !hasDespawn(drain(out), 9) {
 		t.Fatal("strike recall should finish in about 0.4s")
 	}
-	dropState(9)
+	dropState(matchState, 9)
 }
 
 func TestDollDeploysInPointTwo(t *testing.T) {
-	resetQueues()
-	pushDoll(dollSpec{mode: dollStrike, pose: poseAd, x: dollReach, y: 0, arriveAt: deployLife})
-	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	matchState := &unit.MatchState{}
+
+	spec := dollSpec{mode: dollStrike, pose: poseAd, x: dollReach, y: 0, arriveAt: deployLife}
+	d := newDoll(unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: spec})
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNingyushiDoll, Out: out}
 	owner := me(0, 0)
 	d.Handle(ctx, unit.Sense{Time: 0, Self: dollSnap(9, 0, 0), Nearby: []unit.Snapshot{owner}})
 	tp := lastTeleport(drain(out), 9)
@@ -498,15 +537,16 @@ func TestDollDeploysInPointTwo(t *testing.T) {
 	if tp == nil || math.Abs(tp.X-dollReach) > 1 || math.Abs(tp.Y) > 1 {
 		t.Fatalf("doll should arrive at dest in 0.2s, got %+v", tp)
 	}
-	dropState(9)
+	dropState(matchState, 9)
 }
 
 func TestEllipseDollShowsRange(t *testing.T) {
-	resetQueues()
-	pushDoll(dollSpec{mode: dollEllipse, armAt: 0.8, until: 3.8, rangeOn: true})
-	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	matchState := &unit.MatchState{}
+
+	spec := dollSpec{mode: dollEllipse, armAt: 0.8, until: 3.8, rangeOn: true}
+	d := newDoll(unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: spec})
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNingyushiDoll, Out: out}
 	d.Handle(ctx, unit.Sense{Time: 0, Self: dollSnap(9, 54, 0), Nearby: []unit.Snapshot{me(0, 0), foe(80, 0)}})
 	if rangeOn(drain(out)) {
 		t.Fatal("ellipse should wait for windup")
@@ -515,7 +555,7 @@ func TestEllipseDollShowsRange(t *testing.T) {
 	if !rangeOn(drain(out)) {
 		t.Fatal("armed ellipse doll should show range")
 	}
-	dropState(9)
+	dropState(matchState, 9)
 }
 
 func dollSnap(id uint64, x, y float64) unit.Snapshot {
@@ -526,40 +566,43 @@ func dollSnap(id uint64, x, y float64) unit.Snapshot {
 }
 
 func TestEllipseAxesStayHorizontal(t *testing.T) {
-	resetQueues()
-	pushDoll(dollSpec{mode: dollEllipse, ux: 0, uy: 1, armAt: 0, until: 4, rangeOn: true})
-	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	matchState := &unit.MatchState{}
+
+	spec := dollSpec{mode: dollEllipse, ux: 0, uy: 1, armAt: 0, until: 4, rangeOn: true}
+	d := newDoll(unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: spec})
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNingyushiDoll, Out: out}
 	d.Handle(ctx, unit.Sense{Time: 0, Self: dollSnap(9, 54, 0), Nearby: []unit.Snapshot{me(0, 0), foe(80, 80)}})
 	a1 := rangeAxes(drain(out))
 	if a1 == nil || math.Abs(a1[0]-1) > 1e-6 || math.Abs(a1[1]) > 1e-6 {
 		t.Fatalf("ellipse must stay screen-horizontal, axes=%v", a1)
 	}
-	dropState(9)
+	dropState(matchState, 9)
 }
 
 func TestEllipseHitsMortalMinion(t *testing.T) {
-	resetQueues()
-	pushDoll(dollSpec{mode: dollOrbit, ang: 0, until: 3, rangeOn: true})
-	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	matchState := &unit.MatchState{}
+
+	spec := dollSpec{mode: dollOrbit, ang: 0, until: 3, rangeOn: true}
+	d := newDoll(unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: spec})
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNingyushiDoll, Out: out}
 	self := dollSnap(9, 200, 0)
 	d.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{me(0, 0), mortalMinion(230, 0)}})
 	cmds := drain(out)
 	if !hasDamage(cmds, 8, burstDmg) {
 		t.Fatalf("ellipse should hit mortal minion: %v", cmds)
 	}
-	dropState(9)
+	dropState(matchState, 9)
 }
 
 func TestBattleAxeUsesEllipse(t *testing.T) {
-	resetQueues()
-	pushDoll(dollSpec{mode: dollOrbit, ang: 0, until: 3, rangeOn: true})
-	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	matchState := &unit.MatchState{}
+
+	spec := dollSpec{mode: dollOrbit, ang: 0, until: 3, rangeOn: true}
+	d := newDoll(unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: spec})
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNingyushiDoll, Out: out}
 	self := dollSnap(9, 200, 0)
 	d.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{me(0, 0), foe(230, 0)}})
 	cmds := drain(out)
@@ -573,18 +616,19 @@ func TestBattleAxeUsesEllipse(t *testing.T) {
 	if hasDamageTo(drain(out), 2) {
 		t.Fatal("vertical miss should stay outside horizontal ellipse")
 	}
-	dropState(9)
+	dropState(matchState, 9)
 }
 
 func TestBattleExpandsWithHit(t *testing.T) {
-	resetQueues()
-	pushDoll(dollSpec{
+	matchState := &unit.MatchState{}
+
+	spec := dollSpec{
 		mode: dollOrbit, ang: 0, x: orbitR, y: 0,
 		arriveAt: orbitExpand, until: orbitExpand + orbitLife, rangeOn: true,
-	})
-	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	}
+	d := newDoll(unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: spec})
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNingyushiDoll, Out: out}
 	d.Handle(ctx, unit.Sense{Time: 0, Self: dollSnap(9, 0, 0), Nearby: []unit.Snapshot{me(0, 0), foe(36, 0)}})
 	cmds := drain(out)
 	tp := lastTeleport(cmds, 9)
@@ -608,18 +652,19 @@ func TestBattleExpandsWithHit(t *testing.T) {
 	if !hasDespawn(drain(out), 9) {
 		t.Fatal("battle duration should cover expand + orbit")
 	}
-	dropState(9)
+	dropState(matchState, 9)
 }
 
 func TestChaseGoesToLockedPoint(t *testing.T) {
-	resetQueues()
-	pushDoll(dollSpec{mode: dollIdle})
-	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	matchState := &unit.MatchState{}
+
+	spec := dollSpec{mode: dollIdle}
+	d := newDoll(unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: spec})
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNingyushiDoll, Out: out}
 	self := dollSnap(9, 0, 0)
-	orderChase(9, 0.8, 3.8, 100, 0)
-	t.Cleanup(func() { dropState(9) })
+	orderChase(matchState, 9, 0.8, 3.8, 100, 0)
+	t.Cleanup(func() { dropState(matchState, 9) })
 	d.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{me(0, 0), foe(100, 0)}})
 	_ = drain(out)
 	d.Handle(ctx, unit.Sense{Time: 0.8, Self: self, Nearby: []unit.Snapshot{me(0, 0), foe(100, 80)}})
@@ -633,14 +678,15 @@ func TestChaseGoesToLockedPoint(t *testing.T) {
 }
 
 func TestSpell26EllipseOnThrowAndReturn(t *testing.T) {
-	resetQueues()
-	pushDoll(dollSpec{
+	matchState := &unit.MatchState{}
+
+	spec := dollSpec{
 		mode: dollEllipseRecall, x: dollReach, y: 0, arriveAt: deployLife,
 		rangeOn: true, slow: true, once: true, dmg: 8.4,
-	})
-	d := newDoll(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	}
+	d := newDoll(unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: spec})
 	out := make(chan unit.Cmd, 32)
-	ctx := unit.Context{ID: 9, Kind: KindNingyushiDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNingyushiDoll, Out: out}
 	self := dollSnap(9, 0, 0)
 	d.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{me(0, 0), foe(20, 0)}})
 	cmds := drain(out)
@@ -663,7 +709,7 @@ func TestSpell26EllipseOnThrowAndReturn(t *testing.T) {
 	if !hasDespawn(drain(out), 9) {
 		t.Fatal("spell 26 recall should finish in about 0.4s")
 	}
-	dropState(9)
+	dropState(matchState, 9)
 }
 
 func rangeOn(cmds []unit.Cmd) bool {
@@ -709,7 +755,6 @@ func lastTeleport(cmds []unit.Cmd, id uint64) *unit.Teleport {
 }
 
 func fighter(skill uint8) *人偶使 {
-	resetQueues()
 	return &人偶使{
 		energy:    energyMax,
 		energyCap: energyMax,
@@ -748,16 +793,17 @@ func mortalMinion(x, y float64) unit.Snapshot {
 }
 
 func TestChainLaserPolylineThenClears(t *testing.T) {
-	resetQueues()
+	matchState := &unit.MatchState{}
+
 	a := fighter(SkillN22)
 	a.level[SkillN22] = 1
 	out := make(chan unit.Cmd, 64)
-	ctx := unit.Context{ID: 1, Kind: KindNingyushi, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindNingyushi, Out: out}
 	d1 := unit.Snapshot{ID: 9, Kind: KindNingyushiDoll, Role: unit.RoleHelper, OwnerID: 1, X: 40, Y: 0, Radius: dollRadius, Slot: 0}
 	d2 := unit.Snapshot{ID: 10, Kind: KindNingyushiDoll, Role: unit.RoleHelper, OwnerID: 1, X: 60, Y: 0, Radius: dollRadius, Slot: 0}
-	setState(9, dollIdle)
-	setState(10, dollIdle)
-	t.Cleanup(func() { dropState(9); dropState(10) })
+	setState(matchState, 9, dollIdle)
+	setState(matchState, 10, dollIdle)
+	t.Cleanup(func() { dropState(matchState, 9); dropState(matchState, 10) })
 	enemy := foe(80, 0)
 	near := []unit.Snapshot{enemy, d1, d2}
 
@@ -794,9 +840,11 @@ func TestChainLaserPolylineThenClears(t *testing.T) {
 }
 
 func TestHouraiBeamDespawns(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	b := 激光{}
 	out := make(chan unit.Cmd, 8)
-	ctx := unit.Context{ID: 11, Kind: KindNingyushiBeam, Out: out}
+	ctx := unit.Context{State: matchState, ID: 11, Kind: KindNingyushiBeam, Out: out}
 	b.Handle(ctx, unit.Sense{Time: 1, Self: unit.Snapshot{ID: 11, Kind: KindNingyushiBeam}})
 	if hasDespawn(drain(out), 11) {
 		t.Fatal("beam should last through hourai")

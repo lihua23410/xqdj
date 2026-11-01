@@ -108,10 +108,6 @@ const (
 	houraiDmg   = 1.4
 )
 
-var (
-	owners sync.Map
-)
-
 func init() {
 	p := unit.NewPack(KindNingyushi, assets)
 	p.Register(unit.Spec{
@@ -319,7 +315,7 @@ func (a *人偶使) onSense(ctx unit.Context, s unit.Sense) {
 		a.hx, a.hy = s.Self.VX/n, s.Self.VY/n
 	}
 	a.nearby = append(a.nearby[:0], s.Nearby...)
-	a.countDolls(ctx.ID)
+	a.countDolls(ctx.State, ctx.ID)
 	if a.booted {
 		if !a.lockedOut(s.Time) {
 			dt := s.Time - a.lastT
@@ -335,7 +331,7 @@ func (a *人偶使) onSense(ctx unit.Context, s unit.Sense) {
 	} else {
 		a.boot(ctx, s.Time)
 	}
-	owners.Store(ctx.ID, a)
+	stateFor(ctx.State).owners.Store(ctx.ID, a)
 	a.emitHUD(ctx, s)
 	a.tickJob(ctx, s)
 	if a.lockedOut(s.Time) {
@@ -422,7 +418,7 @@ func (a *人偶使) ensureRNG(ctx unit.Context) {
 	}
 }
 
-func (a *人偶使) countDolls(id uint64) {
+func (a *人偶使) countDolls(scope *unit.MatchState, id uint64) {
 	a.idleDolls = 0
 	a.liveDolls = 0
 	for i := range a.nearby {
@@ -431,7 +427,7 @@ func (a *人偶使) countDolls(id uint64) {
 			continue
 		}
 		a.liveDolls++
-		if stateOf(o.ID) == dollIdle {
+		if stateOf(scope, o.ID) == dollIdle {
 			a.idleDolls++
 		}
 	}
@@ -496,8 +492,8 @@ func enemyOf(s unit.Sense) *unit.Snapshot {
 	return unit.Seek(s)
 }
 
-func noteDealt(owner uint64) {
-	v, ok := owners.Load(owner)
+func noteDealt(scope *unit.MatchState, owner uint64) {
+	v, ok := stateFor(scope).owners.Load(owner)
 	if !ok {
 		return
 	}
@@ -508,8 +504,8 @@ func noteDealt(owner uint64) {
 	a.charge()
 }
 
-func ownerOf(id uint64) *人偶使 {
-	v, ok := owners.Load(id)
+func ownerOf(scope *unit.MatchState, id uint64) *人偶使 {
+	v, ok := stateFor(scope).owners.Load(id)
 	if !ok {
 		return nil
 	}
@@ -522,7 +518,7 @@ func deal(ctx unit.Context, owner, to uint64, amt float64) {
 		return
 	}
 	ctx.Out <- unit.Damage{From: ctx.ID, To: to, Amount: amt}
-	noteDealt(owner)
+	noteDealt(ctx.State, owner)
 }
 
 func pushEnemy(ctx unit.Context, fromX, fromY float64, e unit.Snapshot) (float64, float64) {

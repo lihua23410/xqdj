@@ -10,7 +10,6 @@ import (
 	"embed"
 	"math"
 	"math/rand/v2"
-	"sync"
 
 	"xqdj/internal/unit"
 )
@@ -61,7 +60,7 @@ func init() {
 		Fighter:  false,
 		Look:     unit.Look{Color: "#d6ef6a", FX: []string{"seal"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		s, ok := takeSeal(info.Stream)
+		s, ok := info.Data.(seal)
 		if !ok {
 			s = seal{sides: int(layerMin), damage: layerMin, reach: sealReach(layerMin), life: sealLife(layerMin)}
 		}
@@ -117,27 +116,6 @@ type seal struct {
 	reach  float64
 	life   float64
 	spin   float64
-}
-
-var (
-	sealMu sync.Mutex
-	seals  = map[uint64]seal{}
-)
-
-func putSeal(stream uint64, s seal) {
-	sealMu.Lock()
-	seals[stream] = s
-	sealMu.Unlock()
-}
-
-func takeSeal(stream uint64) (seal, bool) {
-	sealMu.Lock()
-	s, ok := seals[stream]
-	if ok {
-		delete(seals, stream)
-	}
-	sealMu.Unlock()
-	return s, ok
 }
 
 type 阈值 struct {
@@ -198,7 +176,7 @@ func (a *阈值) shoot(ctx unit.Context, s unit.Sense) {
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
 	})
-	putSeal(sp.Stream, seal{sides: sides, damage: damage, reach: reach, life: life, spin: spin})
+	sp.Data = seal{sides: sides, damage: damage, reach: reach, life: life, spin: spin}
 	ctx.Out <- sp
 	a.paint(ctx)
 }

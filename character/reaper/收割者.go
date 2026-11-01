@@ -4,7 +4,7 @@ package 收割者
 import (
 	"embed"
 	"math"
-	"sync"
+
 	"xqdj/internal/unit"
 )
 
@@ -32,7 +32,6 @@ const (
 )
 
 // recallingIDs：主人判定收回时记下当时场上镰刀的 id。新钉的刀 id 不在里面，途中仍能钉。
-var recallingIDs sync.Map
 
 //go:embed fx
 var assets embed.FS
@@ -132,7 +131,7 @@ func (r *收割者) maybeReap(ctx unit.Context, s unit.Sense) {
 		if o.Kind != KindSickle || o.OwnerID != ctx.ID {
 			continue
 		}
-		recallingIDs.Store(o.ID, struct{}{})
+		stateFor(ctx.State).recallingIDs.Store(o.ID, struct{}{})
 	}
 }
 
@@ -156,7 +155,7 @@ func (k *镰刀) Handle(ctx unit.Context, ev unit.Event) {
 
 func (k *镰刀) onSense(ctx unit.Context, s unit.Sense) {
 	if !k.recalling {
-		if _, ok := recallingIDs.LoadAndDelete(ctx.ID); ok {
+		if _, ok := stateFor(ctx.State).recallingIDs.LoadAndDelete(ctx.ID); ok {
 			vx := 0.0
 			if k.drew {
 				vx = harvestCarry

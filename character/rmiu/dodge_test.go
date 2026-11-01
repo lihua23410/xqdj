@@ -28,12 +28,14 @@ func TestDodgeChance(t *testing.T) {
 }
 
 func TestDodgeBlocksHit(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	m := meleeMiu()
 	m.rng = lowRNG()
 	m.seenSp = map[uint64]float64{99: 170}
 	m.x, m.y = 1, 2
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.IncomingDamage{Token: 4, From: 99, Amount: 9, Speed: 270})
 	cmds := drain(out)
 	blocked := false
@@ -51,11 +53,13 @@ func TestDodgeBlocksHit(t *testing.T) {
 }
 
 func TestNoDodgeWhenSlower(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	m := meleeMiu()
 	m.rng = lowRNG()
 	m.seenSp = map[uint64]float64{99: 400}
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.IncomingDamage{Token: 5, From: 99, Amount: 9, Speed: 170})
 	ok := false
 	for _, c := range drain(out) {

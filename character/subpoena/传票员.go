@@ -25,7 +25,6 @@ import (
 	"embed"
 	"math"
 	"math/rand/v2"
-	"sync"
 
 	"xqdj/internal/unit"
 )
@@ -64,10 +63,6 @@ const (
 	dt = 1.0 / 60.0
 )
 
-// tickets 把「这张票该记多少伤」从发射者交给新单位。Spawn 没有载荷字段，
-// 父子之间只靠 ctx.Born 定下的 Stream 对号；工厂取一次就删，不留引用。
-var tickets sync.Map // uint64 -> float64
-
 //go:embed fx
 var assets embed.FS
 
@@ -97,8 +92,7 @@ func init() {
 		Vision: 9999, // 自己按 Nearby 判碰，得看得见全场
 		Look:   unit.Look{Color: ticketColor, FX: []string{"ticket"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		dmg, _ := tickets.LoadAndDelete(info.Stream)
-		value, _ := dmg.(float64)
+		value, _ := info.Data.(float64)
 		return &传票{dmg: value, slot: info.Slot}
 	})
 }
@@ -246,7 +240,7 @@ func (a *传票员) launch(ctx unit.Context, s unit.Sense, ang, dmg float64) {
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
 	})
-	tickets.Store(sp.Stream, dmg)
+	sp.Data = dmg
 	ctx.Out <- sp
 }
 

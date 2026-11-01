@@ -23,12 +23,14 @@ func TestHexHitAcceptsFace(t *testing.T) {
 }
 
 func TestWallHitPlantsSickleOnHexEdge(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	e := &收割者{}
 	nx, ny := hexNormal(2)
 	ap := unit.HexRadius * math.Sqrt(3) / 2
 	x, y := nx*(ap-18), ny*(ap-18)
-	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
+	e.Handle(unit.Context{State: matchState, ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
 		Time: 1, NX: nx, NY: ny, X: x, Y: y,
 	})
 	cmds := drain(out)
@@ -39,9 +41,11 @@ func TestWallHitPlantsSickleOnHexEdge(t *testing.T) {
 }
 
 func TestCapsuleWallDoesNotPlant(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	e := &收割者{}
-	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
+	e.Handle(unit.Context{State: matchState, ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
 		Time: 1, NX: 1, NY: 0, Kind: unit.WallCapsule,
 	})
 	if lastSpawn(drain(out)) != nil {
@@ -50,9 +54,11 @@ func TestCapsuleWallDoesNotPlant(t *testing.T) {
 }
 
 func TestHardWallPlantsSickle(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	e := &收割者{}
-	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
+	e.Handle(unit.Context{State: matchState, ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
 		Time: 1, NX: 0, NY: 1, Kind: unit.WallHard,
 	})
 	sp := lastSpawn(drain(out))
@@ -62,9 +68,11 @@ func TestHardWallPlantsSickle(t *testing.T) {
 }
 
 func TestWallHitPlantsAtContactNotStalePosition(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	e := &收割者{}
-	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
+	e.Handle(unit.Context{State: matchState, ID: 1, Kind: KindReaper, Out: out}, unit.WallHit{
 		Time: 1, NX: 0, NY: 1, Kind: unit.WallHard, X: 40, Y: 10,
 	})
 	sp := lastSpawn(drain(out))
@@ -77,12 +85,14 @@ func TestWallHitPlantsAtContactNotStalePosition(t *testing.T) {
 }
 
 func TestSameSideStacks(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	e := &收割者{}
 	nx, ny := hexNormal(1)
 	ap := unit.HexRadius * math.Sqrt(3) / 2
 	x, y := nx*(ap-18), ny*(ap-18)
-	ctx := unit.Context{ID: 1, Kind: KindReaper, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindReaper, Out: out}
 	e.Handle(ctx, unit.WallHit{Time: 1, NX: nx, NY: ny, X: x, Y: y})
 	_ = drain(out)
 	e.Handle(ctx, unit.WallHit{Time: 2, NX: nx, NY: ny})
@@ -93,6 +103,8 @@ func TestSameSideStacks(t *testing.T) {
 }
 
 func TestTenSicklesRecall(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	e := &收割者{}
 	nearby := make([]unit.Snapshot, 0, sickleNeed)
@@ -102,7 +114,7 @@ func TestTenSicklesRecall(t *testing.T) {
 			X: float64(i) * 20, Y: 200, Radius: sickleRadius,
 		})
 	}
-	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.Sense{
+	e.Handle(unit.Context{State: matchState, ID: 1, Kind: KindReaper, Out: out}, unit.Sense{
 		Time:   3,
 		Self:   unit.Snapshot{ID: 1, Kind: KindReaper, Role: unit.RoleFighter, Slot: 0},
 		Nearby: nearby,
@@ -114,7 +126,7 @@ func TestTenSicklesRecall(t *testing.T) {
 	for i := 0; i < sickleNeed; i++ {
 		kout := make(chan unit.Cmd, 8)
 		k := &镰刀{owner: 1, slot: 0}
-		k.Handle(unit.Context{ID: uint64(10 + i), Kind: KindSickle, Out: kout}, unit.Sense{
+		k.Handle(unit.Context{State: matchState, ID: uint64(10 + i), Kind: KindSickle, Out: kout}, unit.Sense{
 			Time: 3,
 			Self: nearby[i],
 		})
@@ -134,9 +146,11 @@ func TestTenSicklesRecall(t *testing.T) {
 }
 
 func TestSickleCutsWithCD(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	k := &镰刀{owner: 1, slot: 0}
-	ctx := unit.Context{ID: 9, Kind: KindSickle, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindSickle, Out: out}
 	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 10, Y: 0, Radius: 18}
 	k.Handle(ctx, unit.Sense{
 		Time: 0,
@@ -169,9 +183,11 @@ func TestSickleCutsWithCD(t *testing.T) {
 }
 
 func TestCutTurnsBlood(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	k := &镰刀{owner: 1, slot: 0}
-	ctx := unit.Context{ID: 9, Kind: KindSickle, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindSickle, Out: out}
 	k.Handle(ctx, unit.Sense{
 		Time: 0,
 		Self: unit.Snapshot{ID: 9, X: 0, Y: 0, Radius: 18, Slot: 0},
@@ -194,9 +210,11 @@ func TestCutTurnsBlood(t *testing.T) {
 }
 
 func TestReapDespawnsOnOwner(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	k := &镰刀{owner: 1, slot: 0, recalling: true}
-	k.Handle(unit.Context{ID: 9, Kind: KindReap, Out: out}, unit.Sense{
+	k.Handle(unit.Context{State: matchState, ID: 9, Kind: KindReap, Out: out}, unit.Sense{
 		Time: 1,
 		Self: unit.Snapshot{ID: 9, X: 0, Y: 0, Radius: 36, Slot: 0},
 		Nearby: []unit.Snapshot{{
@@ -213,9 +231,11 @@ func TestReapDespawnsOnOwner(t *testing.T) {
 }
 
 func TestParkedDoesNotDespawnOnOwner(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	k := &镰刀{owner: 1, slot: 0}
-	k.Handle(unit.Context{ID: 9, Kind: KindSickle, Out: out}, unit.Sense{
+	k.Handle(unit.Context{State: matchState, ID: 9, Kind: KindSickle, Out: out}, unit.Sense{
 		Time: 1,
 		Self: unit.Snapshot{ID: 9, X: 0, Y: 0, Radius: 18, Slot: 0},
 		Nearby: []unit.Snapshot{{
@@ -228,9 +248,11 @@ func TestParkedDoesNotDespawnOnOwner(t *testing.T) {
 }
 
 func TestHitSickleHealsOnRecall(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	k := &镰刀{owner: 1, slot: 0, recalling: true, drew: true}
-	k.Handle(unit.Context{ID: 9, Kind: KindReap, Out: out}, unit.Sense{
+	k.Handle(unit.Context{State: matchState, ID: 9, Kind: KindReap, Out: out}, unit.Sense{
 		Time: 1,
 		Self: unit.Snapshot{ID: 9, X: 0, Y: 0, Radius: 36, Slot: 0},
 		Nearby: []unit.Snapshot{{
@@ -244,9 +266,11 @@ func TestHitSickleHealsOnRecall(t *testing.T) {
 }
 
 func TestTwoCutsStillHeal3(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	k := &镰刀{owner: 1, slot: 0}
-	ctx := unit.Context{ID: 9, Kind: KindSickle, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindSickle, Out: out}
 	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 10, Y: 0, Radius: 18}
 	self := unit.Snapshot{ID: 9, X: 0, Y: 0, Radius: 18, Slot: 0}
 	k.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{enemy}})
@@ -254,7 +278,7 @@ func TestTwoCutsStillHeal3(t *testing.T) {
 	k.Handle(ctx, unit.Sense{Time: 0.4, Self: self, Nearby: []unit.Snapshot{enemy}})
 	_ = drain(out)
 	k.recalling = true
-	k.Handle(unit.Context{ID: 9, Kind: KindReap, Out: out}, unit.Sense{
+	k.Handle(unit.Context{State: matchState, ID: 9, Kind: KindReap, Out: out}, unit.Sense{
 		Time: 1,
 		Self: unit.Snapshot{ID: 9, X: 0, Y: 0, Radius: 36, Slot: 0},
 		Nearby: []unit.Snapshot{{
@@ -275,10 +299,12 @@ func TestTwoCutsStillHeal3(t *testing.T) {
 }
 
 func TestHitParkedCarriesHealOnTransform(t *testing.T) {
-	recallingIDs.Store(uint64(21), struct{}{})
+	matchState := &unit.MatchState{}
+
+	stateFor(matchState).recallingIDs.Store(uint64(21), struct{}{})
 	out := make(chan unit.Cmd, 8)
 	k := &镰刀{owner: 1, slot: 0, drew: true}
-	k.Handle(unit.Context{ID: 21, Kind: KindSickle, Out: out}, unit.Sense{
+	k.Handle(unit.Context{State: matchState, ID: 21, Kind: KindSickle, Out: out}, unit.Sense{
 		Time: 2,
 		Self: unit.Snapshot{ID: 21, X: 40, Y: 0, Radius: 18, Slot: 0},
 	})
@@ -288,7 +314,7 @@ func TestHitParkedCarriesHealOnTransform(t *testing.T) {
 	}
 	rout := make(chan unit.Cmd, 8)
 	rk := &镰刀{owner: 1, slot: 0, recalling: true}
-	rk.Handle(unit.Context{ID: 22, Kind: KindReap, Out: rout}, unit.Sense{
+	rk.Handle(unit.Context{State: matchState, ID: 22, Kind: KindReap, Out: rout}, unit.Sense{
 		Time: 2,
 		Self: unit.Snapshot{ID: 22, X: 0, Y: 0, Radius: 36, Slot: 0, VX: harvestCarry},
 		Nearby: []unit.Snapshot{{
@@ -302,9 +328,11 @@ func TestHitParkedCarriesHealOnTransform(t *testing.T) {
 }
 
 func TestAcceptsIncomingDamage(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 4)
 	e := &收割者{}
-	e.Handle(unit.Context{ID: 1, Kind: KindReaper, Out: out}, unit.IncomingDamage{
+	e.Handle(unit.Context{State: matchState, ID: 1, Kind: KindReaper, Out: out}, unit.IncomingDamage{
 		Token: 3, Amount: 9, Time: 1,
 	})
 	if _, ok := drain(out)[0].(unit.ConfirmDamage); !ok {

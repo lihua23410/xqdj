@@ -284,6 +284,9 @@ type Spawn struct {
 	Stream uint64
 	// HardNail 钉在硬墙上。墙在转的话，这个点跟着墙走。
 	HardNail bool
+	// Data 是包内私有的出生参数，只交给这次出生的工厂，不进快照。
+	// 传不可变值，或将数据所有权交给新演员；发送后不得继续修改共享引用。
+	Data any
 }
 
 type Despawn struct {
@@ -416,6 +419,8 @@ type VisionBlock struct {
 }
 
 type Context struct {
+	// State 供本场的同包演员协作，不得用进程级可变表保存对局状态。
+	State *MatchState
 	// Field 是本单位最近一次感知的场地快照；首次感知前使用出生时的快照。
 	Field  Field
 	ID     uint64
@@ -449,6 +454,8 @@ type Actor interface {
 }
 
 type SpawnInfo struct {
+	State *MatchState
+	Data  any
 	Field Field
 	// Probe 是本场非因果的只读探针记录，由构造器复制后持有。
 	Probe   *ProbeTape

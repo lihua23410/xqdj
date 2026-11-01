@@ -346,7 +346,7 @@ func (a *钓鱼佬) launch(ctx unit.Context, x, y, ux, uy, weight float64, i, n 
 	if spent {
 		sp *= 0.45
 	}
-	pushFish(fishJob{y: weight, dmg: fishDamage(weight), speed: sp, spent: spent})
+	job := fishJob{y: weight, dmg: fishDamage(weight), speed: sp, spent: spent}
 	if n > 1 {
 		span := 1.2
 		off := -span/2 + span*float64(i)/float64(n-1)
@@ -355,7 +355,7 @@ func (a *钓鱼佬) launch(ctx unit.Context, x, y, ux, uy, weight float64, i, n 
 	}
 	gap := fisherRadius + r + 2
 	ctx.Out <- ctx.Born(unit.Spawn{
-		Kind: kind, OwnerID: ctx.ID, Slot: a.slot,
+		Kind: kind, OwnerID: ctx.ID, Slot: a.slot, Data: job,
 		X: x + ux*gap, Y: y + uy*gap,
 		VX: ux * sp, VY: uy * sp,
 	})

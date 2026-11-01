@@ -65,7 +65,7 @@ go run ./cmd/winrate -n 100 -timeout 90 -o winrate.md
 | `-j` | `NumCPU×8` | 同时进行的场次数 |
 | `-only` | 空 | 只测该战斗机对其余所有球（不含自己打自己） |
 
-`-only` 会先校验名字；报告头部标出范围，但两张矩阵仍按当时全部已注册战斗机输出行列，无关格子是 `—`。种子由对阵双方名字决定，`-n`、`-j` 不影响结果。名单来自 `unit.FighterKinds()`，不写死只数。
+`-only` 会先校验名字；报告头部标出范围，但两张矩阵仍按当时全部已注册战斗机输出行列，无关格子是 `—`。每场种子由左右双方名字和场次编号决定；增加 `-n` 会扩展样本，修改 `-j` 不改变这些种子。演员仍异步处理事件，因此相同种子尚不保证逐场结果完全一致。名单来自 `unit.FighterKinds()`，不写死只数。
 
 ## 目录
 
@@ -330,6 +330,10 @@ func(info unit.SpawnInfo) unit.Actor {
     return &新球{} // info.OwnerID / info.Slot 开局随从要用
 }
 ```
+
+同场演员需要共享主人表、计数或协作标记时，包内定义私有状态类型，通过 `unit.StateFor[本包状态](ctx.State)` 取得；工厂对应使用 `info.State`。字段的锁由私产维护，不能用进程级可变表保存对局数据。测试手动构造 Context 时，同场共用一份 `&unit.MatchState{}`，不同场各用一份。
+
+只在出生时使用的参数放在 `ctx.Born(unit.Spawn{Kind: ..., Data: 本包参数{...}})`，工厂从 `info.Data` 断言回本包类型。传值或转移所有权，发送后不再修改共享引用；不要用全局队列或按 Stream 索引的全局表转交参数。见 [ADR 0029](docs/adr/0029-match-owned-character-state.md)。
 
 ### 4. 实现 `Actor`
 

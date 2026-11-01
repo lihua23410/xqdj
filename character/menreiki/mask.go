@@ -2,57 +2,56 @@ package 面灵气
 
 import (
 	"math"
-	"sync"
+
 	"xqdj/internal/unit"
 )
 
-var (
-	liveMu      sync.Mutex
-	liveFaction = map[uint64]string{}
-	maskReady   = map[uint64][3]bool{}
-)
-
-func setLive(id uint64, faction string) {
-	liveMu.Lock()
-	liveFaction[id] = faction
-	liveMu.Unlock()
+func setLive(scope *unit.MatchState, id uint64, faction string) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	shared.liveFaction[id] = faction
+	shared.liveMu.Unlock()
 }
 
-func ownerFaction(id uint64) string {
-	liveMu.Lock()
-	defer liveMu.Unlock()
-	return liveFaction[id]
+func ownerFaction(scope *unit.MatchState, id uint64) string {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	return shared.liveFaction[id]
 }
 
-func armMask(owner uint64, i int) {
+func armMask(scope *unit.MatchState, owner uint64, i int) {
 	if i < 0 || i > 2 {
 		return
 	}
-	liveMu.Lock()
-	v := maskReady[owner]
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	v := shared.maskReady[owner]
 	v[i] = true
-	maskReady[owner] = v
-	liveMu.Unlock()
+	shared.maskReady[owner] = v
+	shared.liveMu.Unlock()
 }
 
-func armAllMasks(owner uint64) {
-	liveMu.Lock()
-	maskReady[owner] = [3]bool{true, true, true}
-	liveMu.Unlock()
+func armAllMasks(scope *unit.MatchState, owner uint64) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	shared.maskReady[owner] = [3]bool{true, true, true}
+	shared.liveMu.Unlock()
 }
 
-func spendMask(owner uint64, i int) bool {
+func spendMask(scope *unit.MatchState, owner uint64, i int) bool {
 	if i < 0 || i > 2 {
 		return false
 	}
-	liveMu.Lock()
-	defer liveMu.Unlock()
-	v := maskReady[owner]
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	v := shared.maskReady[owner]
 	if !v[i] {
 		return false
 	}
 	v[i] = false
-	maskReady[owner] = v
+	shared.maskReady[owner] = v
 	return true
 }
 
@@ -80,10 +79,10 @@ func (a *面具) hit(ctx unit.Context, e unit.Collision) {
 		return
 	}
 	if hitTarget(e.Other, a.slot) {
-		if !spendMask(a.owner, a.index) {
+		if !spendMask(ctx.State, a.owner, a.index) {
 			return
 		}
-		strike(ctx, e.Other, maskDmg(ownerFaction(a.owner)))
+		strike(ctx, e.Other, maskDmg(ownerFaction(ctx.State, a.owner)))
 	}
 }
 
@@ -126,7 +125,7 @@ func (b *面灵气弹) Handle(ctx unit.Context, ev unit.Event) {
 			return
 		}
 		if hitTarget(e.Other, b.slot) {
-			strike(ctx, e.Other, maskDmg(ownerFaction(b.owner)))
+			strike(ctx, e.Other, maskDmg(ownerFaction(ctx.State, b.owner)))
 			b.die(ctx)
 			return
 		}

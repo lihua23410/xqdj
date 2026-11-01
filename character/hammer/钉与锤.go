@@ -4,7 +4,6 @@ package 钉与锤
 import (
 	"embed"
 	"math"
-	"sync"
 	"xqdj/internal/unit"
 )
 
@@ -123,7 +122,8 @@ func init() {
 		BreakWalls: true,
 		Look:       unit.Look{Color: "#c0c0c0", Overlay: true, FX: []string{"nail"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &钉{owner: info.OwnerID, slot: info.Slot, spawnTime: -1}
+		birth, _ := info.Data.(nailJob)
+		return &钉{owner: info.OwnerID, slot: info.Slot, spawnTime: -1, birth: birth}
 	})
 
 	// 替身人偶（活随从，不动）
@@ -180,7 +180,7 @@ func (h *钉与锤) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	h.enemySlot = 1 - s.Self.Slot
 	if o := unit.Seek(s); o != nil {
-		rememberFoe(ctx.ID, o.ID)
+		rememberFoe(ctx.State, ctx.ID, o.ID)
 	}
 
 	h.checkHammer(ctx, s)
@@ -325,10 +325,10 @@ func (h *钉与锤) tryRitual(ctx unit.Context, s unit.Sense) bool {
 	}
 	for i := 0; i < 3; i++ {
 		a := ritualAng(i)
-		pushNail(nailJob{orbit: true, ang: a})
 		x, y := clampInHex(s.Field, enemy.X+math.Cos(a)*ritualOrbit, enemy.Y+math.Sin(a)*ritualOrbit, nailRadius)
 		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindNail,
+			Data:    nailJob{orbit: true, ang: a},
 			X:       x,
 			Y:       y,
 			OwnerID: ctx.ID,
@@ -434,6 +434,7 @@ func (a *弧) Handle(ctx unit.Context, ev unit.Event) {
 // ========== 钉子弹 ==========
 
 type 钉 struct {
+	birth       nailJob
 	owner       uint64
 	slot        int
 	spawnTime   float64
@@ -590,8 +591,8 @@ func (n *钉) boot(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	n.spawnTime = s.Time
-	job, ok := popNail()
-	if !ok || !job.orbit {
+	job := n.birth
+	if !job.orbit {
 		return
 	}
 	n.phase = nailOrbit
@@ -694,7 +695,7 @@ func copyIfDoll(ctx unit.Context, owner uint64, u unit.Snapshot, amount float64)
 	if amt > amount {
 		amt = amount
 	}
-	if eid := foeOfOwner(owner); eid != 0 {
+	if eid := foeOfOwner(ctx.State, owner); eid != 0 {
 		ctx.Out <- unit.Damage{From: owner, To: eid, Amount: amt}
 	}
 }
@@ -764,50 +765,21 @@ type nailJob struct {
 	ang   float64
 }
 
-var (
-	foeMu sync.Mutex
-	foeOf = map[uint64]uint64{}
-
-	nailMu sync.Mutex
-	nailQ  []nailJob
-)
-
-func rememberFoe(owner, enemy uint64) {
+func rememberFoe(scope *unit.MatchState, owner, enemy uint64) {
 	if owner == 0 || enemy == 0 {
 		return
 	}
-	foeMu.Lock()
-	foeOf[owner] = enemy
-	foeMu.Unlock()
+	shared := stateFor(scope)
+	shared.foeMu.Lock()
+	shared.foeOf[owner] = enemy
+	shared.foeMu.Unlock()
 }
 
-func foeOfOwner(owner uint64) uint64 {
-	foeMu.Lock()
-	defer foeMu.Unlock()
-	return foeOf[owner]
-}
-
-func pushNail(job nailJob) {
-	nailMu.Lock()
-	nailQ = append(nailQ, job)
-	nailMu.Unlock()
-}
-
-func popNail() (nailJob, bool) {
-	nailMu.Lock()
-	defer nailMu.Unlock()
-	if len(nailQ) == 0 {
-		return nailJob{}, false
-	}
-	job := nailQ[0]
-	nailQ = nailQ[1:]
-	return job, true
-}
-
-func resetNailJobs() {
-	nailMu.Lock()
-	nailQ = nil
-	nailMu.Unlock()
+func foeOfOwner(scope *unit.MatchState, owner uint64) uint64 {
+	shared := stateFor(scope)
+	shared.foeMu.Lock()
+	defer shared.foeMu.Unlock()
+	return shared.foeOf[owner]
 }
 
 func reflectDir(ux, uy, nx, ny float64) (float64, float64) {

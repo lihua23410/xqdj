@@ -184,7 +184,7 @@ func (m *面灵气) tickSense(ctx unit.Context, s unit.Sense) {
 	if !m.marked {
 		ctx.Out <- unit.NoFrameFreeze{UnitID: ctx.ID, Hold: true}
 	}
-	setLive(ctx.ID, s.Self.Faction)
+	setLive(ctx.State, ctx.ID, s.Self.Faction)
 	m.tickHook(ctx, s)
 	m.grant(ctx, s)
 	m.watchBreak(ctx, s)
@@ -300,7 +300,7 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 	if m.lastT > 0 {
 		dt = s.Time - m.lastT
 	} else {
-		armAllMasks(ctx.ID)
+		armAllMasks(ctx.State, ctx.ID)
 	}
 	m.lastT = s.Time
 	omega := 2 * math.Pi / maskSpinT
@@ -335,7 +335,7 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 			m.hitSpun[i] += omega * dt
 			for m.hitSpun[i] >= maskHitArc {
 				m.hitSpun[i] -= maskHitArc
-				armMask(ctx.ID, i)
+				armMask(ctx.State, ctx.ID, i)
 			}
 		}
 		var hit []unit.Snapshot
@@ -348,7 +348,7 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 				hit = append(hit, *o)
 			}
 		}
-		if len(hit) > 0 && spendMask(ctx.ID, i) {
+		if len(hit) > 0 && spendMask(ctx.State, ctx.ID, i) {
 			dmg := maskDmg(s.Self.Faction)
 			for k := range hit {
 				strike(ctx, hit[k], dmg)

@@ -127,7 +127,6 @@ func TestDebugBootOpensDomain(t *testing.T) {
 }
 
 func TestFishAfterThreeSeconds(t *testing.T) {
-	resetFishQ()
 	out := make(chan unit.Cmd, 32)
 	a := &钓鱼佬{booted: true, draw: seq(0.5)}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
@@ -207,7 +206,6 @@ func TestMissMarksStackWalkSpeed(t *testing.T) {
 }
 
 func TestSecondMissAddsFiveNextCatch(t *testing.T) {
-	resetFishQ()
 	out := make(chan unit.Cmd, 16)
 	a := &钓鱼佬{booted: true, misses: 2, draw: seq(0.15)}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
@@ -225,7 +223,6 @@ func TestSecondMissAddsFiveNextCatch(t *testing.T) {
 }
 
 func TestThirdMissUnlocksTenRolls(t *testing.T) {
-	resetFishQ()
 	out := make(chan unit.Cmd, 64)
 	a := &钓鱼佬{booted: true, misses: 3, rod: true, draw: seq(
 		0.4, 0, 0.4, 0, 0.4, 0, 0.4, 0, 0.4, 0,
@@ -342,7 +339,6 @@ func TestFlyFishKeepsMoving(t *testing.T) {
 }
 
 func TestFlyFishAutoRecast(t *testing.T) {
-	resetFishQ()
 	out := make(chan unit.Cmd, 16)
 	a := &钓鱼佬{booted: true, misses: 2, draw: seq(0.5)}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
@@ -364,9 +360,8 @@ func TestFlyFishAutoRecast(t *testing.T) {
 }
 
 func TestFishSeeksOnlyOnSpawnAndBounce(t *testing.T) {
-	resetFishQ()
-	pushFish(fishJob{y: 20, dmg: 4, speed: 180})
-	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	job := fishJob{y: 20, dmg: 4, speed: 180}
+	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0, Data: job})
 	out := make(chan unit.Cmd, 8)
 	ctx := unit.Context{ID: 9, Kind: KindFish, Out: out}
 	self := unit.Snapshot{ID: 9, Kind: KindFish, Role: unit.RoleProjectile, Slot: 0, X: 0, Y: 0, VX: 180, Radius: 10}
@@ -395,9 +390,8 @@ func TestFishSeeksOnlyOnSpawnAndBounce(t *testing.T) {
 }
 
 func TestFishLastBounceCoastsToStop(t *testing.T) {
-	resetFishQ()
-	pushFish(fishJob{y: 20, dmg: 4, speed: 180})
-	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	job := fishJob{y: 20, dmg: 4, speed: 180}
+	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0, Data: job})
 	f.steady = true
 	f.drag = 400
 	out := make(chan unit.Cmd, 8)
@@ -459,9 +453,8 @@ func TestFishLastBounceCoastsToStop(t *testing.T) {
 }
 
 func TestSpentFishDoesNotDamage(t *testing.T) {
-	resetFishQ()
-	pushFish(fishJob{y: 20, dmg: fishDamage(20), speed: 180})
-	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	job := fishJob{y: 20, dmg: fishDamage(20), speed: 180}
+	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0, Data: job})
 	f.spent = true
 	out := make(chan unit.Cmd, 8)
 	f.Handle(unit.Context{ID: 9, Kind: KindFish, Out: out}, unit.Collision{
@@ -475,9 +468,8 @@ func TestSpentFishDoesNotDamage(t *testing.T) {
 }
 
 func TestFishHitsEnemyGoesInert(t *testing.T) {
-	resetFishQ()
-	pushFish(fishJob{y: 20, dmg: fishDamage(20), speed: 180})
-	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	job := fishJob{y: 20, dmg: fishDamage(20), speed: 180}
+	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0, Data: job})
 	out := make(chan unit.Cmd, 8)
 	ctx := unit.Context{ID: 9, Kind: KindFish, Out: out}
 	f.Handle(ctx, unit.Collision{
@@ -502,7 +494,6 @@ func TestFishHitsEnemyGoesInert(t *testing.T) {
 }
 
 func TestBigCatchStartsRamUntilAllFaces(t *testing.T) {
-	resetFishQ()
 	out := make(chan unit.Cmd, 32)
 	a := &钓鱼佬{booted: true, draw: seq(0.9), misses: 2}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
@@ -547,7 +538,7 @@ func TestBigCatchStartsRamUntilAllFaces(t *testing.T) {
 	if sp == nil || !isFishKind(sp.Kind) {
 		t.Fatalf("ram end should spit leftover 鱼: %v", cmds)
 	}
-	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0})
+	f := newFish(unit.SpawnInfo{OwnerID: 1, Slot: 0, Data: sp.Data})
 	if !f.spent {
 		t.Fatal("spit 鱼 should already be 惰性")
 	}
@@ -607,7 +598,6 @@ func TestFishingDamageReduction(t *testing.T) {
 }
 
 func TestUnlockRodOnThirdMiss(t *testing.T) {
-	resetFishQ()
 	out := make(chan unit.Cmd, 64)
 	a := &钓鱼佬{booted: true, misses: 2, draw: seq(0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4)}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}

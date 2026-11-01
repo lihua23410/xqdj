@@ -101,8 +101,8 @@ func (a *人偶使) castChase(ctx unit.Context, s unit.Sense, enemy unit.Snapsho
 	n := 0
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind == KindNingyushiDoll && o.OwnerID == ctx.ID && stateOf(o.ID) == dollIdle {
-			orderChase(o.ID, s.Time+placeWind, s.Time+placeWind+chaseLife, enemy.X, enemy.Y)
+		if o.Kind == KindNingyushiDoll && o.OwnerID == ctx.ID && stateOf(ctx.State, o.ID) == dollIdle {
+			orderChase(ctx.State, o.ID, s.Time+placeWind, s.Time+placeWind+chaseLife, enemy.X, enemy.Y)
 			n++
 		}
 	}
@@ -121,7 +121,7 @@ func (a *人偶使) castChain(ctx unit.Context, s unit.Sense, enemy unit.Snapsho
 	pts := [][2]float64{{s.Self.X, s.Self.Y}}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind == KindNingyushiDoll && o.OwnerID == ctx.ID && stateOf(o.ID) == dollIdle {
+		if o.Kind == KindNingyushiDoll && o.OwnerID == ctx.ID && stateOf(ctx.State, o.ID) == dollIdle {
 			pts = append(pts, [2]float64{o.X, o.Y})
 		}
 	}
@@ -183,10 +183,10 @@ func (a *人偶使) castSpell24(ctx unit.Context, s unit.Sense, enemy unit.Snaps
 
 func (a *人偶使) castSpell62(ctx unit.Context, s unit.Sense, enemy unit.Snapshot) bool {
 	ux, uy := faceOf(a, s, enemy)
-	pushBomb(bombSpec{kind: bombBounce, dmg: float64(a.spellLevel(SkillN62)+5) * 1.4, tx: enemy.X, ty: enemy.Y})
+	spec := bombSpec{kind: bombBounce, dmg: float64(a.spellLevel(SkillN62)+5) * 1.4, tx: enemy.X, ty: enemy.Y}
 	gap := s.Self.Radius + bombR + 2
 	ctx.Out <- ctx.Born(unit.Spawn{
-		Kind: KindNingyushiBomb, X: s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
+		Kind: KindNingyushiBomb, Data: spec, X: s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
 		VX: ux * bounceSp, VY: uy * bounceSp, OwnerID: ctx.ID, Slot: s.Self.Slot,
 	})
 	return true
@@ -202,10 +202,10 @@ func (a *人偶使) castDemon(ctx unit.Context, s unit.Sense, enemy unit.Snapsho
 		dx, dy, n = 1, 0, 1
 	}
 	ux, uy := dx/n, dy/n
-	pushBomb(bombSpec{kind: bombSeek, dmg: demonDmg, tx: enemy.X, ty: enemy.Y, explode: demonR})
+	spec := bombSpec{kind: bombSeek, dmg: demonDmg, tx: enemy.X, ty: enemy.Y, explode: demonR}
 	gap := s.Self.Radius + bombR + 2
 	ctx.Out <- ctx.Born(unit.Spawn{
-		Kind: KindNingyushiBomb, X: s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
+		Kind: KindNingyushiBomb, Data: spec, X: s.Self.X + ux*gap, Y: s.Self.Y + uy*gap,
 		VX: ux * demonSp, VY: uy * demonSp, OwnerID: ctx.ID, Slot: s.Self.Slot,
 	})
 	return true
@@ -445,8 +445,8 @@ func (a *人偶使) tickHourai(ctx unit.Context, s unit.Sense) {
 func recallAll(ctx unit.Context, s unit.Sense) {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind == KindNingyushiDoll && o.OwnerID == ctx.ID && stateOf(o.ID) == dollIdle {
-			orderRecall(o.ID)
+		if o.Kind == KindNingyushiDoll && o.OwnerID == ctx.ID && stateOf(ctx.State, o.ID) == dollIdle {
+			orderRecall(ctx.State, o.ID)
 		}
 	}
 }

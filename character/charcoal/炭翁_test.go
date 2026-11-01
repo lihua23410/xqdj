@@ -8,8 +8,10 @@ import (
 )
 
 func TestOpeningDoesNotTransferOrMint(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(0, selfAt(0, 0), foeAt(10, 0)))
 	if len(a.brain.coals) != 0 {
 		t.Fatalf("coals=%d", len(a.brain.coals))
@@ -20,8 +22,10 @@ func TestOpeningDoesNotTransferOrMint(t *testing.T) {
 }
 
 func TestSelfCoalAtTwoAndAHalf(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, _ := pipe(1)
+	ctx, _ := pipe(matchState, 1)
 	a.Handle(ctx, sense(selfEvery, selfAt(0, 0), foeAt(200, 0)))
 	if len(a.brain.coals) != 1 || a.brain.coals[0].value != selfValue || a.brain.coals[0].holder != 1 {
 		t.Fatalf("coals=%+v", a.brain.coals)
@@ -32,8 +36,10 @@ func TestSelfCoalAtTwoAndAHalf(t *testing.T) {
 }
 
 func TestSelfCoalRidesTheTouch(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(0, selfAt(0, 0), foeAt(200, 0)))
 	drain(out)
 	a.Handle(ctx, sense(selfEvery, selfAt(0, 0), foeAt(20, 0)))
@@ -43,8 +49,10 @@ func TestSelfCoalRidesTheTouch(t *testing.T) {
 }
 
 func TestBounceHandsOffAfterSeparation(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(0, selfAt(0, 0), foeAt(200, 0)))
 	a.Handle(ctx, sense(selfEvery, selfAt(0, 0), foeAt(200, 0)))
 	drain(out)
@@ -57,8 +65,10 @@ func TestBounceHandsOffAfterSeparation(t *testing.T) {
 }
 
 func TestRepeatedBounceWaitsOutTheCooldown(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(0, selfAt(0, 0), foeAt(200, 0)))
 	a.Handle(ctx, sense(selfEvery, selfAt(0, 0), foeAt(200, 0)))
 	drain(out)
@@ -84,8 +94,10 @@ func TestRepeatedBounceWaitsOutTheCooldown(t *testing.T) {
 }
 
 func TestStayOverlappedHandsOnePerCooldown(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(0, selfAt(0, 0), foeAt(20, 0)))
 	drain(out)
 	a.Handle(ctx, sense(selfEvery, selfAt(0, 0), foeAt(20, 0)))
@@ -115,6 +127,8 @@ func TestStayOverlappedHandsOnePerCooldown(t *testing.T) {
 }
 
 func TestEighthCoalDoesNotDetonate(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
 	a.brain.owner = 1
 	a.brain.nextSelf = 100
@@ -122,7 +136,7 @@ func TestEighthCoalDoesNotDetonate(t *testing.T) {
 		a.brain.coals = append(a.brain.coals, placed{holder: 1, value: 1, due: float64(20 + i)})
 	}
 	a.brain.pending = []booked{{at: 1, value: 3}}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(1, selfAt(0, 0), foeAt(200, 0)))
 	if len(damages(drain(out))) != 0 {
 		t.Fatal("the eighth coal should not detonate anyone")
@@ -133,6 +147,8 @@ func TestEighthCoalDoesNotDetonate(t *testing.T) {
 }
 
 func TestNinthCoalDetonatesTheOldest(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
 	a.brain.owner = 1
 	a.brain.nextSelf = 100
@@ -140,7 +156,7 @@ func TestNinthCoalDetonatesTheOldest(t *testing.T) {
 		a.brain.coals = append(a.brain.coals, placed{holder: 1, value: float64(i + 1), due: float64(20 + i)})
 	}
 	a.brain.pending = []booked{{at: 1, value: 20}}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(1, selfAt(0, 0), foeAt(200, 0)))
 	ds := damages(drain(out))
 	if len(ds) != 1 || ds[0].Amount != 1 || ds[0].To != 1 || !ds[0].NoFreeze {
@@ -164,6 +180,8 @@ func TestNinthCoalDetonatesTheOldest(t *testing.T) {
 }
 
 func TestFullEnemyDetonatesOldestOnArrival(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
 	a.brain.owner = 1
 	a.brain.nextSelf = 100
@@ -171,7 +189,7 @@ func TestFullEnemyDetonatesOldestOnArrival(t *testing.T) {
 	for i := 0; i < coalCap; i++ {
 		a.brain.coals = append(a.brain.coals, placed{holder: 2, value: float64(i + 1), due: float64(4 + i)})
 	}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(1, selfAt(0, 0), foeAt(20, 0)))
 	ds := damages(drain(out))
 	if len(ds) != 1 || ds[0].Amount != 1 || ds[0].To != 2 || ds[0].NoFreeze {
@@ -195,8 +213,10 @@ func TestFullEnemyDetonatesOldestOnArrival(t *testing.T) {
 }
 
 func TestLeaveAndTouchAgain(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(0, selfAt(0, 0), foeAt(200, 0)))
 	a.Handle(ctx, sense(selfEvery, selfAt(0, 0), foeAt(200, 0)))
 	drain(out)
@@ -207,8 +227,10 @@ func TestLeaveAndTouchAgain(t *testing.T) {
 }
 
 func TestBeyondVisionDoesNotHandOff(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, _ := pipe(1)
+	ctx, _ := pipe(matchState, 1)
 	a.Handle(ctx, sense(selfEvery, selfAt(0, 0), foeAt(bodyVision+1, 0)))
 	if len(a.brain.coals) != 1 || a.brain.coals[0].holder != 1 {
 		t.Fatalf("coals=%+v", a.brain.coals)
@@ -216,8 +238,10 @@ func TestBeyondVisionDoesNotHandOff(t *testing.T) {
 }
 
 func TestVisionEdgeHandsOff(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, _ := pipe(1)
+	ctx, _ := pipe(matchState, 1)
 	a.Handle(ctx, sense(selfEvery, selfAt(0, 0), foeAt(bodyVision, 0)))
 	if len(a.brain.coals) != 1 || a.brain.coals[0].holder != 2 {
 		t.Fatalf("coals=%+v", a.brain.coals)
@@ -225,8 +249,10 @@ func TestVisionEdgeHandsOff(t *testing.T) {
 }
 
 func TestOpeningFrameHandsOff(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, _ := pipe(1)
+	ctx, _ := pipe(matchState, 1)
 	a.Handle(ctx, unit.IncomingDamage{Token: 1, From: 9, Amount: 4, Time: 0})
 	a.Handle(ctx, sense(0, selfAt(0, 0), foeAt(100, 0)))
 	if len(a.brain.coals) != 1 || a.brain.coals[0].holder != 2 || a.brain.coals[0].value != 4 {
@@ -246,8 +272,10 @@ func TestVisionRingOnBodyOnly(t *testing.T) {
 }
 
 func TestHandFXOnTransfer(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(selfEvery, selfAt(0, 0), foeAt(40, 0)))
 	var hand *unit.FX
 	for _, c := range drain(out) {
@@ -263,11 +291,13 @@ func TestHandFXOnTransfer(t *testing.T) {
 }
 
 func TestCoalOutsideVisionStillEmitsFX(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
 	a.brain.owner = 1
 	a.brain.nextSelf = 100
 	a.brain.coals = []placed{{holder: 2, value: 27, due: 20}}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, unit.Sense{Time: 3, Self: selfAt(0, 0)})
 	var got bool
 	for _, c := range drain(out) {
@@ -285,8 +315,10 @@ func TestCoalOutsideVisionStillEmitsFX(t *testing.T) {
 }
 
 func TestIncomingBecomesCoalNotHP(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, unit.IncomingDamage{Token: 3, From: 9, Amount: 10, Time: 0.5})
 	cmds := drain(out)
 	if _, ok := cmds[0].(unit.BlockDamage); !ok {
@@ -299,11 +331,13 @@ func TestIncomingBecomesCoalNotHP(t *testing.T) {
 }
 
 func TestExpireBeforeBook(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
 	a.brain.owner = 1
 	a.brain.coals = []placed{{holder: 1, value: 8, due: 2}}
 	a.brain.pending = []booked{{at: 2, value: 5}}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(2, selfAt(0, 0), foeAt(20, 0)))
 	ds := damages(drain(out))
 	if len(ds) != 1 || ds[0].Amount != 8 || !ds[0].NoFreeze || ds[0].To != 1 {
@@ -318,10 +352,12 @@ func TestExpireBeforeBook(t *testing.T) {
 }
 
 func TestDueCoalDoesNotSlipOut(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
 	a.brain.owner = 1
 	a.brain.coals = []placed{{holder: 1, value: 8, due: 2}}
-	ctx, _ := pipe(1)
+	ctx, _ := pipe(matchState, 1)
 	a.Handle(ctx, sense(2, selfAt(0, 0), foeAt(20, 0)))
 	if len(a.brain.coals) != 0 {
 		t.Fatalf("due coal left on someone: %+v", a.brain.coals)
@@ -329,6 +365,8 @@ func TestDueCoalDoesNotSlipOut(t *testing.T) {
 }
 
 func TestSameInstantCoalsSum(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
 	a.brain.owner = 1
 	a.brain.nextSelf = 100
@@ -336,7 +374,7 @@ func TestSameInstantCoalsSum(t *testing.T) {
 		{holder: 2, value: 4, due: 3},
 		{holder: 2, value: 6, due: 3},
 	}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(3, selfAt(0, 0), foeAt(200, 0)))
 	ds := damages(drain(out))
 	if len(ds) != 1 || ds[0].Amount != 10 || ds[0].To != 2 || ds[0].NoFreeze || ds[0].From != 1 {
@@ -345,6 +383,8 @@ func TestSameInstantCoalsSum(t *testing.T) {
 }
 
 func TestDeathSkipsBookAndTransfer(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
 	a.brain.owner = 1
 	a.brain.nextSelf = 2
@@ -353,7 +393,7 @@ func TestDeathSkipsBookAndTransfer(t *testing.T) {
 		{holder: 1, value: 4, due: 9},
 		{holder: 2, value: 3, due: 9},
 	}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	me := selfAt(0, 0)
 	me.HP = 6
 	a.Handle(ctx, senseSnap(2, me, foeAt(20, 0)))
@@ -364,10 +404,12 @@ func TestDeathSkipsBookAndTransfer(t *testing.T) {
 	if len(a.brain.coals) != 1 || a.brain.coals[0].holder != 2 || a.brain.coals[0].value != 3 {
 		t.Fatalf("coals=%+v", a.brain.coals)
 	}
-	t.Cleanup(func() { orphans.Delete(uint64(1)) })
+	t.Cleanup(func() { stateFor(matchState).orphans.Delete(uint64(1)) })
 }
 
 func TestDeathSpawnsEmberForForeignCoal(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
 	a.brain.owner = 7
 	a.brain.nextSelf = 100
@@ -375,7 +417,7 @@ func TestDeathSpawnsEmberForForeignCoal(t *testing.T) {
 		{holder: 7, value: 6, due: 2},
 		{holder: 2, value: 3, due: 9},
 	}
-	ctx, out := pipe(7)
+	ctx, out := pipe(matchState, 7)
 	me := selfAt(0, 0)
 	me.ID = 7
 	me.HP = 6
@@ -391,13 +433,13 @@ func TestDeathSpawnsEmberForForeignCoal(t *testing.T) {
 	if spawned == nil || spawned.Slot != 7 {
 		t.Fatalf("spawn=%v cmds=%v", spawned, cmds)
 	}
-	if _, ok := orphans.Load(uint64(7)); !ok {
+	if _, ok := stateFor(matchState).orphans.Load(uint64(7)); !ok {
 		t.Fatal("missing orphan ledger")
 	}
-	t.Cleanup(func() { orphans.Delete(uint64(7)) })
+	t.Cleanup(func() { stateFor(matchState).orphans.Delete(uint64(7)) })
 
 	ember := &烬{token: 7}
-	ectx, eout := pipe(99)
+	ectx, eout := pipe(matchState, 99)
 	ectx.Kind = KindCharcoalEmber
 	ember.Handle(ectx, sense(9, unit.Snapshot{ID: 99, Role: unit.RoleHelper}, foeAt(0, 0)))
 	ds := damages(drain(eout))
@@ -407,9 +449,11 @@ func TestDeathSpawnsEmberForForeignCoal(t *testing.T) {
 }
 
 func TestExpiryFromCharcoalConfirms(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
 	a.brain.kinds[4] = KindCharcoal
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, unit.IncomingDamage{Token: 8, From: 4, Amount: 12, Time: 1})
 	if _, ok := drain(out)[0].(unit.ConfirmDamage); !ok {
 		t.Fatal("expiry should confirm")
@@ -420,8 +464,10 @@ func TestExpiryFromCharcoalConfirms(t *testing.T) {
 }
 
 func TestMortalMinionTakesCoal(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	a.Handle(ctx, sense(0, selfAt(0, 0), foeAt(200, 0)))
 	a.Handle(ctx, sense(selfEvery, selfAt(0, 0), foeAt(200, 0)))
 	drain(out)
@@ -452,8 +498,10 @@ func TestMortalMinionTakesCoal(t *testing.T) {
 }
 
 func TestSteersTowardSeek(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	a := &炭翁{brain: newBrain()}
-	ctx, out := pipe(1)
+	ctx, out := pipe(matchState, 1)
 	foe := foeAt(30, 40)
 	foe.AimPriority = 15
 	a.Handle(ctx, unit.Sense{Time: 0, Self: selfAt(0, 0), Nearby: []unit.Snapshot{foe}})
@@ -470,13 +518,15 @@ func TestSteersTowardSeek(t *testing.T) {
 }
 
 func TestEmberDespawnsWhenOwnerLives(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	b := newBrain()
 	b.owner = 7
 	b.coals = []placed{{holder: 2, value: 3, due: 9}}
-	orphans.Store(uint64(7), b)
-	t.Cleanup(func() { orphans.Delete(uint64(7)) })
+	stateFor(matchState).orphans.Store(uint64(7), b)
+	t.Cleanup(func() { stateFor(matchState).orphans.Delete(uint64(7)) })
 	ember := &烬{token: 7}
-	ctx, out := pipe(99)
+	ctx, out := pipe(matchState, 99)
 	owner := selfAt(0, 0)
 	owner.ID = 7
 	owner.HP = 40
@@ -493,7 +543,7 @@ func TestEmberDespawnsWhenOwnerLives(t *testing.T) {
 	if !gone {
 		t.Fatal("ember should leave while the owner still stands")
 	}
-	if _, ok := orphans.Load(uint64(7)); ok {
+	if _, ok := stateFor(matchState).orphans.Load(uint64(7)); ok {
 		t.Fatal("ledger should return to the owner")
 	}
 	if len(damages(cmds)) != 0 {
@@ -524,9 +574,9 @@ func senseSnap(t float64, self unit.Snapshot, foe unit.Snapshot) unit.Sense {
 	return unit.Sense{Time: t, Self: self, Nearby: []unit.Snapshot{foe}}
 }
 
-func pipe(id uint64) (unit.Context, chan unit.Cmd) {
+func pipe(matchState *unit.MatchState, id uint64) (unit.Context, chan unit.Cmd) {
 	out := make(chan unit.Cmd, 16)
-	return unit.Context{ID: id, Kind: KindCharcoal, Out: out}, out
+	return unit.Context{State: matchState, ID: id, Kind: KindCharcoal, Out: out}, out
 }
 
 func drain(out chan unit.Cmd) []unit.Cmd {

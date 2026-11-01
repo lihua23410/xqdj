@@ -158,6 +158,7 @@ type Match struct {
 	actors      []*unit // 本场开过的所有角色（离场的也留着，停场要等它们的协程真退出）
 	cmds        chan unitpkg.Cmd
 	nextID      uint64
+	shared      *unitpkg.MatchState
 	time        float64
 	spec        fieldSpec
 	winner      string
@@ -234,6 +235,7 @@ func newMatch(seed uint64, pinned bool) *Match {
 		phase:      PhaseSelect,
 		slots:      slots,
 		units:      make(map[uint64]*unit),
+		shared:     &unitpkg.MatchState{},
 		cmds:       make(chan unitpkg.Cmd, 512),
 		spec:       spec,
 		rng:        unitpkg.EngineRNG(seed),
@@ -800,6 +802,7 @@ func (m *Match) End() {
 	m.logMute = true
 	m.stopAllLocked()
 	m.logMute = false
+	m.shared = &unitpkg.MatchState{}
 	m.phase = PhaseSelect
 	m.winner = ""
 	m.winnerID = 0
@@ -927,6 +930,7 @@ func (m *Match) decelerateLocked(dt float64) {
 
 func (m *Match) resetLocked() {
 	m.stopAllLocked()
+	m.shared = &unitpkg.MatchState{}
 	m.units = make(map[uint64]*unit)
 	m.order = nil
 	m.nextID = 0
@@ -1086,11 +1090,16 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 }
 
 func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot int, stream uint64) *unit {
+	return m.addUnitWithDataLocked(kind, p, v, owner, slot, stream, nil)
+}
+
+func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot int, stream uint64, data any) *unit {
 	spec, ok := unitpkg.Lookup(kind)
 	if !ok {
 		return nil
 	}
 	actor := unitpkg.NewActor(kind, unitpkg.SpawnInfo{
+		State: m.shared, Data: data,
 		OwnerID: owner, Slot: slot, Stream: stream,
 		Field: m.liveFieldLocked(), Probe: m.probeTape,
 		Silent: m.spawnSilent && kind == acausalKind(),
@@ -1147,7 +1156,7 @@ func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot in
 		m.noteBirthLocked(u)
 	}
 	u.stream = stream
-	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds, Stream: stream, Field: m.liveFieldLocked()}.WithBirths()
+	ctx := unitpkg.Context{State: m.shared, ID: id, Kind: kind, Out: m.cmds, Stream: stream, Field: m.liveFieldLocked()}.WithBirths()
 	go runActor(u, ctx)
 	m.refreshOwnedVelocityLockLocked(owner, kind)
 	return u
@@ -1342,7 +1351,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if !ok || spec.Fighter {
 			return
 		}
-		u := m.addUnitStreamLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot, c.Stream)
+		u := m.addUnitWithDataLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot, c.Stream, c.Data)
 		if u != nil && c.DamageScale > 0 {
 			u.damageScale = c.DamageScale
 		}
