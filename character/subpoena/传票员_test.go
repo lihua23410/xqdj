@@ -463,6 +463,39 @@ func TestTicketServesRecordedDamageOnContact(t *testing.T) {
 	}
 }
 
+func TestTicketDoublesDamageWhenUnclaimed(t *testing.T) {
+	tk := &传票{dmg: 10, slot: 0}
+	ctx, out := pipe(7)
+	self := unit.Snapshot{ID: 7, Slot: 0, Radius: ticketRadius}
+	far := foeAt(400, 0)
+
+	tk.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{far}})
+	drain(out)
+	tk.Handle(ctx, unit.Sense{Time: ticketStale - dt, Self: self, Nearby: []unit.Snapshot{far}})
+	early, earlyOK := fxIn(drain(out), "ticket")
+	if math.Abs(tk.dmg-10) > 1e-9 || !earlyOK || early.VX != 0 {
+		t.Fatalf("时限内票面=%v vx=%v ok=%v，不该翻倍变红", tk.dmg, early.VX, earlyOK)
+	}
+
+	tk.Handle(ctx, unit.Sense{Time: ticketStale, Self: self, Nearby: []unit.Snapshot{far}})
+	fx, ok := fxIn(drain(out), "ticket")
+	if math.Abs(tk.dmg-20) > 1e-9 || !ok || math.Abs(fx.Amount-20) > 1e-9 || fx.VX != 1 {
+		t.Fatalf("过期票面=%v fx=%v vx=%v ok=%v", tk.dmg, fx.Amount, fx.VX, ok)
+	}
+
+	tk.Handle(ctx, unit.Sense{Time: ticketStale + 1, Self: self, Nearby: []unit.Snapshot{foeAt(0, 0)}})
+	var dmg unit.Damage
+	found := false
+	for _, c := range drain(out) {
+		if d, ok := c.(unit.Damage); ok {
+			dmg, found = d, true
+		}
+	}
+	if !found || math.Abs(dmg.Amount-20) > 1e-9 {
+		t.Fatalf("过期后碰到的伤害=%+v found=%v", dmg, found)
+	}
+}
+
 func TestTicketStopsAfterUniformDeceleration(t *testing.T) {
 	tk := &传票{dmg: 4, slot: 0}
 	ctx, out := pipe(7)
