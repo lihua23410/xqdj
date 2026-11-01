@@ -8,6 +8,7 @@ import (
 	"xqdj/character/axe"
 	"xqdj/character/bloodpact"
 	"xqdj/character/charcoal"
+	"xqdj/character/coalesce"
 	"xqdj/character/doppel"
 	"xqdj/character/doppel_veteran"
 	"xqdj/character/dummy"
@@ -71,6 +72,12 @@ const (
 	KindBloodPact          = 血契.KindBloodPact
 	KindCharcoal           = 炭翁.KindCharcoal
 	KindCharcoalEmber      = 炭翁.KindCharcoalEmber
+	KindCoalesce           = 凝聚体.KindCoalesce
+	KindMassHeavy          = 凝聚体.KindMassHeavy
+	KindMassMedium         = 凝聚体.KindMassMedium
+	KindMassShot           = 凝聚体.KindMassShot
+	KindMassSmall          = 凝聚体.KindMassSmall
+	KindShot               = 凝聚体.KindShot
 	KindClone              = 分身者.KindClone
 	KindCloneArc           = 分身者.KindCloneArc
 	KindDoppel             = 分身者.KindDoppel
