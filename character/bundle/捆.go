@@ -25,9 +25,8 @@ const (
 	trailStep     = 9.0
 	trailLife     = 4.5
 	trailWidth    = 10.0
-	trailTouchDmg = 3.0
 	trailTickDmg  = 1.0
-	trailTickGap  = 1.0
+	trailTickGap  = 0.2
 	rideSpeed     = 190.0
 	rideFreedom   = 0.9
 	maxTrail      = 220
@@ -194,7 +193,6 @@ func (a *捆) catchRiders(ctx unit.Context, sense unit.Sense) {
 			targetID: o.ID, route: route, total: total,
 			lastTime: sense.Time, nextHitAt: sense.Time,
 		}
-		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: trailTouchDmg, NoFreeze: true}
 		ctx.Out <- unit.FX{
 			Name: "bundle-rope-catch", Kind: KindBundle, UnitID: ctx.ID, Slot: a.slot,
 			X: o.X, Y: o.Y, VX: float64(o.ID),
