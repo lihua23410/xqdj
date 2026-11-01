@@ -146,12 +146,20 @@
   pointer-events: none;
 }
 
+/* 按连线长度：中间 100%，向两端降到 0；离端点 15% 处及以外为 0。改百分比即可。 */
 .guide.ningyushi-line {
-  height: 0;
+  height: 1.5px;
   border: none;
-  border-top: 1.5px solid #fff;
-  opacity: 0.85;
-  box-shadow: 0 0 6px #fff;
+  opacity: 1;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0) 25%,
+    #fff 50%,
+    rgba(255, 255, 255, 0) 75%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  filter: drop-shadow(0 0 3px #fff);
 }
 .guide.ningyushi-laser {
   height: 0;
