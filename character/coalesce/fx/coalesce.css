@@ -293,7 +293,6 @@
 .fx-coalesce-shed,
 .fx-coalesce-absorb,
 .fx-coalesce-burst,
-.fx-coalesce-collide,
 .fx-coalesce-shot-hit,
 .fx-coalesce-return,
 .fx-coalesce-chunk-break {
@@ -374,22 +373,6 @@
 @keyframes coalesce-burst-drop {
   from { opacity: 1; transform: translate(0, 0) scale(0.35); }
   to { opacity: 0; transform: translate(var(--bx), var(--by)) scale(1.05); }
-}
-.fx-coalesce-collide::before {
-  content: "";
-  position: absolute;
-  left: -26px;
-  top: -18px;
-  width: 52px;
-  height: 36px;
-  border-radius: 50%;
-  border: 2px solid #d7fff8;
-  opacity: var(--hit, 0.6);
-  animation: coalesce-collide 0.34s ease-out forwards;
-}
-@keyframes coalesce-collide {
-  from { transform: scale(0.35) rotate(-8deg); opacity: 0.9; }
-  to { transform: scale(1.7) rotate(8deg); opacity: 0; }
 }
 .fx-coalesce-shot-hit {
   width: 28px;

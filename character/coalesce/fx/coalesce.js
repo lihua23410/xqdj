@@ -166,12 +166,6 @@ window.lookFX = window.lookFX || {};
   });
 
 
-  arena.registerShot("coalesce-collide", (fx, ctx) => {
-    const node = spawnEffect(ctx, "fx-coalesce-collide");
-    if (node) node.style.setProperty("--hit", (0.3 + Math.min(1, (Number(fx.amount) || 1) / 12) * 0.7).toFixed(3));
-    if (ctx && window.arena) arena.burst(ctx.x, ctx.y, fx.kind, 6);
-  });
-
   arena.registerShot("coalesce-shot-hit", (fx, ctx) => {
     spawnEffect(ctx, "fx-coalesce-shot-hit");
     if (ctx && window.arena) arena.burst(ctx.x, ctx.y, fx.kind, 12);

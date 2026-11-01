@@ -45,8 +45,10 @@ const (
 	shedMinRange = 78.0
 	shedMaxRange = 145.0
 	shedGap      = 0.22
-	contactGap   = 0.75
 	steerGap     = 0.36
+	// 质量块在场时本体让到活随从默认那一档；质量块本身和战斗机同一档。
+	chunkAim       = unit.DefaultFighterAim
+	bodyAimCovered = unit.DefaultMortalAim
 )
 
 type chunkDef struct {
@@ -103,7 +105,7 @@ func init() {
 			Kind: def.kind, Role: unit.RoleMinion,
 			Radius: def.radius, MaxHP: 1, Speed: 0, Vision: bodyVision,
 			Mortal:      true,
-			AimPriority: 255,
+			AimPriority: chunkAim,
 			Look:        unit.Look{Color: chunkColor, FX: []string{"coalesce-chunk"}},
 		}, func(info unit.SpawnInfo) unit.Actor {
 			return &massChunk{bornAt: -1, owner: info.OwnerID, slot: info.Slot}
@@ -138,9 +140,9 @@ type 凝聚体 struct {
 	lastCruise float64
 
 	knownChunks  int
+	chunkCovered bool
 	nextShotAt   float64
 	nextSteerAt  float64
-	nextContact  float64
 	lastShedTime float64
 }
 
@@ -150,8 +152,6 @@ func (a *凝聚体) Handle(ctx unit.Context, ev unit.Event) {
 		a.onIncoming(ctx, e)
 	case unit.Sense:
 		a.onSense(ctx, e)
-	case unit.Collision:
-		a.onCollision(ctx, e)
 	}
 }
 
@@ -170,6 +170,7 @@ func (a *凝聚体) onSense(ctx unit.Context, sense unit.Sense) {
 
 	a.syncMass(ctx, sense)
 	a.knownChunks = a.settleChunks(ctx, sense)
+	a.syncChunkAim(ctx, a.knownChunks)
 	target := unit.Seek(sense)
 	a.steer(ctx, sense, target)
 	a.maybeFire(ctx, sense, target)
@@ -220,6 +221,19 @@ func (a *凝聚体) settleChunks(ctx unit.Context, sense unit.Sense) int {
 		alive++
 	}
 	return alive
+}
+
+func (a *凝聚体) syncChunkAim(ctx unit.Context, alive int) {
+	covered := alive > 0
+	if covered == a.chunkCovered {
+		return
+	}
+	a.chunkCovered = covered
+	value := unit.DefaultFighterAim
+	if covered {
+		value = bodyAimCovered
+	}
+	ctx.Out <- unit.SetAimPriority{From: ctx.ID, UnitID: ctx.ID, Value: value}
 }
 
 func (a *凝聚体) steer(ctx unit.Context, sense unit.Sense, target *unit.Snapshot) {
@@ -312,20 +326,6 @@ func (a *凝聚体) maybeFire(ctx unit.Context, sense unit.Sense, target *unit.S
 	ctx.Out <- unit.FX{
 		Name: "coalesce-compress", Kind: KindCoalesce, UnitID: ctx.ID, Slot: a.slot,
 		X: a.x, Y: a.y, VX: ux, VY: uy, Amount: float64(shotMass),
-	}
-}
-
-func (a *凝聚体) onCollision(ctx unit.Context, hit unit.Collision) {
-	if !unit.EnemyTarget(hit, a.slot) || hit.Time+1e-9 < a.nextContact {
-		return
-	}
-	a.nextContact = hit.Time + contactGap
-	damage := 4 + a.hp*0.10
-	ctx.Out <- unit.Damage{From: ctx.ID, To: hit.Other.ID, Amount: damage}
-	ctx.Out <- unit.FX{
-		Name: "coalesce-collide", Kind: KindCoalesce, UnitID: ctx.ID, Slot: a.slot,
-		X: hit.Other.X, Y: hit.Other.Y, Amount: damage,
-		VX: hit.NX, VY: hit.NY,
 	}
 }
 
