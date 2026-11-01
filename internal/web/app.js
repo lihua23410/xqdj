@@ -106,6 +106,21 @@ function registerShot(name, fn) {
   window.shotFX[base][name] = fn;
 }
 
+const unitPaintHooks = [];
+
+function registerUnitPaint(fn) {
+  if (typeof fn !== "function") return;
+  unitPaintHooks.push(fn);
+}
+
+function unitPaintColor(u, units) {
+  for (const fn of unitPaintHooks) {
+    const color = fn(u, units);
+    if (typeof color === "string" && color) return color;
+  }
+  return "";
+}
+
 const factions = [];
 const factionById = {};
 
@@ -272,6 +287,7 @@ window.arena = {
   burst,
   spawnGhostFrom,
   registerShot,
+  registerUnitPaint,
   registerFactions,
   registerOwnHurt,
   registerPresentation(type, player) {
@@ -536,7 +552,9 @@ function spawnGhostFrom(el, kind, layer, extraClass = "") {
   g.className = `ghost${extraClass ? ` ${extraClass}` : ""}`;
     if (el.classList.contains("semi")) g.classList.add("semi");
     if (el.classList.contains("glow")) g.classList.add("glow");
-  g.style.setProperty("--kind", kindColor(kind));
+  const paint = el.dataset.unitPaint || "";
+  g.style.setProperty("--kind", paint || kindColor(kind));
+  if (paint) g.style.color = paint;
   g.style.setProperty("--face-ang", el.style.getPropertyValue("--face-ang") || "0rad");
   g.style.width = el.style.width;
   g.style.height = el.style.height;
@@ -1703,6 +1721,9 @@ function renderArena() {
     el.classList.toggle("helper", u.role === "helper");
     const oldCut = el.querySelector(".cut");
     if (oldCut) oldCut.remove();
+    const paint = unitPaintColor(u, state.units || []);
+    if (paint) el.dataset.unitPaint = paint;
+    else delete el.dataset.unitPaint;
     el.style.setProperty("--kind", kindColor(u.kind));
     applyLookFX(el, u.kind);
     const speed = Math.hypot(u.vx || 0, u.vy || 0);

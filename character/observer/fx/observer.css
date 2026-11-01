@@ -318,3 +318,9 @@
   25% { opacity: 1; }
   to { opacity: 0; scale: 1.4 1; }
 }
+
+/* 复现弹：亮度留下，色相收到主体浅青灰。滤镜节点在 observer.js。
+   包样式里的 url(#) 会相对本文件解析，文档里的同名规则才指到那颗滤镜。 */
+.ball.projectile[data-unit-paint] {
+  filter: url("#observer-body-tint");
+}

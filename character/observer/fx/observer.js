@@ -176,4 +176,45 @@ window.lookFX["observer-kunai-copy"] = {
     arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
     arena.burst(ctx.x, ctx.y, fx.kind, 8);
   });
+
+  const bodyColor = "#b9d7df";
+  const ownShot = new Set(["观察者视线", "观察者苦无复现"]);
+
+  function ensureBodyTint() {
+    if (document.getElementById("observer-body-tint")) return;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("width", "0");
+    svg.setAttribute("height", "0");
+    svg.style.position = "absolute";
+    svg.style.overflow = "hidden";
+    const filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+    filter.id = "observer-body-tint";
+    filter.setAttribute("color-interpolation-filters", "sRGB");
+    const matrix = document.createElementNS("http://www.w3.org/2000/svg", "feColorMatrix");
+    matrix.setAttribute("type", "matrix");
+    // 先按 Rec.709 收成亮度，再乘上 #b9d7df。白趋于主体色，黑仍是黑。
+    matrix.setAttribute("values", [
+      "0.154249 0.518871 0.052380 0 0",
+      "0.179251 0.603012 0.060875 0 0",
+      "0.185921 0.625449 0.063140 0 0",
+      "0 0 0 1 0",
+    ].join(" "));
+    filter.appendChild(matrix);
+    svg.appendChild(filter);
+    (document.body || document.documentElement).appendChild(svg);
+    const style = document.createElement("style");
+    style.textContent = '.ball.projectile[data-unit-paint]{filter:url("#observer-body-tint")}';
+    document.head.appendChild(style);
+  }
+
+  ensureBodyTint();
+  if (typeof arena.registerUnitPaint === "function") {
+    arena.registerUnitPaint((u, units) => {
+      if (!u || u.role !== "projectile" || ownShot.has(u.kind)) return "";
+      const owner = (units || []).find((o) => o && o.id === u.ownerId);
+      if (!owner || owner.kind !== "观察者") return "";
+      return bodyColor;
+    });
+  }
 })();
