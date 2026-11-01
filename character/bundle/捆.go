@@ -23,14 +23,15 @@ const (
 	bodyColor  = "#b34c50"
 
 	trailStep     = 9.0
-	trailLife     = 6.0
+	trailLife     = 4.5
 	trailWidth    = 10.0
 	trailTouchDmg = 3.0
 	trailTickDmg  = 1.0
-	trailTickGap  = 0.42
+	trailTickGap  = 1.0
 	rideSpeed     = 190.0
 	rideFreedom   = 0.9
 	maxTrail      = 220
+	rideTokenBase = uint64(0xb0a9d1e500000000)
 
 	turnMin  = 1.0
 	turnMax  = 2.2
@@ -225,15 +226,23 @@ func (a *捆) tickRiders(ctx unit.Context, sense unit.Sense) {
 			tail := rider.route[len(rider.route)-1]
 			a.freedomAt[id] = sense.Time + rideFreedom
 			delete(a.riders, id)
+			ctx.Out <- unit.RemoveFS{UnitID: id, Token: rideTokenBase ^ id}
 			ctx.Out <- unit.FX{
 				Name: "bundle-rope-release", Kind: KindBundle, UnitID: ctx.ID, Slot: a.slot,
 				X: tail.x, Y: tail.y, VX: float64(id),
 			}
 			continue
 		}
-		at := pointAlong(rider.route, rider.progress)
-		ctx.Out <- unit.Teleport{UnitID: id, X: at.x, Y: at.y}
-		ctx.Out <- unit.SetVelocity{UnitID: id, VX: 0, VY: 0}
+		at := pointAlong(rider.route, rider.progress+16)
+		dx, dy := at.x-o.X, at.y-o.Y
+		length := math.Hypot(dx, dy)
+		if length > 1e-6 {
+			ctx.Out <- unit.AddFS{
+				UnitID: id, DX: dx / length, DY: dy / length,
+				BaseSpeed: rideSpeed, OnWall: true,
+				Token: rideTokenBase ^ id, ExpiresAt: sense.Time + 0.16,
+			}
+		}
 		if sense.Time+1e-9 >= rider.nextHitAt {
 			rider.nextHitAt = sense.Time + trailTickGap
 			ctx.Out <- unit.Damage{From: ctx.ID, To: id, Amount: trailTickDmg, NoFreeze: true}
