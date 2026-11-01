@@ -63,6 +63,7 @@ type unit struct {
 	holdUntil       float64
 	holdVel         vec
 	noFrameFreeze   bool
+	damageScale     float64
 	noHealthNumbers bool
 	visionBlock     bool
 	shell           bool
@@ -1342,6 +1343,9 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		u := m.addUnitStreamLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot, c.Stream)
+		if u != nil && c.DamageScale > 0 {
+			u.damageScale = c.DamageScale
+		}
 		m.nailToWallLocked(u, c)
 	case unitpkg.Despawn:
 		u := m.units[c.UnitID]
@@ -1446,6 +1450,9 @@ func (u *unit) takesHit() bool {
 func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 	if c.Amount <= 0 {
 		return
+	}
+	if from := m.units[c.From]; from != nil && from.damageScale > 0 {
+		c.Amount *= from.damageScale
 	}
 	u := m.units[c.To]
 	if !u.takesHit() {

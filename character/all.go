@@ -28,6 +28,7 @@ import (
 	"xqdj/character/melee"
 	"xqdj/character/menreiki"
 	"xqdj/character/mezhou"
+	"xqdj/character/observer"
 	"xqdj/character/orca"
 	"xqdj/character/pastor"
 	"xqdj/character/patrol"
@@ -140,6 +141,8 @@ const (
 	KindMe                 = 我与周旋久.KindMe
 	KindVoidShot           = 我与周旋久.KindVoidShot
 	KindZhou               = 我与周旋久.KindZhou
+	KindObserver           = 观察者.KindObserver
+	KindObserverBeam       = 观察者.KindObserverBeam
 	KindOrca               = 大肥鱼.KindOrca
 	KindRice               = 大肥鱼.KindRice
 	KindGlyph              = 老牧师.KindGlyph

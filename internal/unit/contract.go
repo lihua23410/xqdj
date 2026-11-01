@@ -278,6 +278,8 @@ type Spawn struct {
 	VY      float64
 	OwnerID uint64
 	Slot    int
+	// DamageScale > 0 时，该单位造成的伤害在伤害提议入口乘以这个倍率。
+	DamageScale float64
 	// Stream 出生时已经定下的流号。同一父母的第 n 个孩子永远是这个数。
 	Stream uint64
 	// HardNail 钉在硬墙上。墙在转的话，这个点跟着墙走。

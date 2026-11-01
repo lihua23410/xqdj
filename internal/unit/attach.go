@@ -68,6 +68,11 @@ func Seek(s Sense) *Snapshot {
 }
 
 // SeekIf 在 Seek 之上再过滤。extra 为 nil 则不过滤。
+// CanSee 只检查感知快照中的视线遮挡，不检查阵营、可瞄准性或距离。
+func CanSee(s Sense, o Snapshot) bool {
+	return !sightBlocked(s, o)
+}
+
 func SeekIf(s Sense, extra func(Snapshot) bool) *Snapshot {
 	var best *Snapshot
 	bestPri := uint8(255)
