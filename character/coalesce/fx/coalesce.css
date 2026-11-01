@@ -265,6 +265,24 @@
   background: linear-gradient(90deg, transparent, #9ef2e2aa, #eafffb);
   box-shadow: 0 0 8px #67dccc;
 }
+.coalesce-shot-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  min-width: 12px;
+  color: #0b3b3d;
+  font: 800 9px/1 "Microsoft YaHei", "PingFang SC", sans-serif;
+  text-align: center;
+  text-shadow: 0 0 3px #fff;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+  z-index: 2;
+}
+.coalesce-shot-art.coalesce-shot-heavy .coalesce-shot-core {
+  box-shadow:
+    0 0 12px #eafffb,
+    0 0 26px #5cdeca;
+}
 @keyframes coalesce-shot-wobble {
   from { border-radius: 54% 46% 47% 53% / 45% 53% 47% 55%; }
   to { border-radius: 44% 56% 55% 45% / 56% 45% 55% 44%; }
