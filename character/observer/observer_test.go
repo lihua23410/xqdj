@@ -108,18 +108,56 @@ func TestObserverFiresAfterSevenAndHalfSecondsOfObservation(t *testing.T) {
 
 func TestObserverStateReportsGaugePercentage(t *testing.T) {
 	for _, tc := range []struct{ gauge, percent float64 }{{0, 0}, {37.5, 50}, {75, 100}} {
-		out := make(chan unit.Cmd, 1)
+		out := make(chan unit.Cmd, 2)
 		o := &observer{gauge: tc.gauge}
 		o.emitState(unit.Context{ID: 1, Kind: KindObserver, Out: out}, stateGap)
 		cmds := drain(out)
-		if len(cmds) != 1 {
-			t.Fatalf("gauge=%v commands=%v, want one state", tc.gauge, cmds)
+		if len(cmds) != 2 {
+			t.Fatalf("gauge=%v commands=%v, want gauge and film states", tc.gauge, cmds)
 		}
 		fx, ok := cmds[0].(unit.FX)
 		if !ok || fx.Name != "observer-state" || math.Abs(fx.Amount-tc.percent) > 1e-9 {
 			t.Fatalf("gauge=%v state=%+v, want %v%%", tc.gauge, fx, tc.percent)
 		}
 	}
+}
+
+func TestObserverFilmStateReportsOnlyArchivedShotsAndPendingReplay(t *testing.T) {
+	out := make(chan unit.Cmd, 2)
+	o := &observer{
+		film:   []shotNote{{KindObserverBeam, 1}, {KindObserverKunaiCopy, .85}, {KindObserverBeam, .85}},
+		fired:  []shotNote{{KindObserverBeam, .72}},
+		replay: []shotNote{{KindObserverBeam, .61}, {KindObserverKunaiCopy, .72}},
+	}
+	o.emitState(unit.Context{ID: 7, Kind: KindObserver, Out: out}, stateGap)
+	for _, cmd := range drain(out) {
+		if fx, ok := cmd.(unit.FX); ok && fx.Name == "observer-film-state" {
+			if fx.UnitID != 7 || fx.Amount != 3 || fx.VX != 4 || fx.VY != 2 {
+				t.Fatalf("film state=%+v, want 3 archived beams, 4 archived shots and 2 pending shots", fx)
+			}
+			return
+		}
+	}
+	t.Fatal("missing film state")
+}
+
+func TestObserverFilmStateIncludesOrdinaryShotsWithoutBeams(t *testing.T) {
+	out := make(chan unit.Cmd, 2)
+	o := &observer{
+		film:   []shotNote{{KindObserverKunaiCopy, .85}, {KindObserverKunaiCopy, .72}, {KindObserverKunaiCopy, .61}},
+		fired:  []shotNote{{KindObserverKunaiCopy, .85}, {KindObserverKunaiCopy, .85}},
+		replay: []shotNote{{KindObserverKunaiCopy, .85}},
+	}
+	o.emitState(unit.Context{ID: 7, Kind: KindObserver, Out: out}, stateGap)
+	for _, cmd := range drain(out) {
+		if fx, ok := cmd.(unit.FX); ok && fx.Name == "observer-film-state" {
+			if fx.Amount != 0 || fx.VX != 5 || fx.VY != 1 {
+				t.Fatalf("film state=%+v, want 0 beams, 5 archived ordinary shots and 1 pending shot", fx)
+			}
+			return
+		}
+	}
+	t.Fatal("missing film state")
 }
 
 func TestObserverReplaysRecordedSequenceAtScaledDamage(t *testing.T) {

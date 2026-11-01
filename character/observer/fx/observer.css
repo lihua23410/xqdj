@@ -1,327 +1,237 @@
-/* 观察者：单眼主体、视线、观测条与胶片样本。 */
-
+/* 浅青灰的湿润组织包着一只生物眼；胶片仍是独立的观众读数。 */
 .ball.look-observer {
   overflow: visible;
   background:
-    radial-gradient(circle at 38% 30%, #ffffff 0 8%, transparent 32%),
-    radial-gradient(circle at 50% 52%, #d9eef2 0%, #8bbac5 55%, #385a68 100%);
-  box-shadow:
-    inset 0 0 0 2px #e8fdff,
-    0 0 12px #8ed9e7aa,
-    0 0 28px #4a8fa466;
+    radial-gradient(ellipse at 28% 16%, #eff9f9 0 3%, transparent 25%),
+    radial-gradient(ellipse at 69% 80%, #627e89 0, transparent 45%),
+    radial-gradient(circle at 44% 37%, #d0e3e5, #a5bfc5 57%, #536e79 100%);
+  box-shadow: inset 0 -2px 3px #273f4a9c, inset 0 1px 1px #edf9f5,
+    0 0 0 1px #c2d8da80, 0 0 calc(5px + var(--observer-pulse, 0) * 9px) #a7d6df65;
 }
-
+.observer-skin {
+  position: absolute;
+  inset: -2%;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 46% 86%, #586c793d, transparent 38%);
+}
+.observer-skin::before, .observer-skin::after {
+  content: "";
+  position: absolute;
+  left: 7%; right: 7%;
+  height: 24%;
+  border-radius: 54% 47%;
+  pointer-events: none;
+}
+.observer-skin::before { top: 11%; border-top: 2px solid #8d8997; transform: rotate(-6deg); box-shadow: 0 -1px 0 #d2dcdb80; }
+.observer-skin::after { bottom: 9%; border-bottom: 2px solid #746e7d; transform: rotate(4deg); }
+.observer-skin svg { width: 100%; height: 100%; overflow: visible; }
+.observer-skin path {
+  fill: none;
+  stroke: #6e687b;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: calc(.35 + var(--observer-pulse, 0) * .3);
+}
 .observer-eye {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 48px;
-  height: 34px;
-  transform: translate(-50%, -50%);
-  border: 3px solid #15252c;
-  border-radius: 50% 50% 46% 46%;
-  background: radial-gradient(circle at 50% 45%, #fff 0 62%, #d7e9ed 100%);
-  box-shadow:
-    inset 0 0 0 2px #fff,
-    0 0 7px #c8f6ff,
-    0 0 16px #5eb9cc88;
+  left: 50%; top: 49%;
+  width: 94%; height: 66%;
+  box-sizing: border-box;
+  transform: translate(-50%, -50%) scaleY(var(--observer-open, 1));
+  border: 1.5px solid #34464e;
+  border-radius: 54% 46% 51% 49% / 62% 59% 41% 38%;
   overflow: hidden;
   pointer-events: none;
+  background: radial-gradient(ellipse at 48% 39%, #e5efec, #c7d3cf 67%, #819a9f);
+  box-shadow: 0 -2px 0 #a3bac1, 0 2px 0 #657781,
+    inset 0 2px 3px #5b606571, inset 0 -1px 2px #f2fffa, 0 0 3px #0b192b;
   z-index: 6;
 }
-
+.observer-eye::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 32% 15%, #ffffff6b, transparent 28%),
+    linear-gradient(170deg, #192e391f, transparent 50%, #e4f8ef40);
+  box-shadow: inset 0 0 3px #2e3c4f;
+}
+.observer-vessels { position: absolute; inset: 0; }
+.observer-vessels svg { width: 100%; height: 100%; }
+.observer-vessels path { fill: none; stroke: #98717c; stroke-width: .9; opacity: .65; }
 .observer-iris {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 26px;
-  height: 26px;
-  margin: -13px 0 0 -13px;
-  border-radius: 50%;
+  left: 50%; top: 50%;
+  width: 61%; height: 118%;
+  margin: -39% 0 0 -30.5%;
+  border-radius: 48% 52% 48% 50%;
   background:
-    radial-gradient(circle at 38% 35%, #dffcff 0 8%, transparent 16%),
-    radial-gradient(circle, #58d9ec 0 36%, #16748a 38% 62%, #0b3540 64% 100%);
-  box-shadow: 0 0 8px #5edff5, inset 0 0 5px #061e25;
-  animation: observer-iris-breathe 1.4s ease-in-out infinite;
-  transition: transform 0.08s linear;
+    repeating-conic-gradient(from 4deg, #b8e4dd1c 0 4deg, #073b4b4d 4deg 11deg, transparent 11deg 18deg),
+    radial-gradient(ellipse, #84cccf 0 18%, #43888f 34%, #295967 62%, #112c3c 69%, #334c58 73%);
+  box-shadow: inset 0 0 3px #051927, 0 0 1px #172e3b;
 }
-@keyframes observer-iris-breathe {
-  0%, 100% { filter: brightness(0.95); }
-  50% { filter: brightness(1.25); }
-}
-
 .observer-pupil {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 10px;
-  height: 17px;
-  margin: -8.5px 0 0 -5px;
-  border-radius: 50%;
-  background: #02090c;
-  box-shadow: 0 0 4px #000;
-  transition: transform 0.08s linear;
+  left: 50%; top: 50%;
+  width: 20%; height: 76%;
+  transform: translate(-50%, -50%) scaleX(calc(1 - var(--observer-pulse, 0) * .35));
+  border-radius: 55% 45% 48% 52%;
+  background: #030b14;
+  box-shadow: 0 0 2px #0c1d2a;
 }
 .observer-pupil::after {
   content: "";
   position: absolute;
-  left: 2px;
-  top: 2px;
-  width: 3px;
-  height: 4px;
+  left: -2px; top: 17%;
+  width: 3px; height: 4px;
   border-radius: 50%;
-  background: #fff;
+  transform: rotate(-25deg);
+  background: #edfff5d9;
+  box-shadow: 3px 4px 0 -1px #d6fff2;
 }
-
-.observer-eye::after {
-  content: "";
-  position: absolute;
-  left: -4%;
-  right: -4%;
-  top: -42%;
-  height: 54%;
-  border-bottom: 3px solid #16262d;
-  border-radius: 0 0 50% 50%;
-  background: linear-gradient(180deg, #6f9eaa, #c5e4e9);
-  transform-origin: 50% 100%;
-  animation: observer-blink 5.6s ease-in-out infinite;
-}
-@keyframes observer-blink {
-  0%, 91%, 100% { transform: scaleY(0); }
-  94% { transform: scaleY(1); }
-  97% { transform: scaleY(0); }
-}
-
-.ball.look-observer.observer-locked .observer-eye {
-  box-shadow:
-    inset 0 0 0 2px #fff,
-    0 0 10px #bdf7ff,
-    0 0 24px #35cfe8;
-}
-.ball.look-observer.observer-replaying {
-  animation: observer-replay-pulse 0.16s steps(2) infinite;
-}
-@keyframes observer-replay-pulse {
-  0% { filter: brightness(1); }
-  100% { filter: brightness(1.45); }
-}
+.observer-locked .observer-iris { filter: brightness(1.08); }
+.observer-charged .observer-iris { filter: brightness(1.25) saturate(.85); }
+.observer-replaying .observer-eye { box-shadow: 0 -2px 0 #c4dbd9, 0 2px 0 #687d87, inset 0 2px 3px #5b606571, 0 0 6px #a3e1e285; }
 
 .observer-gauge-wrap {
   position: absolute;
-  left: 50%;
-  bottom: -12px;
+  left: 50%; top: calc(100% + 10px);
+  width: 58px;
   display: grid;
-  grid-template-columns: auto 42px;
-  align-items: center;
-  gap: 4px;
-  transform: translate(-50%, 100%);
-  color: #dffbff;
-  font: 700 9px/12px "Microsoft YaHei", "PingFang SC", sans-serif;
+  grid-template-columns: 1fr auto;
+  gap: 3px 5px;
+  transform: translateX(-50%) scale(var(--observer-ui-scale, 1));
+  transform-origin: 50% 0;
+  color: #c2dade;
+  font: 600 8px/10px "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px #03101b;
   pointer-events: none;
   z-index: 8;
 }
-.observer-gauge-wrap b {
-  width: 42px;
-  height: 5px;
-  overflow: hidden;
-  border-radius: 3px;
-  background: #07171d;
-  border: 1px solid #5ccfe2;
-}
-.observer-gauge-wrap i {
+.observer-gauge-value { color: #8faab6; text-align: right; }
+.observer-gauge-track {
+  grid-column: 1 / -1;
   display: block;
-  width: 0;
-  height: 100%;
-  background: linear-gradient(90deg, #5edff5, #dffcff);
-  box-shadow: 0 0 6px #5edff5;
-  transition: width 0.2s linear;
+  height: 3px;
+  border: 1px solid #7c9da673;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #091723cc;
 }
+.observer-gauge-fill {
+  display: block;
+  width: 100%; height: 100%;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, #6b9ca8, #c5e7e7);
+}
+.observer-charged .observer-gauge-fill { background: linear-gradient(90deg, #9dc9cb, #e5fff4); }
+.observer-replay-status { grid-column: 1 / -1; text-align: center; color: #daeee9; font-size: 7px; letter-spacing: .4px; }
+.observer-replay-status[hidden] { display: none; }
 
 .observer-films {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0;
-  height: 0;
-  z-index: 7;
+  left: 50%; top: 50%;
+  width: 0; height: 0;
+  transform: scale(var(--observer-ui-scale, 1));
   pointer-events: none;
+  z-index: 7;
 }
 .observer-film {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 8px;
-  height: 11px;
-  opacity: 0.12;
-  border: 1px solid hsl(var(--hue, 190) 80% 88%);
-  background: hsl(var(--hue, 190) 80% 35% / 0.55);
-  box-shadow: 0 0 4px hsl(var(--hue, 190) 80% 70%);
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  width: 7px; height: 10px;
+  box-sizing: border-box;
+  opacity: .14;
+  border: 1px solid hsl(var(--hue, 185) 35% 75%);
+  background: linear-gradient(90deg, transparent 1px, hsl(var(--hue, 185) 30% 35% / .6) 1px 4px, transparent 4px), #07121dcc;
+  border-radius: 1px;
 }
-.observer-film.active {
-  opacity: 0.95;
+.observer-film::before, .observer-film::after {
+  content: "";
+  position: absolute;
+  top: 1px; bottom: 1px;
+  width: 1px;
+  background: repeating-linear-gradient(transparent 0 1px, hsl(var(--hue, 185) 40% 85%) 1px 2px, transparent 2px 3px);
 }
-.observer-film.f0 { transform: translate(-38px, -18px) rotate(-12deg); }
-.observer-film.f1 { transform: translate(31px, -22px) rotate(9deg); }
-.observer-film.f2 { transform: translate(42px, 17px) rotate(-5deg); }
-
+.observer-film::before { left: 0; }
+.observer-film::after { right: 0; }
+.observer-film.active { opacity: calc(.78 + var(--fresh, 0) * .22); box-shadow: 0 0 calc(2px + var(--fresh, 0) * 7px) hsl(var(--hue, 185) 60% 75% / .7); }
+.observer-film-0 { left: -30px; top: -18px; transform: rotate(-12deg); }
+.observer-film-1 { left: -32px; top: -4px; transform: rotate(-5deg); }
+.observer-film-2 { left: -28px; top: 10px; transform: rotate(6deg); }
 .observer-echo {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 10px;
-  height: 14px;
-  opacity: 0.12;
-  border: 1px solid #b9d7df;
-  background: #385a68cc;
-  box-shadow: inset 0 0 0 2px #dffbff;
-  transform: translate(-8px, 36px) rotate(6deg);
-  transition: opacity 0.15s ease;
+  left: 25px; top: -6px;
+  width: 10px; height: 14px;
+  box-sizing: border-box;
+  color: #c0d6dc;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+  opacity: .18;
+  background: linear-gradient(90deg, #bdcfd640 1px, transparent 1px 7px, #bdcfd640 7px), #162c39;
+  box-shadow: calc(var(--film-layers, 0) * 1px) calc(var(--film-layers, 0) * -1px) 0 -1px #142530,
+    calc(var(--film-layers, 0) * 1px) calc(var(--film-layers, 0) * -1px) 0 0 #91aab67d;
 }
-.observer-echo.active {
-  opacity: 0.95;
-  box-shadow: inset 0 0 0 2px #dffbff, 0 0 8px #b9d7df;
+.observer-echo::before {
+  content: "";
+  position: absolute;
+  left: 2px; right: 2px; top: 3px; bottom: 3px;
+  border: 1px solid #afc9cf;
+  border-radius: 50%;
 }
+.observer-echo.active { opacity: .85; }
+.observer-echo.has-beams { color: #d2e5e4; background-color: #365465; }
+.observer-echo-count { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); font: 600 8px/10px monospace; white-space: nowrap; text-shadow: 0 1px 2px #04121f; }
+.guide.observer-gaze { border-top: 1px dashed #b7d3d6; filter: none; }
+.observer-visual-state { position: absolute; inset: 0; pointer-events: none; }
 
-.guide.observer-gaze {
-  border-top: 1px dashed #bdf7ff;
-  opacity: 0.35;
-  filter: drop-shadow(0 0 3px #35cfe8);
-  animation: observer-gaze 1s linear infinite;
-}
-@keyframes observer-gaze {
-  0%, 100% { opacity: 0.2; }
-  50% { opacity: 0.65; }
-}
-
-.ball.look-observer-kunai-copy {
-  overflow: visible;
-  background: transparent;
-  box-shadow: none;
+.ball.look-observer-beam, .ball.look-observer-kunai-copy { overflow: visible; background: transparent; box-shadow: none; }
+.observer-beam-img {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 34px; height: 7px;
+  margin: -3.5px 0 0 -17px;
+  border-radius: 90% 35% 35% 90%;
+  background: radial-gradient(ellipse at 75% 50%, #edfff5, #a6e8e8 23%, #679fac80 48%, transparent 75%);
+  box-shadow: 4px 0 7px #b5eeea94;
 }
 .ball.look-observer-kunai-copy::before {
   content: "";
   position: absolute;
-  left: 50%;
-  top: 50%;
+  left: 50%; top: 50%;
+  width: 28px; height: 4px;
+  margin: -2px 0 0 -14px;
   transform: rotate(var(--travel, 0rad));
-  transform-origin: 50% 50%;
-  width: 34px;
-  height: 5px;
-  margin: -2.5px 0 0 -17px;
   border-radius: 99px;
-  background: linear-gradient(90deg, transparent, #dffcff 32%, #5edff5 65%, transparent);
-  box-shadow: 0 0 8px #dffcff, 0 0 16px #5edff5;
+  background: linear-gradient(90deg, transparent, #b9d7df 65%, #effcf6);
+  box-shadow: 0 0 6px #b9d7df70;
 }
-
-.ball.look-observer-beam {
-  overflow: visible;
-  background: transparent;
-  box-shadow: none;
+.observer-fx { position: absolute; pointer-events: none; opacity: var(--fade, 1); }
+.observer-capture {
+  width: 5px; height: 8px;
+  border: 1px solid hsl(var(--hue, 185) 50% 78%);
+  background: hsl(var(--hue, 185) 35% 45% / .6);
+  box-shadow: 0 0 5px hsl(var(--hue, 185) 50% 65%);
+  transform: translate(-50%, -50%) rotate(calc(var(--progress, 0) * 100deg));
 }
-.observer-beam-img {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 54px;
-  height: 8px;
-  margin: -4px 0 0 -27px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, transparent, #dffcff 25%, #5edff5 52%, transparent);
-  box-shadow: 0 0 9px #dffcff, 0 0 20px #5edff5;
-  animation: observer-beam-flicker 0.12s linear infinite;
+.observer-lock-mark, .observer-hit {
+  width: 18px; height: 18px;
+  border: 1px solid #b9d7df;
+  border-radius: 48% 52% 45% 55%;
+  transform: translate(-50%, -50%) scale(calc(.7 + var(--progress, 0) * 1.1));
+  box-shadow: inset 0 0 5px #bcdbd455;
 }
-@keyframes observer-beam-flicker {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
-}
-
-.fx-observer-record,
-.fx-observer-lock,
-.fx-observer-replay,
-.fx-observer-copy,
-.fx-observer-beam-fire {
-  position: absolute;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-  z-index: 35;
-}
-.fx-observer-record::before {
-  content: "记录";
-  position: absolute;
-  left: -18px;
-  top: -26px;
-  width: 36px;
-  padding: 1px 2px;
-  border: 1px solid hsl(var(--hue, 190) 80% 82%);
-  background: #07171de6;
-  color: #effeff;
-  font: 700 8px/11px "Microsoft YaHei", sans-serif;
-  text-align: center;
-  box-shadow: 0 0 7px hsl(var(--hue, 190) 80% 70%);
-  animation: observer-record-in 0.7s ease-out forwards;
-}
-@keyframes observer-record-in {
-  0% { opacity: 0; transform: translateY(8px) scale(0.7); }
-  25% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-24px) scale(1); }
-}
-
-.fx-observer-lock::before {
-  content: "";
-  position: absolute;
-  left: -22px;
-  top: -22px;
-  width: 44px;
-  height: 44px;
-  border: 2px solid #bdf7ff;
+.observer-hit { width: 10px; height: 10px; border-color: #d9fff0; }
+.observer-spit {
+  width: 26px; height: 3px;
   border-radius: 50%;
-  box-shadow: 0 0 14px #35cfe8;
-  animation: observer-lock 0.45s ease-out forwards;
+  transform: translate(-50%, -50%) rotate(var(--ang, 0rad)) scaleX(calc(.5 + var(--progress, 0)));
+  background: linear-gradient(90deg, transparent, #b9d7df, transparent);
+  box-shadow: 0 0 5px #b9d7df66;
 }
-@keyframes observer-lock {
-  from { transform: scale(0.3); opacity: 1; }
-  to { transform: scale(1.8); opacity: 0; }
-}
-
-.fx-observer-replay {
-  width: 72px;
-  height: 72px;
-  margin: -36px 0 0 -36px;
-  border: 3px solid #dffcff;
-  border-radius: 50%;
-  box-shadow: 0 0 24px #5edff5, inset 0 0 30px #5edff5;
-  animation: observer-replay 0.8s ease-out forwards;
-}
-@keyframes observer-replay {
-  from { transform: scale(0.2) rotate(0deg); opacity: 1; }
-  to { transform: scale(2.2) rotate(240deg); opacity: 0; }
-}
-
-.fx-observer-copy::before,
-.fx-observer-beam-fire::before {
-  content: "";
-  position: absolute;
-  left: -42px;
-  top: -3px;
-  width: 84px;
-  height: 6px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, transparent, #dffcff, #5edff5, transparent);
-  box-shadow: 0 0 8px #dffcff, 0 0 18px #5edff5;
-  transform-origin: 50% 50%;
-  transform: rotate(var(--ang, 0rad));
-  animation: observer-copy-shot 0.35s ease-out forwards;
-}
-@keyframes observer-copy-shot {
-  from { opacity: 0; scale: 0.2 1; }
-  25% { opacity: 1; }
-  to { opacity: 0; scale: 1.4 1; }
-}
-
-/* 复现弹：亮度留下，色相收到主体浅青灰。滤镜节点在 observer.js。
-   包样式里的 url(#) 会相对本文件解析，文档里的同名规则才指到那颗滤镜。 */
-.ball.projectile[data-unit-paint] {
-  filter: url("#observer-body-tint");
-}
+.observer-spit.beam { background: linear-gradient(90deg, transparent, #e9fff3, transparent); }
+/* 保留复现弹的原形状与亮度，只把涂色收到观察者的主体浅青灰。 */
+.ball.projectile[data-unit-paint="#b9d7df"] { filter: url("#observer-body-tint"); }

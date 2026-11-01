@@ -360,6 +360,20 @@ func (o *observer) emitState(ctx unit.Context, now float64) {
 		X: o.x, Y: o.y, Amount: o.gauge / gaugeMax * 100, // 观测条百分比
 		VX: o.stateMark(), VY: float64(o.targetID),
 	}
+	beams := 0
+	for _, film := range [][]shotNote{o.film, o.fired} {
+		for _, shot := range film {
+			if shot.kind == KindObserverBeam {
+				beams++
+			}
+		}
+	}
+	// 只给观众看：已归档的视线数、胶片总发数，以及尚未打出的发数。
+	ctx.Out <- unit.FX{
+		Name: "observer-film-state", Kind: KindObserver, UnitID: ctx.ID, Slot: o.slot,
+		X: o.x, Y: o.y, Amount: float64(beams),
+		VX: float64(len(o.film) + len(o.fired)), VY: float64(len(o.replay)),
+	}
 }
 
 func (o *observer) stateMark() float64 {
