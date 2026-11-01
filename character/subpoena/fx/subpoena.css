@@ -65,6 +65,25 @@
     0 6px 0 rgba(122, 96, 50, 0.25);
 }
 
+/* 逾期：纸、公文线和光都换成红，数字仍留在纸角上。 */
+.ball.look-ticket.ticket-stale {
+  background: linear-gradient(158deg, #ffd5ce, #d24536);
+  border-color: rgba(110, 24, 18, 0.9);
+  box-shadow:
+    0 0 calc(8px + var(--heat, 0) * 14px)
+      rgba(255, 78, 58, calc(0.55 + var(--heat, 0) * 0.35)),
+    0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.ball.look-ticket.ticket-stale::after {
+  background: rgba(110, 22, 16, 0.75);
+  box-shadow:
+    0 3px 0 rgba(110, 22, 16, 0.55),
+    0 6px 0 rgba(110, 22, 16, 0.35);
+}
+.ball.look-ticket.ticket-stale > .ticket-amount {
+  color: #ffd2c8;
+}
+
 .ticket-amount {
   position: absolute;
   left: 50%;
