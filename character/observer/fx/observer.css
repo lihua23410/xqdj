@@ -98,23 +98,6 @@
     0 0 10px #bdf7ff,
     0 0 24px #35cfe8;
 }
-.ball.look-observer.observer-armored::after {
-  content: "";
-  position: absolute;
-  inset: -7px;
-  border: 2px solid #bdf7ff;
-  border-radius: 50%;
-  box-shadow: 0 0 12px #5edff5, inset 0 0 8px #5edff5;
-  opacity: 0.55;
-  animation: observer-armor 1s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 5;
-}
-@keyframes observer-armor {
-  0%, 100% { opacity: 0.28; transform: scale(0.98); }
-  50% { opacity: 0.7; transform: scale(1.06); }
-}
-
 .ball.look-observer.observer-replaying {
   animation: observer-replay-pulse 0.16s steps(2) infinite;
 }
@@ -181,6 +164,24 @@
 .observer-film.f0 { transform: translate(-38px, -18px) rotate(-12deg); }
 .observer-film.f1 { transform: translate(31px, -22px) rotate(9deg); }
 .observer-film.f2 { transform: translate(42px, 17px) rotate(-5deg); }
+
+.observer-echo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 10px;
+  height: 14px;
+  opacity: 0.12;
+  border: 1px solid #b9d7df;
+  background: #385a68cc;
+  box-shadow: inset 0 0 0 2px #dffbff;
+  transform: translate(-8px, 36px) rotate(6deg);
+  transition: opacity 0.15s ease;
+}
+.observer-echo.active {
+  opacity: 0.95;
+  box-shadow: inset 0 0 0 2px #dffbff, 0 0 8px #b9d7df;
+}
 
 .guide.observer-gaze {
   border-top: 1px dashed #bdf7ff;

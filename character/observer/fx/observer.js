@@ -6,7 +6,7 @@ window.lookFX = window.lookFX || {};
   function st(id) {
     let s = window.observerSt[id];
     if (!s) {
-      s = { gauge: 0, records: 0, targetId: 0, tones: [], replayUntil: 0, lidUntil: 0 };
+      s = { gauge: 0, records: 0, targetId: 0, tones: [], echo: false, replayUntil: 0, lidUntil: 0 };
       window.observerSt[id] = s;
     }
     return s;
@@ -54,7 +54,6 @@ window.lookFX = window.lookFX || {};
       const target = units.find((o) => o && o.id === s.targetId);
       const now = performance.now();
       el.classList.toggle("observer-locked", !!target);
-	      el.classList.toggle("observer-armored", s.gauge >= 50);
       el.classList.toggle("observer-replaying", now < s.replayUntil);
 
       const eye = ensure(el, "observer-eye");
@@ -87,6 +86,13 @@ window.lookFX = window.lookFX || {};
         const hue = s.tones[i] ?? (170 + i * 55);
         card.style.setProperty("--hue", String(hue));
       }
+      let echo = films.querySelector(":scope > .observer-echo");
+      if (!echo) {
+        echo = document.createElement("div");
+        echo.className = "observer-echo";
+        films.appendChild(echo);
+      }
+      echo.classList.toggle("active", !!s.echo);
     },
     guide(u, ctx) {
       if (!u || !ctx || !ctx.ensureGuide || !ctx.placeSeg || !window.arena) return;
@@ -137,7 +143,9 @@ window.lookFX["observer-kunai-copy"] = {
   arena.registerShot("observer-state", (fx) => {
     const s = st(fx.unitId);
     s.gauge = Number(fx.amount) || 0;
-    s.records = Math.max(0, Math.min(3, Math.round(Number(fx.vx) || 0)));
+    const raw = Math.max(0, Math.round(Number(fx.vx) || 0));
+    s.echo = raw >= 4;
+    s.records = Math.max(0, Math.min(3, raw % 4));
     s.targetId = Math.max(0, Math.round(Number(fx.vy) || 0));
     while (s.tones.length < s.records) s.tones.push(170 + s.tones.length * 55);
     if (s.tones.length > s.records) s.tones = s.tones.slice(-s.records);

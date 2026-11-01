@@ -1,5 +1,6 @@
 // 观察者：没有自己的普通攻击，持续观察一个敌人并记录经过身边的敌方弹体。
-// 观测值满后把记录到的弹体依次复现，复现伤害为原伤害的 70%。
+// 观测值靠看着目标上涨，每记下发再加 5。满了之后先按记下的顺序复现，再打特殊胶片里上一轮的 51%，向上取整。
+// 新记下的伤害为原来的 85%。回响在打出那一发之上再乘一次 85%。
 package 观察者
 
 import (
@@ -21,27 +22,24 @@ const KindObserverKunaiCopy = "观察者苦无复现"
 
 const (
 	observerRadius = 18.0
-	observerHP     = 110.0
+	observerHP     = 100.0
 	observerSpeed  = 140.0
 	observerVision = 9999.0
 	observerColor  = "#b9d7df"
 
-	observeGain       = 10.0
-	observeDrain      = 15.0
-	projectileGain    = 20.0
-	gaugeMax          = 100.0
-	recordRadius      = 240.0
-	recordLimit       = 3
-	replayScale       = 0.85
-	replayGap         = 0.15
-	replayShots       = 10
-	stateGap          = 0.25
-	beamDamage        = 16.0
-	kunaiCopyDamage   = 3.0
-	beamSpeed         = 680.0
-	beamRadius        = 5.0
-	observeArmorAt    = 50.0
-	observeArmorScale = 0.80
+	observeGain     = 10.0
+	observeDrain    = 15.0
+	projectileGain  = 5.0
+	gaugeMax        = 100.0
+	recordRadius    = 240.0
+	kindLimit       = 3
+	replayScale     = 0.85
+	replayGap       = 0.15
+	stateGap        = 0.25
+	beamDamage      = 16.0
+	kunaiCopyDamage = 3.0
+	beamSpeed       = 680.0
+	beamRadius      = 5.0
 )
 
 func init() {
@@ -81,10 +79,13 @@ type observer struct {
 	lastStateAt float64
 
 	projectileSeen map[uint64]bool
-	records        []string
+	kinds          []string   // 先遇上的种类，最多三种，打出去之前不换
+	records        []string   // 按看到的顺序，一发一条
+	film           []shotNote // 上一轮真正飞出去的，含视线
+	fired          []shotNote // 这一轮已经飞出去的，打完再写回 film
 
 	replaying bool
-	replay    []string
+	replay    []shotNote
 	replayAt  float64
 
 	x, y   float64
@@ -94,11 +95,7 @@ type observer struct {
 func (o *observer) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
-		amount := e.Amount
-		if o.gauge >= observeArmorAt {
-			amount *= observeArmorScale
-		}
-		ctx.Out <- unit.ConfirmDamage{Token: e.Token, UnitID: ctx.ID, Amount: amount}
+		ctx.Out <- unit.ConfirmDamage{Token: e.Token, UnitID: ctx.ID, Amount: e.Amount}
 	case unit.Sense:
 		o.onSense(ctx, e)
 	}
@@ -128,6 +125,7 @@ func (o *observer) onSense(ctx unit.Context, s unit.Sense) {
 	if target == nil {
 		o.targetID = 0
 		o.gauge = math.Max(0, o.gauge-observeDrain*dt)
+		o.dropReplay()
 		o.emitState(ctx, s.Time)
 		return
 	}
@@ -147,18 +145,10 @@ func (o *observer) onSense(ctx unit.Context, s unit.Sense) {
 	o.recordProjectiles(ctx, s)
 	if o.gauge >= gaugeMax && !o.replaying {
 		o.gauge = 0
-		if len(o.records) == 0 {
-			o.fireBeam(ctx, target)
-		} else {
-			samples := append([]string(nil), o.records...)
-			o.replaying = true
-			o.replay = o.replay[:0]
-			for i := 0; i < replayShots; i++ {
-				o.replay = append(o.replay, samples[i%len(samples)])
-			}
-			o.records = nil
-			o.replayAt = s.Time
-			ctx.Out <- unit.FX{Name: "observer-replay", Kind: KindObserver, UnitID: ctx.ID, Slot: o.slot, X: o.x, Y: o.y, Amount: float64(len(o.replay))}
+		o.beginVolley(s.Time)
+		ctx.Out <- unit.FX{
+			Name: "observer-replay", Kind: KindObserver, UnitID: ctx.ID, Slot: o.slot,
+			X: o.x, Y: o.y, Amount: float64(len(o.replay)),
 		}
 	}
 	if o.replaying {
@@ -208,19 +198,87 @@ func (o *observer) recordProjectiles(ctx unit.Context, s unit.Sense) {
 			continue
 		}
 		o.projectileSeen[p.ID] = true
-		o.records = append(o.records, p.Kind)
-		if len(o.records) > recordLimit {
-			o.records = o.records[len(o.records)-recordLimit:]
+		fresh := !o.hasKind(p.Kind)
+		if fresh && len(o.kinds) >= kindLimit {
+			continue // 第四种不记。这一发已经见过，种类空出来也不补。
 		}
+		if fresh {
+			o.kinds = append(o.kinds, p.Kind)
+		}
+		o.records = append(o.records, p.Kind)
 		o.gauge = math.Min(gaugeMax, o.gauge+projectileGain)
+		if !fresh {
+			continue
+		}
 		ctx.Out <- unit.FX{
 			Name: "observer-record", Kind: KindObserver, UnitID: ctx.ID, Slot: o.slot,
-			X: p.X, Y: p.Y, Amount: kindTone(p.Kind), VX: float64(len(o.records)),
+			X: p.X, Y: p.Y, Amount: kindTone(p.Kind), VX: float64(len(o.kinds)),
 		}
 	}
 }
 
+func (o *observer) hasKind(kind string) bool {
+	for _, k := range o.kinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *observer) dropReplay() {
+	if !o.replaying && len(o.replay) == 0 {
+		return
+	}
+	o.replay = nil
+	o.replaying = false
+	o.commitFilm()
+}
+
+func (o *observer) beginVolley(now float64) {
+	o.fired = nil
+	o.replay = nil
+	if len(o.records) == 0 {
+		o.replay = append(o.replay, shotNote{kind: KindObserverBeam, scale: 1})
+	} else {
+		for _, kind := range o.records {
+			o.replay = append(o.replay, shotNote{kind: kind, scale: replayScale})
+		}
+		o.records = nil
+		o.kinds = nil
+	}
+	n := echoCount(len(o.film))
+	for i := 0; i < n; i++ {
+		prev := o.film[i]
+		o.replay = append(o.replay, shotNote{kind: prev.kind, scale: prev.scale * replayScale})
+	}
+	o.film = nil
+	o.replaying = true
+	o.replayAt = now
+}
+
+func echoCount(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	return (n*51 + 99) / 100
+}
+
+func (o *observer) commitFilm() {
+	o.film = append([]shotNote(nil), o.fired...)
+	o.fired = nil
+}
+
+type shotNote struct {
+	kind  string
+	scale float64
+}
+
 func (o *observer) tickReplay(ctx unit.Context, s unit.Sense, target *unit.Snapshot) {
+	if target == nil {
+		o.dropReplay()
+		return
+	}
 	if len(o.replay) == 0 {
 		o.replaying = false
 		return
@@ -228,30 +286,34 @@ func (o *observer) tickReplay(ctx unit.Context, s unit.Sense, target *unit.Snaps
 	if s.Time+1e-9 < o.replayAt {
 		return
 	}
-	kind := o.replay[0]
+	shot := o.replay[0]
 	o.replay = o.replay[1:]
-	o.spawnReplay(ctx, kind, target)
+	if o.spawnReplay(ctx, shot, target) {
+		o.fired = append(o.fired, shot)
+	}
 	o.replayAt = s.Time + replayGap
 	if len(o.replay) == 0 {
 		o.replaying = false
+		o.commitFilm()
 	}
 }
 
-func (o *observer) spawnReplay(ctx unit.Context, kind string, target *unit.Snapshot) {
+func (o *observer) spawnReplay(ctx unit.Context, shot shotNote, target *unit.Snapshot) bool {
 	if target == nil {
-		return
+		return false
 	}
+	kind := shot.kind
 	if kind == tanyongchen.KindTanKunaiShot {
 		kind = KindObserverKunaiCopy
 	}
 	spec, ok := unit.Lookup(kind)
 	if !ok || spec.Role != unit.RoleProjectile {
-		return
+		return false
 	}
 	dx, dy := target.X-o.x, target.Y-o.y
 	n := math.Hypot(dx, dy)
 	if n < 1e-6 {
-		return
+		return false
 	}
 	ux, uy := dx/n, dy/n
 	speed := spec.Speed
@@ -259,39 +321,21 @@ func (o *observer) spawnReplay(ctx unit.Context, kind string, target *unit.Snaps
 		speed = 420
 	}
 	d := observerRadius + math.Max(6, spec.Radius) + 4
-	spawn := unit.Spawn{
+	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: kind, X: o.x + ux*d, Y: o.y + uy*d,
 		VX: ux * speed, VY: uy * speed,
 		OwnerID: ctx.ID, Slot: o.slot,
-		DamageScale: replayScale,
-	}
-	ctx.Out <- ctx.Born(spawn)
-	ctx.Out <- unit.FX{
-		Name: "observer-copy-shot", Kind: KindObserver, UnitID: ctx.ID, Slot: o.slot,
-		X: o.x, Y: o.y, VX: ux, VY: uy,
-	}
-}
-
-func (o *observer) fireBeam(ctx unit.Context, target *unit.Snapshot) {
-	if target == nil {
-		return
-	}
-	dx, dy := target.X-o.x, target.Y-o.y
-	n := math.Hypot(dx, dy)
-	if n < 1e-6 {
-		return
-	}
-	ux, uy := dx/n, dy/n
-	d := observerRadius + beamRadius + 4
-	ctx.Out <- ctx.Born(unit.Spawn{
-		Kind: KindObserverBeam, X: o.x + ux*d, Y: o.y + uy*d,
-		VX: ux * beamSpeed, VY: uy * beamSpeed,
-		OwnerID: ctx.ID, Slot: o.slot,
+		DamageScale: shot.scale,
 	})
+	fxName := "observer-copy-shot"
+	if kind == KindObserverBeam && shot.scale >= 1 {
+		fxName = "observer-beam-fire"
+	}
 	ctx.Out <- unit.FX{
-		Name: "observer-beam-fire", Kind: KindObserver, UnitID: ctx.ID, Slot: o.slot,
+		Name: fxName, Kind: KindObserver, UnitID: ctx.ID, Slot: o.slot,
 		X: o.x, Y: o.y, VX: ux, VY: uy,
 	}
+	return true
 }
 
 func (o *observer) emitState(ctx unit.Context, now float64) {
@@ -302,8 +346,16 @@ func (o *observer) emitState(ctx unit.Context, now float64) {
 	ctx.Out <- unit.FX{
 		Name: "observer-state", Kind: KindObserver, UnitID: ctx.ID, Slot: o.slot,
 		X: o.x, Y: o.y, Amount: o.gauge,
-		VX: float64(len(o.records)), VY: float64(o.targetID),
+		VX: o.stateMark(), VY: float64(o.targetID),
 	}
+}
+
+func (o *observer) stateMark() float64 {
+	n := len(o.kinds)
+	if len(o.film)+len(o.fired) > 0 {
+		n += 4
+	}
+	return float64(n)
 }
 
 func kindTone(kind string) float64 {
