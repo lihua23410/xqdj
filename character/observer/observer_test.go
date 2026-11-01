@@ -22,7 +22,7 @@ func TestObserverSkipsMeleeArcsAndRecordsTanKunaiProxy(t *testing.T) {
 func TestObserverReplaysTanKunaiAsDamageCopy(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	o := &observer{
-		rng: unit.NewRNG(1), gauge: 100, targetID: 2,
+		rng: unit.NewRNG(1), gauge: gaugeMax, targetID: 2,
 		records: []string{tanyongchen.KindTanKunaiShot},
 	}
 	ctx := unit.Context{ID: 1, Kind: KindObserver, Out: out}
@@ -87,11 +87,46 @@ func TestObserverGainsGaugeAndRecordsEnemyProjectile(t *testing.T) {
 	}
 }
 
+func TestObserverFiresAfterSevenAndHalfSecondsOfObservation(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	o := &observer{}
+	ctx := unit.Context{ID: 1, Kind: KindObserver, Out: out}
+	self := unit.Snapshot{ID: 1, Slot: 0, Role: unit.RoleFighter, Radius: observerRadius}
+	target := unit.Snapshot{ID: 2, Slot: 1, Role: unit.RoleFighter, X: 100, AimPriority: 15}
+	for step := 0; step <= 60; step++ {
+		now := float64(step) / 8 // 0.125 秒一拍，避免浮点累计影响临界时刻。
+		o.Handle(ctx, unit.Sense{Time: now, Self: self, Nearby: []unit.Snapshot{target}})
+		cmds := drain(out)
+		if fired := hasSpawn(cmds, KindObserverBeam); fired != (step == 60) {
+			t.Fatalf("time=%v fired=%v gauge=%v, want first beam at 7.5s", now, fired, o.gauge)
+		}
+	}
+	if o.gauge != 0 {
+		t.Fatalf("gauge=%v, want reset after firing", o.gauge)
+	}
+}
+
+func TestObserverStateReportsGaugePercentage(t *testing.T) {
+	for _, tc := range []struct{ gauge, percent float64 }{{0, 0}, {37.5, 50}, {75, 100}} {
+		out := make(chan unit.Cmd, 1)
+		o := &observer{gauge: tc.gauge}
+		o.emitState(unit.Context{ID: 1, Kind: KindObserver, Out: out}, stateGap)
+		cmds := drain(out)
+		if len(cmds) != 1 {
+			t.Fatalf("gauge=%v commands=%v, want one state", tc.gauge, cmds)
+		}
+		fx, ok := cmds[0].(unit.FX)
+		if !ok || fx.Name != "observer-state" || math.Abs(fx.Amount-tc.percent) > 1e-9 {
+			t.Fatalf("gauge=%v state=%+v, want %v%%", tc.gauge, fx, tc.percent)
+		}
+	}
+}
+
 func TestObserverReplaysRecordedSequenceAtScaledDamage(t *testing.T) {
 	out := make(chan unit.Cmd, 64)
 	want := []string{KindObserverBeam, KindObserverKunaiCopy, KindObserverBeam}
 	o := &observer{
-		rng: unit.NewRNG(1), gauge: 100, targetID: 2,
+		rng: unit.NewRNG(1), gauge: gaugeMax, targetID: 2,
 		kinds:   []string{KindObserverBeam, tanyongchen.KindTanKunaiShot},
 		records: []string{KindObserverBeam, tanyongchen.KindTanKunaiShot, KindObserverBeam},
 	}
@@ -228,11 +263,11 @@ func TestObserverDropsRemainingReplayWhenTargetIsGone(t *testing.T) {
 	}
 }
 
-func TestObserverEchoesFrontHalfAtDecayedDamage(t *testing.T) {
+func TestObserverEchoesAllBeamsAtDecayedDamage(t *testing.T) {
 	out := make(chan unit.Cmd, 64)
 	o := &observer{
 		rng: unit.NewRNG(1), booted: true, lastTime: 1,
-		gauge: 100, targetID: 2,
+		gauge: gaugeMax, targetID: 2,
 		kinds:   []string{KindObserverBeam},
 		records: []string{KindObserverBeam, KindObserverBeam},
 		film: []shotNote{
@@ -246,7 +281,7 @@ func TestObserverEchoesFrontHalfAtDecayedDamage(t *testing.T) {
 	self := unit.Snapshot{ID: 1, Slot: 0, Role: unit.RoleFighter, Radius: observerRadius}
 	target := unit.Snapshot{ID: 2, Slot: 1, Role: unit.RoleFighter, X: 100, Radius: 18, AimPriority: 15}
 	var scales []float64
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 6; i++ {
 		o.Handle(ctx, unit.Sense{Time: 1 + float64(i)*replayGap, Self: self, Nearby: []unit.Snapshot{target}})
 		for _, cmd := range drain(out) {
 			if spawn, ok := cmd.(unit.Spawn); ok && spawn.Kind == KindObserverBeam {
@@ -254,7 +289,7 @@ func TestObserverEchoesFrontHalfAtDecayedDamage(t *testing.T) {
 			}
 		}
 	}
-	want := []float64{replayScale, replayScale, replayScale * replayScale, replayScale * replayScale, replayScale * replayScale}
+	want := []float64{replayScale, replayScale, replayScale * replayScale, replayScale * replayScale, replayScale * replayScale, replayScale * replayScale}
 	if len(scales) != len(want) {
 		t.Fatalf("scales=%v, want %v", scales, want)
 	}
@@ -263,8 +298,82 @@ func TestObserverEchoesFrontHalfAtDecayedDamage(t *testing.T) {
 			t.Fatalf("scales=%v, want %v", scales, want)
 		}
 	}
-	if len(o.film) != 5 || o.replaying {
-		t.Fatalf("film=%v replaying=%v, want the five shots that flew", o.film, o.replaying)
+	if len(o.film) != 6 || o.replaying {
+		t.Fatalf("film=%v replaying=%v, want the six shots that flew", o.film, o.replaying)
+	}
+}
+
+func TestObserverEchoesOtherProjectilesAt51PercentAndKeepsBeamOrder(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	o := &observer{
+		records: []string{KindObserverKunaiCopy},
+		film: []shotNote{
+			{KindObserverKunaiCopy, 1},
+			{KindObserverBeam, 0.9},
+			{KindObserverKunaiCopy, 0.8},
+			{KindObserverKunaiCopy, 0.7},
+			{KindObserverKunaiCopy, 0.6},
+			{KindObserverBeam, 0.5},
+		},
+	}
+	ctx := unit.Context{ID: 1, Kind: KindObserver, Out: out}
+	target := &unit.Snapshot{ID: 2, Slot: 1, X: 100}
+	want := []shotNote{
+		{KindObserverKunaiCopy, replayScale},
+		{KindObserverKunaiCopy, replayScale},
+		{KindObserverBeam, 0.9 * replayScale},
+		{KindObserverKunaiCopy, 0.8 * replayScale},
+		{KindObserverKunaiCopy, 0.7 * replayScale},
+		{KindObserverBeam, 0.5 * replayScale},
+	}
+	o.beginVolley(1)
+	var got []shotNote
+	for i := 0; i < len(want); i++ {
+		o.tickReplay(ctx, unit.Sense{Time: 1 + float64(i)*replayGap}, target)
+		for _, cmd := range drain(out) {
+			if spawn, ok := cmd.(unit.Spawn); ok {
+				got = append(got, shotNote{spawn.Kind, spawn.DamageScale})
+			}
+		}
+	}
+	if len(got) != len(want) || o.replaying || len(o.film) != len(want) {
+		t.Fatalf("shots=%v film=%v replaying=%v, want %v", got, o.film, o.replaying, want)
+	}
+	for i := range want {
+		if got[i].kind != want[i].kind || math.Abs(got[i].scale-want[i].scale) > 1e-9 {
+			t.Fatalf("shot %d=%v, want %v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestObserverDryRoundsAccumulateAllBeamsAndDecayEachGeneration(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	ctx := unit.Context{ID: 1, Kind: KindObserver, Out: out}
+	o := &observer{}
+	target := &unit.Snapshot{ID: 2, Slot: 1, X: 100}
+	for round := 1; round <= 10; round++ {
+		now := float64(round) * 10
+		o.beginVolley(now)
+		var scales []float64
+		for i := 0; i < round; i++ {
+			o.tickReplay(ctx, unit.Sense{Time: now + float64(i)*replayGap}, target)
+			for _, cmd := range drain(out) {
+				if spawn, ok := cmd.(unit.Spawn); ok {
+					if spawn.Kind != KindObserverBeam {
+						t.Fatalf("round %d spawned %s, want beam", round, spawn.Kind)
+					}
+					scales = append(scales, spawn.DamageScale)
+				}
+			}
+		}
+		if len(scales) != round || len(o.film) != round || o.replaying {
+			t.Fatalf("round %d: scales=%v film=%v replaying=%v", round, scales, o.film, o.replaying)
+		}
+		for i, scale := range scales {
+			if want := math.Pow(replayScale, float64(i)); math.Abs(scale-want) > 1e-9 {
+				t.Fatalf("round %d beam %d scale=%v, want %v", round, i, scale, want)
+			}
+		}
 	}
 }
 
@@ -272,7 +381,7 @@ func TestObserverDryRoundFiresBeamThenEcho(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	o := &observer{
 		rng: unit.NewRNG(1), booted: true, lastTime: 1,
-		gauge: 100, targetID: 2,
+		gauge: gaugeMax, targetID: 2,
 		film: []shotNote{{KindObserverBeam, 1}},
 	}
 	ctx := unit.Context{ID: 1, Kind: KindObserver, Out: out}
@@ -296,7 +405,7 @@ func TestObserverFilmKeepsOnlyShotsThatFlew(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	o := &observer{
 		rng: unit.NewRNG(1), booted: true, lastTime: 1,
-		gauge: 100, targetID: 2,
+		gauge: gaugeMax, targetID: 2,
 		kinds:   []string{KindObserverBeam},
 		records: []string{KindObserverBeam, KindObserverBeam, KindObserverBeam},
 	}
@@ -316,7 +425,7 @@ func TestObserverFilmKeepsOnlyShotsThatFlew(t *testing.T) {
 
 func TestObserverUsesBeamWhenNoSamples(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
-	o := &observer{rng: unit.NewRNG(1), gauge: 100, targetID: 2}
+	o := &observer{rng: unit.NewRNG(1), gauge: gaugeMax, targetID: 2}
 	ctx := unit.Context{ID: 1, Kind: KindObserver, Out: out}
 	self := unit.Snapshot{ID: 1, Slot: 0, Role: unit.RoleFighter, Radius: observerRadius}
 	target := unit.Snapshot{ID: 2, Slot: 1, Role: unit.RoleFighter, X: 100, Radius: 18, AimPriority: 15}

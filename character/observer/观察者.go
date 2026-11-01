@@ -1,5 +1,6 @@
 // 观察者：没有自己的普通攻击，持续观察一个敌人并记录经过身边的敌方弹体。
-// 观测值靠看着目标上涨，每记下发再加 5。满了之后先按记下的顺序复现，再打特殊胶片里上一轮的 51%，向上取整。
+// 观测值上限 75，看着目标每秒涨 10，每记下发再加 5。满了之后先按记下的顺序复现，再打特殊胶片里的回响。
+// 胶片中的视线全部保留，其余弹体保留前 51%，向上取整；回响仍按原来的打出顺序发射。
 // 新记下的伤害为原来的 85%。回响在打出那一发之上再乘一次 85%。
 package 观察者
 
@@ -30,7 +31,7 @@ const (
 	observeGain     = 10.0
 	observeDrain    = 15.0
 	projectileGain  = 5.0
-	gaugeMax        = 100.0
+	gaugeMax        = 75.0
 	recordRadius    = 240.0
 	kindLimit       = 3
 	replayScale     = 0.85
@@ -247,9 +248,20 @@ func (o *observer) beginVolley(now float64) {
 		o.records = nil
 		o.kinds = nil
 	}
-	n := echoCount(len(o.film))
-	for i := 0; i < n; i++ {
-		prev := o.film[i]
+	otherCount := 0
+	for _, prev := range o.film {
+		if prev.kind != KindObserverBeam {
+			otherCount++
+		}
+	}
+	otherLeft := echoCount(otherCount)
+	for _, prev := range o.film {
+		if prev.kind != KindObserverBeam {
+			if otherLeft == 0 {
+				continue
+			}
+			otherLeft--
+		}
 		o.replay = append(o.replay, shotNote{kind: prev.kind, scale: prev.scale * replayScale})
 	}
 	o.film = nil
@@ -345,7 +357,7 @@ func (o *observer) emitState(ctx unit.Context, now float64) {
 	o.lastStateAt = now
 	ctx.Out <- unit.FX{
 		Name: "observer-state", Kind: KindObserver, UnitID: ctx.ID, Slot: o.slot,
-		X: o.x, Y: o.y, Amount: o.gauge,
+		X: o.x, Y: o.y, Amount: o.gauge / gaugeMax * 100, // 观测条百分比
 		VX: o.stateMark(), VY: float64(o.targetID),
 	}
 }
