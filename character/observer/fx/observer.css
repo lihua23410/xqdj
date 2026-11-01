@@ -123,19 +123,6 @@
   100% { filter: brightness(1.45); }
 }
 
-.observer-name {
-  position: absolute;
-  left: 50%;
-  top: -14px;
-  transform: translate(-50%, -100%);
-  color: #dffbff;
-  text-shadow: 0 0 7px #45cfe5;
-  font: 700 11px/14px "Microsoft YaHei", "PingFang SC", sans-serif;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 8;
-}
-
 .observer-gauge-wrap {
   position: absolute;
   left: 50%;
@@ -204,6 +191,26 @@
 @keyframes observer-gaze {
   0%, 100% { opacity: 0.2; }
   50% { opacity: 0.65; }
+}
+
+.ball.look-observer-kunai-copy {
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+.ball.look-observer-kunai-copy::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: rotate(var(--travel, 0rad));
+  transform-origin: 50% 50%;
+  width: 34px;
+  height: 5px;
+  margin: -2.5px 0 0 -17px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, #dffcff 32%, #5edff5 65%, transparent);
+  box-shadow: 0 0 8px #dffcff, 0 0 16px #5edff5;
 }
 
 .ball.look-observer-beam {

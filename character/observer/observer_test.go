@@ -4,8 +4,41 @@ import (
 	"math"
 	"testing"
 
+	tanyongchen "xqdj/character/tanyongchen"
 	"xqdj/internal/unit"
 )
+
+func TestObserverSkipsMeleeArcsAndRecordsTanKunaiProxy(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	o := &observer{slot: 0, x: 0, y: 0, projectileSeen: map[uint64]bool{}}
+	arc := unit.Snapshot{ID: 9, Slot: 1, Role: unit.RoleProjectile, Kind: "小骑士弧", ArcSpan: unit.Deg(120), X: 40, Radius: 20}
+	kunai := unit.Snapshot{ID: 10, Slot: 1, Role: unit.RoleProjectile, Kind: tanyongchen.KindTanKunaiShot, X: 60, Radius: 1}
+	o.recordProjectiles(unit.Context{ID: 1, Kind: KindObserver, Out: out}, unit.Sense{Self: unit.Snapshot{ID: 1, Slot: 0}, Nearby: []unit.Snapshot{arc, kunai}})
+	if len(o.records) != 1 || o.records[0] != tanyongchen.KindTanKunaiShot {
+		t.Fatalf("records=%v, want only Tan kunai proxy", o.records)
+	}
+}
+
+func TestObserverReplaysTanKunaiAsDamageCopy(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	o := &observer{
+		rng: unit.NewRNG(1), gauge: 100, targetID: 2,
+		records: []string{tanyongchen.KindTanKunaiShot},
+	}
+	ctx := unit.Context{ID: 1, Kind: KindObserver, Out: out}
+	self := unit.Snapshot{ID: 1, Slot: 0, Role: unit.RoleFighter, Radius: observerRadius}
+	target := unit.Snapshot{ID: 2, Slot: 1, Role: unit.RoleFighter, X: 100, Radius: 18, AimPriority: 15}
+	o.Handle(ctx, unit.Sense{Time: 1, Self: self, Nearby: []unit.Snapshot{target}})
+	for _, cmd := range drain(out) {
+		if spawn, ok := cmd.(unit.Spawn); ok && spawn.Kind == KindObserverKunaiCopy {
+			if math.Abs(spawn.DamageScale-replayScale) > 1e-9 {
+				t.Fatalf("kunai copy damage scale=%v, want %v", spawn.DamageScale, replayScale)
+			}
+			return
+		}
+	}
+	t.Fatal("Tan kunai was not mapped to observer kunai copy")
+}
 
 func TestObserverCanObserveMortalFighterProxyAndKeepsLock(t *testing.T) {
 	out := make(chan unit.Cmd, 32)

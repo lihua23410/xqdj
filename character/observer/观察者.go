@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand/v2"
 
+	tanyongchen "xqdj/character/tanyongchen"
 	"xqdj/internal/unit"
 )
 
@@ -16,6 +17,7 @@ var assets embed.FS
 
 const KindObserver = "观察者"
 const KindObserverBeam = "观察者视线"
+const KindObserverKunaiCopy = "观察者苦无复现"
 
 const (
 	observerRadius = 18.0
@@ -35,6 +37,7 @@ const (
 	replayShots       = 10
 	stateGap          = 0.25
 	beamDamage        = 16.0
+	kunaiCopyDamage   = 3.0
 	beamSpeed         = 680.0
 	beamRadius        = 5.0
 	observeArmorAt    = 50.0
@@ -56,6 +59,13 @@ func init() {
 		Look: unit.Look{Color: "#dffbff", Trail: true, FX: []string{"observer-beam"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &beam{owner: info.OwnerID, slot: info.Slot}
+	})
+	p.Register(unit.Spec{
+		Kind: KindObserverKunaiCopy, Role: unit.RoleProjectile, Radius: 7,
+		MaxHP: 1, Speed: 480,
+		Look: unit.Look{Color: "#dffbff", Trail: true, FX: []string{"observer-kunai-copy"}},
+	}, func(info unit.SpawnInfo) unit.Actor {
+		return &kunaiCopy{owner: info.OwnerID, slot: info.Slot}
 	})
 }
 
@@ -188,6 +198,9 @@ func (o *observer) recordProjectiles(ctx unit.Context, s unit.Sense) {
 		if p.Role != unit.RoleProjectile || p.Slot == o.slot {
 			continue
 		}
+		if p.ArcSpan > 1e-6 {
+			continue // 近战扇弧不是可复制弹体
+		}
 		if math.Hypot(p.X-o.x, p.Y-o.y) > recordRadius+p.Radius {
 			continue
 		}
@@ -227,6 +240,9 @@ func (o *observer) tickReplay(ctx unit.Context, s unit.Sense, target *unit.Snaps
 func (o *observer) spawnReplay(ctx unit.Context, kind string, target *unit.Snapshot) {
 	if target == nil {
 		return
+	}
+	if kind == tanyongchen.KindTanKunaiShot {
+		kind = KindObserverKunaiCopy
 	}
 	spec, ok := unit.Lookup(kind)
 	if !ok || spec.Role != unit.RoleProjectile {
@@ -300,6 +316,38 @@ type beam struct {
 	owner uint64
 	slot  int
 	dead  bool
+}
+
+type kunaiCopy struct {
+	owner uint64
+	slot  int
+	dead  bool
+}
+
+func (k *kunaiCopy) Handle(ctx unit.Context, ev unit.Event) {
+	if k.dead {
+		return
+	}
+	switch e := ev.(type) {
+	case unit.Collision:
+		if e.Other.ID == k.owner {
+			return
+		}
+		if !unit.Hittable(e.Other, k.slot) {
+			if e.Other.Role == unit.RoleProjectile {
+				k.dead = true
+				ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+			}
+			return
+		}
+		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: kunaiCopyDamage}
+		ctx.Out <- unit.FX{Name: "observer-kunai-hit", Kind: KindObserver, UnitID: k.owner, Slot: k.slot, X: e.Other.X, Y: e.Other.Y}
+		k.dead = true
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+	case unit.WallHit:
+		k.dead = true
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+	}
 }
 
 func (b *beam) Handle(ctx unit.Context, ev unit.Event) {

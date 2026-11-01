@@ -18,6 +18,7 @@ var assets embed.FS
 const KindTan = "谭泳辰老先生"
 const KindBell = "铃铛"
 const KindKunai = "苦无"
+const KindTanKunaiShot = "谭泳辰苦无弹"
 const KindDomain = "灵狐场域"
 const KindMilk = "奶符"
 
@@ -107,6 +108,16 @@ func init() {
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &灵狐场域{owner: info.OwnerID, slot: info.Slot}
 	})
+	p.Register(unit.Spec{
+		Kind:      KindTanKunaiShot,
+		Role:      unit.RoleProjectile,
+		Radius:    1,
+		MaxHP:     1,
+		Speed:     0,
+		Vision:    0,
+		PassWalls: true,
+		Look:      unit.Look{Color: "#00000000"},
+	}, func(unit.SpawnInfo) unit.Actor { return &kunaiProxy{} })
 	p.Register(unit.Spec{
 		Kind:     KindMilk,
 		Role:     unit.RoleHelper,
@@ -290,6 +301,11 @@ func (t *谭泳辰老先生) attack(ctx unit.Context, s unit.Sense, inDomain boo
 	t.pending = append(t.pending, pendingKunai{
 		start: s.Time, ox: t.x, oy: t.y, ux: ux, uy: uy,
 		total: total, speed: total / kunaiFlight, crit: crit,
+	})
+	ctx.Out <- ctx.Born(unit.Spawn{
+		Kind: KindTanKunaiShot, X: t.x, Y: t.y,
+		VX: ux * total / kunaiFlight, VY: uy * total / kunaiFlight,
+		OwnerID: ctx.ID, Slot: t.slot,
 	})
 	ctx.Out <- unit.FX{Name: "kunai", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: t.x, Y: t.y, VX: ux, VY: uy, Amount: total}
 
@@ -551,5 +567,26 @@ func (m *奶符) Handle(ctx unit.Context, ev unit.Event) {
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return
 		}
+	}
+}
+
+// kunaiProxy 是不可见、无伤害的苦无轨迹单位，供观察者等“观察弹体”的角色感知。
+type kunaiProxy struct {
+	born    float64
+	booting bool
+}
+
+func (p *kunaiProxy) Handle(ctx unit.Context, ev unit.Event) {
+	s, ok := ev.(unit.Sense)
+	if !ok {
+		return
+	}
+	if !p.booting {
+		p.booting = true
+		p.born = s.Time
+		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+	}
+	if s.Time+1e-9 >= p.born+kunaiFlight {
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
 }

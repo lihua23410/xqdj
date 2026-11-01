@@ -147,6 +147,7 @@ const (
 	KindZhou               = 我与周旋久.KindZhou
 	KindObserver           = 观察者.KindObserver
 	KindObserverBeam       = 观察者.KindObserverBeam
+	KindObserverKunaiCopy  = 观察者.KindObserverKunaiCopy
 	KindOrca               = 大肥鱼.KindOrca
 	KindRice               = 大肥鱼.KindRice
 	KindGlyph              = 老牧师.KindGlyph
@@ -212,6 +213,7 @@ const (
 	KindKunai              = 谭泳辰.KindKunai
 	KindMilk               = 谭泳辰.KindMilk
 	KindTan                = 谭泳辰.KindTan
+	KindTanKunaiShot       = 谭泳辰.KindTanKunaiShot
 	KindTokei              = 时计.KindTokei
 	KindTokeiArc           = 时计.KindTokeiArc
 	KindTokeiMoment        = 时计.KindTokeiMoment

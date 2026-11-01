@@ -43,7 +43,7 @@ window.lookFX = window.lookFX || {};
   window.lookFX.observer = {
     unmount(el) {
       if (!el) return;
-      for (const cls of [".observer-eye", ".observer-gauge-wrap", ".observer-films", ".observer-name"]) {
+      for (const cls of [".observer-eye", ".observer-gauge-wrap", ".observer-films"]) {
         el.querySelector(`:scope > ${cls}`)?.remove();
       }
     },
@@ -65,9 +65,6 @@ window.lookFX = window.lookFX || {};
       const shift = target ? 5 : 0;
       iris.style.transform = `translate(${Math.cos(rad) * shift}px, ${Math.sin(rad) * shift}px)`;
       pupil.style.transform = `translate(${Math.cos(rad) * 2}px, ${Math.sin(rad) * 2}px)`;
-
-      const name = ensure(el, "observer-name");
-      name.textContent = "观察者";
 
       const gauge = ensure(el, "observer-gauge-wrap");
       let bar = gauge.querySelector("i");
@@ -105,6 +102,14 @@ window.lookFX = window.lookFX || {};
       if (ctx.seenGuides) ctx.seenGuides.add(g.id);
     },
   };
+
+window.lookFX["observer-kunai-copy"] = {
+  tick(el, u) {
+    if (!el) return;
+    const ang = Math.atan2(-(Number(u.vy) || 0), Number(u.vx) || 1);
+    el.style.setProperty("--travel", `${ang}rad`);
+  },
+};
 
   window.lookFX["observer-beam"] = {
     unmount(el) {
