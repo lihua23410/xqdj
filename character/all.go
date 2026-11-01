@@ -7,6 +7,7 @@ import (
 	"xqdj/character/archer"
 	"xqdj/character/axe"
 	"xqdj/character/bloodpact"
+	"xqdj/character/bundle"
 	"xqdj/character/charcoal"
 	"xqdj/character/coalesce"
 	"xqdj/character/doppel"
@@ -70,6 +71,7 @@ const (
 	KindBloodArc           = 血契.KindBloodArc
 	KindBloodBat           = 血契.KindBloodBat
 	KindBloodPact          = 血契.KindBloodPact
+	KindBundle             = 捆.KindBundle
 	KindCharcoal           = 炭翁.KindCharcoal
 	KindCharcoalEmber      = 炭翁.KindCharcoalEmber
 	KindCoalesce           = 凝聚体.KindCoalesce
