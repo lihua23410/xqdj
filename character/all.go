@@ -49,6 +49,7 @@ import (
 	"xqdj/character/subpoena"
 	"xqdj/character/tachi"
 	"xqdj/character/tanyongchen"
+	"xqdj/character/threshold"
 	"xqdj/character/tokei"
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
@@ -216,6 +217,7 @@ const (
 	KindMilk               = 谭泳辰.KindMilk
 	KindTan                = 谭泳辰.KindTan
 	KindTanKunaiShot       = 谭泳辰.KindTanKunaiShot
+	KindThreshold          = 阈值.KindThreshold
 	KindTokei              = 时计.KindTokei
 	KindTokeiArc           = 时计.KindTokeiArc
 	KindTokeiMoment        = 时计.KindTokeiMoment
