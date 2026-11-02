@@ -58,6 +58,58 @@ func TestAbsorbedChunkDoesNotCover(t *testing.T) {
 	}
 }
 
+func TestChunkHalvesDamage(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	c := &massChunk{owner: 1, slot: 0, x: 3, y: 4, hp: 1}
+	ctx := unit.Context{ID: 9, Kind: massKind(3), Out: out}
+	c.Handle(ctx, unit.IncomingDamage{Token: 7, Amount: 4})
+	cmds := drain(out)
+	got, ok := confirmOf(cmds)
+	if !ok || got.Amount != 2 || got.Token != 7 || got.UnitID != 9 {
+		t.Fatalf("4 点报价该减成 2: %+v %v", got, ok)
+	}
+	fx := breakFX(cmds)
+	if fx == nil || fx.Amount != 2 {
+		t.Fatalf("减完仍够打碎，该播破裂: %+v", fx)
+	}
+}
+
+func TestChunkSurvivesBelowOne(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	c := &massChunk{owner: 1, slot: 0, hp: 1}
+	ctx := unit.Context{ID: 9, Kind: massKind(1), Out: out}
+	c.Handle(ctx, unit.IncomingDamage{Token: 8, Amount: 1})
+	cmds := drain(out)
+	got, ok := confirmOf(cmds)
+	if !ok || got.Amount != 0.5 {
+		t.Fatalf("1 点报价该减成 0.5: %+v %v", got, ok)
+	}
+	if fx := breakFX(cmds); fx != nil {
+		t.Fatalf("减完还剩半血，不该碎: %+v", fx)
+	}
+	if c.hp != 0.5 {
+		t.Fatalf("hp=%v", c.hp)
+	}
+}
+
+func confirmOf(cmds []unit.Cmd) (unit.ConfirmDamage, bool) {
+	for _, c := range cmds {
+		if d, ok := c.(unit.ConfirmDamage); ok {
+			return d, true
+		}
+	}
+	return unit.ConfirmDamage{}, false
+}
+
+func breakFX(cmds []unit.Cmd) *unit.FX {
+	for _, c := range cmds {
+		if fx, ok := c.(unit.FX); ok && fx.Name == "coalesce-chunk-break" {
+			return &fx
+		}
+	}
+	return nil
+}
+
 func TestChunkSpecAim(t *testing.T) {
 	for mass := minChunkMass; mass <= maxChunkMass; mass++ {
 		spec, ok := unit.Lookup(massKind(mass))

@@ -23,7 +23,7 @@ const (
 )
 
 const (
-	bodyHP       = 100.0
+	bodyHP       = 120.0
 	bodyRadius   = 28.0
 	minRadius    = 11.0
 	bodyCruise   = 108.0
@@ -38,6 +38,7 @@ const (
 	shotLife     = 3.4
 	shotBounces  = 2
 	chunkLife    = 9.0
+	chunkRemain  = 0.5 // 质量块减伤后剩下一半
 	maxChunks    = 24
 	maxShedBits  = 12
 	minChunkMass = 1
@@ -108,7 +109,7 @@ func init() {
 			AimPriority: chunkAim,
 			Look:        unit.Look{Color: chunkColor, FX: []string{"coalesce-chunk"}},
 		}, func(info unit.SpawnInfo) unit.Actor {
-			return &massChunk{bornAt: -1, owner: info.OwnerID, slot: info.Slot}
+			return &massChunk{bornAt: -1, owner: info.OwnerID, slot: info.Slot, hp: 1}
 		})
 	}
 
@@ -439,16 +440,27 @@ type massChunk struct {
 	owner  uint64
 	slot   int
 	x, y   float64
+	hp     float64
 	booted bool
 }
 
 func (c *massChunk) Handle(ctx unit.Context, ev unit.Event) {
 	if hit, ok := ev.(unit.IncomingDamage); ok {
-		ctx.Out <- unit.FX{
-			Name: "coalesce-chunk-break", Kind: KindCoalesce, UnitID: c.owner, Slot: c.slot,
-			X: c.x, Y: c.y, Amount: hit.Amount,
+		if c.hp <= 0 {
+			c.hp = 1
 		}
-		unit.ConfirmHit(ctx, hit)
+		amt := hit.Amount * chunkRemain
+		if amt >= c.hp {
+			ctx.Out <- unit.FX{
+				Name: "coalesce-chunk-break", Kind: KindCoalesce, UnitID: c.owner, Slot: c.slot,
+				X: c.x, Y: c.y, Amount: amt,
+			}
+		}
+		c.hp -= amt
+		if c.hp < 0 {
+			c.hp = 0
+		}
+		ctx.Out <- unit.ConfirmDamage{Token: hit.Token, UnitID: ctx.ID, Amount: amt}
 		return
 	}
 	sense, ok := ev.(unit.Sense)
@@ -456,6 +468,7 @@ func (c *massChunk) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	c.x, c.y = sense.Self.X, sense.Self.Y
+	c.hp = sense.Self.HP
 	if !c.booted {
 		c.booted = true
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
