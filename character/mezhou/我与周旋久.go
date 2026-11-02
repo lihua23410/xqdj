@@ -79,6 +79,8 @@ const (
 
 func init() {
 	p := unit.NewPack(KindMe, assets)
+	p.RegisterAttackFan(unit.Spec{Kind: KindMeArc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(180), ArcInner: 18, Pass: true, AttachFriends: true, Look: unit.Look{Color: meColor, Overlay: true, Glow: true}})
+	p.RegisterAttackFan(unit.Spec{Kind: KindZhouArc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(180), ArcInner: 18, Pass: true, AttachFriends: true, Look: unit.Look{Color: meColor, Overlay: true, Glow: true}})
 	p.Register(unit.Spec{
 		Kind:    KindMe,
 		Role:    unit.RoleFighter,
@@ -119,6 +121,8 @@ func init() {
 }
 
 type 我 struct {
+	fanSense unit.Sense
+
 	slot   int
 	mode   int
 	boot   bool
@@ -147,6 +151,10 @@ type 我 struct {
 }
 
 func (t *我) Handle(ctx unit.Context, ev unit.Event) {
+	if sense, ok := ev.(unit.Sense); ok {
+		t.fanSense = sense
+	}
+	defer t.syncAttackFans(ctx)
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
 		t.onIncoming(ctx, e)
@@ -175,35 +183,17 @@ func (t *我) onIncoming(ctx unit.Context, d unit.IncomingDamage) {
 }
 
 func (t *我) onCollision(ctx unit.Context, e unit.Collision) {
-	if t.dead {
+	if t.dead || e.Other.Kind != KindZhou || e.Time-t.lastHitAt < bumpCD {
 		return
 	}
-	if e.Other.Kind == KindZhou {
-		if e.Time-t.lastHitAt < bumpCD {
-			return
+	t.lastHitAt = e.Time
+	if t.mode == modeNone {
+		t.bumps++
+		ctx.Out <- unit.FX{Name: "bump", Kind: ctx.Kind, X: e.Other.X, Y: e.Other.Y, Slot: t.slot, Amount: float64(t.bumps)}
+		if t.bumps >= bumpsPerRoll {
+			t.bumps = 0
+			t.roll(ctx, e.Time, e.Other.HP, e.Other.MaxHP)
 		}
-		t.lastHitAt = e.Time
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: meDamage}
-		if t.mode == modeNone {
-			t.bumps++
-			ctx.Out <- unit.FX{Name: "bump", Kind: ctx.Kind, X: e.Other.X, Y: e.Other.Y, Slot: t.slot, Amount: float64(t.bumps)}
-			if t.bumps >= bumpsPerRoll {
-				t.bumps = 0
-				t.roll(ctx, e.Time, e.Other.HP, e.Other.MaxHP)
-			}
-		}
-		return
-	}
-	if unit.Hittable(e.Other, t.slot) {
-		if e.Time-t.lastHitAt < bumpCD {
-			return
-		}
-		t.lastHitAt = e.Time
-		amt := meDamage
-		if t.mode == modeHoly {
-			amt *= 2
-		}
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: amt}
 	}
 }
 
@@ -492,27 +482,17 @@ func (t *我) emitMode(ctx unit.Context) {
 }
 
 type 周旋久 struct {
-	owner     uint64
-	slot      int
-	lastHitAt float64
+	owner uint64
+	slot  int
 }
 
 func (z *周旋久) Handle(ctx unit.Context, ev unit.Event) {
 	if unit.AcceptHit(ctx, ev) {
 		return
 	}
-	e, ok := ev.(unit.Collision)
-	if !ok {
-		return
+	if s, ok := ev.(unit.Sense); ok {
+		unit.SyncAttackFan(ctx, s, KindZhouArc, unit.FanAttack{Active: true, Damage: zhouDamage, Cooldown: bumpCD, FriendKind: KindMe})
 	}
-	if e.Other.Kind != KindMe && !unit.Hittable(e.Other, z.slot) {
-		return
-	}
-	if e.Time-z.lastHitAt < bumpCD {
-		return
-	}
-	z.lastHitAt = e.Time
-	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: zhouDamage}
 }
 
 type 虚空弹 struct {
@@ -555,4 +535,19 @@ func (b *虚空弹) Handle(ctx unit.Context, ev unit.Event) {
 	case unit.WallHit:
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
+}
+
+const KindMeArc = "我与周旋久本体扇环"
+const KindZhouArc = "周旋久扇环"
+
+func (t *我) syncAttackFans(ctx unit.Context) {
+	s := t.fanSense
+	if s.Self.ID == 0 {
+		return
+	}
+	damage := meDamage
+	if t.mode == modeHoly {
+		damage *= 2
+	}
+	unit.SyncAttackFan(ctx, s, KindMeArc, unit.FanAttack{Active: !t.dead, Damage: damage, Cooldown: bumpCD, FriendKind: KindZhou})
 }

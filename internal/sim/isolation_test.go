@@ -95,6 +95,9 @@ func TestConcurrentMatchBirthFieldIsolation(t *testing.T) {
 			for shards < 16 {
 				select {
 				case cmd := <-m.cmds:
+					if c, ok := cmd.(actorCommand); ok {
+						cmd = c.command
+					}
 					if spawn, ok := cmd.(unitpkg.Spawn); ok && spawn.Kind == "回声碎片" {
 						shards++
 						if !field.Walkable(spawn.X, spawn.Y, 4) {

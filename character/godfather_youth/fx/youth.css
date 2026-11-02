@@ -103,3 +103,12 @@
 .youth-streak-edge { fill: none; stroke: #fff0c1; stroke-width: 3; stroke-linecap: round; }
 .youth-bullet-buffed .youth-streak-core { stroke: #f28760; }
 .youth-bullet-buffed .youth-streak-edge { stroke: #ffe2a4; }
+
+.ball.arc.look-youth-arc {
+  border-color: #cdb174;
+  filter: drop-shadow(0 0 2px #8b3a49);
+}
+.ball.arc.look-youth-arc.youth-arc-buff {
+  border-color: #eed19a;
+  filter: drop-shadow(0 0 3px #f27a63);
+}

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"xqdj/internal/audit"
 	"xqdj/internal/replay"
 	unitpkg "xqdj/internal/unit"
 	奇美拉 "xqdj/map/chimera"
@@ -68,6 +69,7 @@ type unit struct {
 	visionBlock     bool
 	shell           bool
 	attach          bool
+	attachFriends   bool
 	arcSpan         float64
 	arcInner        float64
 	faction         string
@@ -849,6 +851,9 @@ func (m *Match) Tick() {
 		}
 		return
 	}
+	// Commands/impulses can turn an owner since the previous frame. A fan must
+	// use its owner's current velocity before the next sweep, including returns.
+	m.stickFollowersLocked()
 	m.physicsLocked(DT)
 	m.flushPendingLocked()
 	m.settleHitsLocked()
@@ -1128,35 +1133,37 @@ func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot 
 		m.actorWork = newActorWork()
 	}
 	u := &unit{
-		id:          id,
-		kind:        kind,
-		role:        spec.Role,
-		slot:        slot,
-		owner:       owner,
-		p:           p,
-		v:           v,
-		radius:      spec.Radius,
-		hp:          spec.MaxHP,
-		maxHP:       spec.MaxHP,
-		vision:      spec.Vision,
-		cruise:      spec.Speed,
-		velM:        1,
-		actor:       actor,
-		inbox:       newActorInbox(m.actorWork),
-		stop:        make(chan struct{}),
-		exited:      make(chan struct{}),
-		solid:       spec.Role != unitpkg.RoleHelper && !spec.Nonsolid,
-		semi:        spec.Semi,
-		face:        vec{1, 0},
-		passWalls:   spec.PassWalls,
-		breakWalls:  spec.BreakWalls,
-		mortal:      spec.Mortal,
-		aimPriority: unitpkg.DefaultAimPriority(spec),
-		shell:       spec.Shell,
-		attach:      spec.Attach,
-		arcSpan:     spec.ArcSpan,
-		arcInner:    spec.ArcInner,
-		visionBlock: spec.VisionBlock,
+		id:            id,
+		kind:          kind,
+		role:          spec.Role,
+		slot:          slot,
+		owner:         owner,
+		p:             p,
+		v:             v,
+		radius:        spec.Radius,
+		hp:            spec.MaxHP,
+		maxHP:         spec.MaxHP,
+		vision:        spec.Vision,
+		cruise:        spec.Speed,
+		velM:          1,
+		actor:         actor,
+		inbox:         newActorInbox(m.actorWork),
+		stop:          make(chan struct{}),
+		exited:        make(chan struct{}),
+		solid:         spec.Role != unitpkg.RoleHelper && !spec.Nonsolid,
+		semi:          spec.Semi,
+		face:          vec{1, 0},
+		passWalls:     spec.PassWalls,
+		breakWalls:    spec.BreakWalls,
+		mortal:        spec.Mortal,
+		aimPriority:   unitpkg.DefaultAimPriority(spec),
+		shell:         spec.Shell,
+		attach:        spec.Attach,
+		attachFriends: spec.AttachFriends,
+		pass:          spec.Pass,
+		arcSpan:       spec.ArcSpan,
+		arcInner:      spec.ArcInner,
+		visionBlock:   spec.VisionBlock,
 	}
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
@@ -1203,6 +1210,10 @@ func (u *unit) setVel(v vec) {
 func runActor(u *unit, ctx unitpkg.Context) {
 	defer close(u.exited)
 	defer u.inbox.close()
+	out, forwarded := actorOutput(u, ctx.Out)
+	ctx.Out = out
+	spec, _ := unitpkg.Lookup(u.kind)
+	defer func() { close(out); <-forwarded }()
 	for {
 		ev, ok := u.inbox.next(u.stop)
 		if !ok {
@@ -1211,7 +1222,15 @@ func runActor(u *unit, ctx unitpkg.Context) {
 		if sense, ok := ev.(unitpkg.Sense); ok {
 			ctx.Field = sense.Field
 		}
+		_, collision := ev.(unitpkg.Collision)
+		if _, fanHit := ev.(unitpkg.FanHit); fanHit {
+			collision = true
+		}
+		out <- actorBegin{origin: audit.Origin{ID: u.id, Kind: u.kind, Role: u.role, Collision: collision, Fan: spec.Attach && spec.ArcSpan > 0}}
 		u.actor.Handle(ctx, ev)
+		done := make(chan struct{})
+		out <- actorEnd{done: done}
+		<-done
 		u.inbox.finish()
 	}
 }
@@ -1256,7 +1275,18 @@ collect:
 }
 
 func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
+	if c, ok := cmd.(actorCommand); ok {
+		audit.CheckCommand(c.origin, c.command)
+		cmd = c.command
+	}
 	switch c := cmd.(type) {
+	case unitpkg.FanContact:
+		fan := m.units[c.From]
+		if fan != nil && fan.attach && fan.arcSpan > 0 {
+			if owner := m.units[fan.owner]; owner != nil && !owner.stopped {
+				m.send(owner, unitpkg.FanHit{From: fan.id, Kind: fan.kind, Time: c.Collision.Time, Other: c.Collision.Other})
+			}
+		}
 	case unitpkg.SetVelocity:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -1526,7 +1556,9 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 	}
 	m.noteOfferLocked(c)
 	var arc float64
+	var sourceOwner uint64
 	if from := m.units[c.From]; from != nil {
+		sourceOwner = from.owner
 		if !m.headless {
 			off := m.pendingDmg[token]
 			off.atkSpeed = from.v.len()
@@ -1542,12 +1574,13 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 		m.pendingDmg[token] = off
 	}
 	m.send(u, unitpkg.IncomingDamage{
-		Token:   token,
-		From:    c.From,
-		Amount:  c.Amount,
-		Time:    m.time,
-		Speed:   u.v.len(),
-		ArcSpan: arc,
+		SourceOwnerID: sourceOwner,
+		Token:         token,
+		From:          c.From,
+		Amount:        c.Amount,
+		Time:          m.time,
+		Speed:         u.v.len(),
+		ArcSpan:       arc,
 	})
 }
 
@@ -2491,10 +2524,10 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 			if ignore[canonPair(a.id, b.id)] {
 				continue
 			}
-			if a.role == unitpkg.RoleProjectile && (a.slot == b.slot || (a.owner != 0 && a.owner == b.id)) {
+			if a.role == unitpkg.RoleProjectile && !a.attachFriends && (a.slot == b.slot || (a.owner != 0 && a.owner == b.id)) {
 				continue
 			}
-			if b.role == unitpkg.RoleProjectile && (b.slot == a.slot || (b.owner != 0 && b.owner == a.id)) {
+			if b.role == unitpkg.RoleProjectile && !b.attachFriends && (b.slot == a.slot || (b.owner != 0 && b.owner == a.id)) {
 				continue
 			}
 			if a.attach || b.attach {
@@ -2648,7 +2681,7 @@ func attachHits(atk, target *unit) bool {
 	if atk == nil || target == nil {
 		return false
 	}
-	if target.slot == atk.slot || target.id == atk.owner {
+	if !atk.attachFriends && (target.slot == atk.slot || target.id == atk.owner) {
 		return false
 	}
 	return target.role == unitpkg.RoleFighter || target.mortal

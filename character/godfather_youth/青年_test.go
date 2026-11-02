@@ -188,7 +188,7 @@ func TestCloseRamsForTen(t *testing.T) {
 	if dmg != 0 {
 		t.Fatalf("opened inside should wait for overlap, dmg=%v", dmg)
 	}
-	a.Handle(ctx, unit.Collision{Time: 0.05, Other: foe(2, 30, 0)})
+	a.Handle(ctx, unit.FanHit{Kind: KindYouthArc, Time: 0.05, Other: foe(2, 30, 0)})
 	cmds = drain(out)
 	var got float64
 	var stunned bool
@@ -206,7 +206,7 @@ func TestCloseRamsForTen(t *testing.T) {
 			dropped = true
 		}
 	}
-	if got != ramDmg || stunned || a.phase != phRam || dropped {
+	if got != 0 || stunned || a.phase != phRam || dropped {
 		t.Fatalf("dmg=%v stun=%v phase=%d dropped=%v", got, stunned, a.phase, dropped)
 	}
 }
@@ -218,7 +218,7 @@ func TestBuffRamStunsAndReturns(t *testing.T) {
 	a.Handle(ctx, senseAt(0, 100, []unit.Snapshot{foe(2, 80, 0)}))
 	_ = drain(out)
 	target := foe(2, 30, 0)
-	a.Handle(ctx, unit.Collision{Time: 0.05, Other: target})
+	a.Handle(ctx, unit.FanHit{Kind: KindYouthArc, Time: 0.05, Other: target})
 	cmds := drain(out)
 	var stun *unit.Stun
 	for _, c := range cmds {
@@ -230,7 +230,7 @@ func TestBuffRamStunsAndReturns(t *testing.T) {
 		t.Fatalf("stun=%v phase=%d ramX=%v", stun, a.phase, a.ramX)
 	}
 	a.buffUntil = 0.06
-	a.Handle(ctx, unit.Collision{Time: 0.1, Other: target})
+	a.Handle(ctx, unit.FanHit{Kind: KindYouthArc, Time: 0.1, Other: target})
 	var early float64
 	for _, c := range drain(out) {
 		if d, ok := c.(unit.Damage); ok {
@@ -240,14 +240,14 @@ func TestBuffRamStunsAndReturns(t *testing.T) {
 	if early != 0 {
 		t.Fatalf("inside buff ram cd dmg=%v", early)
 	}
-	a.Handle(ctx, unit.Collision{Time: 0.25, Other: target})
+	a.Handle(ctx, unit.FanHit{Kind: KindYouthArc, Time: 0.25, Other: target})
 	var n float64
 	for _, c := range drain(out) {
 		if d, ok := c.(unit.Damage); ok {
 			n += d.Amount
 		}
 	}
-	if n != ramDmg || a.phase != phReturn {
+	if n != 0 || a.phase != phReturn {
 		t.Fatalf("return dmg=%v phase=%d", n, a.phase)
 	}
 }
@@ -344,7 +344,7 @@ func TestCloseDuringCooldownStillRams(t *testing.T) {
 	if stun {
 		t.Fatal("stun before overlap")
 	}
-	a.Handle(ctx, unit.Collision{Time: 1.05, Other: foe(2, 20, 0)})
+	a.Handle(ctx, unit.FanHit{Kind: KindYouthArc, Time: 1.05, Other: foe(2, 20, 0)})
 	stun = false
 	for _, c := range drain(out) {
 		if _, ok := c.(unit.Stun); ok {
@@ -412,7 +412,7 @@ func TestStunInterruptsRam(t *testing.T) {
 	if v == nil || math.Abs(v.VX-cruise) > 1e-9 || math.Abs(v.VY) > 1e-9 {
 		t.Fatalf("vel=%v", v)
 	}
-	a.Handle(ctx, unit.Collision{Time: 0.21, Other: foe(2, 10, 0)})
+	a.Handle(ctx, unit.FanHit{Kind: KindYouthArc, Time: 0.21, Other: foe(2, 10, 0)})
 	var dmg float64
 	for _, c := range drain(out) {
 		if d, ok := c.(unit.Damage); ok {
@@ -438,7 +438,7 @@ func TestStunOnReturnKeepsReturnDirection(t *testing.T) {
 	a.buffUntil = 8
 	a.Handle(ctx, senseAt(0, 100, []unit.Snapshot{foe(2, 80, 0)}))
 	_ = drain(out)
-	a.Handle(ctx, unit.Collision{Time: 0.05, Other: foe(2, 20, 0)})
+	a.Handle(ctx, unit.FanHit{Kind: KindYouthArc, Time: 0.05, Other: foe(2, 20, 0)})
 	_ = drain(out)
 	a.Handle(ctx, unit.Stunned{Time: 0.2, Until: 1})
 	v := lastVel(drain(out))

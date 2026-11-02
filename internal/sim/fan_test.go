@@ -37,6 +37,9 @@ func TestOfferDamageCarriesFanSpan(t *testing.T) {
 	if !hits[0].FromFan() || hits[0].ArcSpan != arc.arcSpan || hits[0].Amount != 10 {
 		t.Fatalf("fan hit=%+v span=%v", hits[0], arc.arcSpan)
 	}
+	if hits[0].SourceOwnerID != wolf.id {
+		t.Fatalf("source owner=%d want %d", hits[0].SourceOwnerID, wolf.id)
+	}
 	if hits[1].FromFan() || hits[1].Amount != 8 {
 		t.Fatalf("body hit=%+v", hits[1])
 	}

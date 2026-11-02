@@ -558,7 +558,7 @@ func TestRamSkipsPond(t *testing.T) {
 	}
 }
 
-func TestRamHitsEnemyNormalDoesNot(t *testing.T) {
+func TestRamBodyCollisionNeverDamages(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	a := &钓鱼佬{booted: true, ram: true, ramY: 60, slot: 0}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
@@ -568,8 +568,8 @@ func TestRamHitsEnemyNormalDoesNot(t *testing.T) {
 	}
 	a.Handle(ctx, hit)
 	d := lastDamage(drain(out))
-	if d == nil || d.To != 2 {
-		t.Fatalf("ram should damage: %v", d)
+	if d != nil {
+		t.Fatalf("body must leave damage to fan: %v", d)
 	}
 	a.ram = false
 	a.Handle(ctx, unit.Collision{

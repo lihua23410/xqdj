@@ -59,6 +59,7 @@ var assets embed.FS
 
 func init() {
 	p := unit.NewPack(KindYouth, assets)
+	p.RegisterAttackFan(unit.Spec{Kind: KindYouthArc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(90), ArcInner: 18, Pass: true, Look: unit.Look{Color: "#c9a227", Overlay: true, Glow: true, FX: []string{"youth-arc"}}})
 	p.Register(unit.Spec{
 		Kind: KindYouth, Role: unit.RoleFighter, Radius: bodyRadius, MaxHP: bodyHP,
 		Speed: cruise, Vision: vision, Fighter: true,
@@ -88,6 +89,9 @@ const (
 )
 
 type 教父青年 struct {
+	fanSense unit.Sense
+	fanEpoch uint64
+
 	rng       *rand.Rand
 	roll      func() float64
 	booted    bool
@@ -126,6 +130,10 @@ type aimMark struct {
 }
 
 func (a *教父青年) Handle(ctx unit.Context, ev unit.Event) {
+	if sense, ok := ev.(unit.Sense); ok {
+		a.fanSense = sense
+	}
+	defer a.syncAttackFans(ctx)
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
 		amt := e.Amount
@@ -144,8 +152,10 @@ func (a *教父青年) Handle(ctx unit.Context, ev unit.Event) {
 		if a.back {
 			a.walled = true
 		}
-	case unit.Collision:
-		a.connect(ctx, e.Time, e.Other)
+	case unit.FanHit:
+		if e.Kind == KindYouthArc {
+			a.connect(ctx, e.Time, e.Other)
+		}
 	case unit.Sense:
 		a.onSense(ctx, e)
 	}
@@ -440,6 +450,7 @@ func (a *教父青年) startRam(ctx unit.Context, s unit.Sense, t *unit.Snapshot
 		dx, dy, n = 1, 0, 1
 	}
 	a.phase = phRam
+	a.fanEpoch++
 	a.ramID = t.ID
 	a.ramX, a.ramY = dx/n, dy/n
 	a.dashLeft = ramDist
@@ -468,11 +479,11 @@ func (a *教父青年) connect(ctx unit.Context, now float64, other unit.Snapsho
 		a.hitReady = now + buffRamCD
 	}
 	a.struck = true
-	ctx.Out <- unit.Damage{From: ctx.ID, To: other.ID, Amount: ramDmg}
 	if a.phase == phRam && now+1e-9 < a.buffUntil {
 		ctx.Out <- unit.Stun{UnitID: other.ID, Hold: true, Until: now + stunDur}
 		a.ramX, a.ramY = -a.ramX, -a.ramY
 		a.phase = phReturn
+		a.fanEpoch++
 		a.dashLeft = ramDist
 		a.struck = false
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: a.ramX * ramSpeed, VY: a.ramY * ramSpeed}
@@ -592,4 +603,14 @@ func (b *手枪弹) hit(ctx unit.Context, e unit.Collision) {
 		}
 	}
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+}
+
+const KindYouthArc = "教父青年撞击扇环"
+
+func (a *教父青年) syncAttackFans(ctx unit.Context) {
+	s := a.fanSense
+	if s.Self.ID == 0 {
+		return
+	}
+	unit.SyncAttackFan(ctx, s, KindYouthArc, unit.FanAttack{Active: a.ramming() && !a.struck, Epoch: float64(a.fanEpoch), ReadyAt: a.hitReady, Damage: ramDmg, Once: true, TargetID: a.ramID})
 }

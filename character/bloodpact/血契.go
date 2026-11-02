@@ -110,6 +110,7 @@ var assets embed.FS
 
 func init() {
 	p := unit.NewPack(KindBloodPact, assets)
+	p.RegisterAttackFan(unit.Spec{Kind: KindPounceArc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(110), ArcInner: 18, Look: unit.Look{Color: pactColor, Overlay: true, Glow: true}})
 	p.Register(unit.Spec{
 		Kind:    KindBloodPact,
 		Role:    unit.RoleFighter,
@@ -161,6 +162,8 @@ func init() {
 }
 
 type 血契 struct {
+	fanSense unit.Sense
+
 	x, y   float64
 	radius float64
 	slot   int
@@ -196,14 +199,22 @@ type bloodLine struct {
 }
 
 func (b *血契) Handle(ctx unit.Context, ev unit.Event) {
+	if sense, ok := ev.(unit.Sense); ok {
+		b.fanSense = sense
+	}
+	defer b.syncAttackFans(ctx)
 	if unit.AcceptHit(ctx, ev) {
 		return
 	}
 	switch e := ev.(type) {
 	case unit.Sense:
 		b.onSense(ctx, e)
-	case unit.Collision:
-		b.strikePounce(ctx, e)
+	case unit.WallHit:
+		b.pounceUntil = 0
+	case unit.FanHit:
+		if e.Kind == KindPounceArc {
+			b.strikePounce(ctx, e)
+		}
 	}
 }
 
@@ -435,20 +446,12 @@ func (b *血契) tryPounce(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-// strikePounce 饿扑撞上敌方战斗机或活随从：这一扑只结一次咬合伤害，并当拍建线。
-func (b *血契) strikePounce(ctx unit.Context, e unit.Collision) {
+// strikePounce only handles the fan's hit effects; the fan quoted the damage.
+func (b *血契) strikePounce(ctx unit.Context, e unit.FanHit) {
 	if b.pounceHit || b.pounceUntil <= 0 || e.Time > b.pounceUntil+1e-9 {
 		return
 	}
-	if !unit.EnemyTarget(e, b.slot) {
-		return
-	}
 	b.pounceHit = true
-	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: biteDamage}
-	ctx.Out <- unit.FX{
-		Name: "blood-bite", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
-		X: e.Other.X, Y: e.Other.Y,
-	}
 	b.tether(ctx, e.Time, &e.Other)
 }
 
@@ -674,4 +677,14 @@ func (b *血契) stateCode(s unit.Sense) int {
 func (b *血契) nextFSToken(owner uint64) uint64 {
 	b.fsSeq++
 	return owner<<32 | uint64(b.fsSeq)
+}
+
+const KindPounceArc = "血契饿扑扇环"
+
+func (b *血契) syncAttackFans(ctx unit.Context) {
+	s := b.fanSense
+	if s.Self.ID == 0 {
+		return
+	}
+	unit.SyncAttackFan(ctx, s, KindPounceArc, unit.FanAttack{Active: b.pounceUntil > s.Time, Epoch: b.pounceUntil, Until: b.pounceUntil, Damage: biteDamage, Once: true, FX: "blood-bite", EffectKind: KindBloodPact})
 }

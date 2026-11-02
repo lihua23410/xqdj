@@ -13,19 +13,19 @@
 需要 Go 1.22+。
 
 ```bash
-go run .
+make run
 ```
 
 打开 [http://127.0.0.1:8080](http://127.0.0.1:8080)。默认监听 `:8080`，用 `XQDJ_ADDR` 改：
 
 ```bash
-XQDJ_ADDR=127.0.0.1:9000 go run .
+XQDJ_ADDR=127.0.0.1:9000 make run
 ```
 
 拉不下来依赖时：
 
 ```bash
-GOPROXY=https://goproxy.cn,direct go run .
+GOPROXY=https://goproxy.cn,direct make run
 ```
 
 前端和角色资源都靠 `go:embed` 打进二进制：`internal/web/embed.go` 收 `*.html *.css *.js lib/*.js`（往 `lib/` 加新文件要同时改这行 pattern）；角色包收的是它自己 `//go:embed` 行列到的东西——多数包只 embed `fx`，地慧星还 embed `status`，面灵气还 embed `status faction`，人偶使是 `fx 素材`。
@@ -43,10 +43,10 @@ netstat -ano | findstr :8080
 taskkill /PID <PID> /F
 ```
 
-测试：
+测试（先审查，再执行全量测试）：
 
 ```bash
-go test ./...
+make test
 ```
 
 加球或改了战斗机子包之后，先 `go generate ./character` 再测。加场地子包则 `go generate ./map`。对应的 `all.go` 过期时 `TestAllGoListsEveryPack` 会失败。
@@ -71,6 +71,38 @@ go run ./cmd/winrate -n 100 -timeout 90 -o winrate.md
 
 旧收件箱在感知积压时会丢失伤害通知，造成严重的串行/并行胜率偏移。现已改为 FIFO 可靠投递并保留每拍感知，在命令结算阶段等待角色处理跟上；角色之间仍异步执行。报告会记录本次并发及事件处理口径。增量写回的账本规则见 [ADR 0032](docs/adr/0032-winrate-detail-is-the-ledger.md)。旧矩阵需要重新生成，修复方案与验证范围见 [ADR 0031](docs/adr/0031-reliable-actor-events-and-batch-backpressure.md)。
 
+## 碰撞伤害的强制边界
+
+**严厉禁止将碰撞出伤绑定到战斗机本体。** 本体的 `Collision`、`FanHit` 回调及其调用的辅助函数不得发送 `unit.Damage`。不得通过伪造 `Damage.From`、拆进辅助函数、存状态后延迟到 `Sense` 扣血，或在本体自扫贴身圆距离来绕行。接触攻击必须由独立的 `Attach` 扇环命中，并以扇环自己的 ID 发出伤害；本体可以处理碰撞产生的状态变化、弹开及原有穿透规则。范围伤害、持续伤害、自扣血仍是各自独立的机制，不按 `From == 本体` 一刀切禁止。
+
+构建与提交前使用强制入口：
+
+```bash
+make audit   # 独立静态审查，违规 panic，打印文件行号和辅助函数调用链
+make build   # 审查通过后编译 ./xqdj
+make test    # 审查通过后运行 go test ./...
+```
+
+`internal/audit` 扫描已注册战斗机的本体碰撞分支，并追踪本包的命名辅助函数及同接收者方法。`go test ./...` 中也有仓库边界检查。引擎另以私有命令通道记录真实发送者与触发事件，在结算入口强制校验：战斗机处理本体碰撞或扇环命中通知时发送任何 `Damage`，即使伪造 `From` 也直接 panic；真实扇环的伤害与命中通知都必须以自己的 ID 发出，通知也会校验真实发送者。这里不是 `init()` 检查，裸 `go build` 不会自动执行静态审查，但其产物仍保留运行时硬检查。
+
+这是一套防回归约束，不是恶意代码沙箱：静态检查不完整证明接口分派、函数变量、跨包调用及跨事件状态流；运行时检查在违规路径实际执行时触发，不能阻止文件上传。拥有引擎或检查器修改权限的人仍能拆掉防线；需要额外的受保护 CI 来约束发布。见 [ADR 0033](docs/adr/0033-contact-attacks-belong-to-fans.md)。
+
+本轮接触攻击按招式分别确定张角：
+
+| 战斗机 / 招式 | 张角 | 命中与联动 |
+| --- | --- | --- |
+| pink 平淡空手 | 180° | 6 伤，0.18 秒冷却；浅粉、玫红与原有血雾 |
+| pink 油箱冲刺 | 144° | 同一冲刺每目标三段 × 3 伤，可打多个目标；原电锯与火花 |
+| 盾斧两种突刺 | 120° | 原突刺伤害、前方群伤，再接原连招；背后不参与群伤 |
+| 回声声呐突进 | 90° | 每次突进一道，6 伤一次，命中后继续冲到墙 |
+| 钓鱼佬高速碰撞 | 180° | 八秒窗口，按鱼重出伤，0.35 秒冷却重挂 |
+| 血契饿扑 | 110° | 每扑额外 7 伤一次并建线；普通咬合仍独立结算 |
+| 教父(青年)撞击与折返 | 90° | 每段对原锁定目标 2.5 伤一次；强化命中眩晕并折返，返程随速度反向 |
+| 我与周旋久 | 双方各 180° | 我伤 2、周旋久伤 3、神圣时我伤 4；互撞掷状态与扇环扣血分离 |
+| 人偶使冲刺 | 120° | 按命中当下剩余段数结清并收招；原矩形分段攻击保留 |
+
+新接触攻击可用 `Pack.RegisterAttackFan` 注册，用 `unit.SyncAttackFan` 管理窗口。伤害在扇环演员内发出；引擎转发 `unit.FanHit` 给本体，只用于眩晕、折返、接招或建线等后续动作，不能重复扣血。持续多目标与指定目标的扇环可以使用现有 `Pass` 接触规则；搭档互伤的扇环显式声明 `AttachFriends`，普通扇环仍跳过同边及主人。共享攻击窗口归属本场 `MatchState`，内部加锁，不向出生参数塞可变演员指针。
+
 ## 目录
 
 ```
@@ -86,7 +118,9 @@ map/场地.go              //go:generate go run generate.go（包名 场地；�
 map/generate.go          扫描子目录，写出 all.go（自身带 //go:build ignore）
 map/all.go               生成：blank import 每个子包，触发 init 登记
 map/all_test.go          清单过期 / 空 import 会失败
-internal/unit/           Actor / Cmd / Sense / Look / Pack / Field，sim 与 character 的唯一协议
+internal/unit/           Actor / Cmd / Sense / Look / Pack / Field、扇环攻击窗口，sim 与 character 的唯一协议
+internal/audit/          本体碰撞出伤的静态审查与运行时硬检查
+cmd/audit/               审查入口；Makefile 在 build / run / test 前强制调用
 internal/sim/            物理、对局状态机、CCD、墙
 internal/web/            单挑选人页、团队赛页（`team.html`）、战场、引擎级特效（embed）；lib/ 放 gsap 等第三方脚本；sfx/ 是两段缺省音效。不要为新球改这里
 cmd/winrate/             无头胜率矩阵
@@ -302,7 +336,9 @@ unit.Spec{
     VisionBlock: false,           // true = 挡视线：挡索敌视线（Seek 跳过被压住连线段的目标），不进感知过滤、不挡物理。可用 VisionBlock 令牌运行时挂摘
     Cruise:      false,           // true = 吃巡航带子。战斗机默认有；活随从要写
     Shell:       false,           // true = 贴身壳：吸收打向主人的伤害，撞碎时给主人 GuardBreak；不撞墙
-    Attach:     false,            // true = 每帧贴主人；不挡伤、不碎、不撞墙。只和敌方战斗机、活随从做 CCD
+    Attach:     false,            // true = 每帧贴主人；不挡伤、不碎、不撞墙。默认只与敌方战斗机、活随从做 CCD
+    AttachFriends: false,         // 特殊搭档扇环允许接触同边和主人，伤害目标仍由攻击窗口限定
+    Pass:       false,            // 出生即持 Pass；用于多目标或指定目标的穿人攻击判定
     ArcSpan:    0,                // 扇环张角（弧度）。0 = 不是扇环。整圈用 2π。用 unit.Deg(120)
     ArcInner:   0,                // 扇环内径；外径是 Radius。角色自己填（现有近战是 18 / 20）
     Look:       unit.Look{...},
@@ -352,7 +388,9 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
     case unit.Sense:
         // 每帧；被 Stun 时引擎不发
     case unit.Collision:
-        // 撞上别人
+        // 本体接触，只处理状态；严禁直接或经辅助函数发送 Damage
+    case unit.FanHit:
+        // 扇环已经发出伤害，这里只处理接招等后续动作
     case unit.WallHit:
         // 撞场边、硬墙或胶囊墙
     case unit.FactionChanged:
@@ -582,6 +620,7 @@ go test ./...
 - 用中文当目录名或 import 路径。
 - 随从 Kind 叫一个太泛的名字（`子弹` 已被远程占用；新子弹请 `新球弹` 这种）。
 - 瞬移 / 场判断抄数字 280，或假定场地是六边形。
+- **在战斗机本体 Collision 或其辅助函数内出伤，或伪造来源绕过。静态审查拒绝，运行时直接 panic。**
 - 战斗机不处理 `IncomingDamage`。
 - 索敌写死 `Role == unit.RoleFighter`（用 `unit.Seek` / `unit.Aimable`）。
 - 出伤写死战斗机、漏掉活随从（用 `unit.Hittable` / `unit.EnemyTarget`）。
@@ -607,7 +646,8 @@ go test ./...
 - [ ] 自带受击音已 `arena.registerOwnHurt(Kind)`；新音效的响度已量过并写进 `docs/audio-loudness.md`
 - [ ] 包内 `fx/README.md` 记了音效来源与许可
 - [ ] 没有硬编码 280 / 六条场边
-- [ ] `go generate ./character` 且 `go test ./...` 通过
+- [ ] 接触攻击由独立扇环出伤，本体回调无直接或间接 Damage
+- [ ] `go generate ./character` 且 `make test` 通过
 - [ ] 没改 `internal/web` / `main.go`
 
 ### 14. 最小骨架（无特效文件）
@@ -618,9 +658,15 @@ package 新球
 import "xqdj/internal/unit"
 
 const KindNova = "新球"
+const KindNovaArc = "新球扇环"
 
 func init() {
     p := unit.NewPack(KindNova, nil)
+    p.RegisterAttackFan(unit.Spec{
+        Kind: KindNovaArc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1,
+        Attach: true, ArcSpan: unit.Deg(120), ArcInner: 18,
+        Look: unit.Look{Color: "#7ad0ff", Overlay: true},
+    })
     p.Register(unit.Spec{
         Kind:    KindNova,
         Role:    unit.RoleFighter,
@@ -631,30 +677,18 @@ func init() {
         Fighter: true,
         Look:    unit.Look{Color: "#7ad0ff"},
     }, func(info unit.SpawnInfo) unit.Actor {
-        return &新球{slot: info.Slot}
+        return &新球{}
     })
 }
 
-type 新球 struct {
-    slot       int
-    hitReadyAt float64
-}
+type 新球 struct{}
 
 func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
-    if unit.AcceptHit(ctx, ev) {
-        return
-    }
-    switch e := ev.(type) {
-    case unit.Sense:
-        if t := unit.Seek(e); t != nil {
-            _ = t // 瞄准 t
-        }
-    case unit.Collision:
-        if !unit.EnemyTarget(e, a.slot) || e.Time < a.hitReadyAt {
-            return
-        }
-        ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: 6}
-        a.hitReadyAt = e.Time + 0.1
+    if unit.AcceptHit(ctx, ev) { return }
+    if s, ok := ev.(unit.Sense); ok {
+        unit.SyncAttackFan(ctx, s, KindNovaArc, unit.FanAttack{
+            Active: true, Damage: 6, Cooldown: 0.1,
+        })
     }
 }
 ```
@@ -782,7 +816,7 @@ arena.registerShot("shot", (fx, ctx) => {
 
 - **场地是数据**。库在 `map/`（包名 `场地`）：一份场地一个 ASCII 子包，`init` 里 `unit.RegisterField`；`go generate ./map` 写出 `all.go`。`unit.Field` 有形状、场心到场边距离和预放墙；库里默认六边形（平顶、`Extent = HexRadius = 280`、无硬墙），另有圆（`Extent = 280`，场心一条硬墙，开局 `x ∈ [-110, 110]`、半宽 6，绕场心顺时针 8 秒一圈；转到固体身上时挤出，并按固体自己的速度弹开）。`Match.SetField` 只在选人阶段生效，开打后忽略；不认识的名字不改当前这份。单挑拒绝奇美拉。`UseTeam` 在当前场地是六边形或名字为空时改选奇美拉。库里另有火山、机关房、八边形、大六边形和奇美拉：轮廓判定是各场地私产（`RegisterOutline` 登记实现），其中八边形截角方形（场心到边 280·cos22.5°），开局由场地演员（BootKind）在三个 120° 均分位砌三段带 `VisionBlock` 的方端硬墙——走 `PlaceWall` 造墙链，不是预放墙（ADR 0009）。大六边形外形同默认六边形，场心到场边 472.5（ADR 0014）；开局两只中心对称的旋涡钉在场心半径 280 的圆上，12 秒逆时针一圈，战斗机、活随从、子弹碰上就送到对面往场心偏一截并把方向倒转 180°（Helper 不送）；场心另有一条同圆的转墙（长 220、粗 6、8 秒顺时针一圈），由场地演员 `PlaceWall{Hard, VisionBlock}` 砌出（ADR 0009），不是预放墙。`NewMatch` 按名字装六边形，没有则列表第一份，登记表空则用 `unit.HexField()` 垫底（不进选人列表）。落点、夹紧、撞边都走 `unit.Field`，角色不要自己算。
 - **时间**：`sim.TickHz = 60`，`DT = 1/60`，hit-stop `HitStopFrames = 3`。引擎每 tick 广播一次快照。
-- **帧序**（`Match.Tick`）：hit-stop 中只消化指令并递减计数（归零那拍判胜负）；否则 FS 过期 → 同步巡航 → 巡航带子 → 消化指令 → 施加瞬时 FS → 结算碰撞 → 物理推进 → 应用本帧伤害 → 再结算碰撞 → 清掉没打中的附着弹 → 贴壳 / 贴随从 → 会转的硬墙前进一拍并挤出挡路的固体 → 推进时间 → 墙和眩晕过期 → 发快照 → 判胜负。
+- **帧序**（`Match.Tick`）：hit-stop 中只消化指令并递减计数（归零那拍判胜负）；否则 FS 过期 → 同步巡航 → 巡航带子 → 消化指令 → 施加瞬时 FS → 结算碰撞 → 按主人当下速度贴合扇环 → 物理推进 → 应用本帧伤害 → 再结算碰撞 → 清掉没打中的附着弹 → 贴壳 / 贴随从 → 会转的硬墙前进一拍并挤出挡路的固体 → 推进时间 → 墙和眩晕过期 → 发快照 → 判胜负。
 - **出生**：战斗机在可进入区域随机落点（两个圆心至少隔 `r+R+8`），初速大小 = `Spec.Speed`、方向随机。
 - **巡航带子**：快于巡航每 0.2s 减 10（不低于巡航）；慢于巡航但仍在动每 0.2s 加 5（不高于巡航）；速率为 0 且巡航大于 0 时，沿巡航朝向立刻回到巡航，不爬升。持 `Stand`、持瞬时 FS、或巡航 FS 的 `M ≈ 0` 时都不推；只对实心且有巡航带子的单位生效（战斗机默认有；活随从要 `Spec.Cruise`）。拉/推发生在消化指令之前，当帧 `SetVelocity` 能顶住巡航带子，但仍乘当时的 `M`；被瞬时 FS 覆盖时顶不住。
 - **撞墙**：入射角 = 反射角，速率不变，场边、硬墙、胶囊墙一样；战斗机和普通子弹一样。例外：`PassWalls` / `Attach` / `Shell` 单位根本不碰墙；`BreakWalls` 的弹撞场边照弹、撞硬墙穿过、撞胶囊墙拆穿。

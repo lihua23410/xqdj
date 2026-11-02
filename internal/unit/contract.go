@@ -212,12 +212,13 @@ type Kill struct {
 // IncomingDamage 引擎准备扣血。战斗机必须回 ConfirmDamage 才会真正掉 HP；回 BlockDamage 则整包取消。
 // ArcSpan 是报价那一瞬间来源单位的扇环张角；0 表示来源不是扇环。任何战斗机都能读，不专属于某一套。
 type IncomingDamage struct {
-	Token   uint64
-	From    uint64
-	Amount  float64
-	Time    float64
-	Speed   float64
-	ArcSpan float64
+	SourceOwnerID uint64 // 引擎从实际伤害来源读取，出生同拍也可识别所属攻击
+	Token         uint64
+	From          uint64
+	Amount        float64
+	Time          float64
+	Speed         float64
+	ArcSpan       float64
 }
 
 // FromFan 这记伤害的来源是扇环。飞出去的弹、本体相撞、场地伤都不是。

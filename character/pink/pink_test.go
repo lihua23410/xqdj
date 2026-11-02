@@ -123,7 +123,7 @@ func TestCrowdOnlyTakesDamageFromPink(t *testing.T) {
 	}
 }
 
-func TestPlainCollisionDealsSix(t *testing.T) {
+func TestPlainBodyCollisionDoesNotDealDamage(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	body := &pink{form: formPlain, weapon: weaponDefault, slot: 0}
 	body.Handle(unit.Context{ID: 1, Kind: KindPink, Out: out}, unit.Collision{
@@ -131,8 +131,27 @@ func TestPlainCollisionDealsSix(t *testing.T) {
 		Other: unit.Snapshot{ID: 2, Slot: 1, Role: unit.RoleFighter},
 	})
 	cmds := drainPink(out)
-	if d := firstDamage(cmds, 2); d == nil || d.Amount != 6 {
-		t.Fatalf("plain collision damage = %+v, want 6", d)
+	if d := firstDamage(cmds, 2); d != nil {
+		t.Fatalf("body collision must not damage: %+v", d)
+	}
+}
+
+func TestNewFanCanDamageItsOwnCrowdBeforeFirstSense(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	c := &crowd{owner: 1}
+	c.Handle(unit.Context{ID: 3, Out: out}, unit.IncomingDamage{Token: 1, From: 99, SourceOwnerID: 1, Amount: 6})
+	c.Handle(unit.Context{ID: 3, Out: out}, unit.IncomingDamage{Token: 2, From: 100, SourceOwnerID: 2, Amount: 6})
+	confirmed, blocked := false, false
+	for _, cmd := range drainPink(out) {
+		if d, ok := cmd.(unit.ConfirmDamage); ok && d.Token == 1 {
+			confirmed = true
+		}
+		if d, ok := cmd.(unit.BlockDamage); ok && d.Token == 2 {
+			blocked = true
+		}
+	}
+	if !confirmed || !blocked {
+		t.Fatalf("own crowd protection: confirmed=%v blocked=%v", confirmed, blocked)
 	}
 }
 
@@ -216,8 +235,8 @@ func TestFuelDashHitsThreeTimesAndBlocksDamage(t *testing.T) {
 	body.startFuelDash(ctx, 1)
 	cmds := drainPink(out)
 	total, hits := damageTotal(cmds, 2)
-	if hits != sawHits || total != sawHits*sawHit {
-		t.Fatalf("fuel hits=%d total=%v, want %d hits and %v", hits, total, sawHits, sawHits*sawHit)
+	if hits != 0 || total != 0 {
+		t.Fatalf("body must leave damage to fan: hits=%d total=%v (fan expects %d hits and %v)", hits, total, sawHits, sawHits*sawHit)
 	}
 	body.Handle(ctx, unit.IncomingDamage{Token: 3, From: 2, Amount: 99, Time: 1.1})
 	blocked := false

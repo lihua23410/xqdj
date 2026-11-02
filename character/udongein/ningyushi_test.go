@@ -397,7 +397,7 @@ func TestSpell24RushesTowardEnemy(t *testing.T) {
 	}
 }
 
-func TestSpell24CollisionDumpsRemaining(t *testing.T) {
+func TestSpell24FanHitEndsWithoutDuplicateDamage(t *testing.T) {
 	matchState := &unit.MatchState{}
 
 	a := fighter(SkillN24)
@@ -407,11 +407,12 @@ func TestSpell24CollisionDumpsRemaining(t *testing.T) {
 	a.Handle(ctx, unit.Sense{Time: 0, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
 	_ = drain(out)
 	a.force = SkillNone
-	full := float64(spell24Hits) * float64(1+2) * 1.4
-	a.Handle(ctx, unit.Collision{Time: 0.1, Other: foe(36, 0), NX: 1, NY: 0})
+	a.Handle(ctx, unit.FanHit{Kind: KindN24Arc, Time: 0.1, Other: foe(36, 0)})
 	cmds := drain(out)
-	if !hasDamage(cmds, 2, full) {
-		t.Fatalf("body hit should dump remaining [24], want %v got %v", full, cmds)
+	for _, cmd := range cmds {
+		if _, ok := cmd.(unit.Damage); ok {
+			t.Fatalf("owner duplicated fan damage: %v", cmds)
+		}
 	}
 	if a.job.kind != 0 {
 		t.Fatal("[24] should end after body hit")

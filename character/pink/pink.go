@@ -134,6 +134,8 @@ const (
 
 func init() {
 	p := unit.NewPack(KindPink, assets)
+	p.RegisterAttackFan(unit.Spec{Kind: KindPinkContact, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(180), ArcInner: 18, Look: unit.Look{Color: "#ff8fbe", Overlay: true, Glow: true, FX: []string{"pink-contact"}}})
+	p.RegisterAttackFan(unit.Spec{Kind: KindPinkFuelArc, Role: unit.RoleProjectile, Radius: 48, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(144), ArcInner: 18, Pass: true, Look: unit.Look{Color: "#ffb21e", Overlay: true, Glow: true, FX: []string{"pink-fuel-arc"}}})
 	p.Register(unit.Spec{
 		Kind: KindPink, Role: unit.RoleFighter, Radius: pinkRadius, MaxHP: pinkHP,
 		Speed: pinkSpeed, Vision: pinkVision, Fighter: true,
@@ -191,6 +193,8 @@ func init() {
 }
 
 type pink struct {
+	fanSense unit.Sense
+
 	slot   int
 	booted bool
 	rng    *rand.Rand
@@ -203,7 +207,6 @@ type pink struct {
 	nextAttackAt float64
 	nextCrowdAt  float64
 	nextStateAt  float64
-	lastBumpAt   float64
 
 	reloading  bool
 	reloadAt   float64
@@ -212,7 +215,6 @@ type pink struct {
 
 	fuelUntil   float64
 	fuelDrop    bool
-	fuelHits    map[uint64]bool
 	invulnUntil float64
 
 	x, y   float64
@@ -222,6 +224,10 @@ type pink struct {
 }
 
 func (p *pink) Handle(ctx unit.Context, ev unit.Event) {
+	if sense, ok := ev.(unit.Sense); ok {
+		p.fanSense = sense
+	}
+	defer p.syncAttackFans(ctx)
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
 		if e.Time < p.invulnUntil {
@@ -233,26 +239,8 @@ func (p *pink) Handle(ctx unit.Context, ev unit.Event) {
 		if e.VictimKind == KindCrowd {
 			p.onCrowdKill(ctx, e)
 		}
-	case unit.Collision:
-		p.onCollision(ctx, e)
 	case unit.Sense:
 		p.tick(ctx, e)
-	}
-}
-
-func (p *pink) onCollision(ctx unit.Context, e unit.Collision) {
-	// 平淡形态的默认攻击就是碰撞；装备武器后改用装备攻击。
-	if p.form != formPlain || p.weapon != weaponDefault {
-		return
-	}
-	if e.Time-p.lastBumpAt < 0.18 || !unit.EnemyTarget(e, p.slot) {
-		return
-	}
-	p.lastBumpAt = e.Time
-	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: 6}
-	ctx.Out <- unit.FX{
-		Name: "bump", Kind: KindPink, UnitID: ctx.ID, Slot: p.slot,
-		X: e.Other.X, Y: e.Other.Y, VX: p.hx, VY: p.hy,
 	}
 }
 
@@ -395,7 +383,6 @@ func (p *pink) equip(ctx unit.Context, weapon int, now float64) {
 	p.reloadAt = 0
 	p.fuelUntil = 0
 	p.fuelDrop = false
-	p.fuelHits = nil
 	p.emitState(ctx)
 }
 
@@ -557,7 +544,6 @@ func (p *pink) melee(ctx unit.Context, s unit.Sense, now float64) {
 }
 
 func (p *pink) startFuelDash(ctx unit.Context, now float64) {
-	p.fuelHits = make(map[uint64]bool)
 	p.fuelUntil = now + fuelTime
 	p.invulnUntil = now + fuelTime + 0.05
 	p.ammo--
@@ -572,7 +558,6 @@ func (p *pink) startFuelDash(ctx unit.Context, now float64) {
 		X: p.x, Y: p.y, VX: p.hx, VY: p.hy, Amount: float64(p.ammo),
 	}
 	p.emitAmmo(ctx)
-	p.fuelStrike(ctx)
 }
 
 func (p *pink) tickFuel(ctx unit.Context, s unit.Sense) {
@@ -583,32 +568,6 @@ func (p *pink) tickFuel(ctx unit.Context, s unit.Sense) {
 			p.dropWeapon(ctx)
 		}
 		return
-	}
-	p.fuelStrike(ctx)
-}
-
-func (p *pink) fuelStrike(ctx unit.Context) {
-	if p.fuelHits == nil {
-		p.fuelHits = make(map[uint64]bool)
-	}
-	for id, o := range p.seen {
-		if p.fuelHits[id] || !unit.Hittable(o, p.slot) {
-			continue
-		}
-		if math.Hypot(o.X-p.x, o.Y-p.y) > fuelHitR+o.Radius {
-			continue
-		}
-		p.fuelHits[id] = true
-		for n := 0; n < sawHits; n++ {
-			ctx.Out <- unit.Damage{
-				From: ctx.ID, To: id, Amount: sawHit,
-				NoFreeze: true,
-			}
-		}
-		ctx.Out <- unit.FX{
-			Name: "fuel-hit", Kind: KindPink, UnitID: ctx.ID, Slot: p.slot,
-			X: o.X, Y: o.Y, VX: p.hx, VY: p.hy,
-		}
 	}
 }
 
@@ -677,7 +636,6 @@ func (p *pink) clearWeapon() {
 	p.reloads = 0
 	p.fuelUntil = 0
 	p.fuelDrop = false
-	p.fuelHits = nil
 }
 
 func (p *pink) nearestEnemy(s unit.Sense) (unit.Snapshot, bool) {
@@ -743,4 +701,17 @@ func boolInt(v bool) int {
 		return 1
 	}
 	return 0
+}
+
+const KindPinkContact = "pink贴身扇环"
+const KindPinkFuelArc = "pink电锯扇环"
+
+func (p *pink) syncAttackFans(ctx unit.Context) {
+	s := p.fanSense
+	if s.Self.ID == 0 {
+		return
+	}
+	unit.SyncAttackFan(ctx, s, KindPinkContact, unit.FanAttack{Active: p.form == formPlain && p.weapon == weaponDefault, Damage: 6, Cooldown: 0.18, FX: "bump", EffectKind: KindPink})
+	s.Self.VX, s.Self.VY = p.hx, p.hy
+	unit.SyncAttackFan(ctx, s, KindPinkFuelArc, unit.FanAttack{Active: p.fuelUntil > s.Time, Epoch: p.fuelUntil, Until: p.fuelUntil, Damage: sawHit, Hits: sawHits, NoFreeze: true, Once: true, PerTarget: true, FX: "fuel-hit", EffectKind: KindPink})
 }

@@ -17,8 +17,8 @@ func TestPounceStrikeOnceAndTethers(t *testing.T) {
 	}
 	ctx := unit.Context{ID: 3, Kind: KindBloodPact, Out: out}
 	foe := unit.Snapshot{ID: 9, Role: unit.RoleFighter, Slot: 1, HP: 80, MaxHP: 100, X: 40, Y: 0}
-	b.Handle(ctx, unit.Collision{Time: 0.2, Other: foe})
-	b.Handle(ctx, unit.Collision{Time: 0.3, Other: foe})
+	b.Handle(ctx, unit.FanHit{Kind: KindPounceArc, Time: 0.2, Other: foe})
+	b.Handle(ctx, unit.FanHit{Kind: KindPounceArc, Time: 0.3, Other: foe})
 
 	dmg, bond := 0, 0
 	for _, c := range drainBat(out) {
@@ -32,8 +32,8 @@ func TestPounceStrikeOnceAndTethers(t *testing.T) {
 			bond++
 		}
 	}
-	if dmg != 1 {
-		t.Fatalf("这一扑只该结一次伤，实际 %d", dmg)
+	if dmg != 0 {
+		t.Fatalf("主人不应重复发出饿扑伤害，实际 %d", dmg)
 	}
 	if bond != 1 {
 		t.Fatalf("扑中该当拍建线，实际 %d", bond)
@@ -48,7 +48,7 @@ func TestPounceIgnoresHitAfterDash(t *testing.T) {
 	b := &血契{slot: 0, pounceUntil: 0.5, lines: map[uint64]*bloodLine{}}
 	ctx := unit.Context{ID: 3, Kind: KindBloodPact, Out: out}
 	foe := unit.Snapshot{ID: 9, Role: unit.RoleFighter, Slot: 1, HP: 80, MaxHP: 100}
-	b.Handle(ctx, unit.Collision{Time: 0.8, Other: foe})
+	b.Handle(ctx, unit.FanHit{Kind: KindPounceArc, Time: 0.8, Other: foe})
 	for _, c := range drainBat(out) {
 		if _, ok := c.(unit.Damage); ok {
 			t.Fatal("扑完之后的碰撞不该再结饿扑的伤")

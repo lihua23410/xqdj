@@ -125,6 +125,7 @@ const (
 
 func init() {
 	p := unit.NewPack(KindAxe, assets)
+	p.RegisterAttackFan(unit.Spec{Kind: KindAxeThrustArc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(120), ArcInner: 18, Look: unit.Look{Color: axeColor, Overlay: true, Glow: true}})
 	// Look.Ghost = 220：速度超过 220px/s 时前端才拉残影（也就是 350 的突刺那一段），平时走位不拉。
 	p.Register(unit.Spec{
 		Kind:    KindAxe,
@@ -141,6 +142,8 @@ func init() {
 }
 
 type 盾斧 struct {
+	fanSense unit.Sense
+
 	form      int                   // formShield / formSword / formAxe
 	redShield bool                  // 红盾：正面减伤 0.5 → 0.25
 	redSword  bool                  // 红剑：strikeDmg 给剑/突刺 +redBonus
@@ -154,18 +157,23 @@ type 盾斧 struct {
 	hx, hy    float64               // 面朝方向（单位向量），hitFan/rotate 都按它算
 	x, y      float64               // 自己的位置，front() 判定正面要用
 	seen      map[uint64][2]float64 // 见过的单位位置：盾只挡见过的来源，目标脱离视野后还能记住最后位置
-	lastNear  []unit.Snapshot       // 最近一帧感知：突刺碰撞事件不带感知，群扫靠它
 	slot      int
 	booted    bool
 	detour    unit.DetourHold
 }
 
 func (a *盾斧) Handle(ctx unit.Context, ev unit.Event) {
+	if sense, ok := ev.(unit.Sense); ok {
+		a.fanSense = sense
+	}
+	defer a.syncAttackFans(ctx)
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
 		a.confirm(ctx, e)
-	case unit.Collision:
-		a.onHit(ctx, e)
+	case unit.FanHit:
+		if e.Kind == KindAxeThrustArc {
+			a.onHit(ctx, e)
+		}
 	case unit.Sense:
 		a.tick(ctx, e)
 	}
@@ -205,41 +213,18 @@ func (a *盾斧) front(ox, oy float64) bool {
 	return math.Acos(dot) <= unit.Deg(shieldSpan)/2
 }
 
-func (a *盾斧) onHit(ctx unit.Context, e unit.Collision) {
-	if !unit.EnemyTarget(e, a.slot) {
+func (a *盾斧) onHit(ctx unit.Context, e unit.FanHit) {
+	if !unit.Hittable(e.Other, a.slot) {
 		return
 	}
 	switch a.step {
 	case stepThrust:
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: false}
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: a.strikeDmg(thrustDmg)}
-		a.thrustSweep(ctx, e.Other.ID) // 撞上的那位之外，身周一圈也一并结算（对群）
 		a.beginSlash(ctx, e.Time, true)
 	case stepChouThrust:
 		// 超解前那一下突刺：撞上人就结 3 伤，然后接超解旋（顶到位是目的，不是打完收招）。
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: a.strikeDmg(thrustDmg)}
-		a.thrustSweep(ctx, e.Other.ID)
 		a.beginChouSpin(ctx, e.Time)
-	}
-}
-
-// thrustSweep 突刺命中那一下的群结算：盾斧攻击都是对群——以自己当前位置为圆心、
-// 摸到就起手的 seekR 内，敌方战斗机+敌方活随从都吃一记突刺伤（撞上的那位已单打，跳过）。
-// 碰撞事件不带感知快照，群扫靠每帧缓存的 lastNear（差一拍的位置，误差一拍推进，可接受）。
-func (a *盾斧) thrustSweep(ctx unit.Context, skip uint64) {
-	if a.lastNear == nil {
-		return
-	}
-	for i := range a.lastNear {
-		o := &a.lastNear[i]
-		if o.ID == skip || !unit.Hittable(*o, a.slot) {
-			continue
-		}
-		if math.Hypot(o.X-a.x, o.Y-a.y) > seekR+o.Radius {
-			continue
-		}
-		ctx.Out <- unit.Damage{From: ctx.ID, To: o.ID, Amount: a.strikeDmg(thrustDmg)}
 	}
 }
 
@@ -717,7 +702,6 @@ func (a *盾斧) note(s unit.Sense) {
 		o := s.Nearby[i]
 		a.seen[o.ID] = [2]float64{o.X, o.Y}
 	}
-	a.lastNear = s.Nearby
 }
 
 // emitLook 三个字段各有约定，前端原样收：Amount=形态(0 盾/1 剑/2 斧)、VX=红盾(0/1)、VY=红剑(0/1)。
@@ -760,4 +744,15 @@ func (a *盾斧) emitPhial(ctx unit.Context) {
 		amt = 20
 	}
 	ctx.Out <- unit.FX{Name: "phial", Kind: ctx.Kind, UnitID: ctx.ID, Amount: amt}
+}
+
+const KindAxeThrustArc = "盾斧突刺扇环"
+
+func (a *盾斧) syncAttackFans(ctx unit.Context) {
+	s := a.fanSense
+	if s.Self.ID == 0 {
+		return
+	}
+	s.Self.VX, s.Self.VY = a.thrustDir[0]*thrustSp, a.thrustDir[1]*thrustSp
+	unit.SyncAttackFan(ctx, s, KindAxeThrustArc, unit.FanAttack{Active: a.step == stepThrust || a.step == stepChouThrust, Epoch: a.until, Damage: a.strikeDmg(thrustDmg), Until: a.until, Once: true, Sweep: true, SweepRadius: seekR})
 }

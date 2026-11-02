@@ -69,9 +69,11 @@ const (
 	KindArrow              = 弓箭.KindArrow
 	KindVolleyArrow        = 弓箭.KindVolleyArrow
 	KindAxe                = 盾斧.KindAxe
+	KindAxeThrustArc       = 盾斧.KindAxeThrustArc
 	KindBloodArc           = 血契.KindBloodArc
 	KindBloodBat           = 血契.KindBloodBat
 	KindBloodPact          = 血契.KindBloodPact
+	KindPounceArc          = 血契.KindPounceArc
 	KindBundle             = 捆.KindBundle
 	KindCharcoal           = 炭翁.KindCharcoal
 	KindCharcoalEmber      = 炭翁.KindCharcoalEmber
@@ -85,6 +87,7 @@ const (
 	KindShadow             = 分身者_百战.KindShadow
 	KindDummy              = 靶子.KindDummy
 	KindEcho               = 回声.KindEcho
+	KindEchoArc            = 回声.KindEchoArc
 	KindShard              = 回声.KindShard
 	KindStar               = 回声.KindStar
 	KindEngine             = 内燃机.KindEngine
@@ -92,6 +95,7 @@ const (
 	KindFishBig            = 钓鱼佬.KindFishBig
 	KindFishMid            = 钓鱼佬.KindFishMid
 	KindFisher             = 钓鱼佬.KindFisher
+	KindFisherArc          = 钓鱼佬.KindFisherArc
 	KindFlood              = 钓鱼佬.KindFlood
 	KindPond               = 钓鱼佬.KindPond
 	KindFrei               = Freischutz.KindFrei
@@ -109,6 +113,7 @@ const (
 	KindGodfatherShot      = 教父.KindGodfatherShot
 	KindSniper             = 教父.KindSniper
 	KindYouth              = 教父青年.KindYouth
+	KindYouthArc           = 教父青年.KindYouthArc
 	KindYouthBuffShot      = 教父青年.KindYouthBuffShot
 	KindYouthShot          = 教父青年.KindYouthShot
 	KindHajimi             = 反重力猫咪.KindHajimi
@@ -146,8 +151,10 @@ const (
 	KindMenreikiMask3      = 面灵气.KindMenreikiMask3
 	KindMenreikiShot       = 面灵气.KindMenreikiShot
 	KindMe                 = 我与周旋久.KindMe
+	KindMeArc              = 我与周旋久.KindMeArc
 	KindVoidShot           = 我与周旋久.KindVoidShot
 	KindZhou               = 我与周旋久.KindZhou
+	KindZhouArc            = 我与周旋久.KindZhouArc
 	KindObserver           = 观察者.KindObserver
 	KindObserverBeam       = 观察者.KindObserverBeam
 	KindObserverKunaiCopy  = 观察者.KindObserverKunaiCopy
@@ -165,6 +172,8 @@ const (
 	KindGatling            = pink.KindGatling
 	KindGatlingShot        = pink.KindGatlingShot
 	KindPink               = pink.KindPink
+	KindPinkContact        = pink.KindPinkContact
+	KindPinkFuelArc        = pink.KindPinkFuelArc
 	KindPistol             = pink.KindPistol
 	KindPistolShot         = pink.KindPistolShot
 	KindRifle              = pink.KindRifle
@@ -226,6 +235,7 @@ const (
 	KindTwin               = 无下限术士.KindTwin
 	KindTwinArc            = 无下限术士.KindTwinArc
 	KindTwinBlueArc        = 无下限术士.KindTwinBlueArc
+	KindN24Arc             = 人偶使.KindN24Arc
 	KindNingyushi          = 人偶使.KindNingyushi
 	KindNingyushiBeam      = 人偶使.KindNingyushiBeam
 	KindNingyushiBomb      = 人偶使.KindNingyushiBomb
