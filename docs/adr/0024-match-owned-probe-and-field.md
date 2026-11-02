@@ -13,4 +13,4 @@
 
 本次仍保留 sim 对非因果包的现有探针编排依赖；移除该依赖属于后续架构调整。人偶使的全局队列、主人表和按单位 ID 索引的状态表也不在本次两条数据链的隔离范围内，不能据此宣称整个引擎已无跨场共享状态。
 
-后续：战斗机可变私产的对局隔离由 [ADR 0029](0029-match-owned-character-state.md) 补齐，演员调度的确定性仍另行处理。
+后续：战斗机可变私产的对局隔离由 [ADR 0029](0029-match-owned-character-state.md) 补齐。异步行动产生的单场差异是保留的对局特性，见 [ADR 0030](0030-preserve-asynchronous-match-variation.md)。

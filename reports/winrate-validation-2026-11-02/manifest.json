@@ -1,0 +1,22 @@
+{
+  "original_report_sha256": "61efc5a1874ea30c2b6ae685527102e64c7c38bbbd0217efbbbe835eddb70e05",
+  "original_binary_sha256": "d0145d7519a5538e5bb703212279a5f3e08c4ac71e1d7dc57bcee40ae644d614",
+  "fresh_binary_sha256": "d0145d7519a5538e5bb703212279a5f3e08c4ac71e1d7dc57bcee40ae644d614",
+  "source_sha256": {
+    "cmd/winrate/main.go": "16bf7ee9d4fb5f3e13793ff48889e318109c2f376ccc9f2961272318f847565e",
+    "cmd/winrate/runner.go": "f83a9e323cb490eb86a8987ed4e936e4bcf8dc497da68049ef58a0933233b0d7",
+    "internal/sim/match.go": "46a0bcc9b30bc6f7cd069139fd3180df052c30537560562dd8476f7657b3dcfa"
+  },
+  "serial_jobs": 1,
+  "timeout": 90,
+  "rules": "unchanged; actors remain asynchronous",
+  "analysis_scipy_version": "1.18.1",
+  "original_concurrency": "32 inferred from preceding command; original report does not record -j",
+  "screen_plan": {
+    "all_pairs_serial_games_per_pair": 10,
+    "matched_parallel_jobs": 32,
+    "confirmatory_selection": "12 largest max(W/L/D) proportion shifts plus 4 low-shift matchups with original win rate 40%-60%",
+    "confirmatory_games_per_pair": 200,
+    "confirmatory_round_indices": "100..299 (seed numbers 101..300), unused in screening or original report"
+  }
+}

@@ -167,6 +167,7 @@ type Match struct {
 	rng         *rand.Rand
 	seed        uint64
 	pinned      bool
+	headless    bool // 统计保留完整规则和异步 actor，省去战报与开场演出素材。
 	skipProbe   bool
 	spawnSilent bool
 	rootN       uint64
@@ -222,6 +223,14 @@ func NewMatch() *Match {
 
 func NewMatchSeeded(seed uint64) *Match {
 	return newMatch(seed, true)
+}
+
+// NewHeadlessMatchSeeded 用于批量统计。种子不保证异步行动的调度次序。
+// 仅关闭日志和探针演出素材，非因果探针与其余战斗规则照常运行。
+func NewHeadlessMatchSeeded(seed uint64) *Match {
+	m := newMatch(seed, true)
+	m.headless = true
+	return m
 }
 
 func newMatch(seed uint64, pinned bool) *Match {
@@ -1484,13 +1493,15 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 	m.noteOfferLocked(c)
 	var arc float64
 	if from := m.units[c.From]; from != nil {
-		off := m.pendingDmg[token]
-		off.atkSpeed = from.v.len()
-		off.atkImpulse = impulseSpeeds(from)
-		m.pendingDmg[token] = off
+		if !m.headless {
+			off := m.pendingDmg[token]
+			off.atkSpeed = from.v.len()
+			off.atkImpulse = impulseSpeeds(from)
+			m.pendingDmg[token] = off
+		}
 		arc = from.arcSpan
 	}
-	{
+	if !m.headless {
 		off := m.pendingDmg[token]
 		off.defSpeed = u.v.len()
 		off.defImpulse = impulseSpeeds(u)
@@ -2693,19 +2704,36 @@ func (m *Match) emitLocked() {
 			continue
 		}
 		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field, Walls: views, Knock: len(u.fsList) > 0}
-		vr2 := u.vision * u.vision
-		for _, o := range snaps {
-			if o.ID == u.id {
-				continue
-			}
-			dx := o.X - u.p.X
-			dy := o.Y - u.p.Y
-			if dx*dx+dy*dy <= vr2 || o.OwnerID == u.id {
-				sense.Nearby = append(sense.Nearby, o)
-			}
-		}
+		sense.Nearby = nearbySnapshots(snaps, u)
 		m.send(u, sense)
 	}
+}
+
+func nearbySnapshots(snaps []unitpkg.Snapshot, u *unit) []unitpkg.Snapshot {
+	vr2 := u.vision * u.vision
+	visible := func(o unitpkg.Snapshot) bool {
+		dx, dy := o.X-u.p.X, o.Y-u.p.Y
+		return o.ID != u.id && (dx*dx+dy*dy <= vr2 || o.OwnerID == u.id)
+	}
+	n := 0
+	for _, o := range snaps {
+		if visible(o) {
+			n++
+		}
+	}
+	if n == 0 {
+		return nil
+	}
+	// actor 可在后续拍仍持有 Sense；每份列表独立拥有内存，不跨拍回收复用。
+	nearby := make([]unitpkg.Snapshot, n)
+	i := 0
+	for _, o := range snaps {
+		if visible(o) {
+			nearby[i] = o
+			i++
+		}
+	}
+	return nearby
 }
 
 func (m *Match) send(u *unit, ev unitpkg.Event) {

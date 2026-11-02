@@ -7,8 +7,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"xqdj/internal/sim"
@@ -31,9 +29,13 @@ func main() {
 	nGames := flag.Int("n", 100, "每组对战场次")
 	maxSec := flag.Float64("timeout", 90, "单场模拟超时秒数，超时计平")
 	outPath := flag.String("o", "winrate.md", "输出文件")
-	jobs := flag.Int("j", runtime.NumCPU()*8, "同时进行的场次数")
+	jobs := flag.Int("j", runtime.NumCPU()*2, "同时进行的场次数")
 	only := flag.String("only", "", "只测该战斗机对其余所有球（不含自己打自己）")
 	flag.Parse()
+	if *nGames < 1 {
+		fmt.Fprintln(os.Stderr, "每组场次 -n 必须大于 0")
+		os.Exit(1)
+	}
 
 	kinds := unit.FighterKinds()
 	if len(kinds) < 1 {
@@ -61,7 +63,6 @@ func main() {
 		*jobs = 1
 	}
 
-	type pair struct{ a, b string }
 	var pairs []pair
 	if *only != "" {
 		for _, k := range kinds {
@@ -78,70 +79,12 @@ func main() {
 		}
 	}
 
-	gate := make(chan struct{}, *jobs)
-	var done atomic.Int64
-	total := int64(len(pairs) * *nGames)
+	total := len(pairs) * *nGames
 	fmt.Fprintf(os.Stderr, "组合 %d，每组 %d 场，共 %d 场，并发 %d\n", len(pairs), *nGames, total, *jobs)
-
-	results := make([]pairResult, len(pairs))
-	var wgPairs sync.WaitGroup
 	t0 := time.Now()
-	for pi, p := range pairs {
-		wgPairs.Add(1)
-		go func(pi int, p pair) {
-			defer wgPairs.Done()
-			var wg sync.WaitGroup
-			wA := make([]int, *nGames)
-			wB := make([]int, *nGames)
-			wD := make([]int, *nGames)
-			wT := make([]int, *nGames)
-			for n := 0; n < *nGames; n++ {
-				wg.Add(1)
-				go func(n int) {
-					defer wg.Done()
-					gate <- struct{}{}
-					defer func() { <-gate }()
-					left, right := p.a, p.b
-					if n%2 == 1 {
-						left, right = p.b, p.a
-					}
-					seed := mixSeed(left, right, uint64(n)+1)
-					m := sim.NewMatchSeeded(seed)
-					m.SetSlot(0, left)
-					m.SetSlot(1, right)
-					m.Start()
-					winner, ticks := m.Play(maxTicks)
-					m.End()
-					if ticks >= maxTicks && winner == "平局" {
-						wT[n] = 1
-					}
-					switch {
-					case winner == "平局" || winner == "":
-						wD[n] = 1
-					case winner == p.a:
-						wA[n] = 1
-					case winner == p.b:
-						wB[n] = 1
-					default:
-						wD[n] = 1
-					}
-					done.Add(1)
-				}(n)
-			}
-			wg.Wait()
-			r := pairResult{a: p.a, b: p.b}
-			for n := 0; n < *nGames; n++ {
-				r.winsA += wA[n]
-				r.winsB += wB[n]
-				r.draws += wD[n]
-				r.timeout += wT[n]
-			}
-			results[pi] = r
-		}(pi, p)
-	}
-	wgPairs.Wait()
+	results, done := runPairs(pairs, *nGames, maxTicks, *jobs, playMatch)
 	elapsed := time.Since(t0)
-	fmt.Fprintf(os.Stderr, "打完 %d 场，用时 %s\n", done.Load(), elapsed.Round(time.Millisecond))
+	fmt.Fprintf(os.Stderr, "打完 %d 场，用时 %s\n", done, elapsed.Round(time.Millisecond))
 
 	text := render(kinds, results, *nGames, *maxSec, elapsed, *only)
 	if err := os.WriteFile(*outPath, []byte(text), 0o644); err != nil {
