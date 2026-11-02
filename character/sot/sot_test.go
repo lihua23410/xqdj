@@ -386,8 +386,8 @@ func TestStainStacksOnEnterOnly(t *testing.T) {
 	enemy := enemyAt(10, 0)
 	near := []unit.Snapshot{sotAt(-200, 0), enemy}
 	f.Handle(ctx, unit.Sense{Time: 1, Self: self, Nearby: near})
-	if m := lastMark(drain(out), 2); m == nil || m.Delta != 1 || m.Kind != drunkKind {
-		t.Fatalf("踏进该叠 1 层: %+v", m)
+	if m := lastMark(drain(out), 2); m == nil || m.Delta != 1 || m.Kind != drunkKind || m.Lifetime != drunkLife {
+		t.Fatalf("踏进该叠 1 层、活 %v 秒: %+v", drunkLife, m)
 	}
 	f.Handle(ctx, unit.Sense{Time: 1.1, Self: self, Nearby: near})
 	if m := lastMark(drain(out), 2); m != nil {
@@ -397,8 +397,8 @@ func TestStainStacksOnEnterOnly(t *testing.T) {
 	f.Handle(ctx, unit.Sense{Time: 1.2, Self: self, Nearby: []unit.Snapshot{sotAt(-200, 0), far}})
 	_ = drain(out)
 	f.Handle(ctx, unit.Sense{Time: 1.3, Self: self, Nearby: near})
-	if m := lastMark(drain(out), 2); m == nil || m.Delta != 1 {
-		t.Fatalf("离开再进该再叠: %+v", m)
+	if m := lastMark(drain(out), 2); m == nil || m.Delta != 1 || m.Lifetime != drunkLife {
+		t.Fatalf("离开再进该再叠一层、各走各的 %v 秒: %+v", drunkLife, m)
 	}
 }
 
@@ -409,8 +409,8 @@ func TestOwnerAlsoGetsDrunk(t *testing.T) {
 	self := unit.Snapshot{ID: 8, Kind: KindSotStain, Role: unit.RoleHelper, Slot: 0, X: 0, Y: 0, Radius: stainRadius}
 	me := sotAt(5, 0)
 	f.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{me}})
-	if m := lastMark(drain(out), 1); m == nil || m.Delta != 1 {
-		t.Fatalf("自己踩场也该叠: %+v", m)
+	if m := lastMark(drain(out), 1); m == nil || m.Delta != 1 || m.Lifetime != 0 {
+		t.Fatalf("自己踩场该叠且不掉: %+v", m)
 	}
 }
 

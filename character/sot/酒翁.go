@@ -31,6 +31,7 @@ const (
 	drunkKind = "醉意"
 	drunkIcon = "/ball/酒翁/status/xiaojiu.png"
 	drunkMul  = 0.8
+	drunkLife = 15.0 // 敌人身上每一层从踏进去那一拍起单独活这么久；自己的醉意不掉
 )
 
 //go:embed fx status

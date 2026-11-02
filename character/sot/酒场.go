@@ -35,7 +35,11 @@ func (f *酒场) Handle(ctx unit.Context, ev unit.Event) {
 		if _, was := f.inside[o.ID]; was {
 			continue
 		}
-		ctx.Out <- unit.StackMark{UnitID: o.ID, Kind: drunkKind, Delta: 1, Icon: drunkIcon}
+		mark := unit.StackMark{UnitID: o.ID, Kind: drunkKind, Delta: 1, Icon: drunkIcon}
+		if o.ID != f.owner {
+			mark.Lifetime = drunkLife
+		}
+		ctx.Out <- mark
 	}
 	f.inside = now
 }
