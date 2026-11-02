@@ -356,19 +356,25 @@ func TestCloseDuringCooldownStillRams(t *testing.T) {
 	}
 }
 
-func TestRamBlocksDamage(t *testing.T) {
+func TestRamKeepsFanDamage(t *testing.T) {
 	a := &教父青年{roll: func() float64 { return 0.5 }}
 	ctx, out := ctxOf()
 	a.Handle(ctx, senseAt(0, 100, []unit.Snapshot{foe(2, 80, 0)}))
 	_ = drain(out)
-	a.Handle(ctx, unit.IncomingDamage{Token: 7, From: 2, Amount: 10, Time: 0.1})
+	a.Handle(ctx, unit.IncomingDamage{Token: 7, From: 2, Amount: 10, Time: 0.1, ArcSpan: 1})
 	cmds := drain(out)
-	if _, ok := lastCmd[unit.ConfirmDamage](cmds); ok {
-		t.Fatal("ram confirmed a hit")
+	if _, ok := lastCmd[unit.BlockDamage](cmds); ok {
+		t.Fatal("ram blocked a fan")
 	}
-	b, ok := lastCmd[unit.BlockDamage](cmds)
-	if !ok || b.Token != 7 || b.UnitID != 1 || a.phase != phRam {
-		t.Fatalf("block=%v phase=%d", b, a.phase)
+	c, ok := lastCmd[unit.ConfirmDamage](cmds)
+	if !ok || c.Token != 7 || c.Amount != 4 || a.phase != phRam {
+		t.Fatalf("fan confirm=%v phase=%d", c, a.phase)
+	}
+	a.Handle(ctx, unit.IncomingDamage{Token: 8, From: 2, Amount: 10, Time: 0.12})
+	cmds = drain(out)
+	c, ok = lastCmd[unit.ConfirmDamage](cmds)
+	if !ok || c.Token != 8 || c.Amount != 10 {
+		t.Fatalf("bullet confirm=%v", c)
 	}
 }
 

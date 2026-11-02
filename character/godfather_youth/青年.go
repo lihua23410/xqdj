@@ -51,6 +51,7 @@ const (
 	ramRecover = 0.45
 	buffRamCD  = 0.2
 	stunDur    = 0.8
+	ramFanKeep = 0.4 // 持 Pass 时扇环伤害降到四成，其余照额
 )
 
 //go:embed fx
@@ -127,11 +128,11 @@ type aimMark struct {
 func (a *教父青年) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
+		amt := e.Amount
 		if a.ramming() {
-			unit.BlockHit(ctx, e)
-			return
+			amt = e.KeepFan(ramFanKeep)
 		}
-		unit.ConfirmHit(ctx, e)
+		ctx.Out <- unit.ConfirmDamage{Token: e.Token, UnitID: ctx.ID, Amount: amt}
 	case unit.Stunned:
 		a.interrupt(ctx, e.Time)
 	case unit.WallHit:
