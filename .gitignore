@@ -5,6 +5,7 @@
 .temp/
 .tmep/
 /tmp/
+/reports/
 .shots/
 .tmp-*
 *.log
