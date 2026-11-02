@@ -5,6 +5,7 @@ package character
 import (
 	"xqdj/character/acausal"
 	"xqdj/character/archer"
+	"xqdj/character/arsonist"
 	"xqdj/character/axe"
 	"xqdj/character/bloodpact"
 	"xqdj/character/bundle"
@@ -68,6 +69,12 @@ const (
 	KindArcher             = 弓箭.KindArcher
 	KindArrow              = 弓箭.KindArrow
 	KindVolleyArrow        = 弓箭.KindVolleyArrow
+	KindArsonField         = 纵火者.KindArsonField
+	KindArsonFire          = 纵火者.KindArsonFire
+	KindArsonFireMark      = 纵火者.KindArsonFireMark
+	KindArsonOil           = 纵火者.KindArsonOil
+	KindArsonOilMark       = 纵火者.KindArsonOilMark
+	KindArsonist           = 纵火者.KindArsonist
 	KindAxe                = 盾斧.KindAxe
 	KindAxeThrustArc       = 盾斧.KindAxeThrustArc
 	KindBloodArc           = 血契.KindBloodArc

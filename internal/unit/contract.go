@@ -1,5 +1,7 @@
 package unit
 
+import "encoding/json"
+
 type Snapshot struct {
 	ID              uint64   `json:"id"`
 	Kind            string   `json:"kind"`
@@ -347,15 +349,18 @@ type HoldStill struct {
 }
 
 type FX struct {
-	Name   string  `json:"name"`
-	UnitID uint64  `json:"unitId"`
-	Kind   string  `json:"kind"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	VX     float64 `json:"vx"`
-	VY     float64 `json:"vy"`
-	Slot   int     `json:"slot"`
-	Amount float64 `json:"amount"`
+	// Data is an immutable, pack-owned visual payload. The engine forwards it
+	// without interpreting geometry; omit it for ordinary one-shot effects.
+	Data   json.RawMessage `json:"data,omitempty"`
+	Name   string          `json:"name"`
+	UnitID uint64          `json:"unitId"`
+	Kind   string          `json:"kind"`
+	X      float64         `json:"x"`
+	Y      float64         `json:"y"`
+	VX     float64         `json:"vx"`
+	VY     float64         `json:"vy"`
+	Slot   int             `json:"slot"`
+	Amount float64         `json:"amount"`
 }
 
 // Force 给目标加加速度，引擎做 v += (AX,AY)*dt。不是改写速度，快的球仍能撞上。

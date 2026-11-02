@@ -65,6 +65,15 @@ func TestRuntimeAllowsFanAndNonContactDamage(t *testing.T) {
 	CheckCommand(Origin{ID: 1, Role: unit.RoleFighter, Collision: true}, unit.SetHP{UnitID: 1, HP: 70, MaxHP: 70})
 }
 
+func TestRuntimeRejectsFanQuotingAStranger(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("fan quoted a stranger")
+		}
+	}()
+	CheckCommand(Origin{ID: 24, Role: unit.RoleProjectile, Fan: true}, unit.Damage{From: 2, To: 3, Amount: 6})
+}
+
 func TestRuntimeRejectsForgedFanNotification(t *testing.T) {
 	defer func() {
 		if recover() == nil {

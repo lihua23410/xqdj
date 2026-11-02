@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"xqdj/internal/unit"
 )
 
 func TestMergeUpdatesBothSides(t *testing.T) {
@@ -273,12 +275,21 @@ func TestBenchKindDropsOut(t *testing.T) {
 }
 
 func TestRebuildDropsBench(t *testing.T) {
-	src, err := os.ReadFile("../../winrate.md")
-	if err != nil {
-		t.Fatal(err)
+	// Keep this fixture complete when a new fighter is registered. The committed
+	// statistics are a separate parsing fixture, not the roster for this test.
+	kinds := append(rankedKinds(unit.FighterKinds()), benchKind)
+	var rows []pairResult
+	for i, a := range kinds {
+		for _, b := range kinds[i+1:] {
+			rows = append(rows, pairResult{a, b, 4, 4, 2, 0})
+		}
+	}
+	src := render(kinds, rows, 10, 90, time.Second, 1, "")
+	if !strings.Contains(src, benchKind) {
+		t.Fatal("fixture must contain the bench")
 	}
 	path := filepath.Join(t.TempDir(), "winrate.md")
-	if err := os.WriteFile(path, src, 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := rebuildReport(path); err != nil {

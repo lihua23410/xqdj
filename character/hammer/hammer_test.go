@@ -154,25 +154,49 @@ func TestDollHoldsPassAndExpires(t *testing.T) {
 	}
 }
 
-func TestArcCopiesDollHitImmediately(t *testing.T) {
+func TestArcCopiesDollHitOncePerTouch(t *testing.T) {
 	matchState := &unit.MatchState{}
 
 	rememberFoe(matchState, 1, 2)
 	t.Cleanup(func() { rememberFoe(matchState, 1, 0) })
 	out := make(chan unit.Cmd, 16)
-	a := &弧{owner: 1, slot: 0}
-	ctx := unit.Context{State: matchState, ID: 8, Kind: KindHammerArc, Out: out}
+	arcCtx := unit.Context{State: matchState, ID: 8, Kind: KindHammerArc, Out: out}
 	doll := unit.Snapshot{
 		ID: 10, Kind: KindDoll, Role: unit.RoleMinion, Slot: 1, Mortal: true,
-		OwnerID: 1, HP: 40, Radius: dollRadius,
+		OwnerID: 1, HP: 40, X: 30, Y: 0, Radius: dollRadius,
 	}
-	a.Handle(ctx, unit.Collision{Time: 1, Other: doll})
+	a := &弧{owner: 1, slot: 0}
+	a.Handle(arcCtx, unit.Collision{Time: 1, Other: doll})
 	cmds := drain(out)
-	if d := damageTo(cmds, 10); d == nil || d.Amount != arcDamage {
+	if d := damageTo(cmds, 10); d == nil || d.Amount != arcDamage || d.From != 8 {
 		t.Fatalf("doll dmg=%v cmds=%v", d, cmds)
 	}
+	if damageTo(cmds, 2) != nil {
+		t.Fatalf("arc must not quote the transfer: %v", cmds)
+	}
+
+	again := &弧{owner: 1, slot: 0}
+	again.Handle(arcCtx, unit.Collision{Time: 1.1, Other: doll})
+	if len(drain(out)) != 0 {
+		t.Fatal("still touching the doll should not hit again")
+	}
+
+	h := &钉与锤{nailReadyAt: 999, ritualReadyAt: 999, dollsSpawned: true}
+	hctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
+	self := me(0, 0)
+	h.Handle(hctx, unit.Sense{Time: 1.1, Self: self, Nearby: []unit.Snapshot{doll, foe(400, 0)}})
+	cmds = drain(out)
 	if d := damageTo(cmds, 2); d == nil || d.Amount != arcDamage || d.From != 1 {
-		t.Fatalf("copy dmg=%v cmds=%v", d, cmds)
+		t.Fatalf("transfer=%v cmds=%v", d, cmds)
+	}
+
+	h.Handle(hctx, unit.Sense{Time: 1.2, Self: me(400, 0), Nearby: []unit.Snapshot{doll}})
+	drain(out)
+	third := &弧{owner: 1, slot: 0}
+	third.Handle(arcCtx, unit.Collision{Time: 1.3, Other: doll})
+	cmds = drain(out)
+	if d := damageTo(cmds, 10); d == nil || d.Amount != arcDamage {
+		t.Fatalf("a new touch should hit the doll again: %v", cmds)
 	}
 }
 

@@ -195,6 +195,7 @@ func (h *钉与锤) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	h.trySpawnDolls(ctx, s)
 	h.trackDolls(ctx, s)
+	h.settleDolls(ctx, s)
 }
 
 // checkHammer：弧消失时，锤击就绪则对近战内可命中单位击退眩晕，并挥锤群攻。
@@ -374,7 +375,7 @@ func (h *钉与锤) trySpawnDolls(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-// trackDolls：给新生人偶设 HP。转伤改由近战弧命中时立刻复制，避免等下一帧 Sense。
+// trackDolls：给新生人偶设 HP。打在人偶上的转伤由本体在感知里发出。
 func (h *钉与锤) trackDolls(ctx unit.Context, s unit.Sense) {
 	if h.dollHPs == nil {
 		h.dollHPs = map[uint64]float64{}
@@ -418,17 +419,28 @@ func (h *钉与锤) trackDolls(ctx unit.Context, s unit.Sense) {
 type 弧 struct {
 	owner uint64
 	slot  int
+	spent bool
 }
 
 func (a *弧) Handle(ctx unit.Context, ev unit.Event) {
-	switch e := ev.(type) {
-	case unit.Collision:
-		if !unit.EnemyTarget(e, a.slot) {
-			return
-		}
-		hurt(ctx, ctx.ID, a.owner, e.Other, arcDamage)
-		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+	if a.spent {
+		return
 	}
+	e, ok := ev.(unit.Collision)
+	if !ok || !unit.EnemyTarget(e, a.slot) {
+		return
+	}
+	ownDoll := e.Other.Kind == KindDoll && e.Other.OwnerID == a.owner
+	// 贴着自己的人偶只打第一次。弧每 0.1 秒会重挂，不拦住就会一直转伤。
+	if ownDoll && !latchDoll(ctx.State, a.owner, e.Other.ID) {
+		return
+	}
+	a.spent = true
+	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: arcDamage}
+	if ownDoll {
+		noteDollTransfer(ctx.State, a.owner, e.Other.HP, arcDamage)
+	}
+	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }
 
 // ========== 钉子弹 ==========
@@ -780,6 +792,72 @@ func foeOfOwner(scope *unit.MatchState, owner uint64) uint64 {
 	shared.foeMu.Lock()
 	defer shared.foeMu.Unlock()
 	return shared.foeOf[owner]
+}
+
+// latchDoll 记下这次贴住已经打过。分开之前再碰上不算新的一下。
+func latchDoll(scope *unit.MatchState, owner, doll uint64) bool {
+	if owner == 0 || doll == 0 {
+		return false
+	}
+	shared := stateFor(scope)
+	shared.foeMu.Lock()
+	defer shared.foeMu.Unlock()
+	m := shared.dollHit[owner]
+	if m == nil {
+		m = map[uint64]bool{}
+		shared.dollHit[owner] = m
+	}
+	if m[doll] {
+		return false
+	}
+	m[doll] = true
+	return true
+}
+
+func noteDollTransfer(scope *unit.MatchState, owner uint64, dollHP, hit float64) {
+	if owner == 0 || dollHP <= 0 || hit <= 0 {
+		return
+	}
+	amt := dollHP
+	if amt > hit {
+		amt = hit
+	}
+	shared := stateFor(scope)
+	shared.foeMu.Lock()
+	shared.xfer[owner] += amt
+	shared.foeMu.Unlock()
+}
+
+func (h *钉与锤) settleDolls(ctx unit.Context, s unit.Sense) {
+	touching := map[uint64]bool{}
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Kind != KindDoll || o.OwnerID != ctx.ID {
+			continue
+		}
+		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) <= arcRadius+o.Radius+4 {
+			touching[o.ID] = true
+		}
+	}
+	shared := stateFor(ctx.State)
+	shared.foeMu.Lock()
+	if m := shared.dollHit[ctx.ID]; m != nil {
+		for id := range m {
+			if !touching[id] {
+				delete(m, id)
+			}
+		}
+	}
+	eid := shared.foeOf[ctx.ID]
+	amt := shared.xfer[ctx.ID]
+	if eid != 0 && amt > 0 {
+		shared.xfer[ctx.ID] = 0
+	}
+	shared.foeMu.Unlock()
+	if eid == 0 || amt <= 0 {
+		return
+	}
+	ctx.Out <- unit.Damage{From: ctx.ID, To: eid, Amount: amt}
 }
 
 func reflectDir(ux, uy, nx, ny float64) (float64, float64) {

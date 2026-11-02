@@ -103,6 +103,21 @@ make test    # 审查通过后运行 go test ./...
 
 新接触攻击可用 `Pack.RegisterAttackFan` 注册，用 `unit.SyncAttackFan` 管理窗口。伤害在扇环演员内发出；引擎转发 `unit.FanHit` 给本体，只用于眩晕、折返、接招或建线等后续动作，不能重复扣血。持续多目标与指定目标的扇环可以使用现有 `Pass` 接触规则；搭档互伤的扇环显式声明 `AttachFriends`，普通扇环仍跳过同边及主人。共享攻击窗口归属本场 `MatchState`，内部加锁，不向出生参数塞可变演员指针。
 
+## 纵火者的油火
+
+同一只纵火者的油实际相接就连通，包括不同瓶次、不同单位拖出的油和瞬移落点已有的油；空档不铺油，不同纵火者不互相传火。油面连续合并，火边按实际蔓延前进，后方烧尽露出地面。蔓延速度为 80，每块被点燃的油燃烧 2 秒（含火瓶直接重叠到的油）；火瓶在空地的火仍存在 1 秒。投瓶节拍、90 长拖尾、2 秒冷却和每 0.15 秒 1 点燃烧伤害保留，敌人离火后续烧 1 秒。
+
+油火状态由包内 `surface.go` 的稀疏覆盖网格管理，格宽 3 世界单位。油瓶用圆、拖尾用连续胶囊覆盖写入；判定和画面共用这一份离散油火覆盖，不再用一堆独立圆盘拼判定。火头按带时间戳的事件队列推进，不逐帧全盘重算。每次感知按两批发送：`arson-surface` 和 `arson-burning`，分别描述地面与身上燃烧。地面的 `FX.Data` 携带不可变、按修订号缓存的完整分块游程数据；通用引擎只转发。前端每只纵火者保留一张地面 Canvas，覆盖不变时复用；有火时另用一张 Canvas 批画最多 72 簇火舌，不逐簇建 DOM。每个被点燃单位最多一张共用的身上火焰 Canvas，随真实燃烧状态清理。火舌、火星、瓶口火及余烬的动画时相按模拟时间以 20Hz 采样，油火覆盖变化时同步重绘；暂停冻结，回放一致。焦油材质与玻璃瓶由包内代码绘制。缩放和移动只调整对应图层布局。常驻油火 FX 必须由包内 `registerShot` 消费，避免落入一次性动画特效造成空 DOM 节点积累。边界精度与取舍见 [ADR 0035](docs/adr/0035-continuous-oil-and-timed-fire-front.md)。
+
+专项回归和性能基准（前端回归另需 Node.js）：
+
+```bash
+go test ./character/arsonist
+go test ./internal/sim -run TestArsonistSurface
+node character/arsonist/arson_fx_test.cjs
+go test ./character/arsonist -run '^$' -bench 'BenchmarkOil(FieldIdle|SurfaceBurning)' -benchmem
+```
+
 ## 目录
 
 ```
@@ -141,11 +156,12 @@ winrate.md               无头对战胜率（生成物；改一只球后可用 
 
 ## 现有战斗机
 
-选人按钮顺序 = `unit.FighterKinds()` = 各包 `init()` 的注册顺序。包的加载顺序是 `all.go` 的 import 顺序，也就是 **目录名字母序**。下表按这个顺序，共 53 只（含靶子）。巡航和视野是 `Spec` 的开局值；对局中改巡航、改视野的不写在这里。行为见 `CONTEXT.md` 和 `战斗机.md`。
+选人按钮顺序 = `unit.FighterKinds()` = 各包 `init()` 的注册顺序。包的加载顺序是 `all.go` 的 import 顺序，也就是 **目录名字母序**。下表按这个顺序，共 54 只（含靶子）。巡航和视野是 `Spec` 的开局值；对局中改巡航、改视野的不写在这里。行为见 `CONTEXT.md` 和 `战斗机.md`。
 | 目录 `character/` | Kind | 巡航 | 视野 |
 | --- | --- | ---: | ---: |
 | `acausal` | `非因果` | 160 | 9999 |
 | `archer` | `弓箭` | 178 | 9999 |
+| `arsonist` | `纵火者` | 165 | 9999 |
 | `axe` | `盾斧` | 165 | 9999 |
 | `bloodpact` | `血契` | 170 | 9999 |
 | `bundle` | `捆` | 175 | 9999 |
