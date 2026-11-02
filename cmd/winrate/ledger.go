@@ -7,11 +7,18 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+
+	"xqdj/internal/unit"
 )
 
 var (
 	reGames   = regexp.MustCompile(`每组对战：(\d+) 场`)
 	reTimeout = regexp.MustCompile(`超时：([0-9]+(?:\.[0-9]+)?) 秒`)
+	reJobs    = regexp.MustCompile(`(?:本次并发|并发上限)：(\d+)`)
+	reElapsed = regexp.MustCompile(`用时：(\S+)`)
+	reUpdated = regexp.MustCompile(`上次增量：(.+)`)
+	reWhen    = regexp.MustCompile(`时间：(.+)`)
 )
 
 var detailHeader = []string{"对阵", "场次", "前者胜", "后者胜", "平", "超时平", "前者胜平率", "后者胜平率"}
@@ -380,6 +387,83 @@ func rosterComplete(kinds []string, pairs []pairResult) error {
 		return fmt.Errorf("合并后对阵数是 %d，不是完整全表", len(have))
 	}
 	return nil
+}
+
+// rebuildReport 用现有明细重算总榜和矩阵，丢掉靶子，不重跑对局。报告头的时间、用时和上次增量留着。
+func rebuildReport(path string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	text := string(b)
+	head := preamble(text)
+	n, sec, err := parseHead(head)
+	if err != nil {
+		return err
+	}
+	rows, err := parseDetail(text, n)
+	if err != nil {
+		return err
+	}
+	kinds := rankedKinds(unit.FighterKinds())
+	order := kindOrder(kinds)
+	kept := make([]pairResult, 0, len(rows))
+	seen := map[[2]string]bool{}
+	for _, r := range rows {
+		if _, ok := order[r.a]; !ok {
+			continue
+		}
+		if _, ok := order[r.b]; !ok {
+			continue
+		}
+		c, err := orient(r, order)
+		if err != nil {
+			return err
+		}
+		key := [2]string{c.a, c.b}
+		if seen[key] {
+			return fmt.Errorf("对阵 %s vs %s 重复", c.a, c.b)
+		}
+		seen[key] = true
+		kept = append(kept, c)
+	}
+	if err := rosterComplete(kinds, kept); err != nil {
+		return err
+	}
+	jobs := 1
+	if m := reJobs.FindStringSubmatch(head); m != nil {
+		jobs, err = strconv.Atoi(m[1])
+		if err != nil {
+			return err
+		}
+	}
+	var elapsed time.Duration
+	if m := reElapsed.FindStringSubmatch(head); m != nil {
+		elapsed, err = time.ParseDuration(m[1])
+		if err != nil {
+			return fmt.Errorf("解不开报告用时 %q", m[1])
+		}
+	}
+	updated := ""
+	if m := reUpdated.FindStringSubmatch(head); m != nil {
+		updated = strings.TrimSpace(m[1])
+	}
+	when := ""
+	if m := reWhen.FindStringSubmatch(head); m != nil {
+		when = strings.TrimSpace(m[1])
+	}
+	body := render(kinds, kept, n, sec, elapsed, jobs, updated)
+	if when != "" {
+		lines := strings.Split(body, "\n")
+		for i, line := range lines {
+			if strings.HasPrefix(line, "- 时间：") {
+				lines[i] = "- 时间：" + when
+				break
+			}
+		}
+		body = strings.Join(lines, "\n")
+	}
+	return writeReport(path, body)
 }
 
 func writeReport(path, text string) error {

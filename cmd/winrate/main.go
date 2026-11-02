@@ -37,9 +37,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	kinds := unit.FighterKinds()
-	if len(kinds) < 1 {
-		fmt.Fprintln(os.Stderr, "没有已注册的战斗机")
+	kinds := rankedKinds(unit.FighterKinds())
+	if len(kinds) < 2 {
+		fmt.Fprintln(os.Stderr, "没有足够的战斗机")
 		os.Exit(1)
 	}
 	if *only != "" {
@@ -151,9 +151,9 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 	fmt.Fprintf(&b, "\n")
 
 	fmt.Fprintf(&b, "## 单球胜率\n\n")
-	fmt.Fprintf(&b, "胜率 = 胜 /（胜+负+平）。胜平率 =（胜+平）/（胜+负+平）。不含自己打自己。\n\n")
-	fmt.Fprintf(&b, "| 战斗机 | 场次 | 胜 | 负 | 平 | 胜率 | 胜平率 |\n")
-	fmt.Fprintf(&b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	fmt.Fprintf(&b, "胜率 = 胜 /（胜+负），平不计入。胜平率 =（胜+平）/（胜+负+平）。积分 = 胜×2 + 平，负不计分。排名按积分，积分相同则并列，下一名跳号。不含自己打自己。\n\n")
+	fmt.Fprintf(&b, "| 排名 | 战斗机 | 积分 | 场次 | 胜 | 负 | 平 | 胜率 | 胜平率 |\n")
+	fmt.Fprintf(&b, "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	type row struct {
 		kind string
 		t    tally
@@ -163,19 +163,23 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 		rows = append(rows, row{k, solo[k]})
 	}
 	sort.Slice(rows, func(i, j int) bool {
-		gi, gj := games(rows[i].t), games(rows[j].t)
-		ri, rj := rate(rows[i].t), rate(rows[j].t)
-		if ri != rj {
-			return ri > rj
+		pi, pj := points(rows[i].t), points(rows[j].t)
+		if pi != pj {
+			return pi > pj
 		}
-		if gi != gj {
-			return gi > gj
+		if rows[i].t.win != rows[j].t.win {
+			return rows[i].t.win > rows[j].t.win
 		}
 		return rows[i].kind < rows[j].kind
 	})
-	for _, r := range rows {
+	rank := 1
+	for i, r := range rows {
+		if i > 0 && points(r.t) != points(rows[i-1].t) {
+			rank = i + 1
+		}
 		g := games(r.t)
-		fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %s | %s |\n", r.kind, g, r.t.win, r.t.lose, r.t.draw, pct(rate(r.t)), pct(winDraw(r.t)))
+		fmt.Fprintf(&b, "| %d | %s | %d | %d | %d | %d | %d | %s | %s |\n",
+			rank, r.kind, points(r.t), g, r.t.win, r.t.lose, r.t.draw, pct(rate(r.t)), pct(winDraw(r.t)))
 	}
 
 	fmt.Fprintf(&b, "\n## 一对一胜率\n\n")
@@ -231,12 +235,27 @@ func tallies(kinds []string, results []pairResult) (map[string]tally, map[[2]str
 
 func games(t tally) int { return t.win + t.lose + t.draw }
 
+func points(t tally) int { return t.win*2 + t.draw }
+
+// 靶子是沙包，胜率名册里当它不存在：不对打、不进总榜、不进矩阵、不进明细。
+const benchKind = "靶子"
+
+func rankedKinds(all []string) []string {
+	out := make([]string, 0, len(all))
+	for _, k := range all {
+		if k != benchKind {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
 func rate(t tally) float64 {
-	g := games(t)
-	if g == 0 {
+	decided := t.win + t.lose
+	if decided == 0 {
 		return 0
 	}
-	return float64(t.win) / float64(g)
+	return float64(t.win) / float64(decided)
 }
 
 func winDraw(t tally) float64 {

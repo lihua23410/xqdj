@@ -41,7 +41,7 @@ func TestMergeUpdatesBothSides(t *testing.T) {
 		t.Fatalf("tallies 甲=%+v 乙=%+v", solo["甲"], solo["乙"])
 	}
 	report := render(kinds, merged, 10, 90, time.Second, 4, "甲")
-	if !strings.Contains(report, "| 乙 | 20 | 14 | 6 | 0 | 70.0% | 70.0% |") {
+	if !strings.Contains(report, "| 1 | 乙 | 28 | 20 | 14 | 6 | 0 | 70.0% | 70.0% |") {
 		t.Fatalf("solo row for 乙 missing:\n%s", report)
 	}
 	if strings.Contains(report, "范围：仅") {
@@ -207,6 +207,96 @@ func TestRoundTripAndAtomicWrite(t *testing.T) {
 	}
 	if len(left) != 0 {
 		t.Fatalf("temp files left behind: %v", left)
+	}
+}
+
+func TestTiedPointsShareRank(t *testing.T) {
+	kinds := []string{"甲", "乙", "丙"}
+	results := []pairResult{
+		{"甲", "乙", 0, 0, 10, 0},
+		{"甲", "丙", 10, 0, 0, 0},
+		{"乙", "丙", 10, 0, 0, 0},
+	}
+	report := render(kinds, results, 10, 90, time.Second, 1, "")
+	if !strings.Contains(report, "| 1 | 甲 | 30 | 20 | 10 | 0 | 10 | 100.0% | 100.0% |") ||
+		!strings.Contains(report, "| 1 | 乙 | 30 | 20 | 10 | 0 | 10 | 100.0% | 100.0% |") ||
+		!strings.Contains(report, "| 3 | 丙 | 0 | 20 | 0 | 20 | 0 | 0.0% | 0.0% |") {
+		t.Fatalf("shared rank:\n%s", report)
+	}
+}
+
+func TestSamePointsOrdersByWins(t *testing.T) {
+	kinds := []string{"甲", "乙", "丙"}
+	results := []pairResult{
+		{"甲", "乙", 6, 1, 3, 0},
+		{"甲", "丙", 0, 10, 0, 0},
+		{"乙", "丙", 2, 2, 6, 0},
+	}
+	report := render(kinds, results, 10, 90, time.Second, 1, "")
+	yi := strings.Index(report, "| 2 | 甲 |")
+	bing := strings.Index(report, "| 2 | 乙 |")
+	if yi < 0 || bing < 0 || yi > bing {
+		t.Fatalf("more wins should list first:\n%s", report)
+	}
+}
+
+func TestWinRateIgnoresDraws(t *testing.T) {
+	if rate(tally{win: 1, lose: 1, draw: 8}) != 0.5 {
+		t.Fatalf("rate=%v", rate(tally{win: 1, lose: 1, draw: 8}))
+	}
+	if rate(tally{draw: 4}) != 0 {
+		t.Fatal("no decisive games")
+	}
+}
+
+func TestBenchKindDropsOut(t *testing.T) {
+	if got := rankedKinds([]string{"甲", benchKind, "乙"}); len(got) != 2 || got[0] != "甲" || got[1] != "乙" {
+		t.Fatalf("ranked %v", got)
+	}
+	kinds := []string{"甲", "乙"}
+	text := oldReport(10, 90, `
+| 甲 vs 乙 | 10 | 4 | 4 | 2 | 2 | 60.0% | 60.0% |
+| 甲 vs 靶子 | 10 | 1 | 0 | 9 | 9 | 100.0% | 90.0% |
+| 乙 vs 靶子 | 10 | 0 | 10 | 0 | 0 | 0.0% | 100.0% |
+`)
+	got, err := loadLedger(kinds, "甲", 10, 90, text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].a != "甲" || got[0].b != "乙" {
+		t.Fatalf("kept %+v", got)
+	}
+	report := render(kinds, got, 10, 90, time.Second, 1, "")
+	if strings.Contains(report, benchKind) {
+		t.Fatalf("bench kind still in report:\n%s", report)
+	}
+}
+
+func TestRebuildDropsBench(t *testing.T) {
+	src, err := os.ReadFile("../../winrate.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "winrate.md")
+	if err := os.WriteFile(path, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := rebuildReport(path); err != nil {
+		t.Fatal(err)
+	}
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(out)
+	if strings.Contains(text, benchKind) {
+		t.Fatal("rebuild kept 靶子")
+	}
+	if !strings.Contains(text, "胜率 = 胜 /（胜+负），平不计入。") {
+		t.Fatal("win rate formula missing")
+	}
+	if !strings.Contains(text, "| 排名 | 战斗机 | 积分 |") {
+		t.Fatal("rank table missing")
 	}
 }
 
