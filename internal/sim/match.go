@@ -36,7 +36,7 @@ type unit struct {
 	hp              float64
 	maxHP           float64
 	actor           unitpkg.Actor
-	inbox           chan unitpkg.Event
+	inbox           *actorInbox
 	stop            chan struct{}
 	exited          chan struct{} // 角色协程退出时关闭，停场要等它
 	stopped         bool
@@ -157,6 +157,8 @@ type Match struct {
 	order       []uint64
 	actors      []*unit // 本场开过的所有角色（离场的也留着，停场要等它们的协程真退出）
 	cmds        chan unitpkg.Cmd
+	actorWork   *actorWork
+	cmdBatch    []unitpkg.Cmd
 	nextID      uint64
 	shared      *unitpkg.MatchState
 	time        float64
@@ -246,6 +248,7 @@ func newMatch(seed uint64, pinned bool) *Match {
 		units:      make(map[uint64]*unit),
 		shared:     &unitpkg.MatchState{},
 		cmds:       make(chan unitpkg.Cmd, 512),
+		actorWork:  newActorWork(),
 		spec:       spec,
 		rng:        unitpkg.EngineRNG(seed),
 		seed:       seed,
@@ -1078,6 +1081,9 @@ func (m *Match) killLocked(u *unit) {
 		return
 	}
 	u.stopped = true
+	if u.inbox != nil {
+		u.inbox.close()
+	}
 	close(u.stop)
 }
 
@@ -1118,6 +1124,9 @@ func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot 
 	}
 	m.nextID++
 	id := m.nextID
+	if m.actorWork == nil {
+		m.actorWork = newActorWork()
+	}
 	u := &unit{
 		id:          id,
 		kind:        kind,
@@ -1133,7 +1142,7 @@ func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot 
 		cruise:      spec.Speed,
 		velM:        1,
 		actor:       actor,
-		inbox:       make(chan unitpkg.Event, 64),
+		inbox:       newActorInbox(m.actorWork),
 		stop:        make(chan struct{}),
 		exited:      make(chan struct{}),
 		solid:       spec.Role != unitpkg.RoleHelper && !spec.Nonsolid,
@@ -1193,32 +1202,57 @@ func (u *unit) setVel(v vec) {
 
 func runActor(u *unit, ctx unitpkg.Context) {
 	defer close(u.exited)
+	defer u.inbox.close()
 	for {
-		select {
-		case <-u.stop:
+		ev, ok := u.inbox.next(u.stop)
+		if !ok {
 			return
-		case ev, ok := <-u.inbox:
-			if !ok {
-				return
-			}
-			if sense, ok := ev.(unitpkg.Sense); ok {
-				ctx.Field = sense.Field
-			}
-			u.actor.Handle(ctx, ev)
 		}
+		if sense, ok := ev.(unitpkg.Sense); ok {
+			ctx.Field = sense.Field
+		}
+		u.actor.Handle(ctx, ev)
+		u.inbox.finish()
 	}
 }
 
 func (m *Match) drainCmdsLocked() {
 	defer m.flushLeapsLocked()
-	for i := 0; i < 512; i++ {
+	batch := m.cmdBatch[:0]
+	// Finish the events already delivered at this boundary. Keep receiving
+	// commands while handlers run, so a full cmds channel cannot deadlock them.
+	// Apply this batch only after collection: reactions it creates belong to
+	// the next boundary, rather than an unbounded chain of same-phase replies.
+collect:
+	for {
 		select {
 		case cmd := <-m.cmds:
-			m.applyCmdLocked(cmd)
+			batch = append(batch, cmd)
 		default:
-			return
+			if m.actorWork == nil || m.actorWork.pending.Load() == 0 {
+				// A last handler may have sent its command between the empty
+				// receive above and the completion load. Completion publishes
+				// all its sends, so check the channel once more.
+				select {
+				case cmd := <-m.cmds:
+					batch = append(batch, cmd)
+					continue
+				default:
+					break collect
+				}
+			}
+			select {
+			case cmd := <-m.cmds:
+				batch = append(batch, cmd)
+			case <-m.actorWork.wake:
+			}
 		}
 	}
+	for i, cmd := range batch {
+		batch[i] = nil
+		m.applyCmdLocked(cmd)
+	}
+	m.cmdBatch = batch[:0]
 }
 
 func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
@@ -2743,10 +2777,8 @@ func (m *Match) send(u *unit, ev unitpkg.Event) {
 	if u.tap != nil {
 		u.tap(ev)
 	}
-	select {
-	case u.inbox <- ev:
-	case <-u.stop:
-	default:
+	if u.inbox != nil {
+		u.inbox.push(ev)
 	}
 }
 

@@ -89,7 +89,7 @@ func TestConcurrentMatchBirthFieldIsolation(t *testing.T) {
 			u := m.addUnitLocked("回声星弹", vec{}, vec{}, 0, 0)
 			field := m.liveFieldLocked()
 			m.mu.Unlock()
-			u.inbox <- unitpkg.WallHit{X: 500, Y: 500}
+			u.inbox.push(unitpkg.WallHit{X: 500, Y: 500})
 			deadline := time.After(3 * time.Second)
 			shards := 0
 			for shards < 16 {
@@ -118,14 +118,14 @@ func TestActorRetainsLatestOwnField(t *testing.T) {
 		t.Run(f.Name, func(t *testing.T) {
 			t.Parallel()
 			observed := make(chan unitpkg.Field, 3)
-			u := &unit{actor: fieldObserver{observed}, inbox: make(chan unitpkg.Event, 3), stop: make(chan struct{}), exited: make(chan struct{})}
+			u := &unit{actor: fieldObserver{observed}, inbox: newActorInbox(nil), stop: make(chan struct{}), exited: make(chan struct{})}
 			go runActor(u, unitpkg.Context{Field: f})
 			defer func() { close(u.stop); <-u.exited }()
-			u.inbox <- unitpkg.WallHit{}
+			u.inbox.push(unitpkg.WallHit{})
 			updated := f
 			updated.Walls = []unitpkg.FieldWall{{X1: 123, X2: 456}}
-			u.inbox <- unitpkg.Sense{Field: updated}
-			u.inbox <- unitpkg.IncomingDamage{}
+			u.inbox.push(unitpkg.Sense{Field: updated})
+			u.inbox.push(unitpkg.IncomingDamage{})
 			for i := 0; i < 3; i++ {
 				select {
 				case got := <-observed:

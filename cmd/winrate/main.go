@@ -86,7 +86,7 @@ func main() {
 	elapsed := time.Since(t0)
 	fmt.Fprintf(os.Stderr, "打完 %d 场，用时 %s\n", done, elapsed.Round(time.Millisecond))
 
-	text := render(kinds, results, *nGames, *maxSec, elapsed, *only)
+	text := render(kinds, results, *nGames, *maxSec, elapsed, *only, *jobs)
 	if err := os.WriteFile(*outPath, []byte(text), 0o644); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -105,7 +105,7 @@ func mixSeed(a, b string, n uint64) uint64 {
 	return h
 }
 
-func render(kinds []string, results []pairResult, nGames int, maxSec float64, elapsed time.Duration, only string) string {
+func render(kinds []string, results []pairResult, nGames int, maxSec float64, elapsed time.Duration, only string, jobs int) string {
 	byPair := map[[2]string]pairResult{}
 	solo := map[string]*tally{}
 	for _, k := range kinds {
@@ -126,6 +126,8 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 	fmt.Fprintf(&b, "- 时间：%s\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(&b, "- 每组对战：%d 场（左右槽各一半）\n", nGames)
 	fmt.Fprintf(&b, "- 超时：%.0f 秒模拟时间，超时计平\n", maxSec)
+	fmt.Fprintf(&b, "- 并发上限：%d 场\n", jobs)
+	fmt.Fprintf(&b, "- 事件处理：可靠投递、保留逐拍感知、阶段背压；场内角色仍异步\n")
 	fmt.Fprintf(&b, "- 组合数：%d，用时：%s\n", len(results), elapsed.Round(time.Millisecond))
 	if only != "" {
 		fmt.Fprintf(&b, "- 范围：仅 %s vs 其余战斗机；其他球的单球胜率是对阵 %s 的成绩\n", only, only)
