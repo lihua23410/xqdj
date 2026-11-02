@@ -63,7 +63,7 @@ func TestBodySacrificeClaimsKill(t *testing.T) {
 	}
 }
 
-func TestClaimKillHealsHalfLostHP(t *testing.T) {
+func TestClaimKillDoesNotHeal(t *testing.T) {
 	matchState := &unit.MatchState{}
 
 	resetMiuKillState(matchState)
@@ -75,20 +75,10 @@ func TestClaimKillHealsHalfLostHP(t *testing.T) {
 	self := miuSelf()
 	self.HP = 40
 	m.Handle(ctx, unit.Sense{Time: 1, Self: self})
-	want := (miuHP - 40) * miuHealRatio
-	found := false
 	for _, c := range drain(out) {
-		h, ok := c.(unit.Heal)
-		if !ok || h.UnitID != 10 {
-			continue
+		if h, ok := c.(unit.Heal); ok {
+			t.Fatalf("kill must not heal, got %v", h.Amount)
 		}
-		found = true
-		if mathAbs(h.Amount-want) > 1e-9 {
-			t.Fatalf("heal=%v want %v", h.Amount, want)
-		}
-	}
-	if !found {
-		t.Fatal("kill claim should heal half of lost HP")
 	}
 }
 

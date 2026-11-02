@@ -54,7 +54,6 @@ const (
 	killBonusPer  = 100.0
 	lowHPBoost    = 100.0
 	lowHPRatio    = 0.5
-	miuHealRatio  = 0.25 // 击杀缪后恢复自身已损血量的比例
 	dodgeSpeedDiv = 25.0
 	speedDivisor  = 20.0
 	miuSpawnCount = 5
@@ -983,7 +982,7 @@ func (m *缪) moveToward(ctx unit.Context, s unit.Sense, targets []unit.Snapshot
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * m.speed, VY: dy / n * m.speed}
 }
 
-// claimMiuKill：谁打死缪（己方或敌方同类）谁领加速、继承死者加速，并恢复自身已损血量的一半。
+// claimMiuKill：谁打死缪（己方或敌方同类）谁领加速、继承死者加速。
 func claimMiuKill(ctx unit.Context, s unit.Sense, prev *map[uint64]bool, bonus *float64, vx, vy, hp, maxHP float64) {
 	currentIDs := map[uint64]bool{}
 	for i := range s.Nearby {
@@ -1007,11 +1006,6 @@ func claimMiuKill(ctx unit.Context, s unit.Sense, prev *map[uint64]bool, bonus *
 				*bonus += killBonusPer + victimBonus
 				speed := miuMoveSpeed(*bonus, hp, maxHP)
 				snapMoveSpeed(ctx, speed, vx, vy)
-
-				// 击杀回血：恢复自身已损血量的一半（引擎自动夹上限并弹 +n 特效）
-				if maxHP > hp {
-					ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: (maxHP - hp) * miuHealRatio}
-				}
 
 				ctx.Out <- unit.FX{
 					Name: "miu-powerup", Kind: ctx.Kind,
