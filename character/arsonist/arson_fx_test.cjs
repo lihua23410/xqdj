@@ -58,7 +58,7 @@ function renderer() {
     if(burns)ctx.effects.push({unitId:id,name:'arson-burning',data:burns});
     sandbox.window.lookFX['arson-field'].guide({id},ctx);
   };
-  return {ctx,draw,guides,paints:()=>paints,writes:()=>writes,canvases:()=>canvases,flamePaints:()=>flamePaints,fills:()=>fills};
+  return {sandbox,ctx,draw,guides,paints:()=>paints,writes:()=>writes,canvases:()=>canvases,flamePaints:()=>flamePaints,fills:()=>fills};
 }
 function manyCells(revision=1) {
   return {revision,step:3,side:32,chunks:Array.from({length:4},(_,i)=>({x:i,y:0,o:[0,32,32,32,64,32,96,32,128,32,160,32,192,32,224,32,256,32,288,32,320,32,352,32,384,32,416,32,448,32,480,32]}))};
@@ -129,4 +129,13 @@ test('glass bottle and wick mount once and pause at simulation time',()=>{
  for(let i=0;i<100;i++)sandbox.window.lookFX['arson-fire'].tick(host,u,ctx);
  assert.equal(nodes,2,'one glass bottle and one wick');assert.equal(writes,2,'pause does not keep changing the bottle');
  ctx.time=.6;sandbox.window.lookFX['arson-fire'].tick(host,u,ctx);assert.equal(writes,4);
+});
+
+test('crackle follows actual floor or body fire and stops being requested after expiry',()=>{
+ const r=renderer(),active=[];r.sandbox.window.arsonSFX={observe(ctx,on){active.push(on)}};
+ r.draw(7,manyCells(),0,[]);assert.equal(active.pop(),false);
+ r.draw(7,{revision:2,step:3,side:32,chunks:[{x:0,y:0,f:[0,1]}]},.1,[]);assert.equal(active.pop(),true);
+ r.ctx.units=[{id:2,hp:100,radius:18,x:0,y:0}];
+ r.draw(7,{revision:3,step:3,side:32,chunks:[]},.2,[{id:2,until:1}]);assert.equal(active.pop(),true);
+ r.draw(7,null,1.1);assert.equal(active.pop(),false);
 });

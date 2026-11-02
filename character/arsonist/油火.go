@@ -14,16 +14,23 @@ const (
 )
 
 type walker struct {
-	inside      bool
-	phase       int
-	left, until float64
-	x, y        float64
-	seen        uint64
+	inside       bool
+	phase        int
+	left, until  float64
+	x, y         float64
+	seen         uint64
+	trails, seed uint64
 }
 type scorch struct {
 	on          bool
 	next, until float64
 	seen        uint64
+}
+
+// bottleTrail 记下这只油瓶上一拍的位置，用来把飞行路径连成一道细油。
+type bottleTrail struct {
+	x, y, distance float64
+	seen, seed     uint64
 }
 type 油火 struct {
 	owner   uint64
@@ -34,6 +41,7 @@ type 油火 struct {
 	nextTok uint64
 	surface oilSurface
 	walk    map[uint64]*walker
+	bottles map[uint64]*bottleTrail
 	burn    map[uint64]*scorch
 	slow    map[uint64]uint64
 	noBurns json.RawMessage
@@ -70,7 +78,8 @@ func (f *油火) onSense(ctx unit.Context, s unit.Sense) {
 	f.frame++
 	f.surface.advance(s.Time)
 	f.takeMarks(ctx, s)
-	f.walkers(s, dt)
+	f.bottleTrails(ctx, s)
+	f.walkers(ctx, s, dt)
 	f.surface.advance(s.Time)
 	f.scorch(ctx, s)
 	f.syncSlow(ctx, s)
@@ -83,11 +92,40 @@ func (f *油火) takeMarks(ctx unit.Context, s unit.Sense) {
 		}
 		switch o.Kind {
 		case KindArsonOilMark:
-			f.surface.addOil(o.X, o.Y, o.X, o.Y, oilRadius, s.Time)
+			f.surface.addOilSplash(o.X, o.Y, oilRadius, unit.DeriveStream(ctx.Stream, o.ID, unit.StreamChild), s.Time)
 			ctx.Out <- unit.Despawn{UnitID: o.ID}
 		case KindArsonFireMark:
 			f.surface.addFire(o.X, o.Y, fireRadius, s.Time)
 			ctx.Out <- unit.Despawn{UnitID: o.ID}
+		}
+	}
+}
+
+// bottleTrails 把油瓶上一拍到这一拍的位置连成一道细油。瓶子被挡住碎裂时
+// 不会留下空档：碎落点本身就被随即铺下的泼溅油面盖住。
+func (f *油火) bottleTrails(ctx unit.Context, s unit.Sense) {
+	for _, o := range s.Nearby {
+		if o.OwnerID != f.owner || o.Kind != KindArsonOil {
+			continue
+		}
+		if f.bottles == nil {
+			f.bottles = map[uint64]*bottleTrail{}
+		}
+		t := f.bottles[o.ID]
+		if t == nil {
+			f.bottles[o.ID] = &bottleTrail{x: o.X, y: o.Y, seen: f.frame, seed: unit.DeriveStream(ctx.Stream, o.ID, unit.StreamChild)}
+			continue
+		}
+		t.seen = f.frame
+		if math.Hypot(o.X-t.x, o.Y-t.y) > 1e-6 {
+			f.surface.addOilRibbon(t.x, t.y, o.X, o.Y, bottleTrailWidth, bottleTrailWidth, t.distance, t.seed, s.Time)
+			t.distance += math.Hypot(o.X-t.x, o.Y-t.y)
+		}
+		t.x, t.y = o.X, o.Y
+	}
+	for id, t := range f.bottles {
+		if t.seen != f.frame {
+			delete(f.bottles, id)
 		}
 	}
 }
@@ -107,7 +145,7 @@ func trailRadius(base, drawn float64) float64 {
 	}
 	return base * (1 + (trailHead-1)*(1-drawn/trailLen))
 }
-func (f *油火) walkers(s unit.Sense, dt float64) {
+func (f *油火) walkers(ctx unit.Context, s unit.Sense, dt float64) {
 	if f.walk == nil {
 		f.walk = map[uint64]*walker{}
 	}
@@ -134,6 +172,8 @@ func (f *油火) walkers(s unit.Sense, dt float64) {
 			if f.surface.touches(prior, oil) {
 				w.phase = phasePaint
 				w.left = trailLen
+				w.trails++
+				w.seed = unit.DeriveStream(ctx.Stream, o.ID^w.trails*0x9e3779b97f4a7c15, unit.StreamChild)
 			}
 		}
 		if w.phase == phasePaint {
@@ -143,8 +183,8 @@ func (f *油火) walkers(s unit.Sense, dt float64) {
 				use := math.Min(moved, w.left)
 				t := use / moved
 				drawn := trailLen - w.left
-				f.surface.addOilTaper(w.x, w.y, w.x+(o.X-w.x)*t, w.y+(o.Y-w.y)*t,
-					trailRadius(o.Radius, drawn), trailRadius(o.Radius, drawn+use), s.Time)
+				f.surface.addOilRibbon(w.x, w.y, w.x+(o.X-w.x)*t, w.y+(o.Y-w.y)*t,
+					trailRadius(o.Radius, drawn), trailRadius(o.Radius, drawn+use), drawn, w.seed, s.Time)
 				w.left -= use
 				if w.left <= 1e-6 {
 					w.left = 0

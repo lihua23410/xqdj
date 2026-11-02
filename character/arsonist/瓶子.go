@@ -91,11 +91,14 @@ func (b *bottle) shatter(ctx unit.Context, x, y float64) {
 	}
 	b.dead = true
 	kind := KindArsonOilMark
+	sound := "arson-oil-break"
 	if b.fire {
 		kind = KindArsonFireMark
+		sound = "arson-fire-break"
 	}
 	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: kind, OwnerID: b.owner, Slot: b.slot, X: x, Y: y,
 	})
+	ctx.Out <- unit.FX{Name: sound, UnitID: ctx.ID, Kind: ctx.Kind, X: x, Y: y, Slot: b.slot}
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }

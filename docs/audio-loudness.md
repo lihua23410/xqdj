@@ -38,6 +38,10 @@
 | `character/knight/fx/blink.wav` | 小骑士瞬移冲锋破空（约 0.34 秒） | -70.0 | -3.1 |
 | `character/warden/fx/shatter-full.wav` | 盾士强破盾（金属碎裂，0.28 秒） | -70.0 | -1.1 |
 | `character/warden/fx/shatter-weak.wav` | 盾士旧盾换新（薄甲剥落，0.18 秒） | -70.0 | -1.0 |
+| `character/arsonist/fx/oil-break.wav` | 油瓶玻璃碎裂与黏稠泼油（0.62 秒） | -18.2 | -1.0 |
+| `character/arsonist/fx/fire-break.wav` | 火瓶玻璃碎裂与点燃（0.85 秒） | -17.2 | -1.0 |
+| `character/arsonist/fx/crackle-a.wav` | 燃烧背景噼啪 A（1.15 秒） | -23.5 | -13.0 |
+| `character/arsonist/fx/crackle-b.wav` | 燃烧背景噼啪 B（1.15 秒） | -23.5 | -13.5 |
 
 `default-impact.wav` 只有 0.16 秒，积分响度对这类极短点击没有意义；它已按真峰值
 限制到 -1.0 dBFS，听感上是一次短促碰撞。`character/melee/fx/attack.wav` 同样只有
@@ -62,3 +66,5 @@
 教父(青年)的手枪、针剂与掠过声均来自已核对的 CC0 素材，真峰值分别控制为 -5、-8、-10 dBTP，播放音量为 0.65、0.55、0.45。三类短音分别按 0.075、0.3、0.12 秒限频，不强行抬高极短音的积分响度；逐文件来源和测量见 `character/godfather_youth/fx/audio-sources.json`。
 
 盾士的两种碎盾音为项目原创的确定性金属模态/带限噪声合成，不使用外部采样；均使用 mode 2、priority 0、volume 1.0。两段均不足 0.3 秒，积分响度 -70 LUFS 不代表静音，按真峰值约 -1 dBFS 控制。来源、许可、生成脚本与 SHA-256 见 `character/warden/fx/README.md` 和 `audio-sources.json`。
+
+纵火者碎瓶音使用原创玻璃与黏稠液体合成，并为火瓶混入仓库已有的 CC0 点火录音；燃烧背景用 CC0 火焰噼啪录音制作成两个短段，按 -23.5 LUFS 保持背景层次，避免持续燃烧盖住战斗提示。碎瓶按 -15.7 LUFS 目标与 -1 dBTP 峰值约束取较小增益，最终保留瞬态。全部 volume 1.0、NORMAL/210（碎瓶）或 NORMAL/230（火声），全包固定声部并限频，没有永久循环。来源、许可、滤镜与 SHA-256 见 `character/arsonist/fx/README.md` 和 `audio-sources.json`。

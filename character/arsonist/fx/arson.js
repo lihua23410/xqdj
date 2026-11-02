@@ -218,6 +218,11 @@ window.lookFX = window.lookFX || {};
       st.time = ctx.time;
       paintFire(st, ctx.time);
       paintBurns(st.burns, ctx);
+      if (window.arsonSFX) {
+        const active = !!st.bounds?.fire.length || st.burns.some(b => b.until >= ctx.time &&
+          (ctx.units || []).some(o => o.id === b.id && o.hp > 0));
+        window.arsonSFX.observe(ctx, active);
+      }
       if (!st.bounds) return;
       const layout = `${ctx.scale}/${ctx.cx}/${ctx.cy}`;
       if (st.layout === layout) return;

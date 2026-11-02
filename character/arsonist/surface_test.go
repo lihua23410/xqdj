@@ -198,8 +198,8 @@ func TestTrailAndCooldown(t *testing.T) {
 	if f.surface.revision != rev {
 		t.Fatal("painted during cooldown")
 	}
-	f.sense(out, .25, []unit.Snapshot{ownerAt(), foeAt(2, 0, 0)})
-	f.sense(out, .55, []unit.Snapshot{ownerAt(), foeAt(2, 0, 120)})
+	f.sense(out, .7, []unit.Snapshot{ownerAt(), foeAt(2, 0, 0)})
+	f.sense(out, 1.0, []unit.Snapshot{ownerAt(), foeAt(2, 0, 120)})
 	if stateAt(&f.surface, 0, 100) != oil {
 		t.Fatal("did not restart trail after cooldown")
 	}
@@ -253,7 +253,7 @@ func TestBurnTickDoesNotResetAndAlliesDoNotBurn(t *testing.T) {
 	far := []unit.Snapshot{ownerAt(), foeAt(2, 400, 0), ally}
 	f.sense(out, burnTick+0.05, far)
 	got = damages(f.sense(out, burnTick+burnLife, far))
-	if len(got) != 6 {
+	if len(got) != 5 {
 		t.Fatalf("burn after leaving must finish its second, got %d ticks", len(got))
 	}
 }
@@ -305,9 +305,17 @@ func TestTrailRootTapersIntoPoolInsteadOfPinching(t *testing.T) {
 	f := &油火{owner: 1}
 	f.sense(out, 0, []unit.Snapshot{ownerAt(), {ID: 9, Kind: KindArsonOilMark, OwnerID: 1}, foeAt(2, 0, 0)})
 	x := 0.0
-	for i := 1; i <= 60; i++ {
+	start := math.NaN()
+	for i := 1; i <= 120; i++ {
+		priorX, priorPhase := f.walk[2].x, f.walk[2].phase
 		x += 165.0 / 60
 		f.sense(out, float64(i)/60, []unit.Snapshot{ownerAt(), foeAt(2, x, 0)})
+		if priorPhase == phaseIdle && f.walk[2].phase == phasePaint && math.IsNaN(start) {
+			start = priorX
+		}
+	}
+	if math.IsNaN(start) {
+		t.Fatal("never left the oil")
 	}
 	width := func(wx float64) int {
 		n := 0
@@ -318,20 +326,56 @@ func TestTrailRootTapersIntoPoolInsteadOfPinching(t *testing.T) {
 		}
 		return n * int(surfaceStep)
 	}
-	root := width(66)
+	root := width(start + 3)
 	if root < 3*int(bodyRadius) {
 		t.Fatalf("拖尾根部只有 %d 宽，接回油滩处会塌成细腰", root)
 	}
 	prev := root
-	for wx := 69.0; wx <= 156; wx += surfaceStep {
+	for wx := start + 6; wx <= start+trailLen-3; wx += surfaceStep {
 		w := width(wx)
 		if w > prev+int(surfaceStep) {
 			t.Fatalf("拖尾在 %v 处反而变宽到 %d，根部没有收窄", wx, w)
 		}
 		prev = w
 	}
-	if end := width(156); end > 2*int(bodyRadius)+int(surfaceStep) {
+	if end := width(start + trailLen - 3); end > 2*int(bodyRadius)+int(surfaceStep) {
 		t.Fatalf("拖尾末端 %d 宽，应该收到身体直径", end)
+	}
+}
+
+func TestOilBottleLeaksThinTrailAsItFlies(t *testing.T) {
+	out := make(chan unit.Cmd, 512)
+	f := &油火{owner: 1}
+	bottle := func(x float64) unit.Snapshot {
+		return unit.Snapshot{ID: 7, Kind: KindArsonOil, Role: unit.RoleProjectile,
+			Slot: 0, OwnerID: 1, HP: 1, MaxHP: 1, Radius: bottleRadius, X: x}
+	}
+	for i := 0; i <= 20; i++ {
+		f.sense(out, float64(i)/60, []unit.Snapshot{ownerAt(), bottle(float64(i) * 5)})
+	}
+	for x := 5.0; x <= 100; x += surfaceStep {
+		if stateAt(&f.surface, x, 0) != oil {
+			t.Fatalf("油瓶飞过的路径在 x=%v 处断了", x)
+		}
+	}
+	for _, y := range []float64{12, -12} {
+		if stateAt(&f.surface, 60, y) == oil {
+			t.Fatalf("y=%v 也有油，说明瓶迹宽得和单位拖尾一样", y)
+		}
+	}
+}
+
+func TestFireBottleLeavesNoOil(t *testing.T) {
+	out := make(chan unit.Cmd, 512)
+	f := &油火{owner: 1}
+	for i := 0; i <= 20; i++ {
+		f.sense(out, float64(i)/60, []unit.Snapshot{ownerAt(), {
+			ID: 7, Kind: KindArsonFire, Role: unit.RoleProjectile, Slot: 0, OwnerID: 1,
+			HP: 1, MaxHP: 1, Radius: bottleRadius, X: float64(i) * 5,
+		}})
+	}
+	if n := countState(&f.surface, oil); n != 0 {
+		t.Fatalf("火瓶飞过的路径上留下了 %d 格油", n)
 	}
 }
 

@@ -275,12 +275,15 @@ func (g *oilSurface) addOil(x0, y0, x1, y1, r, now float64) {
 	g.addOilTaper(x0, y0, x1, y1, r, r, now)
 }
 func (g *oilSurface) addOilTaper(x0, y0, x1, y1, r0, r1, now float64) {
+	g.addOilCoverage(now, func(visit func(point)) { rasterTaper(x0, y0, x1, y1, r0, r1, visit) })
+}
+func (g *oilSurface) addOilCoverage(now float64, paint func(func(point))) {
 	type freshCell struct {
 		p       point
 		relight bool
 	}
 	var fresh []freshCell
-	rasterTaper(x0, y0, x1, y1, r0, r1, func(p point) {
+	paint(func(p point) {
 		c := g.cell(p)
 		if c != nil && c.state == oil {
 			return

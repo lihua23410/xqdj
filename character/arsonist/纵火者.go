@@ -26,19 +26,21 @@ const (
 
 	bottleRadius = 8.0
 	bottleSpeed  = 300.0
-	firstThrow   = 0.6
-	throwGap     = 2.5
-	trailCool    = 0.3
-	oilRadius    = 54.0
-	fireRadius   = 36.0
-	trailLen     = 90.0
+	// 油瓶飞过的路径漏下一道细油，比单位拖尾窄得多，落进油滩就连成一摊。
+	bottleTrailWidth = 8.0
+	firstThrow       = 0.6
+	throwGap         = 2.5
+	trailCool        = 0.5
+	oilRadius        = 54.0
+	fireRadius       = 36.0
+	trailLen         = 90.0
 	// 拖尾起点比身体半径粗，沿长度收回到身体半径，免得从油滩里长出一根细管。
 	trailHead = 1.9
 
 	bottleFireLife = 1.0
 	oilFireLife    = 2.0
 	burnLife       = 1.0
-	burnTick       = 0.15
+	burnTick       = 0.2
 	burnTickDmg    = 1.0
 	spreadSpeed    = 80.0
 	oilSlow        = 0.6 // 油滩和火滩里的敌人移动速度都减少 40%，不叠乘

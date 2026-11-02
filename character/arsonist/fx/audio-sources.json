@@ -1,0 +1,62 @@
+[
+  {
+    "file": "oil-break.wav",
+    "duration_seconds": 0.62,
+    "sample_rate": 44100,
+    "channels": 1,
+    "integrated_lufs": -18.2,
+    "true_peak_dbfs": -1.0,
+    "source": "Original modal glass and viscous-liquid synthesis (seed 5801)",
+    "license": "MIT",
+    "processing": "44.1kHz mono PCM16; lowpass=f=7600,acompressor=threshold=0.16:ratio=3:attack=0.6:release=45; fades; gain 8.4500dB; target -15.7 LUFS, ceiling -1.05 dBTP",
+    "mode": 0,
+    "priority": 210,
+    "volume": 1.0,
+    "sha256": "08840caaf7018ab60eb074026e7cb5e9d0049277ce743b823c94750db313f55e"
+  },
+  {
+    "file": "fire-break.wav",
+    "duration_seconds": 0.85,
+    "sample_rate": 44100,
+    "channels": 1,
+    "integrated_lufs": -17.2,
+    "true_peak_dbfs": -1.0,
+    "source": "Original modal glass (seed 5802) + CC0 Catching fire / themightyglider",
+    "license": "MIT synthesis; CC0 1.0 recording",
+    "processing": "44.1kHz mono PCM16; lowpass=f=7600,acompressor=threshold=0.16:ratio=3:attack=0.6:release=45; fades; gain 8.5500dB; target -15.7 LUFS, ceiling -1.05 dBTP",
+    "mode": 0,
+    "priority": 210,
+    "volume": 1.0,
+    "sha256": "389983acd6cc295c4e77a0a98829f0dca18bce9db4d68c0c726b7bac24250ed0"
+  },
+  {
+    "file": "crackle-a.wav",
+    "duration_seconds": 1.15,
+    "sample_rate": 44100,
+    "channels": 1,
+    "integrated_lufs": -23.5,
+    "true_peak_dbfs": -13.0,
+    "source": "CC0 Fire Crackling / AntumDeluge",
+    "license": "CC0 1.0",
+    "processing": "44.1kHz mono PCM16; lowpass=f=7600,acompressor=threshold=0.035:ratio=6:attack=0.1:release=35; fades; gain 11.7000dB; target -23.5 LUFS, ceiling -7.05 dBTP",
+    "mode": 0,
+    "priority": 230,
+    "volume": 1.0,
+    "sha256": "bc1c46709bc9d22437bc4a8d8139945a0d3f0564c182ffd301fee4f8c86ddf6f"
+  },
+  {
+    "file": "crackle-b.wav",
+    "duration_seconds": 1.15,
+    "sample_rate": 44100,
+    "channels": 1,
+    "integrated_lufs": -23.5,
+    "true_peak_dbfs": -13.5,
+    "source": "CC0 Fire Crackling / AntumDeluge",
+    "license": "CC0 1.0",
+    "processing": "44.1kHz mono PCM16; lowpass=f=7600,acompressor=threshold=0.035:ratio=6:attack=0.1:release=35; fades; gain 11.2000dB; target -23.5 LUFS, ceiling -7.05 dBTP",
+    "mode": 0,
+    "priority": 230,
+    "volume": 1.0,
+    "sha256": "4445458b337074008d0dcf565c798b7ee8a4b1fb5111d292ae8ad24dad9b415b"
+  }
+]
