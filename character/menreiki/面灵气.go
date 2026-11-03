@@ -31,7 +31,10 @@ const (
 	maskSpinT     = 2.0
 	maskSpinPaleT = 1.2
 	maskHitArc    = 2 * math.Pi / 3
-	maskHitCD     = 0.4 // 同一只面具对同一个目标的出手间隔
+	maskHitCD     = 0.4   // 同一只面具对同一个目标的出手间隔
+	maskFollowVis = 120.0 // 面具自己看得见主人（轨道半径 + 击退余量），眩晕时靠这个咬住轨道
+	maskFollowGap = 4.0   // 离轨道圈超过这么多，面具才自己往回拉
+	senseGapMax   = 0.1   // Sense 断档（眩晕、卡顿）回来后，单帧最多按这么多秒算转速
 	paleCruise    = 250.0
 	paleTurn      = 90 * math.Pi / 180
 	paleSteerGap  = 0.15
@@ -90,7 +93,7 @@ func init() {
 			Radius:    maskRadius,
 			MaxHP:     1,
 			Speed:     menreikiSpeed,
-			Vision:    0,
+			Vision:    maskFollowVis, // 只为眩晕时自己找主人，不做索敌
 			Fighter:   false,
 			PassWalls: true,
 			Look:      unit.Look{Color: "#f4f0e8", Overlay: true, FX: []string{maskFX(i)}},
@@ -132,6 +135,7 @@ type 面灵气 struct {
 	spun       [3]float64
 	shotOnce   [3]bool
 	hitSpun    [3]float64
+	paused     bool // 刚被眩晕过，恢复后第一帧不收转速差
 	seenWas    map[uint64][]string
 	regenReady float64
 	paleOn     bool
@@ -168,6 +172,8 @@ func (m *面灵气) Handle(ctx unit.Context, ev unit.Event) {
 		if m.lastFac == unit.FactionPale && hitTarget(e.Other, m.slot) {
 			m.steerWait = true
 		}
+	case unit.Stunned:
+		m.paused = true
 	case unit.Sense:
 		m.tickSense(ctx, e)
 	}
@@ -300,6 +306,12 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 	dt := 0.0
 	if m.lastT > 0 {
 		dt = s.Time - m.lastT
+		if m.paused {
+			dt = 0
+			m.paused = false
+		} else if dt > senseGapMax {
+			dt = senseGapMax
+		}
 	} else {
 		armAllMasks(ctx.State, ctx.ID)
 	}

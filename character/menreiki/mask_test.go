@@ -24,6 +24,46 @@ func TestMaskHitRateLimitedPerTarget(t *testing.T) {
 	}
 }
 
+func TestMaskSnapsBackWhenOwnerLeaves(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 9, Kind: KindMenreikiMask1, Out: out}
+	a := &面具{owner: 1}
+	self := unit.Snapshot{
+		ID: 9, Kind: KindMenreikiMask1, Role: unit.RoleHelper, OwnerID: 1, Slot: 0,
+		X: 40, Y: 0, Radius: maskRadius,
+	}
+	owner := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 120, Y: 0, Radius: menreikiRadius,
+	}
+	a.Handle(ctx, unit.Sense{Time: 1, Self: self, Nearby: []unit.Snapshot{owner}})
+	var tp *unit.Teleport
+	for _, c := range drain(out) {
+		if v, ok := c.(unit.Teleport); ok {
+			tp = &v
+		}
+	}
+	if tp == nil {
+		t.Fatal("主人甩开 80，面具该自己追回来")
+	}
+	want := owner.Radius + maskRadius + maskOrbitPad
+	if d := math.Hypot(tp.X-owner.X, tp.Y-owner.Y); math.Abs(d-want) > 1e-6 {
+		t.Fatalf("追回来该落在轨道圈上：d=%v want=%v", d, want)
+	}
+	if tp.X >= owner.X {
+		t.Fatalf("该留在原来那一侧被拉回轨道，tp=%v", tp)
+	}
+
+	// 已经在轨道上就什么都别发，免得和主人每帧的 Teleport 打架。
+	self.X = owner.X + want
+	a.Handle(ctx, unit.Sense{Time: 1.1, Self: self, Nearby: []unit.Snapshot{owner}})
+	for _, c := range drain(out) {
+		if _, ok := c.(unit.Teleport); ok {
+			t.Fatalf("没掉队不该自发瞬移: %v", c)
+		}
+	}
+}
+
 func TestGrantMarksAllEnemyFighters(t *testing.T) {
 	matchState := &unit.MatchState{}
 
