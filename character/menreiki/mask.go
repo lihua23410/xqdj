@@ -55,6 +55,27 @@ func spendMask(scope *unit.MatchState, owner uint64, i int) bool {
 	return true
 }
 
+// maskHitReady 面具对同一目标的出手 CD。三只面具可能同一帧圈住同一个人，
+// 不加限制的话一次贴脸就是三发，多单位/大体型目标还会反复触发。
+func maskHitReady(scope *unit.MatchState, owner, target uint64, now float64) bool {
+	if owner == 0 || target == 0 {
+		return false
+	}
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	m := shared.maskHitAt[owner]
+	if m == nil {
+		m = map[uint64]float64{}
+		shared.maskHitAt[owner] = m
+	}
+	if now+1e-9 < m[target] {
+		return false
+	}
+	m[target] = now + maskHitCD
+	return true
+}
+
 type 面具 struct {
 	owner  uint64
 	slot   int
@@ -80,6 +101,9 @@ func (a *面具) hit(ctx unit.Context, e unit.Collision) {
 	}
 	if hitTarget(e.Other, a.slot) {
 		if !spendMask(ctx.State, a.owner, a.index) {
+			return
+		}
+		if !maskHitReady(ctx.State, a.owner, e.Other.ID, e.Time) {
 			return
 		}
 		strike(ctx, e.Other, maskDmg(ownerFaction(ctx.State, a.owner)))

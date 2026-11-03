@@ -6,6 +6,24 @@ import (
 	"xqdj/internal/unit"
 )
 
+func TestMaskHitRateLimitedPerTarget(t *testing.T) {
+	sc := &unit.MatchState{}
+	if !maskHitReady(sc, 1, 7, 5) {
+		t.Fatal("第一下该放行")
+	}
+	for _, now := range []float64{5.1, 5.2, 5.39} {
+		if maskHitReady(sc, 1, 7, now) {
+			t.Fatalf("%v 还在 CD 里，不该打中同一目标", now)
+		}
+	}
+	if !maskHitReady(sc, 1, 7, 5.4) {
+		t.Fatalf("过了 %v 秒该再打一下", maskHitCD)
+	}
+	if !maskHitReady(sc, 1, 8, 5.45) {
+		t.Fatal("另一个目标各算各的 CD")
+	}
+}
+
 func TestGrantMarksAllEnemyFighters(t *testing.T) {
 	matchState := &unit.MatchState{}
 
