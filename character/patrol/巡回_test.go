@@ -62,7 +62,7 @@ func TestMarkerStartsAtRestAndAcceleratesAlongThrowDirection(t *testing.T) {
 	for _, cmd := range patrolCommands(out) {
 		if v, ok := cmd.(unit.SetVelocity); ok {
 			speed := math.Hypot(v.VX, v.VY)
-			if math.Abs(speed-26/0.014/4/60) > 1e-8 || v.VX*spawn.X+v.VY*spawn.Y <= 0 {
+			if math.Abs(speed-20/0.014/4/60) > 1e-8 || v.VX*spawn.X+v.VY*spawn.Y <= 0 {
 				t.Fatalf("first acceleration=(%v,%v), launch offset=(%v,%v)", v.VX, v.VY, spawn.X, spawn.Y)
 			}
 			return
@@ -72,7 +72,7 @@ func TestMarkerStartsAtRestAndAcceleratesAlongThrowDirection(t *testing.T) {
 }
 
 func TestMarkerDamageWindowAndFourSecondSpeed(t *testing.T) {
-	for _, tc := range []struct{ seconds, damage float64 }{{0, 8}, {1, 8}, {2, 13}, {3, 19.5}, {4, 26}, {5, 26}} {
+	for _, tc := range []struct{ seconds, damage float64 }{{0, 8}, {1, 8}, {2, 10}, {3, 15}, {4, 20}, {5, 20}} {
 		t.Run(strconv.Itoa(int(tc.seconds))+" seconds", func(t *testing.T) {
 			b, ctx, s, out := markerFixture()
 			for frame := 1; frame <= int(tc.seconds*60); frame++ {
@@ -84,11 +84,10 @@ func TestMarkerDamageWindowAndFourSecondSpeed(t *testing.T) {
 					}
 				}
 			}
-			if tc.seconds == 4 && math.Abs(math.Hypot(s.Self.VX, s.Self.VY)-26/0.014) > 1e-6 {
-				t.Fatalf("4-second speed=(%v,%v), want %v", s.Self.VX, s.Self.VY, 26/0.014)
+			if tc.seconds == 4 && math.Abs(math.Hypot(s.Self.VX, s.Self.VY)-20/0.014) > 1e-6 {
+				t.Fatalf("4-second speed=(%v,%v), want %v", s.Self.VX, s.Self.VY, 20/0.014)
 			}
-			// 5 秒已经折返，等过命中间隔后仍应保持 26 封顶。
-			b.Handle(ctx, unit.Collision{Time: s.Time + 0.3, Other: unit.Snapshot{ID: 9, Role: unit.RoleFighter, Slot: 1}})
+			b.Handle(ctx, unit.Collision{Time: s.Time, Other: unit.Snapshot{ID: 9, Role: unit.RoleFighter, Slot: 1}})
 			for _, cmd := range patrolCommands(out) {
 				if damage, ok := cmd.(unit.Damage); ok {
 					if math.Abs(damage.Amount-tc.damage) > 1e-6 {
@@ -102,20 +101,25 @@ func TestMarkerDamageWindowAndFourSecondSpeed(t *testing.T) {
 	}
 }
 
-func TestMarkerForcesReturnAtFiveSeconds(t *testing.T) {
+func TestMarkerReturnsOnTheWallAfterFiveSeconds(t *testing.T) {
 	b, ctx, s, out := markerFixture()
 	s.Self.X = 200
 	s.Time = 14.99
 	b.Handle(ctx, s)
 	patrolCommands(out)
-	if b.returning {
-		t.Fatal("returned before 5 seconds")
+	b.Handle(ctx, unit.WallHit{Time: s.Time, X: s.Self.X, Y: s.Self.Y})
+	if b.returning || hasPassWalls(patrolCommands(out)) {
+		t.Fatal("wall before 5 seconds started the return")
 	}
 	s.Time = 15
 	b.Handle(ctx, s)
 	patrolCommands(out)
-	if !b.returning {
-		t.Fatal("did not return at 5 seconds")
+	if b.returning {
+		t.Fatal("time alone started the return")
+	}
+	b.Handle(ctx, unit.WallHit{Time: s.Time, X: s.Self.X, Y: s.Self.Y})
+	if !b.returning || !hasPassWalls(patrolCommands(out)) {
+		t.Fatal("wall after 5 seconds did not start the return")
 	}
 	s.Time += 1.0 / 60
 	b.Handle(ctx, s)
@@ -124,12 +128,21 @@ func TestMarkerForcesReturnAtFiveSeconds(t *testing.T) {
 			return
 		}
 	}
-	t.Fatal("forced return did not head toward owner")
+	t.Fatal("return did not head back along the outbound trail")
+}
+
+func hasPassWalls(cmds []unit.Cmd) bool {
+	for _, cmd := range cmds {
+		if p, ok := cmd.(unit.PassWalls); ok && p.Hold {
+			return true
+		}
+	}
+	return false
 }
 
 func TestMarkerReturnHasNoTimeoutAndMustActuallyReachOwner(t *testing.T) {
 	b, ctx, s, out := markerFixture()
-	b.flip(s.Time)
+	b.flip(ctx)
 	b.speed = 100000 // 理论单拍行程已经超过敌我距离，也不能隔墙接回。
 	s.Self.X = 200
 	s.Nearby[0].X = -200
@@ -225,4 +238,157 @@ func TestMarkerAccelerationPreservesWallReflection(t *testing.T) {
 		}
 	}
 	t.Fatal("acceleration lost reflected direction")
+}
+
+func TestMarkerContactDamagesOnceUntilSeparated(t *testing.T) {
+	b, ctx, s, out := markerFixture()
+	s.Time = 12
+	s.Self.X, s.Self.Y = 0, 0
+	s.Self.Radius = markRadius
+	b.Handle(ctx, s)
+	patrolCommands(out)
+	enemy := unit.Snapshot{ID: 9, Role: unit.RoleFighter, Slot: 1, X: 20, Y: 0, Radius: 18}
+	other := unit.Snapshot{ID: 10, Role: unit.RoleFighter, Slot: 1, X: -20, Y: 0, Radius: 18}
+	b.Handle(ctx, unit.Collision{Time: s.Time, Other: enemy})
+	if !markerDamaged(patrolCommands(out)) {
+		t.Fatal("first contact did no damage")
+	}
+	b.Handle(ctx, unit.Collision{Time: s.Time, Other: enemy})
+	if markerDamaged(patrolCommands(out)) {
+		t.Fatal("same contact damaged again")
+	}
+	b.Handle(ctx, unit.Collision{Time: s.Time, Other: other})
+	if !markerDamaged(patrolCommands(out)) {
+		t.Fatal("another enemy was blocked by the first contact")
+	}
+	s.Time += 1.0 / 60
+	s.Nearby = []unit.Snapshot{s.Nearby[0], enemy, other}
+	b.Handle(ctx, s)
+	patrolCommands(out)
+	b.Handle(ctx, unit.Collision{Time: s.Time, Other: enemy})
+	if markerDamaged(patrolCommands(out)) {
+		t.Fatal("still overlapping counted as a new contact")
+	}
+	s.Time += 1.0 / 60
+	enemy.X = 400
+	s.Nearby = []unit.Snapshot{s.Nearby[0], enemy}
+	b.Handle(ctx, s)
+	patrolCommands(out)
+	b.Handle(ctx, unit.Collision{Time: s.Time, Other: enemy})
+	if !markerDamaged(patrolCommands(out)) {
+		t.Fatal("a new contact after separation did no damage")
+	}
+}
+
+func markerDamaged(cmds []unit.Cmd) bool {
+	for _, cmd := range cmds {
+		if _, ok := cmd.(unit.Damage); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func TestMarkerRewindsAlongOutboundTrail(t *testing.T) {
+	b, ctx, s, out := markerFixture()
+	s.Nearby[0].X, s.Nearby[0].Y = 0, 0
+	s.Self.X, s.Self.Y = 100, 0
+	s.Self.VX, s.Self.VY = 100, 0
+	s.Time = 11
+	b.Handle(ctx, s)
+	for _, cmd := range patrolCommands(out) {
+		if _, ok := cmd.(unit.PassWalls); ok {
+			t.Fatal("outbound held PassWalls")
+		}
+	}
+	s.Self.X, s.Self.Y = 100, 80
+	s.Self.VX, s.Self.VY = 0, 100
+	s.Time = 12
+	b.Handle(ctx, s)
+	patrolCommands(out)
+	b.Handle(ctx, unit.Collision{Time: s.Time, Other: unit.Snapshot{ID: 9, Role: unit.RoleFighter, Slot: 1}})
+	damaged := false
+	for _, cmd := range patrolCommands(out) {
+		if _, ok := cmd.(unit.PassWalls); ok {
+			t.Fatal("hit inside the window held PassWalls")
+		}
+		if _, ok := cmd.(unit.Damage); ok {
+			damaged = true
+		}
+	}
+	if !damaged || b.returning {
+		t.Fatal("hit inside the window should damage without returning")
+	}
+	s.Time = 14.99
+	b.Handle(ctx, s)
+	patrolCommands(out)
+	if b.returning {
+		t.Fatal("returned before the window ended")
+	}
+	s.Time = 15
+	b.Handle(ctx, s)
+	patrolCommands(out)
+	if b.returning {
+		t.Fatal("time alone started the return")
+	}
+	b.Handle(ctx, unit.WallHit{Time: s.Time, X: s.Self.X, Y: s.Self.Y})
+	if !b.returning || !hasPassWalls(patrolCommands(out)) {
+		t.Fatal("wall after the window did not start the return")
+	}
+	s.Time += 1.0 / 60
+	b.Handle(ctx, s)
+	for _, cmd := range patrolCommands(out) {
+		v, ok := cmd.(unit.SetVelocity)
+		if !ok {
+			continue
+		}
+		if v.VY >= 0 || math.Abs(v.VX) > math.Abs(v.VY) {
+			t.Fatalf("rewind velocity=(%v,%v), want back down the last segment", v.VX, v.VY)
+		}
+		return
+	}
+	t.Fatal("rewind did not set a velocity")
+}
+
+func TestMarkerFliesToOwnerAfterTrail(t *testing.T) {
+	b, ctx, s, out := markerFixture()
+	s.Self.X, s.Self.Y = 31, 0
+	s.Nearby[0].X, s.Nearby[0].Y = 0, 40
+	b.flip(ctx)
+	patrolCommands(out)
+	s.Time += 1.0 / 60
+	b.Handle(ctx, s)
+	for _, cmd := range patrolCommands(out) {
+		v, ok := cmd.(unit.SetVelocity)
+		if !ok {
+			continue
+		}
+		if v.VX >= 0 || v.VY <= 0 {
+			t.Fatalf("after trail, velocity=(%v,%v), want toward owner", v.VX, v.VY)
+		}
+		return
+	}
+	t.Fatal("no velocity after trail")
+}
+
+func TestMarkerStopsWhenTrailEndsWithoutOwner(t *testing.T) {
+	b, ctx, s, out := markerFixture()
+	s.Self.X, s.Self.Y = 31, 0
+	s.Nearby = nil
+	b.flip(ctx)
+	patrolCommands(out)
+	s.Time += 1.0 / 60
+	b.Handle(ctx, s)
+	stopped := false
+	for _, cmd := range patrolCommands(out) {
+		if _, ok := cmd.(unit.Despawn); ok {
+			t.Fatal("marker despawned without an owner")
+		}
+		if v, ok := cmd.(unit.SetVelocity); ok && v.VX == 0 && v.VY == 0 {
+			stopped = true
+		}
+	}
+	if !stopped {
+		t.Fatal("marker kept moving after the trail with no owner")
+	}
 }

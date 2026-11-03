@@ -1473,6 +1473,13 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		u.pass = c.Hold
 		m.noteHoldLocked(u, "穿过", c.Hold)
+	case unitpkg.PassWalls:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || u.passWalls == c.Hold {
+			return
+		}
+		u.passWalls = c.Hold
+		m.noteHoldLocked(u, "穿墙", c.Hold)
 	case unitpkg.Stand:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped || u.stand == c.Hold {

@@ -151,9 +151,10 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 	fmt.Fprintf(&b, "\n")
 
 	fmt.Fprintf(&b, "## 单球胜率\n\n")
-	fmt.Fprintf(&b, "胜率 = 胜 /（胜+负），平不计入。胜平率 =（胜+平）/（胜+负+平）。积分 = 胜×2 + 平，负不计分。排名按积分，积分相同则并列，下一名跳号。不含自己打自己。\n\n")
-	fmt.Fprintf(&b, "| 排名 | 战斗机 | 积分 | 场次 | 胜 | 负 | 平 | 胜率 | 胜平率 |\n")
-	fmt.Fprintf(&b, "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	fmt.Fprintf(&b, "胜率 = 胜 /（胜+负），平不计入。胜平率 =（胜+平）/（胜+负+平）。积分 = 胜×2 + 平，负不计分。排名按积分，积分相同则并列，下一名跳号。不含自己打自己。\n")
+	fmt.Fprintf(&b, "t度按这个名次顺序切：先尽量均分成 t0、t1、t2，多出来的人从 t0 起每档多 1 人；每个大档再同样均分成上、中、下，多出来的人从上起每档多 1 人。人数不够的档留空，不占行。\n\n")
+	fmt.Fprintf(&b, "| 排名 | t度 | 战斗机 | 积分 | 场次 | 胜 | 负 | 平 | 胜率 | 胜平率 |\n")
+	fmt.Fprintf(&b, "| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	type row struct {
 		kind string
 		t    tally
@@ -178,8 +179,8 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 			rank = i + 1
 		}
 		g := games(r.t)
-		fmt.Fprintf(&b, "| %d | %s | %d | %d | %d | %d | %d | %s | %s |\n",
-			rank, r.kind, points(r.t), g, r.t.win, r.t.lose, r.t.draw, pct(rate(r.t)), pct(winDraw(r.t)))
+		fmt.Fprintf(&b, "| %d | %s | %s | %d | %d | %d | %d | %d | %s | %s |\n",
+			rank, tierOf(i, len(rows)), r.kind, points(r.t), g, r.t.win, r.t.lose, r.t.draw, pct(rate(r.t)), pct(winDraw(r.t)))
 	}
 
 	fmt.Fprintf(&b, "\n## 一对一胜率\n\n")
@@ -234,6 +235,46 @@ func tallies(kinds []string, results []pairResult) (map[string]tally, map[[2]str
 }
 
 func games(t tally) int { return t.win + t.lose + t.draw }
+
+// spread 把 n 个人尽量均分成 k 档。不能整除时，靠前的档各多 1 人；不够分的档是 0。
+func spread(n, k int) []int {
+	sizes := make([]int, k)
+	if n <= 0 || k <= 0 {
+		return sizes
+	}
+	base, rem := n/k, n%k
+	for i := range sizes {
+		sizes[i] = base
+		if i < rem {
+			sizes[i]++
+		}
+	}
+	return sizes
+}
+
+// tierOf 按名次位置给出 t度。先均分 t0、t1、t2，再在该大档内均分上、中、下。
+func tierOf(index, n int) string {
+	if n <= 0 || index < 0 || index >= n {
+		return ""
+	}
+	passed := 0
+	for major, majorN := range spread(n, 3) {
+		if index >= passed+majorN {
+			passed += majorN
+			continue
+		}
+		local := index - passed
+		subPassed := 0
+		for sub, subN := range spread(majorN, 3) {
+			if local < subPassed+subN {
+				return fmt.Sprintf("t%d%s", major, []string{"上", "中", "下"}[sub])
+			}
+			subPassed += subN
+		}
+		return ""
+	}
+	return ""
+}
 
 func points(t tally) int { return t.win*2 + t.draw }
 

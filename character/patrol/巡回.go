@@ -1,5 +1,7 @@
-// 巡回朝随机方向丢出标识物后站定。标识物一路加速、撞墙反弹，
-// 撞中敌方或去程满 5 秒时折返；折返一路继续加速、继续撞人出伤，回到巡回身边消失。
+// 巡回朝随机方向丢出标识物后站定。标识物一路加速、撞墙反弹。
+// 去程至少飞满 5 秒。满 5 秒之后，下一次撞墙才折返。
+// 折返沿去程轨迹倒着飞，这段穿墙，轨迹走完再飞向主人当前位置。
+// 伤害随速率增长，封顶 20。同一次接触只出一次伤，分开后再撞可以再打。回到巡回身边消失。
 // 巡回收回标识物后恢复巡航，5 秒后再丢。
 package 巡回
 
@@ -28,20 +30,24 @@ const (
 	firstThrowDelay = 0.8
 	throwCD         = 5.0
 	markStartSpeed  = 0.0
-	// 从静止起步，4 秒达到原伤害公式中 26 伤对应的速率（约 1857.14）。
+	// 从静止起步，4 秒达到 20 伤对应的速率（约 1428.57）。
 	markFullDamageAfter = 4.0
 	markAccel           = (dmgMax/dmgPerSpeed - markStartSpeed) / markFullDamageAfter
-	// 去程兜底：一直没撞到人也折返，别让巡回站成雕像。
+	// 去程至少 5 秒。满了之后要再撞一次墙才折返。
 	markTimeout = 5.0
 	// 伤害随撞击时速走：飞得越久砸得越重（反重力弹先例）。
 	dmgPerSpeed = 0.014
 	dmgMin      = 8.0
-	dmgMax      = 26.0
-	hitPaceCD   = 0.25
-	bounceFXCD  = 0.15
-	catchPad    = 2.0
+	dmgMax      = 20.0
+	// 分开超过皮肤厚度才算离开，避免贴着来回触发。
+	touchSlop  = 1.0
+	bounceFXCD = 0.15
+	catchPad   = 2.0
 
 	markOutKind = "巡回标识物在外"
+
+	// 去程球心取样：静止起步时连续几拍几乎重合，不堆重复点。
+	trailMinStep = 1e-3
 )
 
 //go:embed fx
@@ -180,8 +186,8 @@ func (a *巡回) resumeMovement(ctx unit.Context) {
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * patrolCruise, VY: uy * patrolCruise}
 }
 
-// 标识物：去程方向交给引擎（撞墙反射原样保留），自己只把速率越推越高；
-// 持 Pass 撞人不减速，所以撞中谁都不停，回程也一路穿人。
+// 标识物：去程方向交给引擎（撞墙反射原样保留），自己只把速率越推越高，并记下球心。
+// 持 Pass 撞人不减速。折返起持 PassWalls，沿记下的轨迹倒回，走完再飞向主人。
 type 标识物 struct {
 	owner uint64
 	slot  int
@@ -193,12 +199,15 @@ type 标识物 struct {
 	lastT  float64
 	bornAt float64
 
-	returning  bool
-	struck     map[uint64]bool
-	hitReadyAt float64
+	returning bool
+	touching  map[uint64]bool
 
-	detour       unit.DetourHold
+	trail        []trailPt
 	lastBounceFX float64
+}
+
+type trailPt struct {
+	x, y float64
 }
 
 func (b *标识物) Handle(ctx unit.Context, ev unit.Event) {
@@ -213,6 +222,7 @@ func (b *标识物) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 func (b *标识物) onSense(ctx unit.Context, s unit.Sense) {
+	b.releaseTouch(s)
 	if !b.booted {
 		b.booted = true
 		b.lastT = s.Time
@@ -228,6 +238,7 @@ func (b *标识物) onSense(ctx unit.Context, s unit.Sense) {
 		if n := math.Hypot(dx, dy); n > 1e-6 {
 			b.dirX, b.dirY = dx/n, dy/n
 		}
+		b.noteTrail(s.Self.X, s.Self.Y)
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
 		return
 	}
@@ -239,45 +250,100 @@ func (b *标识物) onSense(ctx unit.Context, s unit.Sense) {
 	b.speed += markAccel * dt
 
 	if b.returning {
-		b.homeward(ctx, s, dt)
+		b.rewind(ctx, s, dt)
 		return
 	}
-	if s.Time-b.bornAt+1e-9 < markTimeout {
-		if n := math.Hypot(s.Self.VX, s.Self.VY); n > 1e-6 {
-			b.dirX, b.dirY = s.Self.VX/n, s.Self.VY/n
-		}
-		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: b.dirX * b.speed, VY: b.dirY * b.speed}
-		return
+	b.noteTrail(s.Self.X, s.Self.Y)
+	if n := math.Hypot(s.Self.VX, s.Self.VY); n > 1e-6 {
+		b.dirX, b.dirY = s.Self.VX/n, s.Self.VY/n
 	}
-	b.flip(s.Time)
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: b.dirX * b.speed, VY: b.dirY * b.speed}
 }
 
-// homeward 回程：朝巡回当前位置直线加速；被墙别住时 Detour 绕端点。
-func (b *标识物) homeward(ctx unit.Context, s unit.Sense, dt float64) {
+func (b *标识物) windowDone(t float64) bool {
+	return b.booted && t-b.bornAt+1e-9 >= markTimeout
+}
+
+// rewind 回程：沿去程球心折线从新到旧飞出这一拍的行程，走完再飞向主人当前位置。
+// 穿墙之后不再绕墙；必须真的靠近才接回，不能因为理论上这一拍够远就消失。
+func (b *标识物) rewind(ctx unit.Context, s unit.Sense, dt float64) {
 	owner := ownerOf(s, b.owner)
-	if owner == nil {
+	if owner != nil {
+		dist := math.Hypot(owner.X-s.Self.X, owner.Y-s.Self.Y)
+		catch := s.Self.Radius + owner.Radius + catchPad
+		if dist <= catch {
+			b.arrive(ctx, owner.X, owner.Y)
+			return
+		}
+	}
+	vx, vy, ok := b.rewindVelocity(s.Self.X, s.Self.Y, b.speed, dt, owner)
+	if !ok {
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 		return
 	}
-	dist := math.Hypot(owner.X-s.Self.X, owner.Y-s.Self.Y)
-	catch := s.Self.Radius + owner.Radius + catchPad
-	if dist <= catch {
-		b.arrive(ctx, owner.X, owner.Y)
-		return
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
+}
+
+// rewindVelocity 把这一拍的行程走在轨迹上，剩下的步长接向主人。轨迹点按走完的丢掉。
+// 没有可去之处时 ok 为 false，调用方把速度写成 0，避免穿墙后沿着最后一段飞出场。
+func (b *标识物) rewindVelocity(x, y, speed, dt float64, owner *unit.Snapshot) (vx, vy float64, ok bool) {
+	budget := speed * dt
+	for len(b.trail) > 0 {
+		last := b.trail[len(b.trail)-1]
+		if math.Hypot(last.x-x, last.y-y) >= trailMinStep {
+			break
+		}
+		b.trail = b.trail[:len(b.trail)-1]
 	}
-	wx, wy, hold := unit.Detour(s.Self.X, s.Self.Y, s.Self.Radius, owner.X, owner.Y, s.Walls, b.detour, s.Time)
-	b.detour = hold
-	dx, dy := wx-s.Self.X, wy-s.Self.Y
+	tx, ty := x, y
+	for budget > 1e-12 && len(b.trail) > 0 {
+		last := b.trail[len(b.trail)-1]
+		dx, dy := last.x-tx, last.y-ty
+		seg := math.Hypot(dx, dy)
+		if seg <= budget {
+			budget -= seg
+			tx, ty = last.x, last.y
+			b.trail = b.trail[:len(b.trail)-1]
+			continue
+		}
+		k := budget / seg
+		tx += dx * k
+		ty += dy * k
+		budget = 0
+	}
+	if budget > 1e-12 && owner != nil {
+		dx, dy := owner.X-tx, owner.Y-ty
+		seg := math.Hypot(dx, dy)
+		if seg > 1e-12 {
+			if seg <= budget {
+				tx, ty = owner.X, owner.Y
+			} else {
+				k := budget / seg
+				tx += dx * k
+				ty += dy * k
+			}
+		}
+	}
+	dx, dy := tx-x, ty-y
 	n := math.Hypot(dx, dy)
-	if n < 1e-6 {
-		return
+	if n < 1e-9 {
+		return 0, 0, false
 	}
-	// 最后一段只飞到当前路点，避免高速越过主人；必须真的靠近才接回，
-	// 不能因为理论上这一拍够远就隔墙消失。
-	speed := b.speed
+	step := speed
 	if dt > 0 && n/dt < speed {
-		speed = n / dt
+		step = n / dt
 	}
-	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * speed, VY: dy / n * speed}
+	return dx / n * step, dy / n * step, true
+}
+
+func (b *标识物) noteTrail(x, y float64) {
+	if n := len(b.trail); n > 0 {
+		last := b.trail[n-1]
+		if math.Hypot(x-last.x, y-last.y) < trailMinStep {
+			return
+		}
+	}
+	b.trail = append(b.trail, trailPt{x: x, y: y})
 }
 
 func (b *标识物) arrive(ctx unit.Context, x, y float64) {
@@ -285,30 +351,42 @@ func (b *标识物) arrive(ctx unit.Context, x, y float64) {
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }
 
-func (b *标识物) flip(t float64) {
+func (b *标识物) flip(ctx unit.Context) {
 	b.returning = true
-	b.struck = make(map[uint64]bool)
-	b.hitReadyAt = t + hitPaceCD
+	ctx.Out <- unit.PassWalls{UnitID: ctx.ID, Hold: true}
 }
 
 func (b *标识物) onCollision(ctx unit.Context, e unit.Collision) {
 	if !unit.EnemyTarget(e, b.slot) {
 		return
 	}
-	if !b.returning {
-		b.strike(ctx, e)
-		b.flip(e.Time)
+	if b.touching[e.Other.ID] {
 		return
 	}
-	if b.struck == nil {
-		b.struck = make(map[uint64]bool)
+	if b.touching == nil {
+		b.touching = map[uint64]bool{}
 	}
-	if b.struck[e.Other.ID] || e.Time < b.hitReadyAt {
-		return
-	}
-	b.struck[e.Other.ID] = true
-	b.hitReadyAt = e.Time + hitPaceCD
+	b.touching[e.Other.ID] = true
 	b.strike(ctx, e)
+}
+
+// releaseTouch 在感知里确认已经分开的人。还叠在一起时引擎每拍都会再报碰撞。
+func (b *标识物) releaseTouch(s unit.Sense) {
+	for id := range b.touching {
+		o := snapshotByID(s, id)
+		if o == nil || math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) > s.Self.Radius+o.Radius+touchSlop {
+			delete(b.touching, id)
+		}
+	}
+}
+
+func snapshotByID(s unit.Sense, id uint64) *unit.Snapshot {
+	for i := range s.Nearby {
+		if s.Nearby[i].ID == id {
+			return &s.Nearby[i]
+		}
+	}
+	return nil
 }
 
 func (b *标识物) strike(ctx unit.Context, e unit.Collision) {
@@ -324,9 +402,18 @@ func (b *标识物) strike(ctx unit.Context, e unit.Collision) {
 		X: e.Other.X, Y: e.Other.Y, VX: e.NX, VY: e.NY, Amount: amt}
 }
 
-// onWall 去程的撞墙火花：弹一次亮一次，是"还在加速"的反馈；回程只顾回家，不撒。
+// onWall 去程的撞墙火花：弹一次亮一次，是"还在加速"的反馈。
+// 满 5 秒后的这一下不再撒火花，它负责进入收回。回程穿墙，不会再撞到。
 func (b *标识物) onWall(ctx unit.Context, w unit.WallHit) {
-	if b.returning || w.Time < b.lastBounceFX+bounceFXCD {
+	if b.returning {
+		return
+	}
+	if b.windowDone(w.Time) {
+		b.noteTrail(w.X, w.Y)
+		b.flip(ctx)
+		return
+	}
+	if w.Time < b.lastBounceFX+bounceFXCD {
 		return
 	}
 	b.lastBounceFX = w.Time
