@@ -7,16 +7,27 @@ import (
 )
 
 const stainRadius = 40.0
+const stainLife = 40.0 // 酒会挥发：酒场最多活这么久，不然一局下来堆近百个，每拍都要感知
 
 type 酒场 struct {
 	owner  uint64
 	slot   int
 	inside map[uint64]struct{}
+	born   float64
+	booted bool
 }
 
 func (f *酒场) Handle(ctx unit.Context, ev unit.Event) {
 	s, ok := ev.(unit.Sense)
 	if !ok {
+		return
+	}
+	if !f.booted {
+		f.booted = true
+		f.born = s.Time
+	}
+	if s.Time-f.born >= stainLife {
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 		return
 	}
 	if f.inside == nil {
