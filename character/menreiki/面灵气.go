@@ -31,6 +31,7 @@ const (
 	maskSpinT     = 2.0
 	maskSpinPaleT = 1.2
 	maskHitArc    = 2 * math.Pi / 3
+	maskHitCD     = 0.4 // 同一只面具对同一个目标的出手间隔
 	paleCruise    = 250.0
 	paleTurn      = 90 * math.Pi / 180
 	paleSteerGap  = 0.15
@@ -351,7 +352,9 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 		if len(hit) > 0 && spendMask(ctx.State, ctx.ID, i) {
 			dmg := maskDmg(s.Self.Faction)
 			for k := range hit {
-				strike(ctx, hit[k], dmg)
+				if maskHitReady(ctx.State, ctx.ID, hit[k].ID, s.Time) {
+					strike(ctx, hit[k], dmg)
+				}
 			}
 		}
 		if cur == nil {
