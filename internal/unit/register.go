@@ -9,6 +9,7 @@ type Spec struct {
 	Vision        float64
 	Fighter       bool
 	Semi          bool
+	RequiresOwner bool    // 处理出生指令时，主人必须仍在场
 	PassWalls     bool    // 不撞墙。出生即持有；也可用 PassWalls 令牌挂摘
 	Mortal        bool    // 活随从：吃 Damage / Heal，不计入胜负
 	BreakWalls    bool    // 击中胶囊墙则该截提前消失并穿过；硬墙穿过不拆；场边仍撞

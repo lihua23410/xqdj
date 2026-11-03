@@ -467,9 +467,11 @@ type Actor interface {
 }
 
 type SpawnInfo struct {
-	State *MatchState
-	Data  any
-	Field Field
+	MatchSeed uint64  // 本场种子，供不依赖单位随机流的共用规则
+	X, Y      float64 // 出生坐标
+	State     *MatchState
+	Data      any
+	Field     Field
 	// Probe 是本场非因果的只读探针记录，由构造器复制后持有。
 	Probe   *ProbeTape
 	OwnerID uint64

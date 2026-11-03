@@ -33,6 +33,7 @@ import (
 	"xqdj/character/mezhou"
 	"xqdj/character/observer"
 	"xqdj/character/orca"
+	"xqdj/character/ospf"
 	"xqdj/character/pastor"
 	"xqdj/character/patrol"
 	"xqdj/character/pink"
@@ -167,6 +168,8 @@ const (
 	KindObserverKunaiCopy  = 观察者.KindObserverKunaiCopy
 	KindOrca               = 大肥鱼.KindOrca
 	KindRice               = 大肥鱼.KindRice
+	KindOSPF               = ospf.KindOSPF
+	KindOSPFNode           = ospf.KindOSPFNode
 	KindGlyph              = 老牧师.KindGlyph
 	KindPastor             = 老牧师.KindPastor
 	KindPatrol             = 巡回.KindPatrol

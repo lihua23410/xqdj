@@ -175,3 +175,27 @@ func octContains(x, y, radius float64) bool {
 	}
 	return true
 }
+
+// PeripheralRoom returns the room in north, east, south, west order.
+// The door chord belongs to the room. Corridors and the hub return -1.
+func PeripheralRoom(x, y float64) int {
+	switch {
+	case y >= yFarN():
+		_, cy := North()
+		for i := 0; i < 6; i++ {
+			a := (float64(i) + 0.5) * math.Pi / 3
+			if math.Cos(a)*x+math.Sin(a)*(y-cy) > hexApo()+1e-9 {
+				return -1
+			}
+		}
+		return 0
+	case x >= xFarE() && RegionContains(1, x, y, 0):
+		return 1
+	case y <= yFarS() && y >= yFarS()-2*squareHalf() && math.Abs(x) <= squareHalf():
+		return 2
+	case x <= xFarW() && RegionContains(0, x, y, 0):
+		return 3
+	default:
+		return -1
+	}
+}

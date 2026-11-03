@@ -1119,7 +1119,7 @@ func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot 
 		return nil
 	}
 	actor := unitpkg.NewActor(kind, unitpkg.SpawnInfo{
-		State: m.shared, Data: data,
+		State: m.shared, Data: data, MatchSeed: m.seed, X: p.X, Y: p.Y,
 		OwnerID: owner, Slot: slot, Stream: stream,
 		Field: m.liveFieldLocked(), Probe: m.probeTape,
 		Silent: m.spawnSilent && kind == acausalKind(),
@@ -1421,7 +1421,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		u.noteFaction(u.faction)
 	case unitpkg.Spawn:
 		spec, ok := unitpkg.Lookup(c.Kind)
-		if !ok || spec.Fighter {
+		if !ok || spec.Fighter || (spec.RequiresOwner && m.units[c.OwnerID] == nil) {
 			return
 		}
 		u := m.addUnitWithDataLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot, c.Stream, c.Data)
