@@ -31,8 +31,8 @@ const (
 	miuVision    = 9999.0
 	miuColor     = "#f0f0f0"
 
-	miuDamage    = 5.0
-	miuMeleeCD   = 0.35
+	miuDamage    = 4.5
+	miuMeleeCD   = 0.40
 	miuMeleeGap  = 8.0 // 半径之和外的额外近战范围
 	miuMeleeSpan = 60.0
 	miuArcInner  = miuRadius - 1
@@ -51,7 +51,7 @@ const (
 	miuThrustCD    = 6.0
 	miuThrustDur   = 0.4
 
-	killBonusPer  = 100.0
+	killBonusPer  = 70.0
 	lowHPBoost    = 100.0
 	lowHPRatio    = 0.5
 	dodgeSpeedDiv = 25.0
