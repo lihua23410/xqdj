@@ -19,8 +19,8 @@ const (
 	knightHP       = 100.0
 	knightStartHP  = 85.0
 	knightVision   = 9999.0
-	knightDamage   = 9.0
-	knightHitCD    = 0.1
+	knightDamage   = 8.0
+	knightHitCD    = 0.11
 	knightCD       = 6.0
 	knightChainGap = 0.5
 	ramSpeed       = 350.0
@@ -28,7 +28,7 @@ const (
 	knightArcOuter = knightRadius + 2
 	knightArcSpan  = 120.0
 	knightColor    = "#ff2a2a"
-	lockHP         = 10.0
+	lockHP         = 6.0
 	markLock       = "锁血"
 )
 

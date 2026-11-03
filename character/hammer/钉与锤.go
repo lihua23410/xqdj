@@ -61,6 +61,7 @@ const (
 	dollSpawnTime = 30.0
 	dollLife      = 10.0
 	dollColor     = "#c4a060"
+	dollXferCD    = 1.0 // 替身转伤每秒最多一次；不打这个 CD 的话锤弧每 0.1s 重挂一次，等于每秒转 70 点
 )
 
 const (
@@ -437,7 +438,7 @@ func (a *弧) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	a.spent = true
 	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: arcDamage}
-	if ownDoll {
+	if ownDoll && transferReady(ctx.State, a.owner, e.Time) {
 		noteDollTransfer(ctx.State, a.owner, e.Other.HP, arcDamage)
 	}
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
@@ -811,6 +812,22 @@ func latchDoll(scope *unit.MatchState, owner, doll uint64) bool {
 		return false
 	}
 	m[doll] = true
+	return true
+}
+
+// transferReady 替身转伤的闸门：距离上次转伤不足 dollXferCD 就不放行。
+// 锤弧打中自己的替身后会重生，不闸住它 0.1 秒就能转一次。
+func transferReady(scope *unit.MatchState, owner uint64, now float64) bool {
+	if owner == 0 {
+		return false
+	}
+	shared := stateFor(scope)
+	shared.foeMu.Lock()
+	defer shared.foeMu.Unlock()
+	if now+1e-9 < shared.xferAt[owner] {
+		return false
+	}
+	shared.xferAt[owner] = now + dollXferCD
 	return true
 }
 

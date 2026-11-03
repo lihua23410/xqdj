@@ -126,6 +126,24 @@ func TestHammerSmashHitsOwnDoll(t *testing.T) {
 	}
 }
 
+func TestDollTransferRateLimited(t *testing.T) {
+	sc := &unit.MatchState{}
+	if !transferReady(sc, 1, 10) {
+		t.Fatal("第一下该放行")
+	}
+	for _, now := range []float64{10.1, 10.5, 10.99} {
+		if transferReady(sc, 1, now) {
+			t.Fatalf("%v 在 CD 里不该再转伤", now)
+		}
+	}
+	if !transferReady(sc, 1, 11) {
+		t.Fatal("满 1 秒该再转")
+	}
+	if !transferReady(sc, 2, 10.2) {
+		t.Fatal("两个本体各算各的 CD")
+	}
+}
+
 func TestDollHoldsPassAndExpires(t *testing.T) {
 	matchState := &unit.MatchState{}
 
