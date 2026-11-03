@@ -345,7 +345,7 @@ func TestGallowsLocksOnTouch(t *testing.T) {
 	if p := lastPass(cmds); p == nil || !p.Hold || p.UnitID != 9 {
 		t.Fatalf("pass=%v", p)
 	}
-	hit.Time = 1.2
+	hit.Time = 1.5
 	a.Handle(ctx, hit)
 	if lastDamage(drain(out)) != nil {
 		t.Fatal("still in 0.6s")
@@ -353,7 +353,7 @@ func TestGallowsLocksOnTouch(t *testing.T) {
 	hit.Time = 1.6
 	a.Handle(ctx, hit)
 	if lastDamage(drain(out)) == nil {
-		t.Fatal("tick after CD")
+		t.Fatal("tick after 0.6s")
 	}
 	hit.Time = 11
 	a.Handle(ctx, hit)

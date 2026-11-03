@@ -13,10 +13,10 @@ const (
 	cageOuter   = cageInner + 2*cageWall
 	cageFit     = cageOuter
 	cageColor   = "#3a3a3a"
-	cageDamage  = 2.0
+	cageDamage  = 1.0
 	gallowsR    = 16.5
 	gallowsDmg  = 1.0
-	gallowsCD   = 0.4
+	gallowsCD   = 0.6
 	chairR      = 16.5
 	currentNMin = 3
 	currentNMax = 6
