@@ -1,4 +1,5 @@
 // 收割者不转向。撞场边或硬墙钉镰刀，场上 10 把才收回。
+// 收回先直线飞回，圆心距 120 以内绕收割者顺时针螺旋一圈，重叠才消失。
 package 收割者
 
 import (
@@ -29,6 +30,7 @@ const (
 	sickleVision = 9999.0
 	sickleHeal   = 3.0
 	harvestCarry = 1.0
+	spiralEnter  = 120.0
 )
 
 // recallingIDs：主人判定收回时记下当时场上镰刀的 id。新钉的刀 id 不在里面，途中仍能钉。
@@ -144,6 +146,10 @@ type 镰刀 struct {
 	lastT      float64
 	hitReadyAt float64
 	booted     bool
+	spiraling  bool
+	spin       float64
+	r0         float64
+	phi0       float64
 }
 
 func (k *镰刀) Handle(ctx unit.Context, ev unit.Event) {
@@ -187,7 +193,6 @@ func (k *镰刀) onSense(ctx unit.Context, s unit.Sense) {
 	k.lastT = s.Time
 	owner := ownerOf(s, k.owner)
 	if k.recalling {
-		k.chase(ctx, s, owner, dt)
 		if owner != nil && overlap(s.Self.X, s.Self.Y, s.Self.Radius, owner.X, owner.Y, owner.Radius) {
 			k.showBlood(ctx)
 			if k.drew {
@@ -196,6 +201,7 @@ func (k *镰刀) onSense(ctx unit.Context, s unit.Sense) {
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return
 		}
+		k.chase(ctx, s, owner, dt)
 	} else {
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 	}
@@ -213,8 +219,17 @@ func (k *镰刀) showBlood(ctx unit.Context) {
 
 func (k *镰刀) chase(ctx unit.Context, s unit.Sense, owner *unit.Snapshot, dt float64) {
 	k.speed += sickleAccel * dt
+	if owner == nil {
+		ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: k.speed + 40}
+		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
+		return
+	}
+	if k.trySpiral(s, owner) {
+		k.stepSpiral(ctx, owner, s.Self.Radius, dt)
+		return
+	}
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: k.speed + 40}
-	if owner == nil || k.speed <= 0 {
+	if k.speed <= 0 {
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 		return
 	}
@@ -225,6 +240,70 @@ func (k *镰刀) chase(ctx unit.Context, s unit.Sense, owner *unit.Snapshot, dt 
 		return
 	}
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * k.speed, VY: dy / n * k.speed}
+}
+
+// trySpiral 在圆心距第一次进入 120 且还没重叠时记下进入方位。已经在环绕里就接着走。
+func (k *镰刀) trySpiral(s unit.Sense, owner *unit.Snapshot) bool {
+	if k.spiraling {
+		return true
+	}
+	dx, dy := s.Self.X-owner.X, s.Self.Y-owner.Y
+	if math.Hypot(dx, dy) > spiralEnter {
+		return false
+	}
+	if overlap(s.Self.X, s.Self.Y, s.Self.Radius, owner.X, owner.Y, owner.Radius) {
+		return false
+	}
+	k.spiraling = true
+	k.r0 = math.Hypot(dx, dy)
+	k.phi0 = math.Atan2(dy, dx)
+	return true
+}
+
+// stepSpiral 把刀摆上以收割者为圆心的顺时针内螺旋。世界 +Y 朝上，顺时针是角度减小。
+// 弧长 ds/dθ = hypot(r, dr/dθ)，转满一圈就钉在接触距上。
+func (k *镰刀) stepSpiral(ctx unit.Context, owner *unit.Snapshot, selfRadius, dt float64) {
+	contact := owner.Radius + selfRadius
+	if k.r0 < contact {
+		k.r0 = contact
+	}
+	drdθ := (contact - k.r0) / (2 * math.Pi)
+	r := spiralRadius(k.r0, contact, k.spin)
+	ds := math.Hypot(r, drdθ)
+	dθ := 0.0
+	if ds > 1e-9 && k.speed > 0 && dt > 0 && k.spin < 2*math.Pi {
+		dθ = k.speed * dt / ds
+		remain := 2*math.Pi - k.spin
+		if dθ > remain {
+			dθ = remain
+		}
+		k.spin += dθ
+	}
+	r = spiralRadius(k.r0, contact, k.spin)
+	phi := k.phi0 - k.spin
+	cs, sn := math.Cos(phi), math.Sin(phi)
+	x := owner.X + r*cs
+	y := owner.Y + r*sn
+	vx, vy := owner.VX, owner.VY
+	if k.spin < 2*math.Pi-1e-12 && dt > 0 {
+		dθdt := dθ / dt
+		drdt := drdθ * dθdt
+		vx += drdt*cs + r*sn*dθdt
+		vy += drdt*sn - r*cs*dθdt
+	}
+	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: x, Y: y}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: vx, VY: vy}
+	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: math.Hypot(vx, vy) + 40}
+}
+
+func spiralRadius(r0, contact, spin float64) float64 {
+	if spin < 0 {
+		spin = 0
+	}
+	if spin > 2*math.Pi {
+		spin = 2 * math.Pi
+	}
+	return r0 + (contact-r0)*(spin/(2*math.Pi))
 }
 
 func (k *镰刀) cut(ctx unit.Context, s unit.Sense) {
