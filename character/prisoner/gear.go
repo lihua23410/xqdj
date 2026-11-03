@@ -13,10 +13,10 @@ const (
 	cageOuter   = cageInner + 2*cageWall
 	cageFit     = cageOuter
 	cageColor   = "#3a3a3a"
-	cageDamage  = 2.0
+	cageDamage  = 1.0
 	gallowsR    = 16.5
 	gallowsDmg  = 1.0
-	gallowsCD   = 0.4
+	gallowsCD   = 0.6
 	chairR      = 16.5
 	currentNMin = 3
 	currentNMax = 6
@@ -87,6 +87,12 @@ func (a *绞刑架) Handle(ctx unit.Context, ev unit.Event) {
 		a.born = s.Time
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
 	}
+	// 双判定：第一判本拍圆盘重叠才锁上；第二判同一目标这一拍仍重叠才继续。
+	// 离开重叠立刻解开，不把上一拍的锁带到人已经走开之后。
+	if a.locked != 0 && !touching(s, a.locked) {
+		a.release(ctx)
+		a.locked = 0
+	}
 	if a.locked == 0 {
 		if o := overlapEnemy(s); o != nil {
 			a.locked = o.ID
@@ -132,24 +138,38 @@ func (a *绞刑架) release(ctx unit.Context) {
 }
 
 func overlapEnemy(s unit.Sense) *unit.Snapshot {
-	sr := s.Self.Radius
-	if sr < 1e-9 {
-		sr = gallowsR
-	}
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if !unit.Hittable(*o, s.Self.Slot) {
-			continue
-		}
-		r := o.Radius
-		if r < 1e-9 {
-			r = prisonerRadius
-		}
-		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) <= sr+r {
+		if circlesOverlap(s, o) {
 			return o
 		}
 	}
 	return nil
+}
+
+func touching(s unit.Sense, id uint64) bool {
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.ID == id && circlesOverlap(s, o) {
+			return true
+		}
+	}
+	return false
+}
+
+func circlesOverlap(s unit.Sense, o *unit.Snapshot) bool {
+	if !unit.Hittable(*o, s.Self.Slot) {
+		return false
+	}
+	sr := s.Self.Radius
+	if sr < 1e-9 {
+		sr = gallowsR
+	}
+	r := o.Radius
+	if r < 1e-9 {
+		r = prisonerRadius
+	}
+	return math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) <= sr+r
 }
 
 type 电椅 struct {

@@ -43,7 +43,7 @@ func TestMergeUpdatesBothSides(t *testing.T) {
 		t.Fatalf("tallies 甲=%+v 乙=%+v", solo["甲"], solo["乙"])
 	}
 	report := render(kinds, merged, 10, 90, time.Second, 4, "甲")
-	if !strings.Contains(report, "| 1 | 乙 | 28 | 20 | 14 | 6 | 0 | 70.0% | 70.0% |") {
+	if !strings.Contains(report, "| 1 | t0上 | 乙 | 28 | 20 | 14 | 6 | 0 | 70.0% | 70.0% |") {
 		t.Fatalf("solo row for 乙 missing:\n%s", report)
 	}
 	if strings.Contains(report, "范围：仅") {
@@ -220,9 +220,9 @@ func TestTiedPointsShareRank(t *testing.T) {
 		{"乙", "丙", 10, 0, 0, 0},
 	}
 	report := render(kinds, results, 10, 90, time.Second, 1, "")
-	if !strings.Contains(report, "| 1 | 甲 | 30 | 20 | 10 | 0 | 10 | 100.0% | 100.0% |") ||
-		!strings.Contains(report, "| 1 | 乙 | 30 | 20 | 10 | 0 | 10 | 100.0% | 100.0% |") ||
-		!strings.Contains(report, "| 3 | 丙 | 0 | 20 | 0 | 20 | 0 | 0.0% | 0.0% |") {
+	if !strings.Contains(report, "| 1 | t0上 | 乙 | 30 | 20 | 10 | 0 | 10 | 100.0% | 100.0% |") ||
+		!strings.Contains(report, "| 1 | t1上 | 甲 | 30 | 20 | 10 | 0 | 10 | 100.0% | 100.0% |") ||
+		!strings.Contains(report, "| 3 | t2上 | 丙 | 0 | 20 | 0 | 20 | 0 | 0.0% | 0.0% |") {
 		t.Fatalf("shared rank:\n%s", report)
 	}
 }
@@ -235,8 +235,8 @@ func TestSamePointsOrdersByWins(t *testing.T) {
 		{"乙", "丙", 2, 2, 6, 0},
 	}
 	report := render(kinds, results, 10, 90, time.Second, 1, "")
-	yi := strings.Index(report, "| 2 | 甲 |")
-	bing := strings.Index(report, "| 2 | 乙 |")
+	yi := strings.Index(report, "| 2 | t1上 | 甲 |")
+	bing := strings.Index(report, "| 2 | t2上 | 乙 |")
 	if yi < 0 || bing < 0 || yi > bing {
 		t.Fatalf("more wins should list first:\n%s", report)
 	}
@@ -306,8 +306,41 @@ func TestRebuildDropsBench(t *testing.T) {
 	if !strings.Contains(text, "胜率 = 胜 /（胜+负），平不计入。") {
 		t.Fatal("win rate formula missing")
 	}
-	if !strings.Contains(text, "| 排名 | 战斗机 | 积分 |") {
+	if !strings.Contains(text, "| 排名 | t度 | 战斗机 | 积分 |") {
 		t.Fatal("rank table missing")
+	}
+}
+
+func TestTierSplitHandlesRemainder(t *testing.T) {
+	if got := tierOf(0, 54); got != "t0上" {
+		t.Fatalf("first of 54 = %s", got)
+	}
+	if got := tierOf(17, 54); got != "t0下" {
+		t.Fatalf("rank 18 of 54 = %s", got)
+	}
+	if got := tierOf(18, 54); got != "t1上" {
+		t.Fatalf("rank 19 of 54 = %s", got)
+	}
+	if got := tierOf(53, 54); got != "t2下" {
+		t.Fatalf("last of 54 = %s", got)
+	}
+	// 55 人：t0 多 1 人，多的那人落在 t0上。
+	counts := map[string]int{}
+	for i := 0; i < 55; i++ {
+		counts[tierOf(i, 55)]++
+	}
+	if counts["t0上"] != 7 || counts["t0中"] != 6 || counts["t0下"] != 6 {
+		t.Fatalf("t0 of 55 = 上%d 中%d 下%d", counts["t0上"], counts["t0中"], counts["t0下"])
+	}
+	if counts["t1上"] != 6 || counts["t2下"] != 6 {
+		t.Fatalf("lower tiers of 55 not even: %+v", counts)
+	}
+	// 人少时先填满靠前的大档。两个人分到 t0 和 t1，各自只有上；t2 留空。
+	if tierOf(0, 2) != "t0上" || tierOf(1, 2) != "t1上" || tierOf(7, 8) != "t2中" {
+		t.Fatalf("small roster = %s %s %s", tierOf(0, 2), tierOf(1, 2), tierOf(7, 8))
+	}
+	if tierOf(0, 1) != "t0上" || tierOf(0, 0) != "" || tierOf(3, 2) != "" {
+		t.Fatal("edge tiers")
 	}
 }
 

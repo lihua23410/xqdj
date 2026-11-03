@@ -346,7 +346,7 @@ unit.Spec{
     Vision:     200,              // Sense.Nearby 的半径。0 = 除自己的随从外谁都看不见。可用 SetVision 改
     Fighter:    true,             // true 才进选人列表。Spawn 不能生成 Fighter
     Semi:       false,            // true = 半圆（无下限术士的红半/蓝半）
-    PassWalls:  false,            // true = 不撞墙（紫弹、收回镰刀）
+    PassWalls:  false,            // true = 不撞墙（紫弹、收回镰刀）。可用 PassWalls 令牌运行时挂摘
     Mortal:     false,            // true = 活随从：吃伤害/治疗，不计入胜负
     BreakWalls: false,            // true = 击中胶囊墙则该截提前消失并穿过；硬墙穿过不拆；场边仍撞
     StartHP:    0,                // 0 = 开局满血 MaxHP。小骑士用 85
@@ -465,6 +465,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 | `SetWallMotion` | 改一截墙绕墙心的转速（弧度每秒，逆时针为正）和墙心平移速度。`Ram > 0` 时平移途中对每个敌方目标结一次这个伤害。两截同一主人、`StunRadius > 0` 的墙胶囊重叠时一起消失，圈里的敌方站死 `StunDur` 秒，主人不晕 |
 | `HoldStill` | 到 `Until` 之前不发感知，速度保持为 0。施加时记下当前速度；再施加则刷新时间并重新记。到点把记下的速度还回去 |
 | `Pass` | 令牌。`Hold: true` 时与其他单位相撞不改双方速度、也不做位置分离；墙仍弹。`Hold: false` 放下 |
+| `PassWalls` | 令牌。`Hold: true` 时不撞场边、硬墙、胶囊墙。出生 `Spec.PassWalls` 为真的单位一开始就持有。`Hold: false` 放下 |
 | `Stand` | 令牌。`Hold: true` 时速率为 0 也不往巡航推。虚弱、居合、锁敌、绞刑架用这个。`Hold: false` 放下 |
 | `NoFrameFreeze` | 令牌。`Hold: true` 时该单位及其随从造成的伤害不停帧。`Hold: false` 放下 |
 | `NoHealthNumbers` | 令牌。`Hold: true` 时不画该单位自己的头顶数字，不跟到随从。`Hold: false` 放下 |
@@ -838,7 +839,7 @@ arena.registerShot("shot", (fx, ctx) => {
 - **帧序**（`Match.Tick`）：hit-stop 中只消化指令并递减计数（归零那拍判胜负）；否则 FS 过期 → 同步巡航 → 巡航带子 → 消化指令 → 施加瞬时 FS → 结算碰撞 → 按主人当下速度贴合扇环 → 物理推进 → 应用本帧伤害 → 再结算碰撞 → 清掉没打中的附着弹 → 贴壳 / 贴随从 → 会转的硬墙前进一拍并挤出挡路的固体 → 推进时间 → 墙和眩晕过期 → 发快照 → 判胜负。
 - **出生**：战斗机在可进入区域随机落点（两个圆心至少隔 `r+R+8`），初速大小 = `Spec.Speed`、方向随机。
 - **巡航带子**：快于巡航每 0.2s 减 10（不低于巡航）；慢于巡航但仍在动每 0.2s 加 5（不高于巡航）；速率为 0 且巡航大于 0 时，沿巡航朝向立刻回到巡航，不爬升。持 `Stand`、持瞬时 FS、或巡航 FS 的 `M ≈ 0` 时都不推；只对实心且有巡航带子的单位生效（战斗机默认有；活随从要 `Spec.Cruise`）。拉/推发生在消化指令之前，当帧 `SetVelocity` 能顶住巡航带子，但仍乘当时的 `M`；被瞬时 FS 覆盖时顶不住。
-- **撞墙**：入射角 = 反射角，速率不变，场边、硬墙、胶囊墙一样；战斗机和普通子弹一样。例外：`PassWalls` / `Attach` / `Shell` 单位根本不碰墙；`BreakWalls` 的弹撞场边照弹、撞硬墙穿过、撞胶囊墙拆穿。
+- **撞墙**：入射角 = 反射角，速率不变，场边、硬墙、胶囊墙一样；战斗机和普通子弹一样。例外：`PassWalls`（出生规格或令牌）/ `Attach` / `Shell` 单位根本不碰墙；`BreakWalls` 的弹撞场边照弹、撞硬墙穿过、撞胶囊墙拆穿。
 - **非弹体互撞**：沿法线各保留自己的速率，`a.v = n·|va|`，`b.v = −n·|vb|`。不要改回速度均分。任一方持有 `Pass` 时双方速度都不改、也不做位置分离（`Collision` 仍发）。墙不受 `Pass` 影响。
 - **伤害**：血量取自 `Spec.MaxHP`（引擎没有默认值，多数角色填 100）；确认伤害把血打到 ≤0 的那一拍由引擎移除（`SetHP` 置 0 不会移除单位）。`RoleFighter` 和 `Spec.Mortal` 的活随从都吃伤害，也都走 `IncomingDamage` → `ConfirmDamage`：不确认就不掉血。区别在确认之后：活随从不停帧、不换位、不叠 `MarkKind`、不计入胜负。对它造成伤害用 `unit.Hittable`（不实心的不算）。
 - **索敌**：不写死战斗机。`Spec.AimPriority` 未写时战斗机 15、活随从 60、其余 0（其余不能改成可瞄准）。快照 `AimPriority`：1–255 可被 `unit.Seek` 挑中（越小越先，相同则当下最近）；0 不可索敌，但 `Nearby` 仍按视野收录，出伤仍看 `Hittable`。1–255 时谁都能 `SetAimPriority`，后写覆盖；改成 0 后只有自己能改回来。观众不画这个数。雷达扫射一类不挑人的出伤不走 Seek。**挡视线**是实体标签（`Spec.VisionBlock` / `VisionBlock` 令牌 / `PlaceWall.VisionBlock`）：`Seek` / `SeekIf` 把「球心连线被带标签实体压住」的目标跳过，墙按胶囊、单位按圆、相切算挡、敌我不分；只挡索敌这一层，不进感知过滤、不挡物理，Nearby 自扫与碰撞出伤照常隔墙进行；场地预放墙不带标签，永远透明。没有带标签实体的场地 `Seek` 行为逐字节不变。

@@ -85,6 +85,68 @@ func TestPassStillBouncesOnHexWall(t *testing.T) {
 	}
 }
 
+func TestPassWallsTokenSkipsHexEdgeUntilDropped(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.SetSlot(0, character.KindRanged)
+	m.SetSlot(1, character.KindRanged)
+	m.Start()
+	defer m.End()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var u *unit
+	for _, id := range m.order {
+		cand := m.units[id]
+		if cand != nil && cand.role == unitpkg.RoleFighter {
+			u = cand
+			break
+		}
+	}
+	if u == nil {
+		t.Fatal("no fighter")
+	}
+	for _, id := range m.order {
+		other := m.units[id]
+		if other == nil || other.id == u.id {
+			continue
+		}
+		other.p = vec{0, 200}
+		other.setVel(vec{0, 0})
+	}
+	u.p = vec{220, 0}
+	u.setVel(vec{400, 0})
+	m.applyCmdLocked(unitpkg.PassWalls{UnitID: u.id, Hold: true})
+	if !u.snap().PassWalls {
+		t.Fatal("snapshot missing PassWalls")
+	}
+	for i := 0; i < 40; i++ {
+		m.physicsLocked(DT)
+		if u.v.X < 0 {
+			t.Fatalf("pass walls bounced, vx=%v p=%+v", u.v.X, u.p)
+		}
+	}
+	if u.p.X <= 220 {
+		t.Fatalf("did not keep moving out, p=%+v", u.p)
+	}
+	m.applyCmdLocked(unitpkg.PassWalls{UnitID: u.id, Hold: false})
+	if u.snap().PassWalls {
+		t.Fatal("snapshot still carries PassWalls")
+	}
+	u.p = vec{220, 0}
+	u.setVel(vec{400, 0})
+	hit := false
+	for i := 0; i < 40; i++ {
+		m.physicsLocked(DT)
+		if u.v.X < 0 {
+			hit = true
+			break
+		}
+	}
+	if !hit {
+		t.Fatalf("dropping PassWalls should restore bounce, vx=%v p=%+v", u.v.X, u.p)
+	}
+}
+
 func parkedRangedPair(t *testing.T) (*unit, *unit, *Match) {
 	t.Helper()
 	m := NewMatchSeeded(1)

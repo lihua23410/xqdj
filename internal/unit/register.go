@@ -9,7 +9,7 @@ type Spec struct {
 	Vision        float64
 	Fighter       bool
 	Semi          bool
-	PassWalls     bool
+	PassWalls     bool    // 不撞墙。出生即持有；也可用 PassWalls 令牌挂摘
 	Mortal        bool    // 活随从：吃 Damage / Heal，不计入胜负
 	BreakWalls    bool    // 击中胶囊墙则该截提前消失并穿过；硬墙穿过不拆；场边仍撞
 	StartHP       float64 // 0 表示开局满血（MaxHP）

@@ -408,6 +408,13 @@ type Pass struct {
 	Hold   bool
 }
 
+// PassWalls 令牌。Hold 时不撞场边、硬墙、胶囊墙。Hold=false 放下。
+// 出生时 Spec.PassWalls 为真的单位一开始就持有，令牌可再摘下。
+type PassWalls struct {
+	UnitID uint64
+	Hold   bool
+}
+
 // NoFrameFreeze 令牌。Hold 时该单位（及其随从）造成的伤害不停帧。Hold=false 放下。
 type NoFrameFreeze struct {
 	UnitID uint64
