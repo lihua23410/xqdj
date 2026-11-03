@@ -65,6 +65,8 @@ type unit struct {
 	holdVel         vec
 	noFrameFreeze   bool
 	damageScale     float64
+	damageBonus     float64
+	absorb          float64
 	noHealthNumbers bool
 	visionBlock     bool
 	shell           bool
@@ -385,6 +387,7 @@ func (u *unit) snap() unitpkg.Snapshot {
 		Nonsolid:        !u.solid,
 		VisionBlock:     u.visionBlock,
 		NoHealthNumbers: u.noHealthNumbers,
+		Absorb:          u.absorb,
 	}
 }
 
@@ -1360,6 +1363,29 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if !logSame(prevHP, u.hp) || !logSame(prevMax, u.maxHP) {
 			m.noteSetHPLocked(u)
 		}
+	case unitpkg.SetAbsorb:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		next := c.Amount
+		if next < 0 {
+			next = 0
+		}
+		if logSame(u.absorb, next) {
+			return
+		}
+		prev := u.absorb
+		u.absorb = next
+		m.noteSpanLocked(u, "护盾", prev, next)
+	case unitpkg.SetDamageBonus:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || logSame(u.damageBonus, c.Amount) {
+			return
+		}
+		prev := u.damageBonus
+		u.damageBonus = c.Amount
+		m.noteSpanLocked(u, "加伤", prev, c.Amount)
 	case unitpkg.SetAimPriority:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -1537,11 +1563,19 @@ func (u *unit) takesHit() bool {
 }
 
 func (m *Match) offerDamageLocked(c unitpkg.Damage) {
+	if from := m.units[c.From]; from != nil {
+		if from.damageScale > 0 {
+			c.Amount *= from.damageScale
+		}
+		// 固定加伤：算在发起者自己身上，外加它主人那一份（弹、弧、随从都归主人）。
+		// 先加再看非正：幻役那种「基础 0 伤、全靠 +X」的攻击也得能过。
+		c.Amount += from.damageBonus
+		if owner := m.units[from.owner]; owner != nil {
+			c.Amount += owner.damageBonus
+		}
+	}
 	if c.Amount <= 0 {
 		return
-	}
-	if from := m.units[c.From]; from != nil && from.damageScale > 0 {
-		c.Amount *= from.damageScale
 	}
 	u := m.units[c.To]
 	if !u.takesHit() {
@@ -1605,6 +1639,15 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	from := m.units[off.credit]
 	if from == nil {
 		from = m.units[off.from]
+	}
+	// 护盾池：整笔伤害被池子吃掉，本体不掉血；打穿那一下多出来的部分直接无视。
+	if u.absorb > 0 {
+		u.absorb -= off.amount
+		if u.absorb < 0 {
+			u.absorb = 0
+		}
+		m.noteAbsorbLocked(off)
+		return
 	}
 	if u.role == unitpkg.RoleFighter && (off.absorb || m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id]) {
 		delete(m.wardAbsorb, u.id)

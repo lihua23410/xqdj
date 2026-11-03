@@ -90,9 +90,38 @@ func (a *面具) Handle(ctx unit.Context, ev unit.Event) {
 			a.passed = true
 			ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
 		}
+		a.keepOrbit(ctx, e)
 	case unit.Collision:
 		a.hit(ctx, e)
 	}
+}
+
+// keepOrbit 是眩晕期的保险。眩晕只拦 Sense，不拦物理：主人照旧靠惯性滑走，
+// 但面具是非实心 helper，位置全靠主人每帧 Teleport —— 主人一断 Sense，
+// 面具就定在世界里、被落在后面（看上去就是「脱手」）。
+// 面具自己看得见主人（Spec 的 Vision），离轨道圈太远就顺着当前方向拉回去。
+// 正常跟着转的时候距离就是轨道半径，这条从不触发。
+func (a *面具) keepOrbit(ctx unit.Context, s unit.Sense) {
+	var o *unit.Snapshot
+	for i := range s.Nearby {
+		if s.Nearby[i].ID == a.owner {
+			o = &s.Nearby[i]
+			break
+		}
+	}
+	if o == nil {
+		return
+	}
+	dx, dy := s.Self.X-o.X, s.Self.Y-o.Y
+	d := math.Hypot(dx, dy)
+	if d < 1e-6 {
+		return
+	}
+	want := o.Radius + s.Self.Radius + maskOrbitPad
+	if math.Abs(d-want) <= maskFollowGap {
+		return
+	}
+	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: o.X + dx/d*want, Y: o.Y + dy/d*want}
 }
 
 func (a *面具) hit(ctx unit.Context, e unit.Collision) {

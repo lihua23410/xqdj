@@ -32,6 +32,8 @@ type Snapshot struct {
 	Nonsolid        bool     `json:"nonsolid,omitempty"`
 	VisionBlock     bool     `json:"visionBlock,omitempty"`
 	NoHealthNumbers bool     `json:"noHealthNumbers,omitempty"`
+	// Absorb 是额外血条剩多少（0 = 没有）。只有带藤色这类护盾的角色会看它。
+	Absorb float64 `json:"absorb,omitempty"`
 }
 
 // WallView 是感知里看见的一截墙。不含寿命和伤害，只够认主人、端点和粗细。
@@ -188,6 +190,22 @@ type SetHP struct {
 	UnitID uint64
 	HP     float64
 	MaxHP  float64
+}
+
+// SetAbsorb 改这一只的额外血条（护盾池）。>0 时每次挨打整笔被池子吃掉：
+// 本体不掉血，池子减到 0 为止；打穿那一下多出来的伤害直接无视。
+// Amount 是剩余量，不是增量；写 0 等于撤掉。
+type SetAbsorb struct {
+	UnitID uint64
+	Amount float64
+}
+
+// SetDamageBonus 改这一只的固定加伤：它自己出伤时（以及它名下的攻击单位出伤时）
+// 每笔提议都加这么多，结果不低于 0。乘算仍然走 Spawn.DamageScale。
+// 只为「每层藤色 +X」这种平加准备，别拿它当通用增伤。
+type SetDamageBonus struct {
+	UnitID uint64
+	Amount float64
 }
 
 type Damage struct {
