@@ -23,15 +23,15 @@ const (
 const (
 	// —— 本体（凡人面板）——
 	archerRadius = 18.0
-	archerSpeed  = 178.0 // 小骑士同级：要主动经营距离，腿不能慢
+	archerSpeed  = 165.0
 	archerHP     = 100.0
 	archerVision = 9999.0    // 安全向算法要看全场敌人和弹幕
 	archerColor  = "#38332f" // 老兵本体：深褐
 	arrowColor   = "#f5f2e8" // 箭是白的：深色场上棕色小点根本看不见（Trail 关掉，拖尾自己画）
 
 	// —— 箭 ——
-	arrowDmg   = 5.0 // 蓄射 / 后撤步那一箭
-	volleyDmg  = 5.0 // 齐射每一支（对心四支全中 = 20）
+	arrowDmg   = 4.0 // 蓄射 / 后撤步那一箭
+	volleyDmg  = 4.0 // 齐射每一支（对心四支全中*4）
 	arrowSpeed = 1024.0
 	arrowR     = 4.0
 	arrowStun  = 0.2 // 每支箭 0.2s 眩晕；同目标同帧同值，Stun 直接覆盖 → 天然不叠
