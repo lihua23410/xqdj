@@ -342,7 +342,7 @@ func (n *network) route(from, to point) []point {
 		length := math.Sqrt(length2)
 		nx, ny = -dy/length, dx/length
 	}
-	for push := n.coreR*1.12 - near; push <= n.coreR*3.5; push += n.coreR*0.25 {
+	for push := n.coreR*1.12 - near; push <= n.coreR*3.5; push += n.coreR * 0.25 {
 		q := point{mx + nx*push, my + ny*push}
 		if n.fieldR > 0 && math.Hypot(q.x, q.y) > n.fieldR*0.94 {
 			break

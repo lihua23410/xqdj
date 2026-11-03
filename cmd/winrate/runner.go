@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sync"
 
 	"xqdj/internal/sim"
@@ -12,7 +13,7 @@ type gameRunner func(left, right string, seed uint64, maxTicks int) (winner stri
 
 // runPairs 只启动固定数量的工作协程；排队场次不持有协程或 Match。
 // 角色仍由 Match 内原有的异步 actor 执行，工作池只限制同时进行的场次数。
-func runPairs(pairs []pair, nGames, maxTicks, jobs int, play gameRunner) ([]pairResult, int) {
+func runPairs(pairs []pair, nGames, maxTicks, jobs int, play gameRunner, bar *progressBar) ([]pairResult, int) {
 	results := make([]pairResult, len(pairs))
 	for i, p := range pairs {
 		results[i] = pairResult{a: p.a, b: p.b}
@@ -29,9 +30,10 @@ func runPairs(pairs []pair, nGames, maxTicks, jobs int, play gameRunner) ([]pair
 	}
 	type task struct{ pair, round int }
 	type outcome struct {
-		pair   int
-		winner string
-		ticks  int
+		pair        int
+		left, right string
+		winner      string
+		ticks       int
 	}
 	queue := make(chan task, jobs)
 	completed := make(chan outcome, jobs)
@@ -48,7 +50,7 @@ func runPairs(pairs []pair, nGames, maxTicks, jobs int, play gameRunner) ([]pair
 				}
 				seed := mixSeed(left, right, uint64(task.round)+1)
 				winner, ticks := play(left, right, seed, maxTicks)
-				completed <- outcome{task.pair, winner, ticks}
+				completed <- outcome{task.pair, left, right, winner, ticks}
 			}
 		}()
 	}
@@ -78,6 +80,14 @@ func runPairs(pairs []pair, nGames, maxTicks, jobs int, play gameRunner) ([]pair
 			r.draws++
 		}
 		done++
+		verdict := "平局"
+		switch game.winner {
+		case game.left:
+			verdict = game.left + " 胜"
+		case game.right:
+			verdict = game.right + " 胜"
+		}
+		bar.report(fmt.Sprintf("%-14s vs %-14s → %s", game.left, game.right, verdict))
 	}
 	return results, done
 }

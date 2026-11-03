@@ -35,7 +35,7 @@ func TestRunPairsAccountsForEveryRound(t *testing.T) {
 		}
 		seen[seed]++
 		return g.winner, g.ticks
-	})
+	}, nil)
 	if done != 10 {
 		t.Fatalf("completed %d games, want 10", done)
 	}
@@ -67,7 +67,7 @@ func TestRunPairsBoundsActiveGames(t *testing.T) {
 			}
 			<-release
 			return "甲", 1
-		})
+		}, nil)
 		finished <- done
 	}()
 	for i := 0; i < jobs; i++ {

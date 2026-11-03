@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
 	"sort"
 	"strings"
@@ -27,7 +28,7 @@ type tally struct {
 
 func main() {
 	nGames := flag.Int("n", 100, "每组对战场次")
-	maxSec := flag.Float64("timeout", 90, "单场模拟超时秒数，超时计平")
+	maxSec := flag.Float64("timeout", 600, "单场模拟超时秒数，超时计平")
 	outPath := flag.String("o", "winrate.md", "输出文件")
 	jobs := flag.Int("j", runtime.NumCPU()*2, "同时进行的场次数")
 	only := flag.String("only", "", "只测该战斗机并写回全表（不含自己打自己）")
@@ -92,7 +93,19 @@ func main() {
 	total := len(pairs) * *nGames
 	fmt.Fprintf(os.Stderr, "组合 %d，每组 %d 场，共 %d 场，并发 %d\n", len(pairs), *nGames, total, *jobs)
 	t0 := time.Now()
-	results, done := runPairs(pairs, *nGames, maxTicks, *jobs, playMatch)
+	bar := newProgress(os.Stderr, total)
+	// Ctrl-C 也要把滚动区还原，不然终端会卡在"只有上面几行能滚"的状态。
+	if bar.live {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, os.Interrupt)
+		go func() {
+			<-sig
+			bar.closeScreen()
+			os.Exit(130)
+		}()
+	}
+	results, done := runPairs(pairs, *nGames, maxTicks, *jobs, playMatch, bar)
+	bar.finish()
 	elapsed := time.Since(t0)
 	fmt.Fprintf(os.Stderr, "打完 %d 场，用时 %s\n", done, elapsed.Round(time.Millisecond))
 

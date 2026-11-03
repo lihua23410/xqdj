@@ -16,3 +16,4 @@ desktop.ini
 .zcode/
 .test-ap/
 .dsh-ops-update-*.lock
+.dsh-progress/
