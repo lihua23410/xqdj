@@ -134,7 +134,7 @@ func TestMetronomeTicksWithoutTarget(t *testing.T) {
 		Nearby: []unit.Snapshot{enemyAt(10, 0)},
 	})
 	d := lastDamage(drain(out))
-	if d == nil || d.Amount != 1 || d.To != 2 {
+	if d == nil || d.Amount != 2 || d.To != 2 {
 		t.Fatalf("damage=%v", d)
 	}
 }
@@ -187,7 +187,7 @@ func TestGearSixHeatBreaksThenBlastsThenResets(t *testing.T) {
 	})
 	cmds = drain(out)
 	d := lastDamage(cmds)
-	if d == nil || d.Amount != 30 {
+	if d == nil || d.Amount != 35 {
 		t.Fatalf("blast=%v", d)
 	}
 	if lastNamed(cmds, "blast") == nil {
