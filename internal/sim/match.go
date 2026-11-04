@@ -52,6 +52,8 @@ type unit struct {
 	semi            bool
 	face            vec
 	passWalls       bool
+	passInnerWalls  bool
+	bodiesOnly      bool
 	breakWalls      bool
 	mortal          bool
 	aimPriority     uint8
@@ -1136,37 +1138,39 @@ func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot 
 		m.actorWork = newActorWork()
 	}
 	u := &unit{
-		id:            id,
-		kind:          kind,
-		role:          spec.Role,
-		slot:          slot,
-		owner:         owner,
-		p:             p,
-		v:             v,
-		radius:        spec.Radius,
-		hp:            spec.MaxHP,
-		maxHP:         spec.MaxHP,
-		vision:        spec.Vision,
-		cruise:        spec.Speed,
-		velM:          1,
-		actor:         actor,
-		inbox:         newActorInbox(m.actorWork),
-		stop:          make(chan struct{}),
-		exited:        make(chan struct{}),
-		solid:         spec.Role != unitpkg.RoleHelper && !spec.Nonsolid,
-		semi:          spec.Semi,
-		face:          vec{1, 0},
-		passWalls:     spec.PassWalls,
-		breakWalls:    spec.BreakWalls,
-		mortal:        spec.Mortal,
-		aimPriority:   unitpkg.DefaultAimPriority(spec),
-		shell:         spec.Shell,
-		attach:        spec.Attach,
-		attachFriends: spec.AttachFriends,
-		pass:          spec.Pass,
-		arcSpan:       spec.ArcSpan,
-		arcInner:      spec.ArcInner,
-		visionBlock:   spec.VisionBlock,
+		id:             id,
+		kind:           kind,
+		role:           spec.Role,
+		slot:           slot,
+		owner:          owner,
+		p:              p,
+		v:              v,
+		radius:         spec.Radius,
+		hp:             spec.MaxHP,
+		maxHP:          spec.MaxHP,
+		vision:         spec.Vision,
+		cruise:         spec.Speed,
+		velM:           1,
+		actor:          actor,
+		inbox:          newActorInbox(m.actorWork),
+		stop:           make(chan struct{}),
+		exited:         make(chan struct{}),
+		solid:          spec.Role != unitpkg.RoleHelper && !spec.Nonsolid,
+		semi:           spec.Semi,
+		face:           vec{1, 0},
+		passWalls:      spec.PassWalls,
+		passInnerWalls: spec.PassInnerWalls,
+		bodiesOnly:     spec.BodiesOnly,
+		breakWalls:     spec.BreakWalls,
+		mortal:         spec.Mortal,
+		aimPriority:    unitpkg.DefaultAimPriority(spec),
+		shell:          spec.Shell,
+		attach:         spec.Attach,
+		attachFriends:  spec.AttachFriends,
+		pass:           spec.Pass,
+		arcSpan:        spec.ArcSpan,
+		arcInner:       spec.ArcInner,
+		visionBlock:    spec.VisionBlock,
 	}
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
@@ -1506,6 +1510,24 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		u.passWalls = c.Hold
 		m.noteHoldLocked(u, "穿墙", c.Hold)
+	case unitpkg.PassInnerWalls:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || u.passInnerWalls == c.Hold {
+			return
+		}
+		u.passInnerWalls = c.Hold
+		m.noteHoldLocked(u, "穿场内墙", c.Hold)
+		if !c.Hold {
+			// A body can be in the middle of a thick or overlapping wall. An
+			// initial projection can still overlap another face, so converge.
+			for i := 0; i < 8; i++ {
+				before := u.p
+				m.constrainUnitLocked(u)
+				if u.p.sub(before).len2() < 1e-12 {
+					break
+				}
+			}
+		}
 	case unitpkg.Stand:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped || u.stand == c.Hold {
@@ -2410,7 +2432,7 @@ func (m *Match) shoveWallLocked(w *barrier) {
 	still := map[uint64]struct{}{}
 	for _, id := range m.order {
 		u := m.units[id]
-		if u == nil || u.stopped || !u.solid || u.passWalls || u.shell || u.attach || u.role == unitpkg.RoleHelper {
+		if u == nil || u.stopped || !u.solid || u.passWalls || u.passInnerWalls || u.shell || u.attach || u.role == unitpkg.RoleHelper {
 			continue
 		}
 		if u.breakWalls && w.hard {
@@ -2532,6 +2554,9 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 			}
 			cc, cr := colOf(u.p, u.face, u.radius, u.semi)
 			for _, w := range m.walls {
+				if u.passInnerWalls {
+					continue
+				}
 				if ignoreUW[uwID{u.id, w.id}] {
 					continue
 				}
@@ -2572,6 +2597,10 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 				continue
 			}
 			if ignore[canonPair(a.id, b.id)] {
+				continue
+			}
+			if (a.bodiesOnly && b.role != unitpkg.RoleFighter && !b.mortal) ||
+				(b.bodiesOnly && a.role != unitpkg.RoleFighter && !a.mortal) {
 				continue
 			}
 			if a.role == unitpkg.RoleProjectile && !a.attachFriends && (a.slot == b.slot || (a.owner != 0 && a.owner == b.id)) {
@@ -2748,6 +2777,9 @@ func (m *Match) constrainUnitLocked(u *unit) {
 		return
 	}
 	m.constrainOutlineLocked(u, vec{})
+	if u.passInnerWalls {
+		return
+	}
 	cc, cr := colOf(u.p, u.face, u.radius, u.semi)
 	for _, w := range m.walls {
 		if u.breakWalls && w.hard {

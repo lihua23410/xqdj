@@ -51,6 +51,7 @@ import (
 	"xqdj/character/sot"
 	"xqdj/character/static"
 	"xqdj/character/subpoena"
+	"xqdj/character/surgery"
 	"xqdj/character/tachi"
 	"xqdj/character/tanyongchen"
 	"xqdj/character/threshold"
@@ -239,6 +240,11 @@ const (
 	KindStaticBall         = 静电魔球.KindStaticBall
 	KindSubpoena           = 传票员.KindSubpoena
 	KindTicket             = 传票员.KindTicket
+	KindBloodBullet        = 外科手术.KindBloodBullet
+	KindScalpel            = 外科手术.KindScalpel
+	KindSurgery            = 外科手术.KindSurgery
+	KindSurgeryField       = 外科手术.KindSurgeryField
+	KindSutureNeedle       = 外科手术.KindSutureNeedle
 	KindTachi              = 太刀.KindTachi
 	KindBell               = 谭泳辰.KindBell
 	KindDomain             = 谭泳辰.KindDomain

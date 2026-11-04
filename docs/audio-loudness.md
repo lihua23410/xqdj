@@ -42,6 +42,9 @@
 | `character/arsonist/fx/fire-break.wav` | 火瓶玻璃碎裂与点燃（0.85 秒） | -17.2 | -1.0 |
 | `character/arsonist/fx/crackle-a.wav` | 燃烧背景噼啪 A（1.15 秒） | -23.5 | -13.0 |
 | `character/arsonist/fx/crackle-b.wav` | 燃烧背景噼啪 B（1.15 秒） | -23.5 | -13.5 |
+| `character/surgery/fx/cut.wav` | 手术刀落下与掠过（0.24 秒） | -70.0 | -7.9 |
+| `character/surgery/fx/stitch.wav` | 穿针牵线（0.13 秒） | -70.0 | -8.0 |
+| `character/surgery/fx/burst.wav` | 创缘崩开喷血（0.38 秒） | -70.0 | -7.7 |
 
 `default-impact.wav` 只有 0.16 秒，积分响度对这类极短点击没有意义；它已按真峰值
 限制到 -1.0 dBFS，听感上是一次短促碰撞。`character/melee/fx/attack.wav` 同样只有

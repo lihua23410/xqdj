@@ -354,7 +354,7 @@ func TestCommittedReportStillParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 100 || sec != 90 {
+	if n != 100 || sec != 600 {
 		t.Fatalf("header n=%d timeout=%v", n, sec)
 	}
 	rows, err := parseDetail(text, n)

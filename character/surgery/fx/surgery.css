@@ -1,0 +1,15 @@
+.ball.look-surgery { background: #76b5ab; border: 1px solid #b6d9ce; box-shadow: inset -2px -2px 4px #153c3f88, 0 2px 4px #0007; overflow: visible; }
+.surgery-body, .surgery-body > svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.surgery-body > svg { filter: drop-shadow(0 1px 1px #163f3b50); }
+.surgery-immune { box-shadow: 0 0 0 1px #dcf2e0, 0 0 6px #98cdb660 !important; }
+.surgery-meter { position: absolute; top: calc(100% + 6px); left: -20%; width: 140%; height: 4px; background: #21181fe8; border: 1px solid #64434c; border-radius: 3px; overflow: hidden; box-sizing: border-box; }
+.surgery-meter i { display: block; width: var(--surgery-charge, 0%); height: 100%; background: linear-gradient(90deg, #6f1835, #c63d4d 75%, #f09b8a); }
+.guide.surgery-floor { position: absolute; transform: none; border: 0; border-radius: 0; pointer-events: none; background: none; }
+.surgery-floor canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.look-surgery-scalpel, .look-surgery-needle, .look-surgery-blood { background: none !important; border: 0 !important; box-shadow: none !important; overflow: visible !important; }
+.surgery-scalpel-art { position: absolute; inset: 0; transform-origin: 50% 50%; pointer-events: none; }
+.surgery-scalpel-art svg { position: absolute; left: -450%; top: -33.3%; width: 600%; height: 166.6%; overflow: visible; filter: drop-shadow(1px 2px 1px #10212990); }
+.surgery-needle-art, .surgery-needle-art svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.surgery-needle-art { filter: drop-shadow(0 0 1px #143d40); }
+.surgery-blood-art { position: absolute; inset: 0; border-radius: 38% 58% 58% 38%; background: radial-gradient(ellipse at 65% 25%, #f5b6aa 0 7%, #cb4154 15%, #9c1836 48%, #480d25 100%); box-shadow: 0 1px 1px #260b1c85; }
+.surgery-blood-art::before { content: ""; position: absolute; right: 70%; top: 32%; width: 85%; height: 35%; border-radius: 90% 0 0 90%; background: linear-gradient(90deg, transparent, #8b153284); }

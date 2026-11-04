@@ -415,6 +415,12 @@ type PassWalls struct {
 	Hold   bool
 }
 
+// PassInnerWalls 穿过场内墙，仍由场边扫掠和约束。放下时立即退出墙内。
+type PassInnerWalls struct {
+	UnitID uint64
+	Hold   bool
+}
+
 // NoFrameFreeze 令牌。Hold 时该单位（及其随从）造成的伤害不停帧。Hold=false 放下。
 type NoFrameFreeze struct {
 	UnitID uint64
