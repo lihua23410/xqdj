@@ -54,6 +54,7 @@ import (
 	"xqdj/character/tanyongchen"
 	"xqdj/character/threshold"
 	"xqdj/character/tokei"
+	"xqdj/character/tokei_inscribed"
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
 	"xqdj/character/waller"
@@ -244,6 +245,8 @@ const (
 	KindTokei              = 时计.KindTokei
 	KindTokeiArc           = 时计.KindTokeiArc
 	KindTokeiMoment        = 时计.KindTokeiMoment
+	KindInscribed          = 时计_铭刻.KindInscribed
+	KindInscribedArc       = 时计_铭刻.KindInscribedArc
 	KindBlue               = 无下限术士.KindBlue
 	KindRed                = 无下限术士.KindRed
 	KindTwin               = 无下限术士.KindTwin
