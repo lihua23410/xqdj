@@ -108,6 +108,10 @@ func (a *fighter) advance(s unit.Sense) commands {
 	var out commands
 	from := point{s.Self.X, s.Self.Y}
 	now := s.Time + 1e-9
+	if math.IsNaN(now) || math.IsInf(now, 0) {
+		// 坏时钟会让下面两个 while 推进条件永远成立，抱着锁空转，整场卡死。
+		return out
+	}
 	for {
 		if a.nextDrop <= now && (a.nextDrop <= a.nextSend || n.nearestASBR(from) == nil) {
 			at := from
