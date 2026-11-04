@@ -92,20 +92,25 @@ func TestNameFiresBigAtCenter(t *testing.T) {
 	}
 }
 
-func TestNameFiresThreeSmallThenRestores(t *testing.T) {
+func TestNameFiresSmallRoundsThenRestores(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	a := &百战{mode: modeSmall}
 	ctx := unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}
 	e := enemyAt(0, 80)
 	first := morphDur + nameGap
-	for _, t := range []float64{0, first, first + nameGap, first + 2*nameGap} {
+	a.Handle(ctx, unit.Sense{
+		Time: 0, Self: selfAt(0, 0), Nearby: []unit.Snapshot{e}, Field: unit.HexField(),
+	})
+	drain(out)
+	// 前 nameShots-1 轮只要推进时间，输出丢掉；最后一轮挂出小结并收炮。
+	for k := 0; k < nameShots-1; k++ {
 		a.Handle(ctx, unit.Sense{
-			Time: t, Self: selfAt(0, 0), Nearby: []unit.Snapshot{e}, Field: unit.HexField(),
+			Time: first + float64(k)*nameGap, Self: selfAt(0, 0), Nearby: []unit.Snapshot{e}, Field: unit.HexField(),
 		})
 		drain(out)
 	}
 	a.Handle(ctx, unit.Sense{
-		Time: first + 3*nameGap, Self: selfAt(0, 0), Nearby: []unit.Snapshot{e}, Field: unit.HexField(),
+		Time: first + float64(nameShots-1)*nameGap, Self: selfAt(0, 0), Nearby: []unit.Snapshot{e}, Field: unit.HexField(),
 	})
 	cmds := drain(out)
 	spawns := allSpawns(cmds)
@@ -140,7 +145,7 @@ func TestNameFiresThreeSmallThenRestores(t *testing.T) {
 		t.Fatal("mark should clear with the name")
 	}
 	a.Handle(ctx, unit.Sense{
-		Time: first + 3*nameGap + morphDur, Self: selfAt(0, 0), Field: unit.HexField(),
+		Time: first + float64(nameShots-1)*nameGap + morphDur, Self: selfAt(0, 0), Field: unit.HexField(),
 	})
 	back := drain(out)
 	if lastNamed(back, "beam") == nil || lastNamed(back, "beam").Amount <= 0 {
