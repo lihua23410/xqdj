@@ -8,6 +8,7 @@ import (
 	"xqdj/character/arsonist"
 	"xqdj/character/axe"
 	"xqdj/character/bloodpact"
+	"xqdj/character/bubble"
 	"xqdj/character/bundle"
 	"xqdj/character/charcoal"
 	"xqdj/character/coalesce"
@@ -83,6 +84,10 @@ const (
 	KindBloodBat           = 血契.KindBloodBat
 	KindBloodPact          = 血契.KindBloodPact
 	KindPounceArc          = 血契.KindPounceArc
+	KindBubble             = 泡泡球.KindBubble
+	KindBubbleBall         = 泡泡球.KindBubbleBall
+	KindBubbleLoad         = 泡泡球.KindBubbleLoad
+	KindBubbleShot         = 泡泡球.KindBubbleShot
 	KindBundle             = 捆.KindBundle
 	KindCharcoal           = 炭翁.KindCharcoal
 	KindCharcoalEmber      = 炭翁.KindCharcoalEmber
