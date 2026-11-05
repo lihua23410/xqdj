@@ -60,4 +60,22 @@
   };
   window.lookFX.fujihime = shieldHook;
   window.lookFX["fujihime-doll"] = shieldHook;
+
+  // 藤色能落在任何 kind 身上：队友、幻役、自己。只按 kind 登记的话，
+  // 挂在队友身上时整条额外血条不画——看着就像 buff 没生效，藤姬一死更像没了。
+  // 这条挂件每一只单位都会过一遍，认「身上有没有藤色」，所以挂在谁身上画在谁身上，
+  // 藤姬倒下之后也照样留着（引擎那边池子和 +X 本来就是跟着持有人的）。
+  function holdsTose(u) {
+    const marks = (u && u.marks) || [];
+    return marks.some((m) => m && m.kind === "藤色" && m.stacks > 0);
+  }
+  window.lookFX.absorb = {
+    tick(el, u) {
+      paintShield(el, holdsTose(u) ? u : null);
+    },
+    unmount(el) {
+      const bar = shieldBarOf(el);
+      if (bar) bar.remove();
+    },
+  };
 })();

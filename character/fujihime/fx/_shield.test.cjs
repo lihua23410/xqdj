@@ -78,3 +78,36 @@ test('池子剩一点点也画得出来，读数最低 1', () => {
   assert.equal(el.children[0].children[0].style.props['--fill'], '6.0%');
   assert.equal(el.children[0].children[1].textContent, '1');
 });
+
+// 藤色能落在队友身上（任何 kind），也能在藤姬倒下之后继续留着——
+// 所以额外血条要走「每只单位都过一遍」的共用挂件，按 kind 登记会整条消失。
+test('藤色落在队友身上也画血条，藤姬不在也留着', () => {
+  const { window: w } = load();
+  const hook = w.lookFX.absorb;
+  assert.ok(hook && typeof hook.tick === 'function', '缺了共用挂件 lookFX.absorb');
+
+  const buddy = new FakeEl('div');
+  const withTose = { absorb: 45, marks: [{ kind: '藤色', stacks: 3 }] };
+  hook.tick(buddy, withTose);
+  assert.equal(buddy.children[0].className, 'fujihime-shield');
+  assert.equal(buddy.children[0].children[0].style.props['--fill'], '45.0%');
+  assert.equal(buddy.children[0].children[1].textContent, '45');
+
+  // 池子被打空：条撤掉（层数标记由状态栏那套管，不归这里）。
+  hook.tick(buddy, { absorb: 0, marks: [{ kind: '藤色', stacks: 3 }] });
+  assert.equal(buddy.children.length, 0);
+
+  // 别人的护盾池不归这条挂件画（比如时计·铭刻有自己那套）。
+  const other = new FakeEl('div');
+  hook.tick(other, { absorb: 60, marks: [] });
+  assert.equal(other.children.length, 0, '没藤色就不该画藤色血条');
+});
+
+test('单位节点被复用时要清掉遗留的血条', () => {
+  const { window: w } = load();
+  const el = new FakeEl('div');
+  w.lookFX.absorb.tick(el, { absorb: 30, marks: [{ kind: '藤色', stacks: 2 }] });
+  assert.equal(el.children.length, 1);
+  w.lookFX.absorb.unmount(el);
+  assert.equal(el.children.length, 0);
+});

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"xqdj/character"
+	血契 "xqdj/character/bloodpact"
 	unitpkg "xqdj/internal/unit"
 )
 
@@ -128,7 +129,7 @@ func setPactHP(m *Match, u *unit, hp float64) {
 	m.mu.Unlock()
 }
 
-// 咬合：扇区里咬到敌方战斗机结 7 伤，而且受 0.3 秒 CD 管——不是每拍都能咬。
+// 咬合：扇区里咬到敌方战斗机结咬合伤害，而且受 0.3 秒 CD 管——不是每拍都能咬。
 // 量 blood-bite FX 的次数而不是 HP 差；开局先把血契压进熔断（HP 9），
 // 蝙蝠召不出来——它们是实体，会把对面从咬距上挤开，主人的咬就乱了。
 // 熔断只熄召蝙蝠/饿扑/收线，不熄免费咬合，正好单独量它。
@@ -148,7 +149,7 @@ func TestBloodBiteRespectsCooldown(t *testing.T) {
 	}
 }
 
-// 咬合命中敌方战斗机才建血线；建上之后对面掉血按浅寄生 25% 回流。
+// 咬合命中敌方战斗机才建血线；建上之后对面掉血按浅寄生回流。
 func TestBloodLineFormsAndFeedsShallow(t *testing.T) {
 	m, pact, victim := startPact(t, 42, character.KindDummy)
 	lockBoth(m, pact, victim, 34)
@@ -158,7 +159,7 @@ func TestBloodLineFormsAndFeedsShallow(t *testing.T) {
 	if seen["blood-bond"] == 0 {
 		t.Fatalf("咬到敌方战斗机该建血线，没见过 blood-bond：%v", seen)
 	}
-	// 血线连着期间，对面掉多少血就按 25% 回流（浅寄生）。
+	// 血线连着期间，对面掉多少血就按浅寄生回流（还有自己那几口咬合的零头，所以只看下限）。
 	setPactHP(m, pact, 50)
 	m.mu.Lock()
 	before := pact.hp
@@ -167,8 +168,8 @@ func TestBloodLineFormsAndFeedsShallow(t *testing.T) {
 
 	tickN(m, 6)
 	after := pactHP(m, pact)
-	if after-before < 4.5 {
-		t.Fatalf("20 伤该回流 5（25%%），血契 %v -> %v", before, after)
+	if want := 20 * 血契.FeedShallow; after-before < want*0.9 {
+		t.Fatalf("20 伤该回流 %v，血契 %v -> %v", want, before, after)
 	}
 }
 
@@ -233,7 +234,7 @@ func TestBloodLineSnapsAndWilts(t *testing.T) {
 	}
 }
 
-// 回流分档：0–3 秒 25%、3–6 秒 50%、6 秒后 75%。
+// 回流分档：0–3 秒、3–6 秒、6 秒后逐档加深。
 // 每档都往对面灌一大笔伤害（100），这样血契自己那几口咬合的回流只是零头，
 // 量出来就是这一档的回流比例。
 func TestBloodFeedDeepensOverTime(t *testing.T) {
@@ -253,21 +254,23 @@ func TestBloodFeedDeepensOverTime(t *testing.T) {
 		tickUntil(m, 0.2)
 		return pactHP(m, pact) - before
 	}
+	// 咬合的零头最多几口，量出来的比例只认「不低于这一档」。
+	check := func(name string, ratio float64) {
+		t.Helper()
+		want := 100 * ratio
+		if got := feed(); got < want-1 {
+			t.Fatalf("%s 该回流 %v，实际 %v", name, want, got)
+		}
+	}
 
-	// 还没到 3 秒：浅寄生 25%。
-	if got := feed(); got < 24 || got > 30 {
-		t.Fatalf("0–3 秒档该回流 25（25%%），实际 %v", got)
-	}
-	// 拖过 3 秒、停在 6 秒前：50%。
+	// 还没到 3 秒：浅寄生。
+	check("0–3 秒档", 血契.FeedShallow)
+	// 拖过 3 秒、停在 6 秒前：中档。
 	tickUntil(m, 3.2)
-	if got := feed(); got < 49 || got > 56 {
-		t.Fatalf("3–6 秒档该回流 50（50%%），实际 %v", got)
-	}
-	// 再拖过 6 秒：75%。
+	check("3–6 秒档", 血契.FeedMid)
+	// 再拖过 6 秒：深档。
 	tickUntil(m, 3.2)
-	if got := feed(); got < 74 || got > 82 {
-		t.Fatalf("6 秒后该回流 75（75%%），实际 %v", got)
-	}
+	check("6 秒后", 血契.FeedDeep)
 }
 
 // 饿扑：开局无血线时烧 5 血、朝索敌目标以 400 速扑 0.5 秒。
@@ -366,14 +369,14 @@ func TestBloodMultiLinePartialSnap(t *testing.T) {
 		t.Fatalf("断一条线不蔫置，巡航该保持钉住的 0，实际 %.1f", cruise)
 	}
 
-	// 靶子线还在：打靶子一刀，照常 25% 回流。
+	// 靶子线还在：打靶子一刀，照常按浅寄生回流。
 	setPactHP(m, pact, 50)
 	m.mu.Lock()
 	before := pact.hp
 	m.offerDamageLocked(unitpkg.Damage{From: victim.id, To: victim.id, Amount: 20})
 	m.mu.Unlock()
 	tickN(m, 6)
-	if after := pactHP(m, pact); after-before < 4.5 {
+	if after := pactHP(m, pact); after-before < 20*血契.FeedShallow*0.9 {
 		t.Fatalf("靶子线该照常回流，血契 %v -> %v", before, after)
 	}
 }

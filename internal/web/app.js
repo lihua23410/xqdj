@@ -362,6 +362,8 @@ function unmountLookFX(el) {
     const hook=window.lookFX && window.lookFX[cls.slice(5)];
     if (hook && typeof hook.unmount==="function") hook.unmount(el);
   }
+  const holder = window.lookFX && window.lookFX.absorb;
+  if (holder && typeof holder.unmount === "function") holder.unmount(el);
 }
 
 function runLookFX(el, u, ctx) {
@@ -372,6 +374,10 @@ function runLookFX(el, u, ctx) {
     const hook = id && hooks[id];
     if (hook && typeof hook.tick === "function") hook.tick(el, u, ctx);
   }
+  // 挂在别人身上的挂件（藤色这种额外血条）：池子在谁身上就画在谁身上。
+  // 只按 kind 登记的话，藤色落到队友身上就一条血条都没有，看着像根本没生效。
+  const holder = hooks.absorb;
+  if (holder && typeof holder.tick === "function") holder.tick(el, u, ctx);
 }
 
 function runLookGuides(scale, cx, cy, seen) {

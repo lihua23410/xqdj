@@ -23,6 +23,14 @@ import (
 
 const KindBloodPact = "血契"
 
+// 数值合约：对局测试（internal/sim）按这几个数断言，别在测试里写死伤害和回流比例。
+const (
+	BiteDamage  = biteDamage
+	FeedShallow = feedShallow // 0–3 秒
+	FeedMid     = feedMid     // 3–6 秒
+	FeedDeep    = feedDeep    // 6 秒后
+)
+
 // 数值常量集中在 init 上面，方便调平衡。
 const (
 	pactRadius = 18.0
