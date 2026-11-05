@@ -82,7 +82,7 @@ func dist2(m *Match, a, b *unit) float64 {
 	return math.Hypot(a.p.X-b.p.X, a.p.Y-b.p.Y)
 }
 
-// 蓄力射击：站定 0.5s → 一箭 4 伤 → 后摇 0.5s，前后摇就是它的节拍（1.0s/箭，最短的一档）。
+// 蓄力射击：站定 0.5s → 一箭 7 伤 → 后摇 0.5s，前后摇就是它的节拍（1.0s/箭，最短的一档）。
 func TestArcherChargeShootRecover(t *testing.T) {
 	m, me, foe := startArcher(t, 41)
 	standApart(m, me, foe, 120) // 中距 → 蓄力射击
@@ -94,16 +94,16 @@ func TestArcherChargeShootRecover(t *testing.T) {
 	if fx["shoot"] != 1 {
 		t.Fatalf("1.2s 内出了 %d 箭，想要 1（0.5 蓄力 + 0.5 后摇，第二箭在 1.5s）", fx["shoot"])
 	}
-	if got := before - hpOf(m, foe); math.Abs(got-4) > 0.01 {
-		t.Fatalf("一次蓄射伤害 %v，想要 4", got)
+	if got := before - hpOf(m, foe); math.Abs(got-5) > 0.01 {
+		t.Fatalf("一次蓄射伤害 %v，想要 5", got)
 	}
 	// 再跑 1.0s（合计 ~2.2s）：节拍 1.0s → 该出第二箭了（1.25s 的旧节拍这时只有一箭）
 	fx = runArcher(m, 1.0)
 	if fx["shoot"] != 1 {
 		t.Fatalf("第二段又出了 %d 箭，想要 1（合计两箭）", fx["shoot"])
 	}
-	if got := before - hpOf(m, foe); math.Abs(got-8) > 0.01 {
-		t.Fatalf("2.2s 后总伤害 %v，想要 8（两箭）", got)
+	if got := before - hpOf(m, foe); math.Abs(got-10) > 0.01 {
+		t.Fatalf("2.2s 后总伤害 %v，想要 10（两箭）", got)
 	}
 }
 
@@ -219,7 +219,7 @@ func TestArcherArrowStunDoesNotStack(t *testing.T) {
 	}
 }
 
-// 齐射：四支并排（心隔 8）、同时出膛；对心命中四支全中 16 伤。
+// 齐射：四支并排（心隔 8）、同时出膛；对心命中四支全中 20 伤。
 func TestArcherVolleyFourParallelArrows(t *testing.T) {
 	m, me, foe := startArcher(t, 44)
 	standApart(m, me, foe, 260) // > 180 且无弹道威胁 → 齐射
@@ -250,16 +250,16 @@ func TestArcherVolleyFourParallelArrows(t *testing.T) {
 	}
 	before := hpOf(m, foe)
 	runArcher(m, 1.2) // 箭飞 260px
-	if got := before - hpOf(m, foe); math.Abs(got-16) > 0.01 {
-		t.Fatalf("对心齐射伤害 %v，想要 16（四支全中）", got)
+	if got := before - hpOf(m, foe); math.Abs(got-20) > 0.01 {
+		t.Fatalf("对心齐射伤害 %v，想要 20（四支全中）", got)
 	}
 }
 
-// 齐射的横移口径：出膛后目标横移 20 → 只中 2~3 支（8~12 伤）；横移 40 → 一支不中。
+// 齐射的横移口径：出膛后目标横移 20 → 只中 2 支（10 伤）；横移 40 → 一支不中。
 // 齐射的横移口径（设计稿：全中走廊 ±12、掉支带 12~36、超过 36 才整个躲开）：
 //
-//	横移 0  → 四支全中 16 伤
-//	横移 20 → 掉到 2~3 支（8~12 伤）
+//	横移 0  → 四支全中 20 伤
+//	横移 20 → 掉到 2~3 支（10~15 伤）
 //	横移 40 → 一支不中
 //
 // 注意命中会把靶子推开一点（箭撞单位有位置分离），所以掉支带里的支数会在 2~3 之间浮动。
@@ -268,8 +268,8 @@ func TestArcherVolleySpreadAgainstLateralMove(t *testing.T) {
 		lat      float64
 		min, max float64
 	}{
-		{0, 16, 16},
-		{20, 8, 12},
+		{0, 20, 20},
+		{20, 10, 15},
 		{40, 0, 0},
 	} {
 		m, me, foe := startArcher(t, 45+uint64(c.lat))
@@ -294,7 +294,7 @@ func TestArcherVolleySpreadAgainstLateralMove(t *testing.T) {
 		runArcher(m, 1.2)
 		got := before - hpOf(m, foe)
 		if got < c.min-0.01 || got > c.max+0.01 {
-			t.Fatalf("横移 %v 时齐射伤害 %v，想要 %v~%v（支数 %v~%v）", c.lat, got, c.min, c.max, c.min/4, c.max/4)
+			t.Fatalf("横移 %v 时齐射伤害 %v，想要 %v~%v（支数 %v~%v）", c.lat, got, c.min, c.max, c.min/5, c.max/5)
 		}
 	}
 }

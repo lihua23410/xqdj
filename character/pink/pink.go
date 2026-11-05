@@ -1,5 +1,5 @@
 // 粉红色迷人的pink：三个形态（平淡/大笑/狂笑）靠击杀场上不断刷新的人群升级。
-// 每次击杀有 25% 概率掉落装备，装备会覆盖当前形态的默认攻击方式。
+// 每次击杀有 33% 概率掉落装备，装备会覆盖当前形态的默认攻击方式。
 package pink
 
 import (
@@ -53,11 +53,12 @@ const (
 )
 
 const (
-	pinkRadius = 18.0
-	pinkHP     = 100.0
-	pinkSpeed  = 155.0
-	pinkVision = 9999.0
-	pinkColor  = "#ff6fae"
+	pinkRadius   = 18.0
+	pinkHP       = 100.0
+	pinkSpeed    = 155.0
+	pinkVision   = 9999.0
+	evolvedSpeed = 140.0
+	pinkColor    = "#ff6fae"
 
 	crowdRadius = 14.0
 	crowdHP     = 6.0
@@ -68,11 +69,11 @@ const (
 	itemRadius = 12.0
 
 	killPerForm     = 2
-	crowdKillHeal   = 3.0
 	crowdKillInvuln = 0.5
-	dropChance      = 0.50
+	dropChance      = 0.33
 
 	meleeCD    = 0.7
+	sawCD      = 1.0
 	meleeRange = 78.0
 	meleeHalf  = 72.0
 	axeDamage  = 6.0
@@ -246,12 +247,12 @@ func (p *pink) Handle(ctx unit.Context, ev unit.Event) {
 
 func (p *pink) onCrowdKill(ctx unit.Context, e unit.Kill) {
 	p.kills++
-	ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: crowdKillHeal}
 	if until := p.now + crowdKillInvuln; until > p.invulnUntil {
 		p.invulnUntil = until
 	}
 	if p.kills%killPerForm == 0 && p.form < formManic {
 		p.form++
+		ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: evolvedSpeed}
 		p.clearWeapon()
 		p.emitState(ctx)
 		ctx.Out <- unit.FX{
@@ -535,7 +536,11 @@ func (p *pink) melee(ctx unit.Context, s unit.Sense, now float64) {
 			BaseSpeed: 255, OnWall: true, ExpiresAt: now + 0.15,
 		}
 	}
-	p.nextAttackAt = now + meleeCD
+	if p.form == formManic {
+		p.nextAttackAt = now + sawCD
+	} else {
+		p.nextAttackAt = now + meleeCD
+	}
 	ctx.Out <- unit.FX{
 		Name: "melee", Kind: KindPink, UnitID: ctx.ID, Slot: p.slot,
 		X: p.x, Y: p.y, VX: p.hx, VY: p.hy,

@@ -1,6 +1,6 @@
 // 泡泡球：一路吹出慢速漂移的泡泡。敌方弹体撞进泡泡会被封存在里面，
 // 弹越多泡泡越慢、越大；泡泡互相碰撞会合并，敌方战斗机撞上则按体积受伤。
-// 被球撞破的泡泡会把封存弹药和撞击推力一起释放。
+// 被敌方撞破的泡泡会把封存弹药一起释放。
 package 泡泡球
 
 import (
@@ -29,19 +29,17 @@ const (
 
 	bubbleRadius   = 18.0
 	bubbleSpeed    = 42.0
-	bubbleLife     = 10.0
-	maxBubbles     = 12
+	bubbleLife     = 40.0
+	maxBubbles     = 20
 	maxStored      = 24
-	maxBubbleSize  = 110.0
+	maxBubbleSize  = 320.0
 	bubbleStateGap = 0.18
+
+	bubbleImpactDamageBase      = 2.0
+	bubbleImpactDamagePerRadius = 0.15
 
 	shotSpeed = 420.0
 	shotLife  = 1.8
-
-	popPush        = 95.0
-	popPushPerAmmo = 20.0
-	shotPush       = 42.0
-	tickSeconds    = 1.0 / 60.0
 )
 
 type bubbleBirth struct {
@@ -403,8 +401,8 @@ func (b *泡泡) onCollision(ctx unit.Context, e unit.Collision) {
 			return
 		}
 		b.capture(ctx, e.Other)
-	case unit.RoleFighter:
-		if e.Other.ID != b.owner && e.Other.Slot != b.slot {
+	default:
+		if unit.Hittable(e.Other, b.slot) {
 			b.hitEnemy(ctx, e.Other)
 		}
 	}
@@ -437,7 +435,7 @@ func (b *泡泡) capture(ctx unit.Context, bullet unit.Snapshot) {
 	n := len(b.ammo)
 	ctx.Out <- unit.ClearMarks{UnitID: ctx.ID, Kind: KindBubbleLoad}
 	ctx.Out <- unit.StackMark{UnitID: ctx.ID, Kind: KindBubbleLoad, Delta: n, Hidden: true}
-	b.radius = b.finalRadius + math.Min(8, float64(n)*0.75)
+	b.radius = math.Min(maxBubbleSize, b.finalRadius+math.Min(8, float64(n)*0.75))
 	ctx.Out <- unit.SetRadius{UnitID: ctx.ID, Radius: b.radius}
 	speed := bubbleMoveSpeed(b.radius, n)
 	dirX, dirY := b.vx, b.vy
@@ -495,7 +493,7 @@ func (b *泡泡) merge(ctx unit.Context, other unit.Snapshot, now float64) {
 }
 
 func (b *泡泡) hitEnemy(ctx unit.Context, other unit.Snapshot) {
-	damage := 2 + math.Max(0, b.radius-8)*0.35
+	damage := bubbleImpactDamageBase + math.Max(0, b.radius-8)*bubbleImpactDamagePerRadius
 	ctx.Out <- unit.Damage{From: ctx.ID, To: other.ID, Amount: damage}
 	b.pop(ctx, other)
 }
@@ -512,9 +510,6 @@ func (b *泡泡) pop(ctx unit.Context, other unit.Snapshot) {
 		dx, dy, d = 1, 0, 1
 	}
 	dirX, dirY := dx/d, dy/d
-	push := popPush + float64(count)*popPushPerAmmo
-	ctx.Out <- unit.Force{UnitID: other.ID, AX: dirX * push / tickSeconds, AY: dirY * push / tickSeconds}
-
 	aimX, aimY := dirX, dirY
 	best := math.MaxFloat64
 	for i := range b.nearby {
@@ -550,7 +545,7 @@ func (b *泡泡) pop(ctx unit.Context, other unit.Snapshot) {
 	}
 	ctx.Out <- unit.FX{
 		Name: "bubble-pop", Kind: KindBubbleBall, UnitID: b.owner, Slot: b.slot,
-		X: b.x, Y: b.y, Amount: float64(count), Data: mustJSON(bubbleState{Count: count, Ammo: b.ammo}),
+		X: b.x, Y: b.y, Amount: float64(count), VX: b.radius, Data: mustJSON(bubbleState{Count: count, Ammo: b.ammo}),
 	}
 	b.forget(ctx)
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
@@ -592,9 +587,6 @@ func (s *封弹) Handle(ctx unit.Context, ev unit.Event) {
 		}
 		s.done = true
 		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: s.damage, NoFreeze: true}
-		if d := math.Hypot(s.vx, s.vy); d > 1e-6 {
-			ctx.Out <- unit.Force{UnitID: e.Other.ID, AX: s.vx / d * shotPush / tickSeconds, AY: s.vy / d * shotPush / tickSeconds}
-		}
 		ctx.Out <- unit.FX{Name: "bubble-shot-hit", Kind: KindBubbleBall, UnitID: s.owner, Slot: s.slot, X: e.Other.X, Y: e.Other.Y, Amount: s.damage}
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	case unit.WallHit:

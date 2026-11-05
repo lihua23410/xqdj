@@ -40,18 +40,24 @@ func TestRequestedWeaponDamageValues(t *testing.T) {
 	if gatlingMag != 60 {
 		t.Fatalf("gatling magazine=%d, want 60", gatlingMag)
 	}
-	if dropChance != 0.50 {
-		t.Fatalf("drop chance=%v, want 0.50", dropChance)
+	if dropChance != 0.33 {
+		t.Fatalf("drop chance=%v, want 0.33", dropChance)
+	}
+	if evolvedSpeed >= pinkSpeed {
+		t.Fatalf("evolved speed=%v, want slower than base speed %v", evolvedSpeed, pinkSpeed)
+	}
+	if sawCD <= meleeCD {
+		t.Fatalf("saw cooldown=%v, want slower than axe cooldown %v", sawCD, meleeCD)
 	}
 	if crowdMax != 6 {
 		t.Fatalf("crowd max=%d, want 6", crowdMax)
 	}
-	if crowdKillHeal != 3 || fireDamage != 4 {
-		t.Fatalf("crowd heal/fire damage=%v/%v, want 3/4", crowdKillHeal, fireDamage)
+	if fireDamage != 4 {
+		t.Fatalf("fire damage=%v, want 4", fireDamage)
 	}
 }
 
-func TestCrowdKillGrantsHalfSecondInvulnerability(t *testing.T) {
+func TestCrowdKillGrantsHalfSecondInvulnerabilityWithoutHealing(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	body := &pink{now: 5, slot: 0}
 	ctx := unit.Context{ID: 1, Kind: KindPink, Out: out}
@@ -63,15 +69,15 @@ func TestCrowdKillGrantsHalfSecondInvulnerability(t *testing.T) {
 	blocked := false
 	healed := false
 	for _, cmd := range drainPink(out) {
-		if heal, ok := cmd.(unit.Heal); ok && heal.UnitID == 1 && heal.Amount == crowdKillHeal {
+		if heal, ok := cmd.(unit.Heal); ok && heal.UnitID == 1 {
 			healed = true
 		}
 		if b, ok := cmd.(unit.BlockDamage); ok && b.Token == 3 {
 			blocked = true
 		}
 	}
-	if !healed {
-		t.Fatal("crowd kill should heal Pink by three health")
+	if healed {
+		t.Fatal("crowd kill should not heal Pink")
 	}
 	if !blocked {
 		t.Fatal("damage within half a second of a crowd kill should be blocked")
@@ -92,6 +98,15 @@ func TestCrowdKillsAdvanceEveryTwoAndResetWeapon(t *testing.T) {
 	}
 	if body.weapon != weaponDefault || body.ammo != 0 {
 		t.Fatalf("weapon should reset on form change, got weapon=%d ammo=%d", body.weapon, body.ammo)
+	}
+	speedSet := false
+	for _, cmd := range drainPink(out) {
+		if c, ok := cmd.(unit.SetCruise); ok && c.UnitID == 1 && c.Speed == evolvedSpeed {
+			speedSet = true
+		}
+	}
+	if !speedSet {
+		t.Fatal("evolved form should lower Pink cruise speed")
 	}
 }
 

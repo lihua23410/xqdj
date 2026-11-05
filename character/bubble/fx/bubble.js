@@ -159,6 +159,9 @@
     const d = readData(fx);
     const node = effect("bubble-pop", fx, ctx, { "--bubble-count": String(d.count || 0) });
     if (!node) return;
+    const blast = Math.max(82, (number(fx.vx) + 70) * 2 * (number(ctx.scale) || 1));
+    node.style.width = `${blast}px`;
+    node.style.height = `${blast}px`;
     const dots = document.createElement("span");
     dots.className = "bubble-pop-dots";
     (d.ammo || []).slice(0, 12).forEach((a, i) => {
