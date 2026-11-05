@@ -1,4 +1,4 @@
-// 老虎机：每次实际受到伤害后进入 4 秒减伤抽奖，三只转轮决定后续攻击或奖励。
+// 老虎机：每次实际受到伤害后进入 5 秒无敌抽奖，三只转轮决定后续攻击或奖励。
 package 老虎机
 
 import (
@@ -44,9 +44,8 @@ const (
 	slotVision = 9999.0
 	slotColor  = "#cf2e4b"
 
-	drawDuration    = 4.0
-	drawDamageScale = 0.5
-	drawStateGap    = 0.5
+	drawDuration = 5.0
+	drawStateGap = 0.5
 
 	cherryDamage     = 5.0
 	watermelonDamage = 6.0
@@ -138,10 +137,10 @@ func (m *slotMachine) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
 		if m.drawing {
-			ctx.Out <- unit.ConfirmDamage{Token: e.Token, UnitID: ctx.ID, Amount: e.Amount * drawDamageScale}
+			unit.BlockHit(ctx, e)
 			return
 		}
-		// 触发抽奖的这一击仍然全额生效；抽奖减伤从下一次伤害开始。
+		// 触发抽奖的这一击仍然生效；抽奖无敌从下一次伤害开始。
 		unit.ConfirmHit(ctx, e)
 		m.beginDraw(ctx, e.Time)
 	case unit.Collision:
