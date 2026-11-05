@@ -1,6 +1,6 @@
 // 弓箭（老兵安柏赫）：没有出众的能力——无成长、无资源、无形态，强度全在**时机**。
-// 蓄力射击（站定 0.5s → 一箭 → 后摇 0.75s）、后撤步射击（安全向滑步 90 + 撤中一箭，CD 4s）、
-// 齐射（站定 1s → 四支贴排同射 → 后摇 1s）、翻滚（挨报价那一下 Block + 短滚 75，CD 12s）。
+// 蓄力射击（站定 0.5s → 一箭 → 后摇 0.5s）、后撤步射击（安全向滑步 90 + 撤中一箭，CD 8s）、
+// 齐射（站定 1.75s → 四支贴排同射 → 后摇 1.25s）、翻滚（挨报价那一下 Block + 短滚 75，CD 12s）。
 // 单位：距离 px、速度 px/s、时间 s、角度 度（unit.Deg）、伤害 HP 点。
 package 弓箭
 
@@ -38,12 +38,15 @@ const (
 	arrowGap   = 2.0 // 出膛点离球面留的余量（同远程原型机：radius + 弹半径 + gap）
 
 	// —— 节奏（秒）——
-	chargeStand = 0.5 // 蓄力射击的站定
-	chargeCd    = 0.5 // 蓄力射击的后摇（就是它的 CD，总节拍 1.0s/箭：最短的一档）
-	volleyStand = 1.5 // 齐射的站定（它最大的破绽）
-	volleyCd    = 1.0 // 齐射的后摇（= CD，2.0s 一轮）
-	retreatCD   = 6.0 // 后撤步：它的价值是白送 90px 位移，按"大招呼"给 6s（同小骑士冲撞/血契饿扑）
+	chargeStand = 0.5  // 蓄力射击的站定
+	chargeCd    = 0.5  // 蓄力射击的后摇（就是它的 CD，总节拍 1.0s/箭：最短的一档）
+	volleyStand = 1.75 // 齐射的站定（它最大的破绽）
+	volleyCd    = 1.25 // 齐射的后摇（= CD，3.0s 一轮）
+	retreatCD   = 8.0  // 后撤步：它的价值是白送 90px 位移，按"大招呼"这一档给（同小骑士冲撞/血契饿扑）
 	rollCD      = 12
+	// 收弓的代价：站定随时能中止，但中止不免费——退出来要收满这么久才够再起手。
+	// 没这一条时"贴脸就收弓、下一拍就后撤"，站定这个破绽等于不存在。
+	cancelCost = 0.35
 
 	// —— 位移（后撤/翻滚共用一个速度，只差时长）——
 	dashSpeed   = 300.0
@@ -73,9 +76,16 @@ const (
 const (
 	stepIdle     = iota
 	stepCharge   // 蓄力射击：站定中
-	stepRecover  // 蓄力射击：后摇
+	stepRecover  // 后摇 / 收弓恢复帧
 	stepVolley   // 齐射：站定中
 	stepVolleyCd // 齐射：后摇
+)
+
+// 数值合约：对局测试（internal/sim）按这几个数断言，别在测试里写死 5、20。
+const (
+	ArrowDamage   = arrowDmg            // 一箭
+	VolleyDamage  = volleyDmg           // 齐射每一支
+	VolleyFullHit = volleyDmg * volleyN // 对心四支全中
 )
 
 func init() {
@@ -176,14 +186,14 @@ func (a *弓箭) tick(ctx unit.Context, s unit.Sense) {
 	}
 	switch a.step {
 	case stepCharge:
-		if a.abortIfUnlocked(ctx, target) {
+		if a.abortIfUnlocked(ctx, target, s.Time) {
 			return
 		}
 		// 站定期间每帧把瞄准方向发出去：弓要跟着目标转，不然出膛方向（开火那拍重新瞄）和弓的朝向不一致
 		a.emitFace(ctx, s, target)
-		// 蓄力中贴脸：主动取消止损（这箭哑火），去等翻滚 CD
+		// 蓄力中贴脸：主动取消止损（这箭哑火），去等后撤/翻滚 CD
 		if dist < closeRange {
-			a.cancel(ctx)
+			a.cancel(ctx, s.Time)
 			return
 		}
 		if s.Time+1e-9 >= a.until {
@@ -195,12 +205,12 @@ func (a *弓箭) tick(ctx unit.Context, s unit.Sense) {
 			a.step = stepIdle
 		}
 	case stepVolley:
-		if a.abortIfUnlocked(ctx, target) {
+		if a.abortIfUnlocked(ctx, target, s.Time) {
 			return
 		}
 		a.emitFace(ctx, s, target) // 齐射蓄力同理：每帧跟目标
 		if dist < closeRange {
-			a.cancel(ctx)
+			a.cancel(ctx, s.Time)
 			return
 		}
 		if s.Time+1e-9 >= a.until {
@@ -255,26 +265,28 @@ func (a *弓箭) emitFace(ctx unit.Context, s unit.Sense, target *unit.Snapshot)
 }
 
 // cancel 收弓：蓄力被自己（贴脸止损 / 丢锁）或翻滚打断，这一箭哑火。
+// 收弓要付 cancelCost 的恢复帧：退到 stepRecover 而不是直接 stepIdle，
+// 所以"贴脸就收弓"不再是零成本——收完这 0.35s 才有下一拍动作。
 // X/Y 必须带：前端拿 ctx.x/ctx.y 画特效，不带就按 (0,0) 画到场心去。
-func (a *弓箭) cancel(ctx unit.Context) {
-	a.step = stepIdle
+func (a *弓箭) cancel(ctx unit.Context, now float64) {
+	a.step, a.until = stepRecover, now+cancelCost
 	ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: false}
 	ctx.Out <- unit.FX{Name: "cancel", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot, X: a.x, Y: a.y}
 }
 
 // abortIfUnlocked 蓄力中途 Seek 不到人就收弓，不把箭射出去。
-func (a *弓箭) abortIfUnlocked(ctx unit.Context, target *unit.Snapshot) bool {
+func (a *弓箭) abortIfUnlocked(ctx unit.Context, target *unit.Snapshot, now float64) bool {
 	if target != nil {
 		return false
 	}
-	a.cancel(ctx)
+	a.cancel(ctx, now)
 	return true
 }
 
 // shoot 朝锁定目标出一支箭。没有锁就不放。
 func (a *弓箭) shoot(ctx unit.Context, s unit.Sense, target *unit.Snapshot, kind string, dmg float64) {
 	if target == nil {
-		a.cancel(ctx)
+		a.cancel(ctx, s.Time)
 		return
 	}
 	ux, uy := a.aimDir(s, target)
@@ -301,7 +313,7 @@ func (a *弓箭) spawnArrow(ctx unit.Context, s unit.Sense, ux, uy, off float64,
 // 不是扇面——四支平行飞，所以横移躲不开、只能躲远。
 func (a *弓箭) fireVolley(ctx unit.Context, s unit.Sense, target *unit.Snapshot) {
 	if target == nil {
-		a.cancel(ctx)
+		a.cancel(ctx, s.Time)
 		return
 	}
 	ux, uy := a.aimDir(s, target)
@@ -343,7 +355,7 @@ func (a *弓箭) hurt(ctx unit.Context, d unit.IncomingDamage) {
 		a.mint(ctx, ux, uy, d.Time+dashRoll)
 		ctx.Out <- unit.FX{Name: "roll", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot, X: a.x, Y: a.y, VX: ux, VY: uy, Amount: rollDist}
 		if a.step == stepCharge || a.step == stepVolley {
-			a.cancel(ctx)
+			a.cancel(ctx, d.Time)
 		}
 		unit.BlockHit(ctx, d)
 		return

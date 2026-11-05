@@ -157,7 +157,7 @@ func TestIdleWithoutLockDoesNotShoot(t *testing.T) {
 	}
 }
 
-// 蓄力到点时锁丢了：收弓，这一箭哑火。
+// 蓄力到点时锁丢了：收弓，这一箭哑火；收完还要吃 cancelCost 的恢复帧才回待机。
 func TestChargeLostLockDoesNotShoot(t *testing.T) {
 	f := &弓箭{step: stepCharge, until: 1.0, booted: true, slot: 0}
 	cmds := feed(f, 1, unit.Sense{Time: 1.0, Self: archerSelf()})
@@ -167,8 +167,31 @@ func TestChargeLostLockDoesNotShoot(t *testing.T) {
 	if !hasFX(cmds, "cancel") {
 		t.Fatalf("丢锁没收弓：%v", cmds)
 	}
-	if f.step != stepIdle {
-		t.Fatalf("step=%d want idle", f.step)
+	if f.step != stepRecover {
+		t.Fatalf("step=%d want recover（收弓要付恢复帧）", f.step)
+	}
+	if math.Abs(f.until-(1.0+cancelCost)) > 1e-9 {
+		t.Fatalf("恢复帧到点 %v，想要 %v", f.until, 1.0+cancelCost)
+	}
+}
+
+// 收弓不是免费的：贴脸逼它收弓之后，cancelCost 之内不许再起手、也不许后撤——
+// 否则"贴脸就收弓、下一拍就滑步"等于没有破绽。
+func TestCancelCostsRecovery(t *testing.T) {
+	f := &弓箭{step: stepCharge, until: 9.0, booted: true, slot: 0}
+	self := archerSelf()
+	foe := foeAt(0, 50) // 距离 50 < 90：贴脸，强制收弓
+	if cmds := feed(f, 1, unit.Sense{Time: 1.0, Self: self, Nearby: []unit.Snapshot{foe}}); !hasFX(cmds, "cancel") {
+		t.Fatalf("贴脸没收弓：%v", cmds)
+	}
+	// 恢复帧里：不后撤、不起手。
+	if cmds := feed(f, 1, unit.Sense{Time: 1.0 + cancelCost/2, Self: self, Nearby: []unit.Snapshot{foe}}); len(cmds) != 0 {
+		t.Fatalf("恢复帧里还在动：%v", cmds)
+	}
+	// 恢复帧一过：该后撤了（后撤 CD 早好了）。
+	cmds := feed(f, 1, unit.Sense{Time: 1.0 + cancelCost + 1e-6, Self: self, Nearby: []unit.Snapshot{foe}})
+	if _, _, ok := addFSDir(cmds); !ok {
+		t.Fatalf("恢复完没后撤：%v", cmds)
 	}
 }
 
