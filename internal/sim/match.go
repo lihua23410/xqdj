@@ -59,6 +59,7 @@ type unit struct {
 	mortal          bool
 	aimPriority     uint8
 	pass            bool
+	hidden          bool
 	stand           bool
 	zeroOwnedKind   string
 	velocityLocked  bool
@@ -380,6 +381,7 @@ func (u *unit) snap() unitpkg.Snapshot {
 		FaceY:           u.face.Y,
 		PassWalls:       u.passWalls,
 		Mortal:          u.mortal,
+		Hidden:          u.hidden,
 		BreakWalls:      u.breakWalls,
 		ArcSpan:         u.arcSpan,
 		ArcInner:        u.arcInner,
@@ -403,8 +405,8 @@ func (u *unit) shape() ccdShape {
 }
 
 func (u *unit) inSnapshot() bool {
-	if u == nil || u.stopped {
-		return false
+	if u == nil || u.stopped || u.hidden {
+		return false // 只记账的实体不上页面
 	}
 	return u.solid || u.role == unitpkg.RoleHelper || u.role == unitpkg.RoleFighter
 }
@@ -1157,6 +1159,7 @@ func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot 
 		stop:           make(chan struct{}),
 		exited:         make(chan struct{}),
 		solid:          spec.Role != unitpkg.RoleHelper && !spec.Nonsolid,
+		hidden:         spec.Hidden,
 		semi:           spec.Semi,
 		face:           vec{1, 0},
 		passWalls:      spec.PassWalls,
@@ -2865,6 +2868,9 @@ func (m *Match) emitLocked() {
 func nearbySnapshots(snaps []unitpkg.Snapshot, u *unit) []unitpkg.Snapshot {
 	vr2 := u.vision * u.vision
 	visible := func(o unitpkg.Snapshot) bool {
+		if o.Hidden && o.ID != u.id {
+			return false // 只记账的实体不参与任何人的感知
+		}
 		dx, dy := o.X-u.p.X, o.Y-u.p.Y
 		return o.ID != u.id && (dx*dx+dy*dy <= vr2 || o.OwnerID == u.id)
 	}

@@ -24,9 +24,12 @@ type Spec struct {
 	Attach         bool    // 每帧贴主人；不挡伤、不碎。不撞墙。只和敌方战斗机、活随从做 CCD
 	AttachFriends  bool    // 扇环也接触同边活体和主人；实际可伤的搭档由攻击窗口限定
 	Pass           bool    // 出生即持 Pass；用于持续穿人的攻击判定
-	ArcSpan        float64 // 扇环张角（弧度）。0 = 不是扇环。2π = 整圈细环
-	ArcInner       float64 // 扇环内径。外径用 Radius。角色自己填
-	Look           Look
+	// Hidden 的实体不进别人的感知，也不进页面：它只是场上的一本账。
+	// 老鼠叼不走、瘟疫找不到、AOE 也够不着——因为它们根本看不见它。
+	Hidden   bool
+	ArcSpan  float64 // 扇环张角（弧度）。0 = 不是扇环。2π = 整圈细环
+	ArcInner float64 // 扇环内径。外径用 Radius。角色自己填
+	Look     Look
 
 	// 指定 Kind 的直属单位在场时，拒绝一切速度与瞬时推动；位置修正和瞬移照常。
 	ZeroVelocityWhileOwned string

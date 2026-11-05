@@ -61,6 +61,20 @@ const (
 	toseDollLayers     = 3    // 幻役出生时额外得到的层数
 	tosePoolPerLayer   = 15.0 // 每层的池子
 	toseDamagePerLayer = 1.5  // 每层的平加伤害（我方角色每有 X 层就 +X）
+
+	// 吃小怪：CD 好了、身边 240 内有血量低于 20 的敌方活随从，就当场吞掉它，
+	// 换一只幻役出来并喂它一层藤色。
+	devourCD     = 20.0
+	devourRange  = 240.0
+	devourMaxHP  = 20.0
+	devourLayers = 1
+)
+
+// 数值合约：层数是池子算出来的（ceil(池子/15)），看守和对局测试都按这几个数走。
+const (
+	ToseKind           = toseKind
+	TosePoolPerLayer   = tosePoolPerLayer
+	ToseDamagePerLayer = toseDamagePerLayer
 )
 
 func init() {
@@ -104,6 +118,19 @@ func init() {
 		Pass:   true,
 		Look:   unit.Look{Color: dollColor, Ghost: 120, FX: []string{"fujihime-doll"}},
 	}, func(unit.SpawnInfo) unit.Actor { return &幻役{} })
+
+	// 藤色看守：只记账的实体，不进任何人的感知、也不上页面（Hidden）。
+	// 它不带主人，所以藤姬倒下之后它还在，继续按池子掉层。
+	p.Register(unit.Spec{
+		Kind:     KindToseKeeper,
+		Role:     unit.RoleHelper,
+		Radius:   1,
+		MaxHP:    1,
+		Speed:    0,
+		Vision:   fujiVision,
+		Nonsolid: true,
+		Hidden:   true,
+	}, func(info unit.SpawnInfo) unit.Actor { return newKeeper(info.Data) })
 }
 
 type 藤姬 struct {
@@ -127,6 +154,9 @@ type 藤姬 struct {
 
 	// 幻役最后一拍的位置：它被别处打死时，气绝要留在原地。
 	dollX, dollY float64
+
+	// 吃小怪的 CD：上来先压满一拍，开局不白吃。
+	devourAt float64
 }
 
 func (f *藤姬) Handle(ctx unit.Context, ev unit.Event) {
@@ -142,6 +172,7 @@ func (f *藤姬) tick(ctx unit.Context, s unit.Sense) {
 	if !f.booted {
 		f.booted = true
 		f.rng = unit.NewRNG(ctx.Stream)
+		f.devourAt = s.Time + devourCD
 	}
 	if unit.RearmAttach(s, ctx.ID, KindFujihimeArc, arcRearm, &f.arc) {
 		unit.SpawnAttach(ctx, s, KindFujihimeArc)
@@ -154,6 +185,7 @@ func (f *藤姬) tick(ctx unit.Context, s unit.Sense) {
 		f.nextGrant = nextGrantAt(s.Time)
 		f.grant(ctx, s)
 	}
+	f.tryDevour(ctx, s)
 }
 
 // nextGrantAt 把结付对齐到整十秒；开局那一拍也算一次。
@@ -184,18 +216,58 @@ func (f *藤姬) grant(ctx unit.Context, s unit.Sense) {
 		f.moveTo(ctx, s, target, f.pool+tosePoolPerLayer)
 	}
 	if f.grants%toseSummonEvery == 0 {
-		f.summon(ctx, s)
+		f.summon(ctx, s, toseDollLayers)
 	}
 }
 
+// tryDevour 吃掉身边一个没多少血的敌方活随从，换一只幻役出来，并喂它一层藤色。
+// 只在场上没有自己的幻役时动手：幻役出生要靠「接手整包」认领这一包池子，
+// 场上已经有旧的，新出来的那只就接不到，等于白给。
+func (f *藤姬) tryDevour(ctx unit.Context, s unit.Sense) {
+	if s.Time+1e-9 < f.devourAt || f.findDoll(ctx.ID, s) != 0 {
+		return
+	}
+	victim := f.devourTarget(s)
+	if victim == nil {
+		return
+	}
+	f.devourAt = s.Time + devourCD
+	ctx.Out <- unit.Despawn{UnitID: victim.ID}
+	ctx.Out <- unit.FX{
+		Name: "fujihime-doll-hit", Kind: KindFujihime, UnitID: victim.ID,
+		Slot: s.Self.Slot, X: victim.X, Y: victim.Y,
+	}
+	f.summon(ctx, s, devourLayers)
+}
+
+// devourTarget 240 以内、血量低于 devourMaxHP 的敌方活随从里最近的那个。
+func (f *藤姬) devourTarget(s unit.Sense) *unit.Snapshot {
+	best := devourRange * devourRange
+	var got *unit.Snapshot
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if !o.Mortal || o.Slot == s.Self.Slot || o.HP >= devourMaxHP {
+			continue
+		}
+		dx, dy := o.X-s.Self.X, o.Y-s.Self.Y
+		if d := dx*dx + dy*dy; d <= best {
+			best, got = d, o
+		}
+	}
+	return got
+}
+
 // addLayers 给当前持有人加 n 层的池子，标记和加伤跟着走。
+// 池子在队友身上时不在这里改标记：那是看守的活，两边都写会叠双。
 func (f *藤姬) addLayers(ctx unit.Context, s unit.Sense, n int) {
 	if f.holder == 0 {
 		return
 	}
 	f.pool += float64(n) * tosePoolPerLayer
 	ctx.Out <- unit.SetAbsorb{UnitID: f.holder, Amount: f.pool}
-	f.retune(ctx, f.holder)
+	if f.holder == ctx.ID {
+		f.retune(ctx, f.holder)
+	}
 	f.flash(ctx, s, f.holder)
 }
 
@@ -217,7 +289,22 @@ func (f *藤姬) moveTo(ctx unit.Context, s unit.Sense, target uint64, pool floa
 	ctx.Out <- unit.SetAbsorb{UnitID: target, Amount: pool}
 	ctx.Out <- unit.SetDamageBonus{UnitID: target, Amount: f.bonus()}
 	ctx.Out <- unit.StackMark{UnitID: target, Kind: toseKind, Delta: f.layers, Icon: toseIcon}
+	if target != ctx.ID && !f.doll {
+		f.sendKeeper(ctx, s, target)
+	}
 	f.flash(ctx, s, target)
+}
+
+// sendKeeper 池子落在队友身上时，派一个看守跟着这本账：
+// 层数和每层加伤从此由它维护，藤姬倒下之后也不会停。
+// 看守不带主人，所以不会跟着她一起被撤。
+func (f *藤姬) sendKeeper(ctx unit.Context, s unit.Sense, holder uint64) {
+	ctx.Out <- ctx.Born(unit.Spawn{
+		Kind: KindToseKeeper,
+		X:    s.Self.X, Y: s.Self.Y,
+		Slot: s.Self.Slot,
+		Data: keeperData{owner: ctx.ID, holder: holder},
+	})
 }
 
 // retune 让标记和加伤跟上当前池子的层数（池子掉层时用）。
@@ -271,6 +358,11 @@ func (f *藤姬) syncHolder(ctx unit.Context, s unit.Sense) {
 		f.takePool(ctx, s, poolOf(n))
 		return
 	}
+	if f.holder != ctx.ID {
+		// 池子在队友身上：掉层归看守管，这里只跟自己的账本。
+		f.layers = layersOf(f.pool)
+		return
+	}
 	f.retune(ctx, f.holder)
 }
 
@@ -301,8 +393,8 @@ func (f *藤姬) quietWhileDoll(ctx unit.Context, s unit.Sense) {
 	unit.SetAim(ctx, ctx.ID, aim)
 }
 
-// summon 召唤一个幻役，登记要交给它的整包（现有 + 3 层）。
-func (f *藤姬) summon(ctx unit.Context, s unit.Sense) {
+// summon 召唤一个幻役，登记要交给它的整包（现有 + extra 层）。
+func (f *藤姬) summon(ctx unit.Context, s unit.Sense, extra int) {
 	ang := f.rng.Float64() * 2 * math.Pi
 	x := s.Self.X + math.Cos(ang)*(fujiRadius+dollRadius+4)
 	y := s.Self.Y + math.Sin(ang)*(fujiRadius+dollRadius+4)
@@ -324,7 +416,7 @@ func (f *藤姬) summon(ctx unit.Context, s unit.Sense) {
 		Slot:    s.Self.Slot,
 		Stream:  unit.DeriveStream(ctx.Stream, uint64(f.grants), 0x7e1),
 	})
-	f.waitDoll = f.pool + float64(toseDollLayers)*tosePoolPerLayer
+	f.waitDoll = f.pool + float64(extra)*tosePoolPerLayer
 }
 
 // adoptDoll 等新幻役出现在感知里，再把整包池子交给它。

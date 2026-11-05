@@ -22,6 +22,7 @@ type Snapshot struct {
 	FaceY           float64  `json:"faceY"`
 	PassWalls       bool     `json:"passWalls"`
 	Mortal          bool     `json:"mortal,omitempty"`
+	Hidden          bool     `json:"hidden,omitempty"` // 不进别人的感知、也不进页面
 	BreakWalls      bool     `json:"breakWalls,omitempty"`
 	ArcSpan         float64  `json:"arcSpan,omitempty"`
 	ArcInner        float64  `json:"arcInner,omitempty"`
