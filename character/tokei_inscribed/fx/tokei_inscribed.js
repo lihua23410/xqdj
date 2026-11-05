@@ -1,24 +1,7 @@
 (function () {
-  window.tokeiInscribedHUD = window.tokeiInscribedHUD || {};
-
-  const SLOTS = 5;
-
-  // 手牌 / 抽卡进度 / 时痕层数 / 20s 冷却就绪时刻。冷却环和两根针都由 lookFX 每帧自己算，
-  // 这里只在状态变化时收到一条（进度每秒变一次，所以分针也是每秒走一格）。
-  arena.registerShot("tokei-inscribed-cards", (fx) => {
-    if (!fx || fx.unitId == null) return;
-    const packed = Math.round(fx.vx || 0) >>> 0;
-    const n = Math.max(0, Math.min(SLOTS, Math.round(fx.vy || 0)));
-    const cards = [];
-    for (let i = 0; i < n; i++) cards.push((packed >> (i * 4)) & 0xf);
-    window.tokeiInscribedHUD[fx.unitId] = {
-      cards,
-      fill: Math.max(0, Math.min(1, (fx.amount || 0) / 5)),
-      trace: Math.max(0, Math.round(fx.y || 0)),
-      cdReadyAt: fx.x || 0,
-    };
-  });
-
+  // 抽牌、手牌、命中抽牌冷却都只是内部机制：球上不画牌槽、不飘抽牌点、也不挂冷却环。
+  // 皮肤只剩「会走的表盘」——白盘、12 刻度、两根金针，跟对局时间走。
+  //
   // 铭刻 / 回溯：在球的位置摊开一张半透明的表盘（时计场上那张脸的半透明版），
   // 分针原地转一整圈——铭刻顺时针、回溯逆时针，盖在最上层。
   function spin(fx, ctx, dir) {
@@ -41,11 +24,6 @@
   arena.registerShot("tokei-inscribed-mark", (fx, ctx) => spin(fx, ctx, "cw"));
   arena.registerShot("tokei-inscribed-rewind", (fx, ctx) => spin(fx, ctx, "ccw"));
 
-  // 抽到牌：球上方一个小白点弹开。
-  arena.registerShot("tokei-inscribed-draw", (fx, ctx) => {
-    arena.spawnFx("fx-tokei-inscribed-draw", ctx.x, ctx.y - 24, fx.kind);
-  });
-
   // 冲刺：一道带速度方向的拉丝。
   arena.registerShot("tokei-inscribed-dash", (fx, ctx) => {
     const el = arena.spawnFx("fx-tokei-inscribed-dash", ctx.x, ctx.y, fx.kind);
@@ -60,13 +38,13 @@
     arena.spawnFx("fx-tokei-inscribed-hit", ctx.x, ctx.y, fx.kind);
   });
 
-  // 每层时痕：飘一个层数。
+  // 时痕每叠一层：飘一个当前层数。
   arena.registerShot("tokei-inscribed-trace", (fx, ctx) => {
     const el = arena.spawnFx("fx-tokei-inscribed-trace", ctx.x, ctx.y - 16, fx.kind);
     if (el) el.textContent = `+${Math.round(fx.amount || 1)}`;
   });
 
-  // 每层长守：一圈白光的护罩。
+  // 长守补池：一圈白光的护罩。
   arena.registerShot("tokei-inscribed-guard", (fx, ctx) => {
     arena.spawnFx("fx-tokei-inscribed-guard", ctx.x, ctx.y, fx.kind);
   });
@@ -81,7 +59,7 @@
     arena.spawnFx("fx-tokei-inscribed-pop", ctx.x, ctx.y, fx.kind);
   });
 
-  // —— 常驻皮肤：和时计同一张白盘，两根针接上了铭刻自己的资源 ——
+  // —— 常驻皮肤：和时计同一张白盘，两根针改成走真实时间 ——
   function ensure(el, cls) {
     let n = el.querySelector(`:scope > .${cls}`);
     if (!n) {
@@ -114,38 +92,14 @@
   window.lookFX = window.lookFX || {};
   window.lookFX["tokei-inscribed"] = {
     tick(el, u, ctx) {
-      const st = window.tokeiInscribedHUD[u.id] || { cards: [], fill: 0, trace: 0, cdReadyAt: 0 };
       const f = face(el);
-
-      // 分针 = 抽卡进度（5 点一圈，每点 72°）；时针 = 时痕层数（每层 30°，12 层到头）。
-      const minute = Math.max(0, Math.min(5, (st.fill || 0) * 5)) * 72;
-      const hour = Math.min(12, st.trace || 0) * 30;
+      // 真表盘的走法：分针 1 分钟一圈（每 10 秒 60°），时针 12 分钟一圈。
+      // 一场一百来秒的对局里两根针都看得见在动，又不会像秒针那样抖。
+      const t = Math.max(0, (ctx && ctx.time) || 0);
       const mh = f.querySelector(".hand.minute");
       const hh = f.querySelector(".hand.hour");
-      if (mh) mh.style.transform = `rotate(${minute}deg)`;
-      if (hh) hh.style.transform = `rotate(${hour}deg)`;
-
-      // 手牌槽
-      let host = el.querySelector(":scope > .inscribed-hand");
-      if (!host) {
-        host = document.createElement("i");
-        host.className = "inscribed-hand";
-        el.appendChild(host);
-      }
-      for (let i = 0; i < SLOTS; i++) {
-        let slot = host.children[i];
-        if (!slot) {
-          slot = document.createElement("i");
-          slot.className = "inscribed-card";
-          host.appendChild(slot);
-        }
-        const c = st.cards[i] || 0;
-        slot.dataset.c = String(c);
-        slot.classList.toggle("is-on", c > 0);
-        slot.classList.toggle("is-fill", c <= 0 && i === st.cards.length);
-        const p = c > 0 ? 100 : i === st.cards.length ? Math.round((st.fill || 0) * 100) : 0;
-        slot.style.setProperty("--p", `${p}%`);
-      }
+      if (mh) mh.style.transform = `rotate(${((t * 6) % 360).toFixed(2)}deg)`;
+      if (hh) hh.style.transform = `rotate(${((t * 0.5) % 360).toFixed(2)}deg)`;
 
       // 长守的额外血条：引擎的 Absorb，挂在球上方，被打掉多少就短多少。
       const pool = Math.max(0, Number(u.absorb) || 0);
@@ -162,22 +116,9 @@
         shield.firstElementChild.style.setProperty("--fill", `${Math.min(100, pool).toFixed(1)}%`);
         shield.lastElementChild.textContent = String(Math.max(1, Math.round(pool)));
       }
-
-      // 冷却环：就绪时整圈亮，否则按剩余比例收。
-      let cd = el.querySelector(":scope > .inscribed-cd");
-      if (!cd) {
-        cd = document.createElement("i");
-        cd.className = "inscribed-cd";
-        el.appendChild(cd);
-      }
-      const now = (ctx && ctx.time) || 0;
-      const left = (st.cdReadyAt || 0) - now;
-      const armed = left <= 1e-6;
-      cd.classList.toggle("is-ready", armed);
-      cd.style.setProperty("--cd", armed ? "1" : String(Math.max(0, Math.min(1, 1 - left / 20))));
     },
     unmount(el) {
-      for (const cls of ["tokei-face", "inscribed-hand", "inscribed-cd", "inscribed-shield"]) {
+      for (const cls of ["tokei-face", "inscribed-shield"]) {
         const n = el.querySelector(`:scope > .${cls}`);
         if (n) n.remove();
       }

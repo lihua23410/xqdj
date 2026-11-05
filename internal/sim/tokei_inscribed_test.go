@@ -8,9 +8,10 @@ import (
 	unitpkg "xqdj/internal/unit"
 )
 
-// 时计·铭刻 的整条链：开局 2 张手牌 → 每 10s 抽一张 → 出牌触发冲刺索敌攻击。
-// 这里只断言「抽卡 HUD 在动」「冲刺真的打出去了」两件事，具体数值由包内单测覆盖。
-func TestInscribedDrawsCardsAndDashes(t *testing.T) {
+// 时计·铭刻 的整条链：开局手牌 → 每 5s 抽一张 → 出牌触发冲刺索敌攻击。
+// 抽牌与手牌已经收回成内部机制（HUD 不外发），所以这里只断言「冲刺真的打出去了」，
+// 抽卡节奏由包内单测覆盖。
+func TestInscribedPlaysCardsAndDashes(t *testing.T) {
 	m := NewMatchSeeded(17)
 	m.SetSlot(0, character.KindInscribed)
 	m.SetSlot(1, character.KindDummy)
@@ -28,31 +29,19 @@ func TestInscribedDrawsCardsAndDashes(t *testing.T) {
 		t.Fatal("missing dummy")
 	}
 
-	cards, dashes, maxCount := 0, 0, 0
-	for i := 0; i < 60*60; i++ { // 60 秒模拟时间，够抽 6 张
+	dashes := 0
+	for i := 0; i < 60*60; i++ { // 60 秒模拟时间
 		m.Tick()
 		time.Sleep(120 * time.Microsecond)
 		m.mu.Lock()
 		for _, f := range m.fx {
-			switch f.Name {
-			case "tokei-inscribed-cards":
-				cards++
-				if n := int(f.VY); n > maxCount {
-					maxCount = n
-				}
-			case "tokei-inscribed-dash":
+			if f.Name == "tokei-inscribed-dash" {
 				dashes++
 			}
 		}
 		m.mu.Unlock()
 	}
 
-	if cards == 0 {
-		t.Fatal("该有手牌 HUD 的演出")
-	}
-	if maxCount < 3 {
-		t.Fatalf("第 10 秒该抽到第 3 张，HUD 最多只见到 %d 张", maxCount)
-	}
 	if dashes == 0 {
 		t.Fatal("出牌该触发冲刺索敌攻击")
 	}

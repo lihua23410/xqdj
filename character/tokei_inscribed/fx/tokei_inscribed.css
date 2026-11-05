@@ -1,6 +1,6 @@
-/* 时计·铭刻：外观沿用原版时计——白盘、黑刻度、时针分针。
-   两根针接的是铭刻自己的资源：分针 = 抽卡进度（10 点一圈），时针 = 时痕层数（每层一小时）。
-   球下方一排手牌槽，右下角小环是 20 秒命中抽牌冷却。 */
+/* 时计·铭刻：外观沿用原版时计——白盘、黑刻度、金针。
+   牌与抽卡节奏都是内部机制，界面上不出现：两根针走对局时间（分针 1 分钟一圈，
+   时针 12 分钟一圈），球上方只留长守那条额外血条。 */
 .ball.look-tokei-inscribed {
   box-shadow: 0 0 10px rgba(244, 242, 236, 0.35);
 }
@@ -51,94 +51,6 @@
   width: 1.5px;
   height: 42%;
   margin-left: -0.75px;
-}
-
-/* —— 手牌槽：球下方 5 个格子，空槽用抽卡进度当填充条 —— */
-.inscribed-hand {
-  position: absolute;
-  left: 50%;
-  bottom: -8px;
-  display: flex;
-  gap: 3px;
-  transform: translate(-50%, 100%);
-  pointer-events: none;
-  z-index: 2;
-}
-
-.inscribed-card {
-  width: 8px;
-  height: 12px;
-  border-radius: 2px;
-  border: 1px solid rgba(244, 242, 236, 0.45);
-  background: linear-gradient(to top, #8d8a80 var(--p, 0%), #22242a var(--p, 0%));
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
-  opacity: 0.4;
-}
-
-.inscribed-card.is-on,
-.inscribed-card.is-fill {
-  opacity: 1;
-}
-
-.inscribed-card.is-on[data-c="1"] {
-  border-color: #e8a13a;
-  background: #e8a13a;
-  box-shadow: 0 0 8px #e8a13a;
-}
-
-.inscribed-card.is-on[data-c="2"] {
-  border-color: #9fc6e8;
-  background: #9fc6e8;
-  box-shadow: 0 0 8px #9fc6e8;
-}
-
-.inscribed-card.is-on[data-c="3"] {
-  border-color: #b7e8a1;
-  background: #b7e8a1;
-  box-shadow: 0 0 8px #b7e8a1;
-}
-
-.inscribed-card.is-on[data-c="4"] {
-  border-color: #f4f2ec;
-  background: #f4f2ec;
-  box-shadow: 0 0 10px #f4f2ec;
-}
-
-.inscribed-card.is-on[data-c="5"] {
-  border-color: #ff7a3c;
-  background: #ff7a3c;
-  box-shadow: 0 0 9px #ff7a3c;
-}
-
-.inscribed-card.is-on[data-c="6"] {
-  border-color: #d8c7ff;
-  background: #d8c7ff;
-  box-shadow: 0 0 9px #d8c7ff;
-}
-
-/* —— 20s 命中抽牌冷却：球右下角一个小环 —— */
-.inscribed-cd {
-  position: absolute;
-  right: -6px;
-  bottom: -6px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: conic-gradient(#f4f2ec calc(var(--cd, 1) * 360deg), rgba(244, 242, 236, 0.18) 0);
-  mask: radial-gradient(circle, transparent 42%, #000 44%);
-  -webkit-mask: radial-gradient(circle, transparent 42%, #000 44%);
-  opacity: 0.85;
-  pointer-events: none;
-}
-
-.inscribed-cd.is-ready {
-  box-shadow: 0 0 8px #f4f2ec;
-  animation: inscribed-cd-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes inscribed-cd-pulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
 }
 
 /* —— 铭刻 / 回溯：摊开一张半透明表盘（时计场上那张脸的降透明度版），分针转一整圈 ——
@@ -201,24 +113,6 @@
 @keyframes inscribed-spin-ccw {
   from { transform: rotate(0deg); }
   to { transform: rotate(-360deg); }
-}
-
-/* —— 抽到牌 —— */
-.fx.fx-tokei-inscribed-draw {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #f4f2ec;
-  box-shadow: 0 0 10px #f4f2ec;
-  transform: translate(-50%, -50%);
-  animation: inscribed-draw 0.7s ease-out forwards;
-  pointer-events: none;
-}
-
-@keyframes inscribed-draw {
-  0% { opacity: 0; transform: translate(-50%, 0) scale(0.4); }
-  30% { opacity: 1; transform: translate(-50%, -8px) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -22px) scale(0.7); }
 }
 
 /* —— 冲刺拉丝 —— */
