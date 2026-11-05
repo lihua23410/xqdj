@@ -29,6 +29,7 @@ type unit struct {
 	stream          uint64
 	kind            string
 	role            string
+	summoned        bool
 	slot            int
 	seat            int
 	owner           uint64
@@ -1451,10 +1452,13 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		u.noteFaction(u.faction)
 	case unitpkg.Spawn:
 		spec, ok := unitpkg.Lookup(c.Kind)
-		if !ok || spec.Fighter || (spec.RequiresOwner && m.units[c.OwnerID] == nil) {
+		if !ok || (spec.Fighter && !c.Temporary) || (c.Temporary && spec.Role != unitpkg.RoleFighter) || (spec.RequiresOwner && m.units[c.OwnerID] == nil) || (c.Temporary && m.units[c.OwnerID] == nil) {
 			return
 		}
 		u := m.addUnitWithDataLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot, c.Stream, c.Data)
+		if u != nil && c.Temporary {
+			u.summoned = true
+		}
 		if u != nil && c.DamageScale > 0 {
 			u.damageScale = c.DamageScale
 		}
@@ -2901,7 +2905,7 @@ func (m *Match) checkWinLocked() {
 	alive := [2]int{}
 	for _, id := range m.order {
 		u := m.units[id]
-		if u == nil || u.stopped || u.role != unitpkg.RoleFighter {
+		if u == nil || u.stopped || u.role != unitpkg.RoleFighter || u.summoned {
 			continue
 		}
 		if u.slot != 0 && u.slot != 1 {
@@ -2936,7 +2940,7 @@ func (m *Match) checkWinLocked() {
 func (m *Match) livingFighterLocked(slot int) *unit {
 	for _, id := range m.order {
 		u := m.units[id]
-		if u != nil && !u.stopped && u.role == unitpkg.RoleFighter && u.slot == slot {
+		if u != nil && !u.stopped && u.role == unitpkg.RoleFighter && !u.summoned && u.slot == slot {
 			return u
 		}
 	}
