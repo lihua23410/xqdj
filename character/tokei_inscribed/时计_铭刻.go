@@ -48,7 +48,7 @@ const (
 	arcOuter   = inscribedRadius + 2
 	arcSpanDeg = 90.0
 	arcDamage  = 4.0 // 基础伤害；时痕的 +X 由引擎的 SetDamageBonus 统一加
-	arcCD      = 1.8 // 撞碎之后重新长出来要这么久
+	arcCD      = 0.6 // 撞碎之后重新长出来要这么久
 
 	// —— 冲刺（只位移，不结算伤害）——
 	dashSpeed     = 420.0 // 冲刺速度
