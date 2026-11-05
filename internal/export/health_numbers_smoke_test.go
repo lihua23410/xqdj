@@ -32,8 +32,8 @@ func TestHealthNumbersSmoke(t *testing.T) {
 	}
 	units := []unit.Snapshot{
 		{ID: 1, Kind: "小骑士", Role: unit.RoleFighter, Radius: 18, HP: 73.4, MaxHP: 100, X: -160, Y: 150},
-		{ID: 2, Kind: "无下限术士", Role: unit.RoleFighter, HP: 41.4, MaxHP: 150, Seat: 1, NoHealthNumbers: true},
-		{ID: 3, Kind: "无下限术士", Role: unit.RoleFighter, HP: 88.6, MaxHP: 150, Seat: 2, NoHealthNumbers: true},
+		{ID: 2, Kind: "无下限术士", Role: unit.RoleFighter, HP: 41.4, MaxHP: 100, Seat: 1, NoHealthNumbers: true},
+		{ID: 3, Kind: "无下限术士", Role: unit.RoleFighter, HP: 88.6, MaxHP: 100, Seat: 2, NoHealthNumbers: true},
 		{ID: 4, Kind: "非因果", Role: unit.RoleFighter, Radius: 18, HP: 75, MaxHP: 100, Slot: 1, X: 160, Y: 150},
 		{ID: 11, Kind: "红半", Role: unit.RoleMinion, Mortal: true, Radius: 18, HP: 9999, MaxHP: 9999, OwnerID: 2, X: -60, Y: 150, Semi: true, FaceX: 1},
 		{ID: 12, Kind: "蓝半", Role: unit.RoleMinion, Mortal: true, Radius: 18, HP: 9999, MaxHP: 9999, OwnerID: 3, X: 60, Y: 150, Semi: true, FaceX: 1},

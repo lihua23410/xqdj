@@ -3,7 +3,6 @@ package 钓鱼佬
 import (
 	"math"
 	"math/rand/v2"
-	"sync"
 	"xqdj/internal/unit"
 )
 
@@ -16,34 +15,6 @@ type fishJob struct {
 	dmg   float64
 	speed float64
 	spent bool
-}
-
-var fishQ struct {
-	sync.Mutex
-	jobs []fishJob
-}
-
-func pushFish(j fishJob) {
-	fishQ.Lock()
-	fishQ.jobs = append(fishQ.jobs, j)
-	fishQ.Unlock()
-}
-
-func popFish() fishJob {
-	fishQ.Lock()
-	defer fishQ.Unlock()
-	if len(fishQ.jobs) == 0 {
-		return fishJob{y: 10, dmg: fishDamage(10), speed: fishSpeed(10)}
-	}
-	j := fishQ.jobs[0]
-	fishQ.jobs = fishQ.jobs[1:]
-	return j
-}
-
-func resetFishQ() {
-	fishQ.Lock()
-	fishQ.jobs = nil
-	fishQ.Unlock()
 }
 
 type 鱼 struct {
@@ -66,7 +37,10 @@ type 鱼 struct {
 }
 
 func newFish(info unit.SpawnInfo) *鱼 {
-	j := popFish()
+	j, ok := info.Data.(fishJob)
+	if !ok {
+		j = fishJob{y: 10, dmg: fishDamage(10), speed: fishSpeed(10)}
+	}
 	return &鱼{job: j, owner: info.OwnerID, slot: info.Slot, spent: j.spent}
 }
 

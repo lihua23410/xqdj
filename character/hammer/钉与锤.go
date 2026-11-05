@@ -4,7 +4,6 @@ package 钉与锤
 import (
 	"embed"
 	"math"
-	"sync"
 	"xqdj/internal/unit"
 )
 
@@ -62,6 +61,7 @@ const (
 	dollSpawnTime = 30.0
 	dollLife      = 10.0
 	dollColor     = "#c4a060"
+	dollXferCD    = 1.0 // 替身转伤每秒最多一次；不打这个 CD 的话锤弧每 0.1s 重挂一次，等于每秒转 70 点
 )
 
 const (
@@ -123,7 +123,8 @@ func init() {
 		BreakWalls: true,
 		Look:       unit.Look{Color: "#c0c0c0", Overlay: true, FX: []string{"nail"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		return &钉{owner: info.OwnerID, slot: info.Slot, spawnTime: -1}
+		birth, _ := info.Data.(nailJob)
+		return &钉{owner: info.OwnerID, slot: info.Slot, spawnTime: -1, birth: birth}
 	})
 
 	// 替身人偶（活随从，不动）
@@ -180,7 +181,7 @@ func (h *钉与锤) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	h.enemySlot = 1 - s.Self.Slot
 	if o := unit.Seek(s); o != nil {
-		rememberFoe(ctx.ID, o.ID)
+		rememberFoe(ctx.State, ctx.ID, o.ID)
 	}
 
 	h.checkHammer(ctx, s)
@@ -195,6 +196,7 @@ func (h *钉与锤) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	h.trySpawnDolls(ctx, s)
 	h.trackDolls(ctx, s)
+	h.settleDolls(ctx, s)
 }
 
 // checkHammer：弧消失时，锤击就绪则对近战内可命中单位击退眩晕，并挥锤群攻。
@@ -325,10 +327,10 @@ func (h *钉与锤) tryRitual(ctx unit.Context, s unit.Sense) bool {
 	}
 	for i := 0; i < 3; i++ {
 		a := ritualAng(i)
-		pushNail(nailJob{orbit: true, ang: a})
 		x, y := clampInHex(s.Field, enemy.X+math.Cos(a)*ritualOrbit, enemy.Y+math.Sin(a)*ritualOrbit, nailRadius)
 		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindNail,
+			Data:    nailJob{orbit: true, ang: a},
 			X:       x,
 			Y:       y,
 			OwnerID: ctx.ID,
@@ -374,7 +376,7 @@ func (h *钉与锤) trySpawnDolls(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-// trackDolls：给新生人偶设 HP。转伤改由近战弧命中时立刻复制，避免等下一帧 Sense。
+// trackDolls：给新生人偶设 HP。打在人偶上的转伤由本体在感知里发出。
 func (h *钉与锤) trackDolls(ctx unit.Context, s unit.Sense) {
 	if h.dollHPs == nil {
 		h.dollHPs = map[uint64]float64{}
@@ -418,22 +420,34 @@ func (h *钉与锤) trackDolls(ctx unit.Context, s unit.Sense) {
 type 弧 struct {
 	owner uint64
 	slot  int
+	spent bool
 }
 
 func (a *弧) Handle(ctx unit.Context, ev unit.Event) {
-	switch e := ev.(type) {
-	case unit.Collision:
-		if !unit.EnemyTarget(e, a.slot) {
-			return
-		}
-		hurt(ctx, ctx.ID, a.owner, e.Other, arcDamage)
-		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+	if a.spent {
+		return
 	}
+	e, ok := ev.(unit.Collision)
+	if !ok || !unit.EnemyTarget(e, a.slot) {
+		return
+	}
+	ownDoll := e.Other.Kind == KindDoll && e.Other.OwnerID == a.owner
+	// 贴着自己的人偶只打第一次。弧每 0.1 秒会重挂，不拦住就会一直转伤。
+	if ownDoll && !latchDoll(ctx.State, a.owner, e.Other.ID) {
+		return
+	}
+	a.spent = true
+	ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: arcDamage}
+	if ownDoll && transferReady(ctx.State, a.owner, e.Time) {
+		noteDollTransfer(ctx.State, a.owner, e.Other.HP, arcDamage)
+	}
+	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }
 
 // ========== 钉子弹 ==========
 
 type 钉 struct {
+	birth       nailJob
 	owner       uint64
 	slot        int
 	spawnTime   float64
@@ -590,8 +604,8 @@ func (n *钉) boot(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	n.spawnTime = s.Time
-	job, ok := popNail()
-	if !ok || !job.orbit {
+	job := n.birth
+	if !job.orbit {
 		return
 	}
 	n.phase = nailOrbit
@@ -694,7 +708,7 @@ func copyIfDoll(ctx unit.Context, owner uint64, u unit.Snapshot, amount float64)
 	if amt > amount {
 		amt = amount
 	}
-	if eid := foeOfOwner(owner); eid != 0 {
+	if eid := foeOfOwner(ctx.State, owner); eid != 0 {
 		ctx.Out <- unit.Damage{From: owner, To: eid, Amount: amt}
 	}
 }
@@ -764,50 +778,103 @@ type nailJob struct {
 	ang   float64
 }
 
-var (
-	foeMu sync.Mutex
-	foeOf = map[uint64]uint64{}
-
-	nailMu sync.Mutex
-	nailQ  []nailJob
-)
-
-func rememberFoe(owner, enemy uint64) {
+func rememberFoe(scope *unit.MatchState, owner, enemy uint64) {
 	if owner == 0 || enemy == 0 {
 		return
 	}
-	foeMu.Lock()
-	foeOf[owner] = enemy
-	foeMu.Unlock()
+	shared := stateFor(scope)
+	shared.foeMu.Lock()
+	shared.foeOf[owner] = enemy
+	shared.foeMu.Unlock()
 }
 
-func foeOfOwner(owner uint64) uint64 {
-	foeMu.Lock()
-	defer foeMu.Unlock()
-	return foeOf[owner]
+func foeOfOwner(scope *unit.MatchState, owner uint64) uint64 {
+	shared := stateFor(scope)
+	shared.foeMu.Lock()
+	defer shared.foeMu.Unlock()
+	return shared.foeOf[owner]
 }
 
-func pushNail(job nailJob) {
-	nailMu.Lock()
-	nailQ = append(nailQ, job)
-	nailMu.Unlock()
-}
-
-func popNail() (nailJob, bool) {
-	nailMu.Lock()
-	defer nailMu.Unlock()
-	if len(nailQ) == 0 {
-		return nailJob{}, false
+// latchDoll 记下这次贴住已经打过。分开之前再碰上不算新的一下。
+func latchDoll(scope *unit.MatchState, owner, doll uint64) bool {
+	if owner == 0 || doll == 0 {
+		return false
 	}
-	job := nailQ[0]
-	nailQ = nailQ[1:]
-	return job, true
+	shared := stateFor(scope)
+	shared.foeMu.Lock()
+	defer shared.foeMu.Unlock()
+	m := shared.dollHit[owner]
+	if m == nil {
+		m = map[uint64]bool{}
+		shared.dollHit[owner] = m
+	}
+	if m[doll] {
+		return false
+	}
+	m[doll] = true
+	return true
 }
 
-func resetNailJobs() {
-	nailMu.Lock()
-	nailQ = nil
-	nailMu.Unlock()
+// transferReady 替身转伤的闸门：距离上次转伤不足 dollXferCD 就不放行。
+// 锤弧打中自己的替身后会重生，不闸住它 0.1 秒就能转一次。
+func transferReady(scope *unit.MatchState, owner uint64, now float64) bool {
+	if owner == 0 {
+		return false
+	}
+	shared := stateFor(scope)
+	shared.foeMu.Lock()
+	defer shared.foeMu.Unlock()
+	if now+1e-9 < shared.xferAt[owner] {
+		return false
+	}
+	shared.xferAt[owner] = now + dollXferCD
+	return true
+}
+
+func noteDollTransfer(scope *unit.MatchState, owner uint64, dollHP, hit float64) {
+	if owner == 0 || dollHP <= 0 || hit <= 0 {
+		return
+	}
+	amt := dollHP
+	if amt > hit {
+		amt = hit
+	}
+	shared := stateFor(scope)
+	shared.foeMu.Lock()
+	shared.xfer[owner] += amt
+	shared.foeMu.Unlock()
+}
+
+func (h *钉与锤) settleDolls(ctx unit.Context, s unit.Sense) {
+	touching := map[uint64]bool{}
+	for i := range s.Nearby {
+		o := &s.Nearby[i]
+		if o.Kind != KindDoll || o.OwnerID != ctx.ID {
+			continue
+		}
+		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) <= arcRadius+o.Radius+4 {
+			touching[o.ID] = true
+		}
+	}
+	shared := stateFor(ctx.State)
+	shared.foeMu.Lock()
+	if m := shared.dollHit[ctx.ID]; m != nil {
+		for id := range m {
+			if !touching[id] {
+				delete(m, id)
+			}
+		}
+	}
+	eid := shared.foeOf[ctx.ID]
+	amt := shared.xfer[ctx.ID]
+	if eid != 0 && amt > 0 {
+		shared.xfer[ctx.ID] = 0
+	}
+	shared.foeMu.Unlock()
+	if eid == 0 || amt <= 0 {
+		return
+	}
+	ctx.Out <- unit.Damage{From: ctx.ID, To: eid, Amount: amt}
 }
 
 func reflectDir(ux, uy, nx, ny float64) (float64, float64) {

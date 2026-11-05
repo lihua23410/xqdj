@@ -345,7 +345,7 @@ func TestGallowsLocksOnTouch(t *testing.T) {
 	if p := lastPass(cmds); p == nil || !p.Hold || p.UnitID != 9 {
 		t.Fatalf("pass=%v", p)
 	}
-	hit.Time = 1.2
+	hit.Time = 1.5
 	a.Handle(ctx, hit)
 	if lastDamage(drain(out)) != nil {
 		t.Fatal("still in 0.6s")
@@ -353,7 +353,7 @@ func TestGallowsLocksOnTouch(t *testing.T) {
 	hit.Time = 1.6
 	a.Handle(ctx, hit)
 	if lastDamage(drain(out)) == nil {
-		t.Fatal("tick after CD")
+		t.Fatal("tick after 0.6s")
 	}
 	hit.Time = 11
 	a.Handle(ctx, hit)
@@ -371,6 +371,57 @@ func TestGallowsLocksOnTouch(t *testing.T) {
 	}
 	if !hasDespawn(end) {
 		t.Fatal("gallows should despawn")
+	}
+}
+
+func TestGallowsReleasesWhenOverlapEnds(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	a := &绞刑架{owner: 1, slot: 0}
+	ctx := unit.Context{ID: 9, Kind: KindGallows, Out: out}
+	self := unit.Snapshot{ID: 9, Kind: KindGallows, Role: unit.RoleHelper, Slot: 0, X: 0, Y: 0, Radius: gallowsR}
+	enemy := enemyAt(0, 0)
+	enemy.VX, enemy.VY = 90, 40
+	hit := unit.Sense{Time: 1, Self: self, Nearby: []unit.Snapshot{enemy}}
+	a.Handle(ctx, hit)
+	if lastDamage(drain(out)) == nil {
+		t.Fatal("touch should damage")
+	}
+	enemy.X = 200
+	hit.Time = 2
+	hit.Nearby = []unit.Snapshot{enemy}
+	a.Handle(ctx, hit)
+	left := drain(out)
+	st := lastStun(left)
+	if st == nil || st.Hold || st.UnitID != 2 {
+		t.Fatalf("release stun=%v", st)
+	}
+	sd := lastStand(left)
+	if sd == nil || sd.Hold || sd.UnitID != 2 {
+		t.Fatalf("release stand=%v", sd)
+	}
+	if lastDamage(left) != nil {
+		t.Fatal("left the gallows, should not keep bleeding")
+	}
+	v := lastVel(left)
+	if v == nil || math.Abs(v.VX-90) > 1e-9 || math.Abs(v.VY-40) > 1e-9 {
+		t.Fatalf("release vel=%v want (90,40)", v)
+	}
+	hit.Time = 2.5
+	a.Handle(ctx, hit)
+	away := drain(out)
+	if lastDamage(away) != nil || lastStun(away) != nil {
+		t.Fatal("still away, should stay released")
+	}
+	enemy.X = 0
+	hit.Time = 3
+	hit.Nearby = []unit.Snapshot{enemy}
+	a.Handle(ctx, hit)
+	back := drain(out)
+	if lastStun(back) == nil || !lastStun(back).Hold {
+		t.Fatal("touching again should lock")
+	}
+	if lastDamage(back) == nil {
+		t.Fatal("touching again should damage")
 	}
 }
 
@@ -559,6 +610,17 @@ func lastCruise(cmds []unit.Cmd) *unit.SetCruise {
 	var v *unit.SetCruise
 	for _, c := range cmds {
 		if x, ok := c.(unit.SetCruise); ok {
+			cp := x
+			v = &cp
+		}
+	}
+	return v
+}
+
+func lastStand(cmds []unit.Cmd) *unit.Stand {
+	var v *unit.Stand
+	for _, c := range cmds {
+		if x, ok := c.(unit.Stand); ok {
 			cp := x
 			v = &cp
 		}

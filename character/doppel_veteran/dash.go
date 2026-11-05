@@ -23,39 +23,27 @@ type dashJob struct {
 	booted bool
 }
 
-var dashJobs sync.Map // uint64 -> *dashJob
-
-// stackGuard：招3重叠钉住时挡伤。
-var stackGuard sync.Map // uint64 -> struct{}
-
-func setStackGuard(id uint64, on bool) {
+func setStackGuard(scope *unit.MatchState, id uint64, on bool) {
 	if on {
-		stackGuard.Store(id, struct{}{})
+		stateFor(scope).stackGuard.Store(id, struct{}{})
 		return
 	}
-	stackGuard.Delete(id)
+	stateFor(scope).stackGuard.Delete(id)
 }
 
-func isStackGuarded(id uint64) bool {
-	_, ok := stackGuard.Load(id)
+func isStackGuarded(scope *unit.MatchState, id uint64) bool {
+	_, ok := stateFor(scope).stackGuard.Load(id)
 	return ok
 }
 
-func clearAllStackGuards() {
-	stackGuard.Range(func(k, _ any) bool {
-		stackGuard.Delete(k)
-		return true
-	})
-}
-
-func startDash(id uint64, ux, uy, speed, dist, dmg float64, block, pass bool, slot int) {
+func startDash(scope *unit.MatchState, id uint64, ux, uy, speed, dist, dmg float64, block, pass bool, slot int) {
 	n := math.Hypot(ux, uy)
 	if n < 1e-6 {
 		ux, uy = 1, 0
 		n = 1
 	}
 	ux, uy = ux/n, uy/n
-	dashJobs.Store(id, &dashJob{
+	stateFor(scope).dashJobs.Store(id, &dashJob{
 		speed:  speed,
 		left:   dist,
 		ux:     ux,
@@ -69,24 +57,24 @@ func startDash(id uint64, ux, uy, speed, dist, dmg float64, block, pass bool, sl
 	})
 }
 
-func clearDash(id uint64) {
-	dashJobs.Delete(id)
+func clearDash(scope *unit.MatchState, id uint64) {
+	stateFor(scope).dashJobs.Delete(id)
 }
 
-func getDash(id uint64) *dashJob {
-	v, ok := dashJobs.Load(id)
+func getDash(scope *unit.MatchState, id uint64) *dashJob {
+	v, ok := stateFor(scope).dashJobs.Load(id)
 	if !ok {
 		return nil
 	}
 	return v.(*dashJob)
 }
 
-func dashesDone(ids []uint64) bool {
+func dashesDone(scope *unit.MatchState, ids []uint64) bool {
 	if len(ids) == 0 {
 		return true
 	}
 	for _, id := range ids {
-		j := getDash(id)
+		j := getDash(scope, id)
 		if j == nil {
 			continue
 		}

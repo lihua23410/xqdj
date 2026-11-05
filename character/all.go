@@ -5,8 +5,11 @@ package character
 import (
 	"xqdj/character/acausal"
 	"xqdj/character/archer"
+	"xqdj/character/arsonist"
 	"xqdj/character/axe"
 	"xqdj/character/bloodpact"
+	"xqdj/character/bubble"
+	"xqdj/character/bundle"
 	"xqdj/character/charcoal"
 	"xqdj/character/coalesce"
 	"xqdj/character/doppel"
@@ -16,6 +19,7 @@ import (
 	"xqdj/character/engine"
 	"xqdj/character/fisher"
 	"xqdj/character/freischutz"
+	"xqdj/character/fujihime"
 	"xqdj/character/glitch"
 	"xqdj/character/godfather"
 	"xqdj/character/godfather_youth"
@@ -31,6 +35,7 @@ import (
 	"xqdj/character/mezhou"
 	"xqdj/character/observer"
 	"xqdj/character/orca"
+	"xqdj/character/ospf"
 	"xqdj/character/pastor"
 	"xqdj/character/patrol"
 	"xqdj/character/pink"
@@ -46,15 +51,19 @@ import (
 	"xqdj/character/sot"
 	"xqdj/character/static"
 	"xqdj/character/subpoena"
+	"xqdj/character/surgery"
 	"xqdj/character/tachi"
 	"xqdj/character/tanyongchen"
+	"xqdj/character/threshold"
 	"xqdj/character/tokei"
+	"xqdj/character/tokei_inscribed"
 	"xqdj/character/twin"
 	"xqdj/character/udongein"
 	"xqdj/character/waller"
 	"xqdj/character/waller_veteran"
 	"xqdj/character/warden"
 	"xqdj/character/wolf"
+	"xqdj/character/xiaoyaoge"
 )
 
 const (
@@ -66,10 +75,23 @@ const (
 	KindArcher             = 弓箭.KindArcher
 	KindArrow              = 弓箭.KindArrow
 	KindVolleyArrow        = 弓箭.KindVolleyArrow
+	KindArsonField         = 纵火者.KindArsonField
+	KindArsonFire          = 纵火者.KindArsonFire
+	KindArsonFireMark      = 纵火者.KindArsonFireMark
+	KindArsonOil           = 纵火者.KindArsonOil
+	KindArsonOilMark       = 纵火者.KindArsonOilMark
+	KindArsonist           = 纵火者.KindArsonist
 	KindAxe                = 盾斧.KindAxe
+	KindAxeThrustArc       = 盾斧.KindAxeThrustArc
 	KindBloodArc           = 血契.KindBloodArc
 	KindBloodBat           = 血契.KindBloodBat
 	KindBloodPact          = 血契.KindBloodPact
+	KindPounceArc          = 血契.KindPounceArc
+	KindBubble             = 泡泡球.KindBubble
+	KindBubbleBall         = 泡泡球.KindBubbleBall
+	KindBubbleLoad         = 泡泡球.KindBubbleLoad
+	KindBubbleShot         = 泡泡球.KindBubbleShot
+	KindBundle             = 捆.KindBundle
 	KindCharcoal           = 炭翁.KindCharcoal
 	KindCharcoalEmber      = 炭翁.KindCharcoalEmber
 	KindCoalesce           = 凝聚体.KindCoalesce
@@ -82,6 +104,7 @@ const (
 	KindShadow             = 分身者_百战.KindShadow
 	KindDummy              = 靶子.KindDummy
 	KindEcho               = 回声.KindEcho
+	KindEchoArc            = 回声.KindEchoArc
 	KindShard              = 回声.KindShard
 	KindStar               = 回声.KindStar
 	KindEngine             = 内燃机.KindEngine
@@ -89,11 +112,15 @@ const (
 	KindFishBig            = 钓鱼佬.KindFishBig
 	KindFishMid            = 钓鱼佬.KindFishMid
 	KindFisher             = 钓鱼佬.KindFisher
+	KindFisherArc          = 钓鱼佬.KindFisherArc
 	KindFlood              = 钓鱼佬.KindFlood
 	KindPond               = 钓鱼佬.KindPond
 	KindFrei               = Freischutz.KindFrei
 	KindFreiNode           = Freischutz.KindFreiNode
 	KindFreiShot           = Freischutz.KindFreiShot
+	KindFujihime           = 藤姬.KindFujihime
+	KindFujihimeArc        = 藤姬.KindFujihimeArc
+	KindFujihimeDoll       = 藤姬.KindFujihimeDoll
 	KindGlitch             = 地慧星.KindGlitch
 	KindGlitchArc          = 地慧星.KindGlitchArc
 	KindGlitchGhost        = 地慧星.KindGlitchGhost
@@ -106,6 +133,7 @@ const (
 	KindGodfatherShot      = 教父.KindGodfatherShot
 	KindSniper             = 教父.KindSniper
 	KindYouth              = 教父青年.KindYouth
+	KindYouthArc           = 教父青年.KindYouthArc
 	KindYouthBuffShot      = 教父青年.KindYouthBuffShot
 	KindYouthShot          = 教父青年.KindYouthShot
 	KindHajimi             = 反重力猫咪.KindHajimi
@@ -143,12 +171,17 @@ const (
 	KindMenreikiMask3      = 面灵气.KindMenreikiMask3
 	KindMenreikiShot       = 面灵气.KindMenreikiShot
 	KindMe                 = 我与周旋久.KindMe
+	KindMeArc              = 我与周旋久.KindMeArc
 	KindVoidShot           = 我与周旋久.KindVoidShot
 	KindZhou               = 我与周旋久.KindZhou
+	KindZhouArc            = 我与周旋久.KindZhouArc
 	KindObserver           = 观察者.KindObserver
 	KindObserverBeam       = 观察者.KindObserverBeam
+	KindObserverKunaiCopy  = 观察者.KindObserverKunaiCopy
 	KindOrca               = 大肥鱼.KindOrca
 	KindRice               = 大肥鱼.KindRice
+	KindOSPF               = ospf.KindOSPF
+	KindOSPFNode           = ospf.KindOSPFNode
 	KindGlyph              = 老牧师.KindGlyph
 	KindPastor             = 老牧师.KindPastor
 	KindPatrol             = 巡回.KindPatrol
@@ -161,6 +194,8 @@ const (
 	KindGatling            = pink.KindGatling
 	KindGatlingShot        = pink.KindGatlingShot
 	KindPink               = pink.KindPink
+	KindPinkContact        = pink.KindPinkContact
+	KindPinkFuelArc        = pink.KindPinkFuelArc
 	KindPistol             = pink.KindPistol
 	KindPistolShot         = pink.KindPistolShot
 	KindRifle              = pink.KindRifle
@@ -206,20 +241,30 @@ const (
 	KindStaticBall         = 静电魔球.KindStaticBall
 	KindSubpoena           = 传票员.KindSubpoena
 	KindTicket             = 传票员.KindTicket
+	KindBloodBullet        = 外科手术.KindBloodBullet
+	KindScalpel            = 外科手术.KindScalpel
+	KindSurgery            = 外科手术.KindSurgery
+	KindSurgeryField       = 外科手术.KindSurgeryField
+	KindSutureNeedle       = 外科手术.KindSutureNeedle
 	KindTachi              = 太刀.KindTachi
 	KindBell               = 谭泳辰.KindBell
 	KindDomain             = 谭泳辰.KindDomain
 	KindKunai              = 谭泳辰.KindKunai
 	KindMilk               = 谭泳辰.KindMilk
 	KindTan                = 谭泳辰.KindTan
+	KindTanKunaiShot       = 谭泳辰.KindTanKunaiShot
+	KindThreshold          = 阈值.KindThreshold
 	KindTokei              = 时计.KindTokei
 	KindTokeiArc           = 时计.KindTokeiArc
 	KindTokeiMoment        = 时计.KindTokeiMoment
+	KindInscribed          = 时计_铭刻.KindInscribed
+	KindInscribedArc       = 时计_铭刻.KindInscribedArc
 	KindBlue               = 无下限术士.KindBlue
 	KindRed                = 无下限术士.KindRed
 	KindTwin               = 无下限术士.KindTwin
 	KindTwinArc            = 无下限术士.KindTwinArc
 	KindTwinBlueArc        = 无下限术士.KindTwinBlueArc
+	KindN24Arc             = 人偶使.KindN24Arc
 	KindNingyushi          = 人偶使.KindNingyushi
 	KindNingyushiBeam      = 人偶使.KindNingyushiBeam
 	KindNingyushiBomb      = 人偶使.KindNingyushiBomb
@@ -232,4 +277,6 @@ const (
 	KindWolf               = 狼人.KindWolf
 	KindWolfArc            = 狼人.KindWolfArc
 	KindWolfBite           = 狼人.KindWolfBite
+	KindGiftBox            = 小幺哥.KindGiftBox
+	KindXiaoyaoge          = 小幺哥.KindXiaoyaoge
 )

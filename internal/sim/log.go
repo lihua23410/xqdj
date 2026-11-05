@@ -20,9 +20,14 @@ func (m *Match) writeLogHeaderLocked() {
 	m.recap.Reset()
 	m.trace.Reset()
 	m.logReady = false
+	m.logNames = nil
+	m.logLeapAt = nil
+	m.logLeaps = nil
+	if m.headless {
+		return
+	}
 	m.logNames = map[uint64]string{}
 	m.logLeapAt = map[uint64]float64{}
-	m.logLeaps = nil
 	mode := "单挑"
 	if m.team {
 		mode = "团队赛"
@@ -44,6 +49,9 @@ func (m *Match) writeLogHeaderLocked() {
 }
 
 func (m *Match) closeLogLocked(line string) {
+	if m.headless {
+		return
+	}
 	if m.logReady || m.logMute {
 		return
 	}
@@ -55,6 +63,9 @@ func (m *Match) closeLogLocked(line string) {
 
 // noteRosterStatusLocked 收尾前把两边每一只都写上。只写胜的一边时，另一边会从战报里消失。
 func (m *Match) noteRosterStatusLocked() {
+	if m.headless {
+		return
+	}
 	for side := 0; side < 2; side++ {
 		edge := "左"
 		if side == 1 {
@@ -84,6 +95,9 @@ func (m *Match) noteRosterStatusLocked() {
 }
 
 func (m *Match) rosterLine(side int) string {
+	if m.headless {
+		return ""
+	}
 	edge := "左"
 	if side == 1 {
 		edge = "右"
@@ -96,6 +110,9 @@ func (m *Match) rosterLine(side int) string {
 }
 
 func (m *Match) noteRecap(line string) {
+	if m.headless {
+		return
+	}
 	if m.logMute {
 		return
 	}
@@ -104,6 +121,9 @@ func (m *Match) noteRecap(line string) {
 }
 
 func (m *Match) noteTrace(line string) {
+	if m.headless {
+		return
+	}
 	if m.logMute {
 		return
 	}
@@ -188,6 +208,9 @@ func (m *Match) sourceLabel(from *unit) string {
 }
 
 func (m *Match) noteBirthLocked(u *unit) {
+	if m.headless {
+		return
+	}
 	if u == nil {
 		return
 	}
@@ -196,12 +219,18 @@ func (m *Match) noteBirthLocked(u *unit) {
 }
 
 func (m *Match) noteWallsBuiltLocked() {
+	if m.headless {
+		return
+	}
 	for _, w := range m.walls {
 		m.noteWallLocked("砌墙", w)
 	}
 }
 
 func (m *Match) noteWallLocked(verb string, w *barrier) {
+	if m.headless {
+		return
+	}
 	if w == nil {
 		return
 	}
@@ -217,21 +246,33 @@ func (m *Match) noteWallLocked(verb string, w *barrier) {
 }
 
 func (m *Match) noteOfferLocked(c unitpkg.Damage) {
+	if m.headless {
+		return
+	}
 	m.noteTrace(fmt.Sprintf("%s  提出  %s → %s  %s",
 		logTime(m.time), m.idLabel(c.From), m.idLabel(c.To), logNum(c.Amount)))
 }
 
 func (m *Match) noteBlockLocked(off dmgOffer) {
+	if m.headless {
+		return
+	}
 	m.noteTrace(fmt.Sprintf("%s  挡住  %s  提出 %s",
 		logTime(m.time), m.idLabel(off.to), logNum(off.amount)))
 }
 
 func (m *Match) noteAbsorbLocked(off dmgOffer) {
+	if m.headless {
+		return
+	}
 	m.noteTrace(fmt.Sprintf("%s  吸收  %s  提出 %s",
 		logTime(m.time), m.idLabel(off.to), logNum(off.amount)))
 }
 
 func (m *Match) noteConfirmLocked(off dmgOffer, applied, hp float64) {
+	if m.headless {
+		return
+	}
 	line := fmt.Sprintf("%s  确认  %s → %s  提出 %s  扣 %s  剩余 %s  攻速 %s  受速 %s",
 		logTime(m.time), m.idLabel(off.from), m.idLabel(off.to), logNum(off.amount), logNum(applied), logNum(hp),
 		logNum(off.atkSpeed), logNum(off.defSpeed))
@@ -245,6 +286,9 @@ func (m *Match) noteConfirmLocked(off dmgOffer, applied, hp float64) {
 }
 
 func (m *Match) noteHurtLocked(from, u *unit, amt float64) {
+	if m.headless {
+		return
+	}
 	if u == nil {
 		return
 	}
@@ -253,6 +297,9 @@ func (m *Match) noteHurtLocked(from, u *unit, amt float64) {
 }
 
 func (m *Match) noteDownLocked(u *unit, recap bool) {
+	if m.headless {
+		return
+	}
 	if u == nil {
 		return
 	}
@@ -264,6 +311,9 @@ func (m *Match) noteDownLocked(u *unit, recap bool) {
 }
 
 func (m *Match) noteGoneLocked(u *unit) {
+	if m.headless {
+		return
+	}
 	if u == nil || u.hp <= 0 {
 		return
 	}
@@ -271,6 +321,9 @@ func (m *Match) noteGoneLocked(u *unit) {
 }
 
 func (m *Match) noteHealLocked(u *unit, got float64) {
+	if m.headless {
+		return
+	}
 	if u == nil || got <= 0 {
 		return
 	}
@@ -282,6 +335,9 @@ func (m *Match) noteHealLocked(u *unit, got float64) {
 }
 
 func (m *Match) noteSetHPLocked(u *unit) {
+	if m.headless {
+		return
+	}
 	if u == nil {
 		return
 	}
@@ -290,6 +346,9 @@ func (m *Match) noteSetHPLocked(u *unit) {
 }
 
 func (m *Match) noteStunLocked(u *unit, until float64, release bool) {
+	if m.headless {
+		return
+	}
 	if u == nil {
 		return
 	}
@@ -306,6 +365,9 @@ func (m *Match) noteStunLocked(u *unit, until float64, release bool) {
 }
 
 func (m *Match) noteCreditLocked(killer, victim *unit) {
+	if m.headless {
+		return
+	}
 	if killer == nil || victim == nil {
 		return
 	}
@@ -328,6 +390,9 @@ func logSame(a, b float64) bool {
 }
 
 func (m *Match) noteHoldLocked(u *unit, verb string, hold bool) {
+	if m.headless {
+		return
+	}
 	if u == nil {
 		return
 	}
@@ -338,6 +403,9 @@ func (m *Match) noteHoldLocked(u *unit, verb string, hold bool) {
 }
 
 func (m *Match) noteSpanLocked(u *unit, verb string, prev, next float64) {
+	if m.headless {
+		return
+	}
 	if u == nil || logSame(prev, next) {
 		return
 	}
@@ -346,6 +414,9 @@ func (m *Match) noteSpanLocked(u *unit, verb string, prev, next float64) {
 }
 
 func (m *Match) noteAimLocked(from uint64, u *unit, next uint8) {
+	if m.headless {
+		return
+	}
 	if u == nil {
 		return
 	}
@@ -354,6 +425,9 @@ func (m *Match) noteAimLocked(from uint64, u *unit, next uint8) {
 }
 
 func (m *Match) noteMarkLocked(u *unit, kind string, prev, next int) {
+	if m.headless {
+		return
+	}
 	if u == nil || kind == "" || prev == next {
 		return
 	}
@@ -366,6 +440,9 @@ func (m *Match) noteMarkLocked(u *unit, kind string, prev, next int) {
 }
 
 func (m *Match) noteFactionNameLocked(u *unit, name string) {
+	if m.headless {
+		return
+	}
 	if u == nil || name == "" {
 		return
 	}
@@ -373,6 +450,9 @@ func (m *Match) noteFactionNameLocked(u *unit, name string) {
 }
 
 func (m *Match) notePushLocked(u *unit, kind string, speed float64, remove bool) {
+	if m.headless {
+		return
+	}
 	if u == nil {
 		return
 	}
@@ -385,6 +465,9 @@ func (m *Match) notePushLocked(u *unit, kind string, speed float64, remove bool)
 }
 
 func (m *Match) noteWallMotionLocked(w *barrier) {
+	if m.headless {
+		return
+	}
 	if w == nil {
 		return
 	}
@@ -397,6 +480,9 @@ func (m *Match) noteWallMotionLocked(w *barrier) {
 }
 
 func (m *Match) noteSwapLocked(body, other *unit, keepVel bool) {
+	if m.headless {
+		return
+	}
 	if body == nil || other == nil {
 		return
 	}
@@ -421,6 +507,9 @@ func nearPt(a, b vec) bool {
 
 // recordLeapLocked 先攒着。同一拍里对位互换的两下，以及连续小步，都不进排查。
 func (m *Match) recordLeapLocked(u *unit, from, dest, land vec) {
+	if m.headless {
+		return
+	}
 	if u == nil {
 		return
 	}
@@ -451,6 +540,9 @@ func (m *Match) recordLeapLocked(u *unit, from, dest, land vec) {
 }
 
 func (m *Match) flushLeapsLocked() {
+	if m.headless {
+		return
+	}
 	for _, lp := range m.logLeaps {
 		if lp.drop {
 			continue

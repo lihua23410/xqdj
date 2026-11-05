@@ -13,19 +13,19 @@
 需要 Go 1.22+。
 
 ```bash
-go run .
+make run
 ```
 
 打开 [http://127.0.0.1:8080](http://127.0.0.1:8080)。默认监听 `:8080`，用 `XQDJ_ADDR` 改：
 
 ```bash
-XQDJ_ADDR=127.0.0.1:9000 go run .
+XQDJ_ADDR=127.0.0.1:9000 make run
 ```
 
 拉不下来依赖时：
 
 ```bash
-GOPROXY=https://goproxy.cn,direct go run .
+GOPROXY=https://goproxy.cn,direct make run
 ```
 
 前端和角色资源都靠 `go:embed` 打进二进制：`internal/web/embed.go` 收 `*.html *.css *.js lib/*.js`（往 `lib/` 加新文件要同时改这行 pattern）；角色包收的是它自己 `//go:embed` 行列到的东西——多数包只 embed `fx`，地慧星还 embed `status`，面灵气还 embed `status faction`，人偶使是 `fx 素材`。
@@ -43,15 +43,15 @@ netstat -ano | findstr :8080
 taskkill /PID <PID> /F
 ```
 
-测试：
+测试（先审查，再执行全量测试）：
 
 ```bash
-go test ./...
+make test
 ```
 
 加球或改了战斗机子包之后，先 `go generate ./character` 再测。加场地子包则 `go generate ./map`。对应的 `all.go` 过期时 `TestAllGoListsEveryPack` 会失败。
 
-无头胜率（所有战斗机两两对打，不含自己打自己；奇数场换槽）：
+无头胜率（靶子以外的战斗机两两对打，不含自己打自己；奇数场换槽）：
 
 ```bash
 go run ./cmd/winrate -n 100 -timeout 90 -o winrate.md
@@ -62,10 +62,64 @@ go run ./cmd/winrate -n 100 -timeout 90 -o winrate.md
 | `-n` | 100 | 每组对战场次 |
 | `-timeout` | 90 | 单场模拟超时秒数，超时计平 |
 | `-o` | `winrate.md` | 输出文件 |
-| `-j` | `NumCPU×8` | 同时进行的场次数 |
-| `-only` | 空 | 只测该战斗机对其余所有球（不含自己打自己） |
+| `-j` | `NumCPU×2` | 同时进行的场次数 |
+| `-only` | 空 | 只测该战斗机并写回全表（不含自己打自己） |
 
-`-only` 会先校验名字；报告头部标出范围，但两张矩阵仍按当时全部已注册战斗机输出行列，无关格子是 `—`。种子由对阵双方名字决定，`-n`、`-j` 不影响结果。名单来自 `unit.FighterKinds()`，不写死只数。
+`-only` 会先校验名字，再读取 `-o` 里的一对一明细，换掉这只战斗机的全部对阵，然后整篇重写单球胜率和两张矩阵。文件不存在、解不开、头部标了「范围：仅」、每组场次或超时和报告头不一致，或其余战斗机的对阵还不齐，都会直接退出，一场不跑，原文件不改。名册没变时可以更新任意一只。只多出一只没有旧账的新球时，要用 `-only` 这只新球一次补齐；一次多出两只以上没有旧账的球，需要不带 `-only` 全量重跑。名册里已经没有的球在写回时从明细删掉。报告头记录本次并发、本次用时，增量写回另记上次增量的战斗机。每场种子由左右双方名字和场次编号决定；增加 `-n` 会扩展样本，修改 `-j` 不改变这些种子。相同种子允许因异步行动出现局面或胜负差异，这是保留的对局特性；改变并发数后单场结果不同，不能单凭这一点判定工具不可靠。跨场共享状态造成的污染仍属于隔离缺陷，不能与异步差异混为一谈。名单来自 `unit.FighterKinds()` 去掉靶子，不写死只数。总榜按积分排名：胜 2 分，平 1 分，负 0 分；积分相同则并列，下一名跳号。总榜胜率 = 胜 /（胜+负），平不计入。一对一格子仍是该组里赢的场次除以每组场次。
+
+统计使用固定工作池，最多同时运行 `-j` 场，不会为全部待测场次预建协程；各组按轮次交错执行，避免大样本时集中排入同一种对阵。无头模式保留完整战斗规则、异步行动和非因果探针，只省去战报、排查日志及探针的开场影片素材。`-n` 必须大于 0；默认并发为逻辑 CPU 数的两倍，`-j` 越大不一定越快，可按本机吞吐量和内存占用调整。
+
+旧收件箱在感知积压时会丢失伤害通知，造成严重的串行/并行胜率偏移。现已改为 FIFO 可靠投递并保留每拍感知，在命令结算阶段等待角色处理跟上；角色之间仍异步执行。报告会记录本次并发及事件处理口径。增量写回的账本规则见 [ADR 0032](docs/adr/0032-winrate-detail-is-the-ledger.md)。旧矩阵需要重新生成，修复方案与验证范围见 [ADR 0031](docs/adr/0031-reliable-actor-events-and-batch-backpressure.md)。
+
+## 碰撞伤害的强制边界
+
+**严厉禁止将碰撞出伤绑定到战斗机本体。** 本体的 `Collision`、`FanHit` 回调及其调用的辅助函数不得发送 `unit.Damage`。不得通过伪造 `Damage.From`、拆进辅助函数、存状态后延迟到 `Sense` 扣血，或在本体自扫贴身圆距离来绕行。接触攻击必须由独立的 `Attach` 扇环命中，并以扇环自己的 ID 发出伤害；本体可以处理碰撞产生的状态变化、弹开及原有穿透规则。范围伤害、持续伤害、自扣血仍是各自独立的机制，不按 `From == 本体` 一刀切禁止。
+
+构建与提交前使用强制入口：
+
+```bash
+make audit   # 独立静态审查，违规 panic，打印文件行号和辅助函数调用链
+make build   # 审查通过后编译 ./xqdj
+make test    # 审查通过后运行 go test ./...
+```
+
+`internal/audit` 扫描已注册战斗机的本体碰撞分支，并追踪本包的命名辅助函数及同接收者方法。`go test ./...` 中也有仓库边界检查。引擎另以私有命令通道记录真实发送者与触发事件，在结算入口强制校验：战斗机处理本体碰撞或扇环命中通知时发送任何 `Damage`，即使伪造 `From` 也直接 panic；真实扇环的伤害与命中通知都必须以自己的 ID 发出，通知也会校验真实发送者。这里不是 `init()` 检查，裸 `go build` 不会自动执行静态审查，但其产物仍保留运行时硬检查。
+
+这是一套防回归约束，不是恶意代码沙箱：静态检查不完整证明接口分派、函数变量、跨包调用及跨事件状态流；运行时检查在违规路径实际执行时触发，不能阻止文件上传。拥有引擎或检查器修改权限的人仍能拆掉防线；需要额外的受保护 CI 来约束发布。见 [ADR 0033](docs/adr/0033-contact-attacks-belong-to-fans.md)。
+
+本轮接触攻击按招式分别确定张角：
+
+| 战斗机 / 招式 | 张角 | 命中与联动 |
+| --- | --- | --- |
+| pink 平淡空手 | 180° | 6 伤，0.18 秒冷却；浅粉、玫红与原有血雾 |
+| pink 油箱冲刺 | 144° | 同一冲刺每目标三段 × 2 伤，可打多个目标；原电锯与火花 |
+| 盾斧两种突刺 | 120° | 原突刺伤害、前方群伤，再接原连招；背后不参与群伤 |
+| 回声声呐突进 | 90° | 每次突进一道，6 伤一次，命中后继续冲到墙 |
+| 钓鱼佬高速碰撞 | 180° | 八秒窗口，按鱼重出伤，0.35 秒冷却重挂 |
+| 血契饿扑 | 110° | 每扑额外 7 伤一次并建线；普通咬合仍独立结算 |
+| 教父(青年)撞击与折返 | 90° | 每段对原锁定目标 2.5 伤一次；强化命中眩晕并折返，返程随速度反向 |
+| 我与周旋久 | 双方各 180° | 我伤 2、周旋久伤 3、神圣时我伤 4；互撞掷状态与扇环扣血分离 |
+| 人偶使冲刺 | 120° | 按命中当下剩余段数结清并收招；原矩形分段攻击保留 |
+
+新接触攻击可用 `Pack.RegisterAttackFan` 注册，用 `unit.SyncAttackFan` 管理窗口。伤害在扇环演员内发出；引擎转发 `unit.FanHit` 给本体，只用于眩晕、折返、接招或建线等后续动作，不能重复扣血。持续多目标与指定目标的扇环可以使用现有 `Pass` 接触规则；搭档互伤的扇环显式声明 `AttachFriends`，普通扇环仍跳过同边及主人。共享攻击窗口归属本场 `MatchState`，内部加锁，不向出生参数塞可变演员指针。
+
+## 纵火者的油火
+
+同一只纵火者的油实际相接就连通，包括不同瓶次、不同单位拖出的油和瞬移落点已有的油；空档不铺油，不同纵火者不互相传火。油面连续合并，火边按实际蔓延前进，后方烧尽露出地面。蔓延速度为 80，每块被点燃的油燃烧 2 秒（含火瓶直接重叠到的油）；火瓶在空地的火仍存在 1 秒。当前投瓶为三油一火循环；拖尾长 90、冷却 0.5 秒，油与火使敌人减速四成，燃烧每 0.2 秒 1 点，离火后续烧 1 秒。
+
+油火状态由包内 `surface.go` 的稀疏覆盖网格管理，格宽 3 世界单位。油瓶按半径 54 圆的参考面积生成不规则泼溅，偏心主滩和少量飞溅共用覆盖；拖行与漏油按实际行程写入宽窄、偏摆自然变化的连续油带，而不是按帧分段，后者更细且带零星滴漏；判定和画面共用这一份离散油火覆盖，不再用一堆独立圆盘拼判定。火头按带时间戳的事件队列推进，不逐帧全盘重算。每次感知按两批发送：`arson-surface` 和 `arson-burning`，分别描述地面与身上燃烧。地面的 `FX.Data` 携带不可变、按修订号缓存的完整分块游程数据；通用引擎只转发。前端每只纵火者保留一张地面 Canvas，覆盖不变时复用；有火时另用一张 Canvas 批画最多 72 簇火舌，不逐簇建 DOM。每个被点燃单位最多一张共用的身上火焰 Canvas，随真实燃烧状态清理。火舌、火星、瓶口火及余烬的动画时相按模拟时间以 20Hz 采样，油火覆盖变化时同步重绘；暂停冻结，回放一致。焦油材质与玻璃瓶由包内代码绘制。缩放和移动只调整对应图层布局。常驻油火 FX 必须由包内 `registerShot` 消费，避免落入一次性动画特效造成空 DOM 节点积累。边界精度与取舍见 [ADR 0035](docs/adr/0035-continuous-oil-and-timed-fire-front.md)。
+
+碎瓶音分别表现玻璃碎裂后的黏稠泼油、点燃；火面和身上燃烧共用限频的轻微噼啪声。使用固定声音池和实际事件/状态触发，暂停不重播，导出走同一路径。来源、许可、响度与重建方式见 [音效说明](character/arsonist/fx/README.md)。
+
+专项回归和性能基准（前端回归另需 Node.js）：
+
+```bash
+go test ./character/arsonist
+go test ./internal/sim -run TestArsonistSurface
+node character/arsonist/arson_fx_test.cjs
+node character/arsonist/arson_audio_test.cjs
+go test ./character/arsonist -run '^$' -bench 'BenchmarkOil(FieldIdle|SurfaceBurning)' -benchmem
+```
 
 ## 目录
 
@@ -82,7 +136,9 @@ map/场地.go              //go:generate go run generate.go（包名 场地；�
 map/generate.go          扫描子目录，写出 all.go（自身带 //go:build ignore）
 map/all.go               生成：blank import 每个子包，触发 init 登记
 map/all_test.go          清单过期 / 空 import 会失败
-internal/unit/           Actor / Cmd / Sense / Look / Pack / Field，sim 与 character 的唯一协议
+internal/unit/           Actor / Cmd / Sense / Look / Pack / Field、扇环攻击窗口，sim 与 character 的唯一协议
+internal/audit/          本体碰撞出伤的静态审查与运行时硬检查
+cmd/audit/               审查入口；Makefile 在 build / run / test 前强制调用
 internal/sim/            物理、对局状态机、CCD、墙
 internal/web/            单挑选人页、团队赛页（`team.html`）、战场、引擎级特效（embed）；lib/ 放 gsap 等第三方脚本；sfx/ 是两段缺省音效。不要为新球改这里
 cmd/winrate/             无头胜率矩阵
@@ -92,7 +148,7 @@ main.go                  HTTP :8080（XQDJ_ADDR 可改）、/、/ws、/ball/<Kin
 CONTEXT.md               领域用词
 战斗机.md                可选战斗机名册：外观、特性、五维雷达
 PLAN.md                  尚未做的混战（多于两边）
-winrate.md               无头对战胜率（生成物，球改过之后要重跑）
+winrate.md               无头对战胜率（生成物；改一只球后可用 -only 写回全表）
 ```
 
 `main.go` 用 `_ "xqdj/character"` 拉起战斗机子包 `init()`。生产代码里 **`internal/sim` 不要 import `character`**，只走 `internal/unit`。角色包 **只 import `xqdj/internal/unit`**，不要 import `internal/sim` 或 `internal/web`。测试里可以 import `xqdj/character`，用生成的 `KindXxx` 点名某只球。
@@ -103,13 +159,16 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 
 ## 现有战斗机
 
-选人按钮顺序 = `unit.FighterKinds()` = 各包 `init()` 的注册顺序。包的加载顺序是 `all.go` 的 import 顺序，也就是 **目录名字母序**。下表按这个顺序，共 52 只（含靶子）。巡航和视野是 `Spec` 的开局值；对局中改巡航、改视野的不写在这里。行为见 `CONTEXT.md` 和 `战斗机.md`。
+选人按钮顺序 = `unit.FighterKinds()` = 各包 `init()` 的注册顺序。包的加载顺序是 `all.go` 的 import 顺序，也就是 **目录名字母序**。下表按这个顺序，共 56 只（含靶子）。巡航和视野是 `Spec` 的开局值；对局中改巡航、改视野的不写在这里。行为见 `CONTEXT.md` 和 `战斗机.md`。
 | 目录 `character/` | Kind | 巡航 | 视野 |
 | --- | --- | ---: | ---: |
 | `acausal` | `非因果` | 160 | 9999 |
 | `archer` | `弓箭` | 178 | 9999 |
+| `arsonist` | `纵火者` | 165 | 9999 |
 | `axe` | `盾斧` | 165 | 9999 |
 | `bloodpact` | `血契` | 170 | 9999 |
+| `bundle` | `捆` | 175 | 9999 |
+| `bubble` | `泡泡球` | 168 | 9999 |
 | `charcoal` | `炭翁` | 240 | 150 |
 | `coalesce` | `凝聚体` | 108 | 9999 |
 | `doppel` | `分身者` | 175 | 0 |
@@ -149,24 +208,31 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 | `sot` | `酒翁` | 165 | 9999 |
 | `static` | `静电魔球` | 160 | 280 |
 | `subpoena` | `传票员` | 170 | 9999 |
+| `surgery` | `外科手术` | 170 | 9999 |
 | `tachi` | `太刀` | 140 | 9999 |
 | `tanyongchen` | `谭泳辰老先生` | 165 | 9999 |
+| `threshold` | `阈值` | 148 | 9999 |
 | `tokei` | `时计` | 170 | 9999 |
+| `tokei_inscribed` | `时计·铭刻` | 165 | 400 |
 | `twin` | `无下限术士` | 200 | 9999 |
 | `udongein` | `人偶使` | 152 | 9999 |
 | `waller` | `筑墙者` | 155 | 9999 |
 | `waller_veteran` | `筑墙者(百战)` | 155 | 9999 |
 | `warden` | `盾士` | 165 | 9999 |
 | `wolf` | `狼人` | 172 | 9999 |
+| `xiaoyaoge` | `小幺哥` | 152 | 9999 |
 
 内燃机开局是 1 档（巡航 120、视野 96），升到 6 档是 300 / 216。`rmiu` 的 package 名是 `r缪`。
 
 非可选单位（不进选人列表，`Fighter: false`）：
 
+- 外科手术：`外科手术场地伤口`、`外科手术手术刀`、`外科手术缝合针`、`外科手术血液子弹`
 - 弓箭：`箭`、`齐射箭`
 - 血契：`血契弧`、`血契蝠`
+- 泡泡球：`泡泡`、`泡泡封弹`
+- 小幺哥：`小幺哥礼物盒`
 - 炭翁：`炭烬`
-- 凝聚体：`凝聚体质量块1` 至 `凝聚体质量块12`、`凝聚体压缩弹`
+- 凝聚体：`凝聚体质量块1` 至 `凝聚体质量块12`、`凝聚体压缩弹1` 至 `凝聚体压缩弹12`
 - 分身者：`分身`、`分身弧`
 - 分身者(百战)：`战影`
 - 回声：`回声星弹`、`回声碎片`
@@ -195,7 +261,9 @@ winrate.md               无头对战胜率（生成物，球改过之后要重�
 - R.缪：`缪`、`缪弹`、`缪弧`
 - 酒翁：`酒翁酒`、`酒翁酒场`
 - 谭泳辰老先生：`铃铛`、`苦无`、`灵狐场域`、`奶符`
+- 阈值：`阈值印`
 - 时计：`时计弧`、`时计时刻`
+- 时计·铭刻：`时计铭刻弧`
 - 无下限术士：`红半`、`蓝半`、`无下限术士弧`、`无下限弧`、`紫弹`
 - 人偶使：`人偶使偶`、`人偶使炸弹`、`人偶使弹`、`人偶使激光`
 - 盾士：`盾`、`盾碎片`、`弱化碎片`
@@ -286,7 +354,7 @@ unit.Spec{
     Vision:     200,              // Sense.Nearby 的半径。0 = 除自己的随从外谁都看不见。可用 SetVision 改
     Fighter:    true,             // true 才进选人列表。Spawn 不能生成 Fighter
     Semi:       false,            // true = 半圆（无下限术士的红半/蓝半）
-    PassWalls:  false,            // true = 不撞墙（紫弹、收回镰刀）
+    PassWalls:  false,            // true = 不撞墙（紫弹、收回镰刀）。可用 PassWalls 令牌运行时挂摘
     Mortal:     false,            // true = 活随从：吃伤害/治疗，不计入胜负
     BreakWalls: false,            // true = 击中胶囊墙则该截提前消失并穿过；硬墙穿过不拆；场边仍撞
     StartHP:    0,                // 0 = 开局满血 MaxHP。小骑士用 85
@@ -295,7 +363,9 @@ unit.Spec{
     VisionBlock: false,           // true = 挡视线：挡索敌视线（Seek 跳过被压住连线段的目标），不进感知过滤、不挡物理。可用 VisionBlock 令牌运行时挂摘
     Cruise:      false,           // true = 吃巡航带子。战斗机默认有；活随从要写
     Shell:       false,           // true = 贴身壳：吸收打向主人的伤害，撞碎时给主人 GuardBreak；不撞墙
-    Attach:     false,            // true = 每帧贴主人；不挡伤、不碎、不撞墙。只和敌方战斗机、活随从做 CCD
+    Attach:     false,            // true = 每帧贴主人；不挡伤、不碎、不撞墙。默认只与敌方战斗机、活随从做 CCD
+    AttachFriends: false,         // 特殊搭档扇环允许接触同边和主人，伤害目标仍由攻击窗口限定
+    Pass:       false,            // 出生即持 Pass；用于多目标或指定目标的穿人攻击判定
     ArcSpan:    0,                // 扇环张角（弧度）。0 = 不是扇环。整圈用 2π。用 unit.Deg(120)
     ArcInner:   0,                // 扇环内径；外径是 Radius。角色自己填（现有近战是 18 / 20）
     Look:       unit.Look{...},
@@ -328,6 +398,10 @@ func(info unit.SpawnInfo) unit.Actor {
 }
 ```
 
+同场演员需要共享主人表、计数或协作标记时，包内定义私有状态类型，通过 `unit.StateFor[本包状态](ctx.State)` 取得；工厂对应使用 `info.State`。字段的锁由私产维护，不能用进程级可变表保存对局数据。测试手动构造 Context 时，同场共用一份 `&unit.MatchState{}`，不同场各用一份。
+
+只在出生时使用的参数放在 `ctx.Born(unit.Spawn{Kind: ..., Data: 本包参数{...}})`，工厂从 `info.Data` 断言回本包类型。传值或转移所有权，发送后不再修改共享引用；不要用全局队列或按 Stream 索引的全局表转交参数。见 [ADR 0029](docs/adr/0029-match-owned-character-state.md)。
+
 ### 4. 实现 `Actor`
 
 ```go
@@ -341,7 +415,9 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
     case unit.Sense:
         // 每帧；被 Stun 时引擎不发
     case unit.Collision:
-        // 撞上别人
+        // 本体接触，只处理状态；严禁直接或经辅助函数发送 Damage
+    case unit.FanHit:
+        // 扇环已经发出伤害，这里只处理接招等后续动作
     case unit.WallHit:
         // 撞场边、硬墙或胶囊墙
     case unit.FactionChanged:
@@ -389,7 +465,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 | `Damage` | 向战斗机或活随从报价伤害。引擎发 `IncomingDamage`，必须 `ConfirmDamage` 才会扣血。报价带上来源当时的 `ArcSpan`（扇环张角，0 表示不是扇环），用 `FromFan` / `KeepFan` 减扇环伤。带 `MarkKind` 时，真正掉血那一拍才叠状态；格挡 / 吸收不叠。`MarkIcon` 用绝对路径，如 `/ball/地慧星/status/jianhen.png`。确认时 `NoFreeze` 为真，这记不停帧 |
 | `ConfirmDamage` | 确认一笔报价；只有 `0 < Amount < 原值` 才生效，`Amount <= 0` 视为不改（取消用 `BlockDamage`） |
 | `BlockDamage` | 取消一笔报价 |
-| `Spawn` | 生成非 fighter 单位。`Fighter: true` 的 Kind 会被引擎丢掉。填 `OwnerID: ctx.ID`、`Slot: Self.Slot`，死时随从一起消失 |
+| `Spawn` | 生成非 fighter 单位。`Fighter: true` 的 Kind 默认会被引擎丢掉；`Temporary: true` 且主人在场时可生成临时战斗机，正常参战但不计入胜负，主人倒下时一起消失。填 `OwnerID: ctx.ID`、`Slot: Self.Slot` |
 | `Despawn` | 删掉指定单位 |
 | `DespawnOwned` | 按主人 + kind 清掉随从（摘壳不会发 `GuardBreak`） |
 | `SwapOwned` | 本体与随机己方分身交换位置和速度（受伤时引擎也会自动做一次）。本体处于 `Stun` 时不换速度 |
@@ -397,6 +473,7 @@ func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
 | `SetWallMotion` | 改一截墙绕墙心的转速（弧度每秒，逆时针为正）和墙心平移速度。`Ram > 0` 时平移途中对每个敌方目标结一次这个伤害。两截同一主人、`StunRadius > 0` 的墙胶囊重叠时一起消失，圈里的敌方站死 `StunDur` 秒，主人不晕 |
 | `HoldStill` | 到 `Until` 之前不发感知，速度保持为 0。施加时记下当前速度；再施加则刷新时间并重新记。到点把记下的速度还回去 |
 | `Pass` | 令牌。`Hold: true` 时与其他单位相撞不改双方速度、也不做位置分离；墙仍弹。`Hold: false` 放下 |
+| `PassWalls` | 令牌。`Hold: true` 时不撞场边、硬墙、胶囊墙。出生 `Spec.PassWalls` 为真的单位一开始就持有。`Hold: false` 放下 |
 | `Stand` | 令牌。`Hold: true` 时速率为 0 也不往巡航推。虚弱、居合、锁敌、绞刑架用这个。`Hold: false` 放下 |
 | `NoFrameFreeze` | 令牌。`Hold: true` 时该单位及其随从造成的伤害不停帧。`Hold: false` 放下 |
 | `NoHealthNumbers` | 令牌。`Hold: true` 时不画该单位自己的头顶数字，不跟到随从。`Hold: false` 放下 |
@@ -480,7 +557,7 @@ window.lookFX.glitch = {
 `tick` 的 `ctx` 有 `now`、`scale`、`cx`、`cy`、`units`、`fxRoot`、`spawnGhost`。`guide` 的 `ctx` 有 `scale`、`cx`、`cy`、`units`、`ensureGuide`、`placeSeg`、`seenGuides`。
 
 4. 把短名填进该 kind 的 `Look.FX`。随从可以和主人不同皮肤（残影用 `"glitch-still"`）。
-5. **`window.lookFX` 的短名是全局的**，不按包隔离。不要和别的球撞。`Look.FX` 里已经占用：`archer`、`arrow`、`assassin`、`axe`、`bloodpact`、`bloodpact-bat`、`bond`、`cage`、`chair`、`chamber-lock`、`charcoal`、`chroma`、`crescent`、`dealer`、`drug`、`engine`、`fisher`、`fisher-fish`、`fisher-flood`、`fisher-pond`、`gallows`、`glitch`、`glitch-still`、`godfather`、`hammer`、`hammer-doll`、`hero`、`hero-friend`、`hero-relic`、`hero-slime`、`integrated`、`integrated-shot`、`knight`、`knight-arc`、`maggot`、`maggot-baby`、`maggot-egg`、`maggot-fly`、`mask1`、`mask2`、`mask3`、`meander`、`meander-lit`、`meander-ring`、`mezhou-me`、`mezhou-void`、`mezhou-zhou`、`minion`、`miu`、`miu-arc`、`miu-shot`、`moon`、`nail`、`ningyushi`、`ningyushi-beam`、`ningyushi-bomb`、`ningyushi-doll`、`ningyushi-shot`、`pastor`、`pastor-glyph`、`piper`、`prisoner`、`pull`、`push`、`radar`、`radar-shell`、`radar-shell-sm`、`radar-vet`、`rat`、`reaper`、`relay`、`relay-node`、`relay-shot`、`rocket`、`shadow`、`sickle`、`slash`、`sniper`、`sot`、`sot-stain`、`sot-wine`、`subpoena`、`tachi`、`tan-bell`、`tan-domain`、`tan-kunai`、`tan-milk`、`tanyongchen`、`ticket`、`tokei`、`tokei-moment`、`veteran`、`volcano-crater`、`volcano-lava`、`vortex`、`waller`、`warden`、`warden-shard`、`warden-shield`、`wolf`、`wolf-arc`、`youth`、`youth-shot`。一次性特效的名字按包隔离，皮肤短名不会。
+5. **`window.lookFX` 的短名是全局的**，不按包隔离。不要和别的球撞。`Look.FX` 里已经占用：`archer`、`arrow`、`assassin`、`axe`、`bloodpact`、`bloodpact-bat`、`bond`、`cage`、`chair`、`chamber-lock`、`charcoal`、`chroma`、`crescent`、`dealer`、`drug`、`engine`、`fisher`、`fisher-fish`、`fisher-flood`、`fisher-pond`、`gallows`、`glitch`、`glitch-still`、`godfather`、`hammer`、`hammer-doll`、`hero`、`hero-friend`、`hero-relic`、`hero-slime`、`integrated`、`integrated-shot`、`knight`、`knight-arc`、`maggot`、`maggot-baby`、`maggot-egg`、`maggot-fly`、`mask1`、`mask2`、`mask3`、`meander`、`meander-lit`、`meander-ring`、`mezhou-me`、`mezhou-void`、`mezhou-zhou`、`minion`、`miu`、`miu-arc`、`miu-shot`、`moon`、`nail`、`ningyushi`、`ningyushi-beam`、`ningyushi-bomb`、`ningyushi-doll`、`ningyushi-shot`、`ospf`、`ospf-node`、`ospf-shot`、`pastor`、`pastor-glyph`、`piper`、`prisoner`、`pull`、`push`、`radar`、`radar-shell`、`radar-shell-sm`、`radar-vet`、`rat`、`reaper`、`relay`、`relay-node`、`relay-shot`、`rocket`、`shadow`、`sickle`、`slash`、`sniper`、`sot`、`sot-stain`、`sot-wine`、`subpoena`、`tachi`、`tan-bell`、`tan-domain`、`tan-kunai`、`tan-milk`、`tanyongchen`、`ticket`、`tokei`、`tokei-moment`、`veteran`、`volcano-crater`、`volcano-lava`、`vortex`、`waller`、`warden`、`warden-shard`、`warden-shield`、`wolf`、`wolf-arc`、`xiaoyaoge`、`xiaoyaoge-gift`、`youth`、`youth-shot`。一次性特效的名字按包隔离，皮肤短名不会。
 6. 卸皮肤时引擎会调 `unmount`。只在「class 被移除」时调（换 kind / 换皮肤）；单位被删或切回选人页不会调，所以不要留下必须靠 `unmount` 才清得掉的常驻子节点。
 
 ### 9. 一次性特效（`unit.FX` + `registerShot`）
@@ -571,6 +648,7 @@ go test ./...
 - 用中文当目录名或 import 路径。
 - 随从 Kind 叫一个太泛的名字（`子弹` 已被远程占用；新子弹请 `新球弹` 这种）。
 - 瞬移 / 场判断抄数字 280，或假定场地是六边形。
+- **在战斗机本体 Collision 或其辅助函数内出伤，或伪造来源绕过。静态审查拒绝，运行时直接 panic。**
 - 战斗机不处理 `IncomingDamage`。
 - 索敌写死 `Role == unit.RoleFighter`（用 `unit.Seek` / `unit.Aimable`）。
 - 出伤写死战斗机、漏掉活随从（用 `unit.Hittable` / `unit.EnemyTarget`）。
@@ -596,7 +674,8 @@ go test ./...
 - [ ] 自带受击音已 `arena.registerOwnHurt(Kind)`；新音效的响度已量过并写进 `docs/audio-loudness.md`
 - [ ] 包内 `fx/README.md` 记了音效来源与许可
 - [ ] 没有硬编码 280 / 六条场边
-- [ ] `go generate ./character` 且 `go test ./...` 通过
+- [ ] 接触攻击由独立扇环出伤，本体回调无直接或间接 Damage
+- [ ] `go generate ./character` 且 `make test` 通过
 - [ ] 没改 `internal/web` / `main.go`
 
 ### 14. 最小骨架（无特效文件）
@@ -607,9 +686,15 @@ package 新球
 import "xqdj/internal/unit"
 
 const KindNova = "新球"
+const KindNovaArc = "新球扇环"
 
 func init() {
     p := unit.NewPack(KindNova, nil)
+    p.RegisterAttackFan(unit.Spec{
+        Kind: KindNovaArc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1,
+        Attach: true, ArcSpan: unit.Deg(120), ArcInner: 18,
+        Look: unit.Look{Color: "#7ad0ff", Overlay: true},
+    })
     p.Register(unit.Spec{
         Kind:    KindNova,
         Role:    unit.RoleFighter,
@@ -620,30 +705,18 @@ func init() {
         Fighter: true,
         Look:    unit.Look{Color: "#7ad0ff"},
     }, func(info unit.SpawnInfo) unit.Actor {
-        return &新球{slot: info.Slot}
+        return &新球{}
     })
 }
 
-type 新球 struct {
-    slot       int
-    hitReadyAt float64
-}
+type 新球 struct{}
 
 func (a *新球) Handle(ctx unit.Context, ev unit.Event) {
-    if unit.AcceptHit(ctx, ev) {
-        return
-    }
-    switch e := ev.(type) {
-    case unit.Sense:
-        if t := unit.Seek(e); t != nil {
-            _ = t // 瞄准 t
-        }
-    case unit.Collision:
-        if !unit.EnemyTarget(e, a.slot) || e.Time < a.hitReadyAt {
-            return
-        }
-        ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: 6}
-        a.hitReadyAt = e.Time + 0.1
+    if unit.AcceptHit(ctx, ev) { return }
+    if s, ok := ev.(unit.Sense); ok {
+        unit.SyncAttackFan(ctx, s, KindNovaArc, unit.FanAttack{
+            Active: true, Damage: 6, Cooldown: 0.1,
+        })
     }
 }
 ```
@@ -771,10 +844,10 @@ arena.registerShot("shot", (fx, ctx) => {
 
 - **场地是数据**。库在 `map/`（包名 `场地`）：一份场地一个 ASCII 子包，`init` 里 `unit.RegisterField`；`go generate ./map` 写出 `all.go`。`unit.Field` 有形状、场心到场边距离和预放墙；库里默认六边形（平顶、`Extent = HexRadius = 280`、无硬墙），另有圆（`Extent = 280`，场心一条硬墙，开局 `x ∈ [-110, 110]`、半宽 6，绕场心顺时针 8 秒一圈；转到固体身上时挤出，并按固体自己的速度弹开）。`Match.SetField` 只在选人阶段生效，开打后忽略；不认识的名字不改当前这份。单挑拒绝奇美拉。`UseTeam` 在当前场地是六边形或名字为空时改选奇美拉。库里另有火山、机关房、八边形、大六边形和奇美拉：轮廓判定是各场地私产（`RegisterOutline` 登记实现），其中八边形截角方形（场心到边 280·cos22.5°），开局由场地演员（BootKind）在三个 120° 均分位砌三段带 `VisionBlock` 的方端硬墙——走 `PlaceWall` 造墙链，不是预放墙（ADR 0009）。大六边形外形同默认六边形，场心到场边 472.5（ADR 0014）；开局两只中心对称的旋涡钉在场心半径 280 的圆上，12 秒逆时针一圈，战斗机、活随从、子弹碰上就送到对面往场心偏一截并把方向倒转 180°（Helper 不送）；场心另有一条同圆的转墙（长 220、粗 6、8 秒顺时针一圈），由场地演员 `PlaceWall{Hard, VisionBlock}` 砌出（ADR 0009），不是预放墙。`NewMatch` 按名字装六边形，没有则列表第一份，登记表空则用 `unit.HexField()` 垫底（不进选人列表）。落点、夹紧、撞边都走 `unit.Field`，角色不要自己算。
 - **时间**：`sim.TickHz = 60`，`DT = 1/60`，hit-stop `HitStopFrames = 3`。引擎每 tick 广播一次快照。
-- **帧序**（`Match.Tick`）：hit-stop 中只消化指令并递减计数（归零那拍判胜负）；否则 FS 过期 → 同步巡航 → 巡航带子 → 消化指令 → 施加瞬时 FS → 结算碰撞 → 物理推进 → 应用本帧伤害 → 再结算碰撞 → 清掉没打中的附着弹 → 贴壳 / 贴随从 → 会转的硬墙前进一拍并挤出挡路的固体 → 推进时间 → 墙和眩晕过期 → 发快照 → 判胜负。
+- **帧序**（`Match.Tick`）：hit-stop 中只消化指令并递减计数（归零那拍判胜负）；否则 FS 过期 → 同步巡航 → 巡航带子 → 消化指令 → 施加瞬时 FS → 结算碰撞 → 按主人当下速度贴合扇环 → 物理推进 → 应用本帧伤害 → 再结算碰撞 → 清掉没打中的附着弹 → 贴壳 / 贴随从 → 会转的硬墙前进一拍并挤出挡路的固体 → 推进时间 → 墙和眩晕过期 → 发快照 → 判胜负。
 - **出生**：战斗机在可进入区域随机落点（两个圆心至少隔 `r+R+8`），初速大小 = `Spec.Speed`、方向随机。
 - **巡航带子**：快于巡航每 0.2s 减 10（不低于巡航）；慢于巡航但仍在动每 0.2s 加 5（不高于巡航）；速率为 0 且巡航大于 0 时，沿巡航朝向立刻回到巡航，不爬升。持 `Stand`、持瞬时 FS、或巡航 FS 的 `M ≈ 0` 时都不推；只对实心且有巡航带子的单位生效（战斗机默认有；活随从要 `Spec.Cruise`）。拉/推发生在消化指令之前，当帧 `SetVelocity` 能顶住巡航带子，但仍乘当时的 `M`；被瞬时 FS 覆盖时顶不住。
-- **撞墙**：入射角 = 反射角，速率不变，场边、硬墙、胶囊墙一样；战斗机和普通子弹一样。例外：`PassWalls` / `Attach` / `Shell` 单位根本不碰墙；`BreakWalls` 的弹撞场边照弹、撞硬墙穿过、撞胶囊墙拆穿。
+- **撞墙**：入射角 = 反射角，速率不变，场边、硬墙、胶囊墙一样；战斗机和普通子弹一样。例外：`PassWalls`（出生规格或令牌）/ `Attach` / `Shell` 单位根本不碰墙；`BreakWalls` 的弹撞场边照弹、撞硬墙穿过、撞胶囊墙拆穿。
 - **非弹体互撞**：沿法线各保留自己的速率，`a.v = n·|va|`，`b.v = −n·|vb|`。不要改回速度均分。任一方持有 `Pass` 时双方速度都不改、也不做位置分离（`Collision` 仍发）。墙不受 `Pass` 影响。
 - **伤害**：血量取自 `Spec.MaxHP`（引擎没有默认值，多数角色填 100）；确认伤害把血打到 ≤0 的那一拍由引擎移除（`SetHP` 置 0 不会移除单位）。`RoleFighter` 和 `Spec.Mortal` 的活随从都吃伤害，也都走 `IncomingDamage` → `ConfirmDamage`：不确认就不掉血。区别在确认之后：活随从不停帧、不换位、不叠 `MarkKind`、不计入胜负。对它造成伤害用 `unit.Hittable`（不实心的不算）。
 - **索敌**：不写死战斗机。`Spec.AimPriority` 未写时战斗机 15、活随从 60、其余 0（其余不能改成可瞄准）。快照 `AimPriority`：1–255 可被 `unit.Seek` 挑中（越小越先，相同则当下最近）；0 不可索敌，但 `Nearby` 仍按视野收录，出伤仍看 `Hittable`。1–255 时谁都能 `SetAimPriority`，后写覆盖；改成 0 后只有自己能改回来。观众不画这个数。雷达扫射一类不挑人的出伤不走 Seek。**挡视线**是实体标签（`Spec.VisionBlock` / `VisionBlock` 令牌 / `PlaceWall.VisionBlock`）：`Seek` / `SeekIf` 把「球心连线被带标签实体压住」的目标跳过，墙按胶囊、单位按圆、相切算挡、敌我不分；只挡索敌这一层，不进感知过滤、不挡物理，Nearby 自扫与碰撞出伤照常隔墙进行；场地预放墙不带标签，永远透明。没有带标签实体的场地 `Seek` 行为逐字节不变。

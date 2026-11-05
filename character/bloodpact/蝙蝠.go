@@ -6,8 +6,9 @@ import (
 	"xqdj/internal/unit"
 )
 
-// 血契蝠 烧 6 血召出的活随从（一次一只、场上至多 3 只）。
+// 血契蝠 烧 3 血召出的活随从（一次一只、场上至多 3 只）。
 // 绕在最近的敌人周围；每到攻击间隔就朝它穿一次，穿过时咬一口，穿完回到环上。
+// 穿的那一下自己免伤（整包取消），穿完照常挨打。
 // 咬的伤打在血线连着的目标身上就按那条线回流。6 秒寿终。
 type 血契蝠 struct {
 	owner uint64
@@ -30,18 +31,22 @@ type 血契蝠 struct {
 }
 
 func (bat *血契蝠) Handle(ctx unit.Context, ev unit.Event) {
-	if unit.AcceptHit(ctx, ev) {
-		return
-	}
 	switch e := ev.(type) {
+	case unit.IncomingDamage:
+		// 穿的途中免伤。绕环、寿终前的间隙照常挨打。
+		if bat.dashing {
+			unit.BlockHit(ctx, e)
+			return
+		}
+		unit.ConfirmHit(ctx, e)
 	case unit.Sense:
 		bat.onSense(ctx, e)
 	case unit.Collision:
 		bat.strike(ctx, e)
 	case unit.WallHit:
-		if bat.dashing {
-			bat.dashing = false
-		}
+		bat.dashing = false
+	case unit.Stunned:
+		bat.dashing = false
 	}
 }
 

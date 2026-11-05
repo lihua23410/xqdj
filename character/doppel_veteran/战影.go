@@ -12,22 +12,22 @@ func (sh *战影) Handle(ctx unit.Context, ev unit.Event) {
 	case unit.IncomingDamage:
 		sh.onDamage(ctx, e)
 	case unit.WallHit:
-		if j := getDash(ctx.ID); j != nil {
+		if j := getDash(ctx.State, ctx.ID); j != nil {
 			j.finish(ctx, ctx.ID, e.Time, true, e.NX, e.NY)
 		}
 	case unit.Collision:
-		if j := getDash(ctx.ID); j != nil {
+		if j := getDash(ctx.State, ctx.ID); j != nil {
 			j.onCollision(ctx, ctx.ID, e)
 		}
 	}
 }
 
 func (sh *战影) onDamage(ctx unit.Context, d unit.IncomingDamage) {
-	if isStackGuarded(ctx.ID) {
+	if isStackGuarded(ctx.State, ctx.ID) {
 		unit.BlockHit(ctx, d)
 		return
 	}
-	if j := getDash(ctx.ID); j != nil && j.blocking() {
+	if j := getDash(ctx.State, ctx.ID); j != nil && j.blocking() {
 		unit.BlockHit(ctx, d)
 		return
 	}

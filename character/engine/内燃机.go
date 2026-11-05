@@ -14,7 +14,7 @@ const (
 	engineAtkCD  = 0.5
 	engineFrail  = 2.0
 	engineBlastT = 1.0
-	engineBlast  = 30.0
+	engineBlast  = 35.0
 	engineColor  = "#ff5a1f"
 	engineGhost  = 280.0
 )
@@ -22,7 +22,7 @@ const (
 var (
 	engineVision = [...]float64{0, 96, 120, 144, 168, 192, 216}
 	engineCruise = [...]float64{0, 120, 156, 192, 228, 264, 300}
-	engineAtk    = [...]float64{0, 0, 0, 1, 1, 2, 3}
+	engineAtk    = [...]float64{0, 1, 1, 2, 2, 3, 3}
 	engineFill   = [...]float64{0, 2, 2, 2, 2, 4, 6}
 )
 

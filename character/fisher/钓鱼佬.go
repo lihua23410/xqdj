@@ -47,6 +47,7 @@ var assets embed.FS
 
 func init() {
 	p := unit.NewPack(KindFisher, assets)
+	p.RegisterAttackFan(unit.Spec{Kind: KindFisherArc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(180), ArcInner: 18, Look: unit.Look{Color: "#ffd28a", Overlay: true, Glow: true}})
 	p.Register(unit.Spec{
 		Kind:    KindFisher,
 		Role:    unit.RoleFighter,
@@ -104,6 +105,8 @@ func registerFish(p *unit.Pack, kind string, r float64) {
 }
 
 type 钓鱼佬 struct {
+	fanSense unit.Sense
+
 	rng      *rand.Rand
 	draw     func() float64
 	booted   bool
@@ -118,7 +121,6 @@ type 钓鱼佬 struct {
 	ramUntil float64
 	x, y     float64
 	slot     int
-	ramHitAt float64
 	holdVX   float64
 	holdVY   float64
 	vx, vy   float64
@@ -126,12 +128,14 @@ type 钓鱼佬 struct {
 }
 
 func (a *钓鱼佬) Handle(ctx unit.Context, ev unit.Event) {
+	if sense, ok := ev.(unit.Sense); ok {
+		a.fanSense = sense
+	}
+	defer a.syncAttackFans(ctx)
 	a.ensureRNG(ctx.Stream)
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
 		a.onHit(ctx, e)
-	case unit.Collision:
-		a.onBump(ctx, e)
 	case unit.WallHit:
 	case unit.Sense:
 		a.onSense(ctx, e)
@@ -161,20 +165,6 @@ func (a *钓鱼佬) onHit(ctx unit.Context, d unit.IncomingDamage) {
 		amt *= fisherDR
 	}
 	ctx.Out <- unit.ConfirmDamage{Token: d.Token, UnitID: ctx.ID, Amount: amt}
-}
-
-func (a *钓鱼佬) onBump(ctx unit.Context, c unit.Collision) {
-	if !a.ram {
-		return
-	}
-	if !unit.EnemyTarget(c, a.slot) {
-		return
-	}
-	if c.Time+1e-9 < a.ramHitAt {
-		return
-	}
-	a.ramHitAt = c.Time + ramHitCD
-	ctx.Out <- unit.Damage{From: ctx.ID, To: c.Other.ID, Amount: ramDamage(a.ramY)}
 }
 
 func (a *钓鱼佬) onSense(ctx unit.Context, s unit.Sense) {
@@ -346,7 +336,7 @@ func (a *钓鱼佬) launch(ctx unit.Context, x, y, ux, uy, weight float64, i, n 
 	if spent {
 		sp *= 0.45
 	}
-	pushFish(fishJob{y: weight, dmg: fishDamage(weight), speed: sp, spent: spent})
+	job := fishJob{y: weight, dmg: fishDamage(weight), speed: sp, spent: spent}
 	if n > 1 {
 		span := 1.2
 		off := -span/2 + span*float64(i)/float64(n-1)
@@ -355,7 +345,7 @@ func (a *钓鱼佬) launch(ctx unit.Context, x, y, ux, uy, weight float64, i, n 
 	}
 	gap := fisherRadius + r + 2
 	ctx.Out <- ctx.Born(unit.Spawn{
-		Kind: kind, OwnerID: ctx.ID, Slot: a.slot,
+		Kind: kind, OwnerID: ctx.ID, Slot: a.slot, Data: job,
 		X: x + ux*gap, Y: y + uy*gap,
 		VX: ux * sp, VY: uy * sp,
 	})
@@ -587,4 +577,14 @@ func fishKind(y float64) (string, float64) {
 	default:
 		return KindFishBig, 28
 	}
+}
+
+const KindFisherArc = "钓鱼佬高速扇环"
+
+func (a *钓鱼佬) syncAttackFans(ctx unit.Context) {
+	s := a.fanSense
+	if s.Self.ID == 0 {
+		return
+	}
+	unit.SyncAttackFan(ctx, s, KindFisherArc, unit.FanAttack{Active: a.ram, Epoch: a.ramUntil, Until: a.ramUntil, Damage: ramDamage(a.ramY), Cooldown: ramHitCD})
 }

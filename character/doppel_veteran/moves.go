@@ -114,7 +114,7 @@ func (a *百战) tickWeiPause(ctx unit.Context, s unit.Sense, shadows []unit.Sna
 	if s.Time+timeEps < a.phaseUntil {
 		return
 	}
-	a.clearDashWait()
+	a.clearDashWait(ctx.State)
 	a.dashIDs = make([]uint64, 0, len(shadows))
 	for _, sh := range shadows {
 		ang := a.orbitAng[sh.ID]
@@ -125,7 +125,7 @@ func (a *百战) tickWeiPause(ctx unit.Context, s unit.Sense, shadows []unit.Sna
 		if dist < weiOvershoot {
 			dist = weiOvershoot
 		}
-		startDash(sh.ID, dx, dy, weiDashSp, dist, weiDamage, true, true, a.slot)
+		startDash(ctx.State, sh.ID, dx, dy, weiDashSp, dist, weiDamage, true, true, a.slot)
 		a.dashIDs = append(a.dashIDs, sh.ID)
 	}
 	a.phase = phaseWeiDash
@@ -279,8 +279,8 @@ func (a *百战) tickZhouAim(ctx unit.Context, s unit.Sense, shadows []unit.Snap
 	a.setStand(ctx, ax.ID, false)
 	cx, cy := a.center()
 	dx, dy := cx-ax.X, cy-ax.Y
-	a.clearDashWait()
-	startDash(ax.ID, dx, dy, zhouDashSp, zhouDashLen, zhouDamage, false, false, a.slot)
+	a.clearDashWait(ctx.State)
+	startDash(ctx.State, ax.ID, dx, dy, zhouDashSp, zhouDashLen, zhouDamage, false, false, a.slot)
 	a.dashIDs = []uint64{ax.ID}
 	a.phase = phaseZhouDash
 	a.driveDashes(ctx, s)
@@ -288,7 +288,7 @@ func (a *百战) tickZhouAim(ctx unit.Context, s unit.Sense, shadows []unit.Snap
 
 func (a *百战) tickZhouDash(ctx unit.Context, s unit.Sense, shadows []unit.Snapshot, dt float64) {
 	// 轴已走满：先收招，同帧不再 placeOnOrbit，避免切向速盖掉 kickCruise
-	if dashesDone(a.dashIDs) {
+	if dashesDone(ctx.State, a.dashIDs) {
 		a.beginReform(ctx, s.Time, shadows)
 		return
 	}
@@ -318,7 +318,7 @@ func (a *百战) startDie(ctx unit.Context, s unit.Sense, shadows []unit.Snapsho
 	a.shotIdx = 0
 	a.stackFixed = false
 	a.gatherFrom = s.Time
-	a.clearDashWait()
+	a.clearDashWait(ctx.State)
 	a.dashIDs = nil
 	a.phase = phaseDieGather
 	a.tickDieGather(ctx, s, shadows, 0)
@@ -357,7 +357,7 @@ func (a *百战) tickDieGather(ctx unit.Context, s unit.Sense, shadows []unit.Sn
 	}
 	a.setPass(ctx, bx.ID, true)
 	a.setStand(ctx, bx.ID, true)
-	setStackGuard(bx.ID, true) // 叠点本体重叠期挡伤
+	setStackGuard(ctx.State, bx.ID, true) // 叠点本体重叠期挡伤
 	ctx.Out <- unit.SetVelocity{UnitID: bx.ID, VX: 0, VY: 0}
 
 	ready := true
@@ -376,15 +376,15 @@ func (a *百战) tickDieGather(ctx unit.Context, s unit.Sense, shadows []unit.Sn
 			ctx.Out <- unit.Teleport{UnitID: sh.ID, X: bx.X, Y: bx.Y}
 			ctx.Out <- unit.SetVelocity{UnitID: sh.ID, VX: 0, VY: 0}
 			a.setStand(ctx, sh.ID, true)
-			setStackGuard(sh.ID, true)
+			setStackGuard(ctx.State, sh.ID, true)
 			continue
 		}
 		ready = false
-		setStackGuard(sh.ID, false) // 还在路上，可受伤
+		setStackGuard(ctx.State, sh.ID, false) // 还在路上，可受伤
 		if step >= dist {
 			ctx.Out <- unit.Teleport{UnitID: sh.ID, X: bx.X, Y: bx.Y}
 			ctx.Out <- unit.SetVelocity{UnitID: sh.ID, VX: 0, VY: 0}
-			setStackGuard(sh.ID, true)
+			setStackGuard(ctx.State, sh.ID, true)
 			continue
 		}
 		ux, uy := dx/dist, dy/dist
@@ -403,7 +403,7 @@ func (a *百战) tickDieGather(ctx unit.Context, s unit.Sense, shadows []unit.Sn
 	for _, sh := range shadows {
 		a.setPass(ctx, sh.ID, true)
 		a.setStand(ctx, sh.ID, true)
-		setStackGuard(sh.ID, true)
+		setStackGuard(ctx.State, sh.ID, true)
 		ctx.Out <- unit.Teleport{UnitID: sh.ID, X: a.stackX, Y: a.stackY}
 		ctx.Out <- unit.SetVelocity{UnitID: sh.ID, VX: 0, VY: 0}
 	}
@@ -431,7 +431,7 @@ func (a *百战) tickDieWait(ctx unit.Context, s unit.Sense, shadows []unit.Snap
 	for _, sh := range shadows {
 		a.setPass(ctx, sh.ID, true)
 		a.setStand(ctx, sh.ID, true)
-		setStackGuard(sh.ID, true)
+		setStackGuard(ctx.State, sh.ID, true)
 		ctx.Out <- unit.Teleport{UnitID: sh.ID, X: sx, Y: sy}
 		ctx.Out <- unit.SetVelocity{UnitID: sh.ID, VX: 0, VY: 0}
 	}
@@ -462,10 +462,10 @@ func (a *百战) tickDieVolley(ctx unit.Context, s unit.Sense, shadows []unit.Sn
 		}
 		a.setPass(ctx, id, false)
 		a.setStand(ctx, id, false)
-		setStackGuard(id, false) // 撞出去后恢复可受伤
+		setStackGuard(ctx.State, id, false) // 撞出去后恢复可受伤
 		cx, cy := a.center()
 		dx, dy := cx-sh.X, cy-sh.Y
-		startDash(id, dx, dy, dieDashSp, dieDashLen, dieDamage, false, false, a.slot)
+		startDash(ctx.State, id, dx, dy, dieDashSp, dieDashLen, dieDamage, false, false, a.slot)
 		a.dashIDs = append(a.dashIDs, id)
 	}
 	a.driveDashes(ctx, s)
@@ -479,12 +479,12 @@ func (a *百战) tickDieVolley(ctx unit.Context, s unit.Sense, shadows []unit.Sn
 		if _, ok := fired[sh.ID]; ok {
 			continue
 		}
-		if j := getDash(sh.ID); j != nil && !j.isDone() {
+		if j := getDash(ctx.State, sh.ID); j != nil && !j.isDone() {
 			continue
 		}
 		a.setPass(ctx, sh.ID, true)
 		a.setStand(ctx, sh.ID, true)
-		setStackGuard(sh.ID, true)
+		setStackGuard(ctx.State, sh.ID, true)
 		if pinOK {
 			ctx.Out <- unit.Teleport{UnitID: sh.ID, X: sx, Y: sy}
 		}
@@ -494,7 +494,7 @@ func (a *百战) tickDieVolley(ctx unit.Context, s unit.Sense, shadows []unit.Sn
 	if a.shotIdx < len(a.order) {
 		return
 	}
-	if dashesDone(a.dashIDs) {
+	if dashesDone(ctx.State, a.dashIDs) {
 		a.beginReform(ctx, s.Time, shadows)
 	}
 }

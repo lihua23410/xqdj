@@ -1,10 +1,11 @@
 // 传票员：票面数字和纸票演出。
 //
-// Go 那边每帧发一次 FX{name:"ticket", amount:票面}；这里按单位 id 记一张表，
-// 皮肤 tick 每帧读表把数字刷到纸角上方。票被撞掉后单位消失，表里那条没人再读，
+// Go 那边每帧发一次 FX{name:"ticket", amount:票面, vx:逾期为 1}；这里按单位 id 记票面和是否逾期，
+// 皮肤 tick 每帧把数字刷到纸角上方，逾期的纸条加上 ticket-stale。票被撞掉后单位消失，表里那条没人再读，
 // shot.js 在表长过一定条数时整表清一次，下一帧的票面数字会自己补回来。
 window.lookFX = window.lookFX || {};
 window.subpoenaDmg = window.subpoenaDmg || {};
+window.subpoenaStale = window.subpoenaStale || {};
 
 (function () {
   const A = window.arena;
@@ -29,6 +30,7 @@ window.subpoenaDmg = window.subpoenaDmg || {};
       }
       const text = fmtAmount(dmg);
       if (label.textContent !== text) label.textContent = text;
+      el.classList.toggle("ticket-stale", !!(window.subpoenaStale && window.subpoenaStale[u.id]));
       // 票面越大纸越烫：给 CSS 一个 0–1 的数。
       el.style.setProperty("--heat", Math.min(1, Number(dmg) / 40).toFixed(2));
     },
@@ -36,7 +38,10 @@ window.subpoenaDmg = window.subpoenaDmg || {};
     unmount(el) {
       const label = el && el.querySelector(".ticket-amount");
       if (label) label.remove();
-      if (el) el.style.removeProperty("--heat");
+      if (el) {
+        el.classList.remove("ticket-stale");
+        el.style.removeProperty("--heat");
+      }
     },
   };
 })();

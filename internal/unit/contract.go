@@ -1,5 +1,7 @@
 package unit
 
+import "encoding/json"
+
 type Snapshot struct {
 	ID              uint64   `json:"id"`
 	Kind            string   `json:"kind"`
@@ -30,6 +32,8 @@ type Snapshot struct {
 	Nonsolid        bool     `json:"nonsolid,omitempty"`
 	VisionBlock     bool     `json:"visionBlock,omitempty"`
 	NoHealthNumbers bool     `json:"noHealthNumbers,omitempty"`
+	// Absorb 是额外血条剩多少（0 = 没有）。只有带藤色这类护盾的角色会看它。
+	Absorb float64 `json:"absorb,omitempty"`
 }
 
 // WallView 是感知里看见的一截墙。不含寿命和伤害，只够认主人、端点和粗细。
@@ -188,6 +192,22 @@ type SetHP struct {
 	MaxHP  float64
 }
 
+// SetAbsorb 改这一只的额外血条（护盾池）。>0 时每次挨打整笔被池子吃掉：
+// 本体不掉血，池子减到 0 为止；打穿那一下多出来的伤害直接无视。
+// Amount 是剩余量，不是增量；写 0 等于撤掉。
+type SetAbsorb struct {
+	UnitID uint64
+	Amount float64
+}
+
+// SetDamageBonus 改这一只的固定加伤：它自己出伤时（以及它名下的攻击单位出伤时）
+// 每笔提议都加这么多，结果不低于 0。乘算仍然走 Spawn.DamageScale。
+// 只为「每层藤色 +X」这种平加准备，别拿它当通用增伤。
+type SetDamageBonus struct {
+	UnitID uint64
+	Amount float64
+}
+
 type Damage struct {
 	From      uint64
 	To        uint64
@@ -212,12 +232,13 @@ type Kill struct {
 // IncomingDamage 引擎准备扣血。战斗机必须回 ConfirmDamage 才会真正掉 HP；回 BlockDamage 则整包取消。
 // ArcSpan 是报价那一瞬间来源单位的扇环张角；0 表示来源不是扇环。任何战斗机都能读，不专属于某一套。
 type IncomingDamage struct {
-	Token   uint64
-	From    uint64
-	Amount  float64
-	Time    float64
-	Speed   float64
-	ArcSpan float64
+	SourceOwnerID uint64 // 引擎从实际伤害来源读取，出生同拍也可识别所属攻击
+	Token         uint64
+	From          uint64
+	Amount        float64
+	Time          float64
+	Speed         float64
+	ArcSpan       float64
 }
 
 // FromFan 这记伤害的来源是扇环。飞出去的弹、本体相撞、场地伤都不是。
@@ -282,8 +303,13 @@ type Spawn struct {
 	DamageScale float64
 	// Stream 出生时已经定下的流号。同一父母的第 n 个孩子永远是这个数。
 	Stream uint64
+	// Temporary 允许生成召唤用战斗机；它正常参战，但不计入胜负。
+	Temporary bool
 	// HardNail 钉在硬墙上。墙在转的话，这个点跟着墙走。
 	HardNail bool
+	// Data 是包内私有的出生参数，只交给这次出生的工厂，不进快照。
+	// 传不可变值，或将数据所有权交给新演员；发送后不得继续修改共享引用。
+	Data any
 }
 
 type Despawn struct {
@@ -343,15 +369,18 @@ type HoldStill struct {
 }
 
 type FX struct {
-	Name   string  `json:"name"`
-	UnitID uint64  `json:"unitId"`
-	Kind   string  `json:"kind"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	VX     float64 `json:"vx"`
-	VY     float64 `json:"vy"`
-	Slot   int     `json:"slot"`
-	Amount float64 `json:"amount"`
+	// Data is an immutable, pack-owned visual payload. The engine forwards it
+	// without interpreting geometry; omit it for ordinary one-shot effects.
+	Data   json.RawMessage `json:"data,omitempty"`
+	Name   string          `json:"name"`
+	UnitID uint64          `json:"unitId"`
+	Kind   string          `json:"kind"`
+	X      float64         `json:"x"`
+	Y      float64         `json:"y"`
+	VX     float64         `json:"vx"`
+	VY     float64         `json:"vy"`
+	Slot   int             `json:"slot"`
+	Amount float64         `json:"amount"`
 }
 
 // Force 给目标加加速度，引擎做 v += (AX,AY)*dt。不是改写速度，快的球仍能撞上。
@@ -377,6 +406,19 @@ type SetAimPriority struct {
 
 // Pass 令牌。Hold 时与其他单位相撞不改双方速度；墙和胶囊墙仍弹。Hold=false 放下。
 type Pass struct {
+	UnitID uint64
+	Hold   bool
+}
+
+// PassWalls 令牌。Hold 时不撞场边、硬墙、胶囊墙。Hold=false 放下。
+// 出生时 Spec.PassWalls 为真的单位一开始就持有，令牌可再摘下。
+type PassWalls struct {
+	UnitID uint64
+	Hold   bool
+}
+
+// PassInnerWalls 穿过场内墙，仍由场边扫掠和约束。放下时立即退出墙内。
+type PassInnerWalls struct {
 	UnitID uint64
 	Hold   bool
 }
@@ -416,6 +458,8 @@ type VisionBlock struct {
 }
 
 type Context struct {
+	// State 供本场的同包演员协作，不得用进程级可变表保存对局状态。
+	State *MatchState
 	// Field 是本单位最近一次感知的场地快照；首次感知前使用出生时的快照。
 	Field  Field
 	ID     uint64
@@ -449,7 +493,11 @@ type Actor interface {
 }
 
 type SpawnInfo struct {
-	Field Field
+	MatchSeed uint64  // 本场种子，供不依赖单位随机流的共用规则
+	X, Y      float64 // 出生坐标
+	State     *MatchState
+	Data      any
+	Field     Field
 	// Probe 是本场非因果的只读探针记录，由构造器复制后持有。
 	Probe   *ProbeTape
 	OwnerID uint64

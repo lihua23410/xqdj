@@ -427,7 +427,7 @@ func TestBiteDamageStepsAndCarries(t *testing.T) {
 	if sp == nil || w.bite != biteDash {
 		t.Fatalf("dash should spawn one bite arc, bite=%d spawn=%v", w.bite, sp != nil)
 	}
-	if got := newBiteArc(unit.SpawnInfo{Stream: sp.Stream}); got.dmg != wolfBiteBase {
+	if got := newBiteArc(unit.SpawnInfo{Stream: sp.Stream, Data: sp.Data}); got.dmg != wolfBiteBase {
 		t.Fatalf("first arc dmg=%v", got.dmg)
 	}
 	w.Handle(ctx, unit.Sense{Time: 1.05, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})
@@ -451,7 +451,7 @@ func TestBiteDamageStepsAndCarries(t *testing.T) {
 	if sp == nil {
 		t.Fatal("next dash should spawn the second arc")
 	}
-	if got := newBiteArc(unit.SpawnInfo{Stream: sp.Stream}); got.dmg != wolfBiteBase {
+	if got := newBiteArc(unit.SpawnInfo{Stream: sp.Stream, Data: sp.Data}); got.dmg != wolfBiteBase {
 		t.Fatalf("second arc dmg=%v", got.dmg)
 	}
 	w.Handle(ctx, unit.Sense{Time: 1.55, Self: hold, Nearby: []unit.Snapshot{biteArcSnap()}})

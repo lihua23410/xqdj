@@ -20,7 +20,7 @@ const (
 	vetColor  = "#b85c38"
 
 	wallEvery  = 1.27
-	wallLen    = 100.0
+	wallLen    = 125.0
 	wallRadius = 6.0
 	wallScrape = 2.0
 	wallGap    = 0.3

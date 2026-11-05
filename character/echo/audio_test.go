@@ -43,7 +43,7 @@ func TestSoundCuesFollowTheActualScanAndDashCycle(t *testing.T) {
 		t.Fatal("existing window replayed its lock cue")
 	}
 	for i := 0; i < 2; i++ {
-		e.Handle(ctx, unit.Collision{Time: 2.3, Other: foe})
+		e.Handle(ctx, unit.FanHit{Kind: KindEchoArc, Time: 2.3, Other: foe})
 	}
 	if audioFXCount(drain(out), "echo-ram") != 1 {
 		t.Fatal("one dash must only sound its one damaging ram")

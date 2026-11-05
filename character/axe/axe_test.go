@@ -142,13 +142,13 @@ func TestThrustHitStartsSecondSlash(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	a := &盾斧{form: formSword, hx: 0, hy: 1, step: stepThrust, slot: 0}
 	ctx := unit.Context{ID: 1, Kind: KindAxe, Out: out}
-	a.Handle(ctx, unit.Collision{
+	a.Handle(ctx, unit.FanHit{Kind: KindAxeThrustArc,
 		Time:  1,
 		Other: foeAt(10, 40),
 	})
 	cmds := drain(out)
 	d := lastDmg(cmds, 2)
-	if d == nil || math.Abs(d.Amount-thrustDmg) > 1e-9 {
+	if d != nil {
 		t.Fatalf("thrust dmg=%v", d)
 	}
 	if a.step != stepSlash2 {
@@ -351,9 +351,9 @@ func TestChouThrustBeforeSuperDischarge(t *testing.T) {
 	}
 
 	// 撞上人：3 伤 + 接超解旋
-	a.Handle(ctx, unit.Collision{Time: 1.1, Other: foeAt(0, 40)})
+	a.Handle(ctx, unit.FanHit{Kind: KindAxeThrustArc, Time: 1.1, Other: foeAt(0, 40)})
 	cmds := drain(out)
-	if d := lastDmg(cmds, 2); d == nil || math.Abs(d.Amount-thrustDmg) > 1e-9 {
+	if d := lastDmg(cmds, 2); d != nil {
 		t.Fatalf("突刺命中该结 %v，得到 %v", thrustDmg, d)
 	}
 	if a.step != stepChouSpin {

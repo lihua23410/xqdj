@@ -1,0 +1,15 @@
+.ball.fighter.look-threshold {
+  background: radial-gradient(circle at 50% 40%, #f7ffd4 0 16%, #b6d84a 46%, #243014 78%);
+  border: 1px solid #e7ff8a;
+  box-shadow: none;
+}
+.threshold-read {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #17210c;
+  font: 700 11px/1 ui-monospace, Consolas, monospace;
+  pointer-events: none;
+}

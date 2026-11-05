@@ -1,0 +1,91 @@
+.ball.look-arson {
+  background:
+    radial-gradient(ellipse at 43% 42%, #fff1ac 0 3%, #ff8b24 5%, #8d2a0b 13%, transparent 23%),
+    conic-gradient(from 17deg, transparent 0 20%, #7c2b12 21% 22%, transparent 23% 48%, #9b3617 49% 50%, transparent 51% 77%, #54200f 78% 79%, transparent 80%),
+    radial-gradient(circle at 33% 24%, #34383c, #111318 45%, #030508 82%);
+  box-shadow: inset 2px 3px 3px #ffffff15, inset -3px -4px 5px #000a, 0 2px 5px #0008;
+  border: 1px solid #414246;
+}
+.ball.look-arson::before {
+  content: "";
+  position: absolute;
+  inset: 27%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #ff9a2e88, #f949151a 55%, transparent 72%);
+  opacity: var(--ember-pulse, .8);
+  box-shadow: 0 0 8px #e75c1d44;
+  pointer-events: none;
+}
+
+.ball.look-arson-oil,
+.ball.look-arson-fire {
+  background: none !important;
+  box-shadow: none !important;
+  border: 0;
+  overflow: visible;
+}
+.arson-bottle {
+  position: absolute;
+  inset: -26% 10% -20%;
+  transform: rotate(var(--bottle-tilt, -.12rad));
+  transform-origin: 50% 60%;
+}
+.arson-bottle::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 26%; width: 100%; height: 74%;
+  border: 1px solid #b8e3deaa;
+  border-radius: 25% 25% 24% 24% / 20% 20% 14% 14%;
+  box-sizing: border-box;
+  background:
+    linear-gradient(100deg, transparent 8%, #efffffaa 15%, #c7f3ed33 22%, transparent 30% 69%, #a4d2c738 82%, #e6ffff99 91%, transparent 97%),
+    linear-gradient(175deg, #b6dadc36 0 22%, #647f7255 24%, #171a19 28% 83%, #404c4266 85%, #6b9a8966 98%);
+  box-shadow: inset 0 -1px 2px #d8fff991, inset 2px 0 2px #edfffc25, 1px 2px 2px #0007;
+}
+.arson-bottle::after {
+  content: "";
+  position: absolute;
+  left: 34%; top: 0; width: 32%; height: 34%;
+  border: 1px solid #c5e5dbbd;
+  border-radius: 2px 2px 0 0;
+  box-sizing: border-box;
+  background: linear-gradient(90deg, #dcf6e8b3, #4d766855 40% 75%, #e8fff0a1), linear-gradient(#8c7552 0 20%, #a8c6b536 25%);
+}
+.look-arson-fire .arson-bottle::before {
+  background:
+    linear-gradient(100deg, transparent 8%, #fff9eaaa 15%, #f4f3de33 22%, transparent 30% 69%, #e5d6a338 82%, #fff9df99 91%, transparent 97%),
+    linear-gradient(175deg, #e5d9a536 0 26%, #e2a03d88 29%, #76321edb 34% 84%, #b5773666 91%, #dfbc6466 98%);
+  border-color: #ebdcb5aa;
+}
+.arson-wick {
+  position: absolute;
+  left: 29%; top: -29%; width: 42%; height: 39%;
+  z-index: 1;
+  border-radius: 80% 10% 60% 45%;
+  transform: rotate(-24deg) scaleY(var(--wick-height, 1));
+  transform-origin: 50% 100%;
+  background: radial-gradient(ellipse at 50% 80%, #fff7bc 8%, #ffd052 25%, #fb761c 51%, #df3b0b66 72%, transparent 76%);
+  box-shadow: 0 0 5px #f69c323d;
+}
+
+.guide.arson-surface,
+.guide.arson-burning {
+  border: 0;
+  transform: none;
+  border-radius: 0;
+  pointer-events: none;
+  background: none;
+}
+.guide.arson-surface canvas,
+.guide.arson-burning canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.guide.arson-surface .arson-flames {
+  position: absolute;
+  left: 0;
+}
+.guide.arson-burning {
+  z-index: 2;
+}

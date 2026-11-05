@@ -2,7 +2,6 @@ package 人偶使
 
 import (
 	"math"
-	"sync"
 	"xqdj/internal/unit"
 )
 
@@ -66,17 +65,6 @@ type chaseMark struct {
 	tx, ty       float64
 }
 
-var (
-	dollMu   sync.Mutex
-	dollQ    []dollSpec
-	bombMu   sync.Mutex
-	bombQ    []bombSpec
-	stateMu  sync.Mutex
-	dollSt   = map[uint64]uint8{}
-	chaseAt  = map[uint64]chaseMark{}
-	recallID = map[uint64]bool{}
-)
-
 func spawnDollAt(ctx unit.Context, s unit.Sense, destX, destY float64, spec dollSpec) {
 	spec.x, spec.y = destX, destY
 	sx, sy := s.Self.X, s.Self.Y
@@ -89,99 +77,62 @@ func spawnDollAt(ctx unit.Context, s unit.Sense, destX, destY float64, spec doll
 	} else {
 		sx, sy = destX, destY
 	}
-	pushDoll(spec)
-	ctx.Out <- ctx.Born(unit.Spawn{Kind: KindNingyushiDoll, X: sx, Y: sy, OwnerID: ctx.ID, Slot: s.Self.Slot})
+	ctx.Out <- ctx.Born(unit.Spawn{Kind: KindNingyushiDoll, X: sx, Y: sy, OwnerID: ctx.ID, Slot: s.Self.Slot, Data: spec})
 }
 
-func pushDoll(s dollSpec) {
-	dollMu.Lock()
-	dollQ = append(dollQ, s)
-	dollMu.Unlock()
+func setState(scope *unit.MatchState, id uint64, st uint8) {
+	shared := stateFor(scope)
+	shared.stateMu.Lock()
+	shared.dollSt[id] = st
+	shared.stateMu.Unlock()
 }
 
-func popDoll() dollSpec {
-	dollMu.Lock()
-	defer dollMu.Unlock()
-	if len(dollQ) == 0 {
-		return dollSpec{mode: dollIdle}
-	}
-	s := dollQ[0]
-	dollQ = dollQ[1:]
-	return s
+func stateOf(scope *unit.MatchState, id uint64) uint8 {
+	shared := stateFor(scope)
+	shared.stateMu.Lock()
+	defer shared.stateMu.Unlock()
+	return shared.dollSt[id]
 }
 
-func pushBomb(s bombSpec) {
-	bombMu.Lock()
-	bombQ = append(bombQ, s)
-	bombMu.Unlock()
+func dropState(scope *unit.MatchState, id uint64) {
+	shared := stateFor(scope)
+	shared.stateMu.Lock()
+	delete(shared.dollSt, id)
+	delete(shared.chaseAt, id)
+	delete(shared.recallID, id)
+	shared.stateMu.Unlock()
 }
 
-func popBomb() bombSpec {
-	bombMu.Lock()
-	defer bombMu.Unlock()
-	if len(bombQ) == 0 {
-		return bombSpec{kind: bombBounce, dmg: 6}
-	}
-	s := bombQ[0]
-	bombQ = bombQ[1:]
-	return s
+func orderChase(scope *unit.MatchState, id uint64, start, until, tx, ty float64) {
+	shared := stateFor(scope)
+	shared.stateMu.Lock()
+	shared.chaseAt[id] = chaseMark{start: start, until: until, tx: tx, ty: ty}
+	shared.stateMu.Unlock()
 }
 
-func setState(id uint64, st uint8) {
-	stateMu.Lock()
-	dollSt[id] = st
-	stateMu.Unlock()
+func orderRecall(scope *unit.MatchState, id uint64) {
+	shared := stateFor(scope)
+	shared.stateMu.Lock()
+	shared.recallID[id] = true
+	shared.stateMu.Unlock()
 }
 
-func stateOf(id uint64) uint8 {
-	stateMu.Lock()
-	defer stateMu.Unlock()
-	return dollSt[id]
-}
-
-func dropState(id uint64) {
-	stateMu.Lock()
-	delete(dollSt, id)
-	delete(chaseAt, id)
-	delete(recallID, id)
-	stateMu.Unlock()
-}
-
-func orderChase(id uint64, start, until, tx, ty float64) {
-	stateMu.Lock()
-	chaseAt[id] = chaseMark{start: start, until: until, tx: tx, ty: ty}
-	stateMu.Unlock()
-}
-
-func orderRecall(id uint64) {
-	stateMu.Lock()
-	recallID[id] = true
-	stateMu.Unlock()
-}
-
-func takeRecall(id uint64) bool {
-	stateMu.Lock()
-	defer stateMu.Unlock()
-	if !recallID[id] {
+func takeRecall(scope *unit.MatchState, id uint64) bool {
+	shared := stateFor(scope)
+	shared.stateMu.Lock()
+	defer shared.stateMu.Unlock()
+	if !shared.recallID[id] {
 		return false
 	}
-	delete(recallID, id)
+	delete(shared.recallID, id)
 	return true
 }
 
-func resetQueues() {
-	dollMu.Lock()
-	dollQ = nil
-	dollMu.Unlock()
-	bombMu.Lock()
-	bombQ = nil
-	bombMu.Unlock()
-}
-
-func chaseWindow(id uint64) (start, until, tx, ty float64, ok bool) {
-	stateMu.Lock()
-	defer stateMu.Unlock()
-	v, ok := chaseAt[id]
+func chaseWindow(scope *unit.MatchState, id uint64) (start, until, tx, ty float64, ok bool) {
+	shared := stateFor(scope)
+	shared.stateMu.Lock()
+	defer shared.stateMu.Unlock()
+	v, ok := shared.chaseAt[id]
 	if !ok {
 		return 0, 0, 0, 0, false
 	}
@@ -206,7 +157,10 @@ type 人偶 struct {
 }
 
 func newDoll(info unit.SpawnInfo) *人偶 {
-	s := popDoll()
+	s, ok := info.Data.(dollSpec)
+	if !ok {
+		s = dollSpec{mode: dollIdle}
+	}
 	return &人偶{spec: s, owner: info.OwnerID, slot: info.Slot, ang: s.ang, left: s.shots}
 }
 
@@ -225,7 +179,7 @@ func (d *人偶) onSense(ctx unit.Context, s unit.Sense) {
 		if d.spec.mode == 0 {
 			d.spec.mode = dollIdle
 		}
-		setState(ctx.ID, d.spec.mode)
+		setState(ctx.State, ctx.ID, d.spec.mode)
 	}
 	dt := s.Time - d.lastT
 	if dt < 0 {
@@ -233,13 +187,13 @@ func (d *人偶) onSense(ctx unit.Context, s unit.Sense) {
 	}
 	d.lastT = s.Time
 	d.x, d.y = s.Self.X, s.Self.Y
-	if takeRecall(ctx.ID) && canForceRecall(d.spec.mode) {
+	if takeRecall(ctx.State, ctx.ID) && canForceRecall(d.spec.mode) {
 		d.spec.slow = false
 		d.spec.arriveAt = 0
 		d.beginRecall(ctx)
 	}
 	if d.spec.follow {
-		if o := ownerOf(d.owner); o != nil && o.abortGen != d.spec.bornGen {
+		if o := ownerOf(ctx.State, d.owner); o != nil && o.abortGen != d.spec.bornGen {
 			d.spec.follow = false
 			d.spec.until = 0
 			d.spec.arriveAt = 0
@@ -264,12 +218,12 @@ func (d *人偶) onSense(ctx unit.Context, s unit.Sense) {
 		d.x, d.y = nx, ny
 	}
 	if d.spec.mode == dollIdle {
-		if start, until, tx, ty, ok := chaseWindow(ctx.ID); ok && s.Time+1e-9 >= start {
+		if start, until, tx, ty, ok := chaseWindow(ctx.State, ctx.ID); ok && s.Time+1e-9 >= start {
 			d.spec.mode = dollChase
 			d.spec.until = until
 			d.spec.tx, d.spec.ty = tx, ty
 			d.spec.rangeOn = true
-			setState(ctx.ID, dollChase)
+			setState(ctx.State, ctx.ID, dollChase)
 		}
 	}
 	d.showRange(ctx, s)
@@ -409,20 +363,20 @@ func (d *人偶) tickShoot(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	if d.left <= 0 {
-		if idleOthers(s, d.owner, ctx.ID) >= 2 {
+		if idleOthers(ctx.State, s, d.owner, ctx.ID) >= 2 {
 			d.spec.slow = false
 			d.beginRecall(ctx)
 		} else {
 			d.spec.mode = dollIdle
 			d.spec.rangeOn = false
-			setState(ctx.ID, dollIdle)
+			setState(ctx.State, ctx.ID, dollIdle)
 		}
 		return
 	}
 	if d.next > 0 && s.Time+1e-9 < d.next {
 		return
 	}
-	setState(ctx.ID, dollShoot)
+	setState(ctx.State, ctx.ID, dollShoot)
 	e := enemyOf(s)
 	ux, uy := 1.0, 0.0
 	if e != nil {
@@ -558,7 +512,7 @@ func (d *人偶) beginRecall(ctx unit.Context) {
 	}
 	d.spec.mode = dollRecall
 	d.armRecall(d.lastT)
-	setState(ctx.ID, dollRecall)
+	setState(ctx.State, ctx.ID, dollRecall)
 }
 
 func (d *人偶) armRecall(now float64) {
@@ -621,14 +575,14 @@ func (d *人偶) nudgeRecall(ctx unit.Context, s unit.Sense, dt float64) {
 	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: nx, Y: ny}
 }
 
-func idleOthers(s unit.Sense, owner, self uint64) int {
+func idleOthers(scope *unit.MatchState, s unit.Sense, owner, self uint64) int {
 	n := 0
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if o.Kind != KindNingyushiDoll || o.OwnerID != owner || o.ID == self {
 			continue
 		}
-		if stateOf(o.ID) == dollIdle {
+		if stateOf(scope, o.ID) == dollIdle {
 			n++
 		}
 	}
@@ -636,7 +590,7 @@ func idleOthers(s unit.Sense, owner, self uint64) int {
 }
 
 func (d *人偶) die(ctx unit.Context) {
-	dropState(ctx.ID)
+	dropState(ctx.State, ctx.ID)
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }
 
@@ -675,7 +629,11 @@ type 人偶炸弹 struct {
 }
 
 func newBomb(info unit.SpawnInfo) *人偶炸弹 {
-	return &人偶炸弹{spec: popBomb(), owner: info.OwnerID, slot: info.Slot}
+	spec, ok := info.Data.(bombSpec)
+	if !ok {
+		spec = bombSpec{kind: bombBounce, dmg: 6}
+	}
+	return &人偶炸弹{spec: spec, owner: info.OwnerID, slot: info.Slot}
 }
 
 func (b *人偶炸弹) Handle(ctx unit.Context, ev unit.Event) {

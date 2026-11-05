@@ -1,0 +1,325 @@
+/* 小幺哥：礼物包装球、礼物盒和开盒彩带。皮肤短名不与核球复用。 */
+
+.ball.look-xiaoyaoge {
+  overflow: visible;
+  border: 2px solid #ffd276;
+  background:
+    radial-gradient(circle at 32% 24%, #fff9d8 0 5%, transparent 19%),
+    repeating-linear-gradient(45deg, #ef4f60 0 9px, #ff6d6e 9px 18px);
+  box-shadow:
+    inset 0 -7px 10px #8d1f3d88,
+    inset 0 0 0 3px #ff9d78,
+    0 0 calc(8px + var(--xiaoyaoge-breath, .5) * 9px) #ff7b6c80;
+}
+
+.xiaoyaoge-art {
+  position: absolute;
+  inset: -11%;
+  pointer-events: none;
+  z-index: 4;
+  transform-origin: 50% 55%;
+}
+
+.xiaoyaoge-wrap {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 24%, #fff7cf99 0 5%, transparent 18%),
+    repeating-linear-gradient(38deg, #ff5264 0 10px, #ff746d 10px 20px);
+  box-shadow:
+    inset 0 -8px 11px #7b193b77,
+    inset 0 0 0 2px #ffd180a8;
+}
+
+.xiaoyaoge-ribbon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #cf8a16, #ffe376 30%, #fff3b0 50%, #ffc545 72%, #b96a10);
+  box-shadow: 0 0 5px #ffe88c99;
+  transform: translate(-50%, -50%);
+}
+.xiaoyaoge-ribbon.vertical { width: 9%; height: 88%; }
+.xiaoyaoge-ribbon.horizontal { width: 88%; height: 9%; }
+
+.xiaoyaoge-bow {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  width: 48%;
+  height: 28%;
+  transform: translate(-50%, -50%);
+}
+.xiaoyaoge-bow i { position: absolute; display: block; }
+.xiaoyaoge-bow .left,
+.xiaoyaoge-bow .right {
+  top: 5%;
+  width: 45%;
+  height: 70%;
+  border: 2px solid #fff0a2;
+  background: linear-gradient(135deg, #ffdf58, #f4a91c);
+  box-shadow: 0 0 5px #ffdd5f;
+}
+.xiaoyaoge-bow .left { left: 2%; border-radius: 70% 20% 65% 25%; transform: rotate(20deg); }
+.xiaoyaoge-bow .right { right: 2%; border-radius: 20% 70% 25% 65%; transform: rotate(-20deg); }
+.xiaoyaoge-bow .knot {
+  left: 40%;
+  top: 22%;
+  width: 22%;
+  height: 42%;
+  border-radius: 50%;
+  background: #ffe97b;
+  box-shadow: 0 0 6px #fff1a8;
+}
+
+.xiaoyaoge-face {
+  position: absolute;
+  left: 25%;
+  top: 42%;
+  width: 50%;
+  height: 30%;
+}
+.xiaoyaoge-face .eye {
+  position: absolute;
+  top: 14%;
+  width: 8%;
+  height: 15%;
+  border-radius: 50%;
+  background: #3e1923;
+}
+.xiaoyaoge-face .eye.left { left: 20%; }
+.xiaoyaoge-face .eye.right { right: 20%; }
+.xiaoyaoge-face .mouth {
+  position: absolute;
+  left: 50%;
+  bottom: 6%;
+  width: 27%;
+  height: 31%;
+  transform: translateX(-50%);
+  border-bottom: 2px solid #6e2031;
+  border-radius: 0 0 50% 50%;
+}
+.xiaoyaoge-cheek {
+  position: absolute;
+  top: 57%;
+  width: 12%;
+  height: 7%;
+  border-radius: 50%;
+  background: #ffb4b7aa;
+  filter: blur(.5px);
+}
+.xiaoyaoge-cheek.left { left: 17%; }
+.xiaoyaoge-cheek.right { right: 17%; }
+
+.xiaoyaoge-throw .xiaoyaoge-bow { animation: xiaoyaoge-bow-kick .32s ease-out; }
+@keyframes xiaoyaoge-bow-kick {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+  35% { transform: translate(-50%, -58%) rotate(-18deg) scale(1.12); }
+}
+
+/* 礼物盒本体。 */
+.ball.look-xiaoyaoge-gift {
+  overflow: visible;
+  border: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.xiaoyaoge-gift-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  transform: rotate(var(--gift-angle, 0rad)) translateY(calc(var(--gift-bob, 0) * 2px));
+  transform-origin: 50% 50%;
+  pointer-events: none;
+}
+.gift-box {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 35px;
+  height: 31px;
+  transform: translate(-50%, -46%) rotate(var(--gift-spin, 0deg));
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg, transparent 42%, #ffdb52 42% 58%, transparent 58%),
+    linear-gradient(#ff6571 0 74%, #bb2741 74% 100%);
+  border: 2px solid #ffd58d;
+  box-shadow: 0 0 8px #ffcc57cc, 0 4px 4px #4c142266;
+}
+.gift-lid {
+  position: absolute;
+  left: -9%;
+  top: -18%;
+  width: 118%;
+  height: 23%;
+  border-radius: 3px;
+  background: #ff7d72;
+  border: 2px solid #ffe28e;
+  box-shadow: 0 0 5px #ffd35f;
+}
+.gift-ribbon-v {
+  position: absolute;
+  left: 42%;
+  top: -18%;
+  width: 16%;
+  height: 118%;
+  background: linear-gradient(#ffe886, #eaa91e);
+}
+.gift-ribbon-h {
+  position: absolute;
+  left: -2%;
+  top: 45%;
+  width: 104%;
+  height: 15%;
+  background: linear-gradient(90deg, #eaa91e, #fff19b 45%, #e8a118);
+}
+.gift-bow {
+  position: absolute;
+  top: -35%;
+  width: 35%;
+  height: 28%;
+  border: 2px solid #fff0a0;
+  background: #ffd44f;
+}
+.gift-bow.left { left: 22%; border-radius: 70% 20% 60% 30%; transform: rotate(20deg); }
+.gift-bow.right { right: 22%; border-radius: 20% 70% 30% 60%; transform: rotate(-20deg); }
+.gift-spark {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff8cb;
+  box-shadow: 0 0 6px #ffcf4e;
+}
+.gift-spark.s1 { left: -8px; top: 8px; }
+.gift-spark.s2 { right: -6px; top: 16px; }
+.gift-spark.s3 { left: 8px; bottom: -7px; }
+
+/* 开盒爆发。 */
+.fx-gift-throw,
+.fx-gift-open {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 39;
+}
+.fx-gift-throw i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ffe27b;
+  box-shadow: 0 0 8px #ffb22d;
+  transform: rotate(var(--a, 0deg)) translateX(var(--d, 18px));
+  animation: gift-throw-spark .44s ease-out forwards;
+}
+@keyframes gift-throw-spark {
+  0% { opacity: .9; transform: rotate(var(--a, 0deg)) translateX(4px) scale(1); }
+  100% { opacity: 0; transform: rotate(var(--a, 0deg)) translateX(var(--d, 18px)) scale(.2); }
+}
+
+.gift-open-art {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--xiaoyaoge-size, 120px);
+  height: var(--xiaoyaoge-size, 120px);
+  transform: translate(-50%, -50%) scale(var(--xiaoyaoge-scale, 1));
+  transform-origin: 50% 50%;
+}
+.gift-open-flash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 10px #fff3a0, 0 0 26px #ffb62e;
+  animation: gift-open-flash .55s ease-out forwards;
+}
+.gift-open-base,
+.gift-open-lid {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 38px;
+  height: 32px;
+  margin: -15px 0 0 -19px;
+  border: 2px solid #ffe698;
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg, transparent 43%, #ffd844 43% 57%, transparent 57%),
+    linear-gradient(#f54f62, #a2203b);
+  box-shadow: 0 0 9px #ffdb5b;
+}
+.gift-open-lid {
+  height: 8px;
+  margin: -19px 0 0 -21px;
+  width: 42px;
+  animation: gift-open-lid .78s cubic-bezier(.1, .76, .2, 1) forwards;
+}
+.gift-open-base { animation: gift-open-base .68s ease-out forwards; }
+.gift-open-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 2px 7px;
+  border: 1px solid #ffe08b;
+  border-radius: 10px;
+  background: #2c101be8;
+  color: #fff2bd;
+  box-shadow: 0 0 9px #ff9f45;
+  font: 700 11px/15px "Microsoft YaHei", "PingFang SC", sans-serif;
+  white-space: nowrap;
+  opacity: 0;
+  animation: gift-open-label .95s .16s ease-out forwards;
+}
+.gift-confetti {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--c, #ffd85a);
+  box-shadow: 0 0 4px var(--c, #ffd85a);
+  opacity: 0;
+  transform: rotate(var(--a, 0deg)) translateX(8px) rotate(0deg);
+  animation: gift-confetti .82s var(--delay, 0s) ease-out forwards;
+}
+@keyframes gift-open-flash {
+  0% { transform: scale(.2); opacity: 1; }
+  24% { transform: scale(3); opacity: 1; }
+  100% { transform: scale(5.5); opacity: 0; }
+}
+@keyframes gift-open-lid {
+  0% { transform: translateY(0) rotate(0deg); }
+  28% { transform: translateY(-25px) rotate(-15deg); opacity: 1; }
+  100% { transform: translateY(-48px) rotate(-38deg); opacity: 0; }
+}
+@keyframes gift-open-base {
+  0% { transform: scale(1); opacity: 1; }
+  35% { transform: scale(1.18, .78); }
+  100% { transform: scale(.5); opacity: 0; }
+}
+@keyframes gift-open-label {
+  0% { opacity: 0; transform: translate(-50%, -28%) scale(.7); }
+  20%, 68% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -78%) scale(.92); }
+}
+@keyframes gift-confetti {
+  0% { opacity: 1; transform: rotate(var(--a, 0deg)) translateX(8px) rotate(0deg); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--a, 0deg)) translateX(var(--d, 42px)) rotate(var(--r, 280deg)); }
+}

@@ -1,4 +1,4 @@
-// 老虎机前端：像素机身覆盖球体，三个转轮按服务端结果播放 5 秒抽奖动画。
+// 老虎机前端：像素机身覆盖球体，三个转轮按服务端结果播放 4 秒抽奖动画。
 window.slotSt = window.slotSt || {};
 window.lookFX = window.lookFX || {};
 
@@ -14,7 +14,7 @@ window.lookFX = window.lookFX || {};
     if (!s) {
       s = {
         results: [0, 1, 3],
-        duration: 5,
+        duration: 4,
         serverRemaining: 0,
         serverAt: 0,
         drawing: false,
@@ -205,7 +205,7 @@ window.lookFX = window.lookFX || {};
 
   function updateDraw(s, fx, initial) {
     const results = decodeReels(fx.amount);
-    const duration = Math.max(0.2, Number(fx.vx) || 5);
+    const duration = Math.max(0.2, Number(fx.vx) || 4);
     const remaining = Math.max(0, Math.min(duration, Number(fx.vy) || duration));
     const changed = results.some((v, i) => v !== s.results[i]);
     s.results = results;

@@ -306,8 +306,7 @@ func TestWindupDamageStacksOnTicket(t *testing.T) {
 	if len(sp) != 1 {
 		t.Fatalf("tickets=%d", len(sp))
 	}
-	got, _ := tickets.Load(sp[0].Stream)
-	tickets.Delete(sp[0].Stream)
+	got := sp[0].Data
 	if v, _ := got.(float64); math.Abs(v-20) > 1e-9 {
 		t.Fatalf("票面=%v want 20", got)
 	}
@@ -326,8 +325,7 @@ func TestWindupStackAppliesToEveryTicket(t *testing.T) {
 		t.Fatalf("tickets=%d", len(sp))
 	}
 	for _, s := range sp {
-		got, _ := tickets.Load(s.Stream)
-		tickets.Delete(s.Stream)
+		got := s.Data
 		if v, _ := got.(float64); math.Abs(v-20) > 1e-9 {
 			t.Fatalf("每张都该带 20，实际 %v", got)
 		}
@@ -407,7 +405,7 @@ func TestThreeSecondWindowForgetsOldHits(t *testing.T) {
 	}
 }
 
-// 票面从发射者交给票：Spawn 没有载荷字段，靠 Stream 对号。
+// 票面随对应的出生请求交给票。
 func TestTicketInheritsRecordedDamage(t *testing.T) {
 	a := newSubpoena(7)
 	a.roll = func() float64 { return 0.1 }
@@ -419,16 +417,13 @@ func TestTicketInheritsRecordedDamage(t *testing.T) {
 	if len(sp) != 1 {
 		t.Fatalf("tickets=%d", len(sp))
 	}
-	actor := unit.NewActor(KindTicket, unit.SpawnInfo{Stream: sp[0].Stream, Slot: sp[0].Slot})
+	actor := unit.NewActor(KindTicket, unit.SpawnInfo{Stream: sp[0].Stream, Slot: sp[0].Slot, Data: sp[0].Data})
 	tk, ok := actor.(*传票)
 	if !ok {
 		t.Fatalf("actor=%T", actor)
 	}
 	if math.Abs(tk.dmg-12.5) > 1e-9 {
 		t.Fatalf("票面=%v", tk.dmg)
-	}
-	if _, left := tickets.Load(sp[0].Stream); left {
-		t.Fatal("载荷该在工厂取走后就删掉")
 	}
 }
 
@@ -460,6 +455,39 @@ func TestTicketServesRecordedDamageOnContact(t *testing.T) {
 	}
 	if !gone {
 		t.Fatal("结算完该消失")
+	}
+}
+
+func TestTicketDoublesDamageWhenUnclaimed(t *testing.T) {
+	tk := &传票{dmg: 10, slot: 0}
+	ctx, out := pipe(7)
+	self := unit.Snapshot{ID: 7, Slot: 0, Radius: ticketRadius}
+	far := foeAt(400, 0)
+
+	tk.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{far}})
+	drain(out)
+	tk.Handle(ctx, unit.Sense{Time: ticketStale - dt, Self: self, Nearby: []unit.Snapshot{far}})
+	early, earlyOK := fxIn(drain(out), "ticket")
+	if math.Abs(tk.dmg-10) > 1e-9 || !earlyOK || early.VX != 0 {
+		t.Fatalf("时限内票面=%v vx=%v ok=%v，不该翻倍变红", tk.dmg, early.VX, earlyOK)
+	}
+
+	tk.Handle(ctx, unit.Sense{Time: ticketStale, Self: self, Nearby: []unit.Snapshot{far}})
+	fx, ok := fxIn(drain(out), "ticket")
+	if math.Abs(tk.dmg-20) > 1e-9 || !ok || math.Abs(fx.Amount-20) > 1e-9 || fx.VX != 1 {
+		t.Fatalf("过期票面=%v fx=%v vx=%v ok=%v", tk.dmg, fx.Amount, fx.VX, ok)
+	}
+
+	tk.Handle(ctx, unit.Sense{Time: ticketStale + 1, Self: self, Nearby: []unit.Snapshot{foeAt(0, 0)}})
+	var dmg unit.Damage
+	found := false
+	for _, c := range drain(out) {
+		if d, ok := c.(unit.Damage); ok {
+			dmg, found = d, true
+		}
+	}
+	if !found || math.Abs(dmg.Amount-20) > 1e-9 {
+		t.Fatalf("过期后碰到的伤害=%+v found=%v", dmg, found)
 	}
 }
 
