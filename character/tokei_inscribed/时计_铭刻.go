@@ -43,10 +43,12 @@ const (
 	inscribedColor  = "#f2f2f2"
 
 	// —— 常驻弧：唯一的出伤来源（冲刺只负责把人送过去）——
-	arcInner  = inscribedRadius
-	arcOuter  = inscribedRadius + 2
-	arcDamage = 4.0 // 基础伤害；时痕的 +X 由引擎的 SetDamageBonus 统一加
-	arcCD     = 1.8 // 撞碎之后重新长出来要这么久
+	// 只砍身前那 90° 一扇（同原型机_近战），不是整圈：从背后贴上来的敌人打不到。
+	arcInner   = inscribedRadius
+	arcOuter   = inscribedRadius + 2
+	arcSpanDeg = 90.0
+	arcDamage  = 4.0 // 基础伤害；时痕的 +X 由引擎的 SetDamageBonus 统一加
+	arcCD      = 1.8 // 撞碎之后重新长出来要这么久
 
 	// —— 冲刺（只位移，不结算伤害）——
 	dashSpeed     = 420.0 // 冲刺速度
@@ -63,12 +65,11 @@ const (
 	// 回溯只会越回越少。改成限时后，回溯=把过期/即将过期的 buff 重新拉满才成立。
 	buffLife  = 20.0 // 每层时痕 / 长守各自活这么久
 	traceStep = 3.5  // 时痕：每层造成的伤害 +3.5
-	guardPool = 20.0 // 长守：每层给一条 20 点的额外血条
+	guardPool = 15.0 // 长守：每层给一条 20 点的额外血条
 
 	// —— 节奏 ——
 	pointGap  = 1.0  // 每 1s 攒 1 点
 	pointCap  = 5.0  // 满 5 点抽 1 张 = 5 秒一张
-	handSlots = 5    // HUD 槽位；手牌本身没有上限
 	windowGap = 5.0  // 出牌窗口长度
 	playGap   = 1.0  // 同窗两张牌的最小间隔
 	hitDrawCD = 20.0 // 命中抽底牌的冷却
@@ -106,8 +107,6 @@ const (
 	fxEmber    = "tokei-inscribed-ember"
 	fxTrace    = "tokei-inscribed-trace"
 	fxGuard    = "tokei-inscribed-guard"
-	fxDraw     = "tokei-inscribed-draw"
-	fxCards    = "tokei-inscribed-cards"
 	fxEmberPop = "tokei-inscribed-ember-pop"
 )
 
@@ -126,8 +125,9 @@ func init() {
 			FX:    []string{"tokei-inscribed"},
 		},
 	}, func(unit.SpawnInfo) unit.Actor { return &铭刻{} })
-	// 常驻弧：整圈包住身体，撞到敌方战斗机/活随从就出 6 点并自毁，
-	// 主人每 arcCD 秒把它重新长出来。冲刺本身不结算伤害，全靠这一圈磨。
+	// 常驻弧：一张朝正前方张开的刀面（弧自己按主人速度/朝向转向），撞到敌方
+	// 战斗机/活随从就出 arcDamage 点并自毁，主人每 arcCD 秒把它重新长出来。
+	// 冲刺本身不结算伤害，全靠这一刀磨。
 	p.Register(unit.Spec{
 		Kind:     KindInscribedArc,
 		Role:     unit.RoleProjectile,
@@ -136,7 +136,7 @@ func init() {
 		Speed:    inscribedSpeed,
 		Vision:   0,
 		Attach:   true,
-		ArcSpan:  2 * math.Pi,
+		ArcSpan:  unit.Deg(arcSpanDeg),
 		ArcInner: arcInner,
 		Look:     unit.Look{Color: inscribedColor, Overlay: true},
 	}, func(info unit.SpawnInfo) unit.Actor { return &铭刻弧{slot: info.Slot} })
@@ -201,8 +201,6 @@ type 铭刻 struct {
 	arc       unit.AttachState
 
 	cdReadyAt float64 // 命中抽牌的冷却就绪时刻；<= now 表示就绪
-
-	hudDirty bool
 }
 
 func (a *铭刻) Handle(ctx unit.Context, ev unit.Event) {
@@ -232,7 +230,6 @@ func (a *铭刻) tick(ctx unit.Context, s unit.Sense) {
 	a.armArc(ctx, s)
 	a.fight(ctx, s)
 	a.touchDraw(ctx, s)
-	a.syncHud(ctx)
 }
 
 // armArc 常驻弧：撞碎之后等 arcCD 再长出来，平时一直挂着。
@@ -244,7 +241,6 @@ func (a *铭刻) armArc(ctx unit.Context, s unit.Sense) {
 
 func (a *铭刻) boot(ctx unit.Context, s unit.Sense) {
 	a.booted = true
-	a.hudDirty = true
 	if a.rng == nil {
 		a.rng = unit.NewRNG(ctx.Stream)
 	}
@@ -274,7 +270,6 @@ func (a *铭刻) expireBuffs(ctx unit.Context, now float64) {
 		if gone > 0 {
 			ctx.Out <- unit.StackMark{UnitID: ctx.ID, Kind: markTrace, Delta: -gone}
 			ctx.Out <- unit.SetDamageBonus{UnitID: ctx.ID, Amount: float64(len(a.traceAt)) * traceStep}
-			a.hudDirty = true
 		}
 	}
 	if len(a.guardAt) > 0 {
@@ -294,7 +289,6 @@ func (a *铭刻) expireBuffs(ctx unit.Context, now float64) {
 				a.guardPool = 0
 			}
 			ctx.Out <- unit.SetAbsorb{UnitID: ctx.ID, Amount: a.guardPool}
-			a.hudDirty = true
 		}
 	}
 }
@@ -349,17 +343,11 @@ func (a *铭刻) charge(ctx unit.Context, s unit.Sense) {
 	for i := 0; i < 200 && s.Time+1e-9 >= a.nextAt; i++ {
 		a.nextAt += pointGap
 		a.progress++
-		a.hudDirty = true // 每秒一点：前端的分针跟着走
 		if a.progress+1e-9 < pointCap {
 			continue
 		}
 		a.progress -= pointCap
 		a.drawTop()
-		a.hudDirty = true
-		ctx.Out <- unit.FX{
-			Name: fxDraw, Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
-			X: a.x, Y: a.y, Amount: a.progress,
-		}
 	}
 }
 
@@ -458,7 +446,6 @@ func (a *铭刻) pickPlayable() (int, bool) {
 func (a *铭刻) playCard(ctx unit.Context, s unit.Sense, idx int) {
 	c := a.hand[idx]
 	a.hand = append(a.hand[:idx], a.hand[idx+1:]...)
-	a.hudDirty = true
 	switch c {
 	case cardTrace:
 		a.traceAt = append(a.traceAt, s.Time+buffLife)
@@ -590,7 +577,7 @@ func (a *铭刻) endDash(ctx unit.Context, s unit.Sense) {
 }
 
 // touchDraw 命中抽底：弧贴到人的时候算命中，20s 冷却就绪才抽，抽完才开始冷却。
-// 弧自己的结算写在 铭刻弧 里（那时候主人拿不到回执），这里只按同一圈范围判一下。
+// 弧自己的结算写在 铭刻弧 里（那时候主人拿不到回执），这里只按同一扇范围判一下。
 func (a *铭刻) touchDraw(ctx unit.Context, s unit.Sense) {
 	if s.Time+1e-9 < a.cdReadyAt {
 		return
@@ -603,15 +590,35 @@ func (a *铭刻) touchDraw(ctx unit.Context, s unit.Sense) {
 		if math.Hypot(o.X-a.x, o.Y-a.y) > s.Self.Radius+o.Radius+4 {
 			continue
 		}
+		if !inArcCone(s.Self, *o) {
+			continue
+		}
 		a.cdReadyAt = s.Time + hitDrawCD
 		a.drawBottom()
-		a.hudDirty = true
-		ctx.Out <- unit.FX{
-			Name: fxDraw, Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
-			X: a.x, Y: a.y, Amount: 1,
-		}
 		return
 	}
+}
+
+// arcAim 跟引擎给挂件定朝向的规矩一致：动起来朝速度，站住了朝主人朝向。
+func arcAim(s unit.Snapshot) (float64, float64) {
+	if n := math.Hypot(s.VX, s.VY); n > 1e-6 {
+		return s.VX / n, s.VY / n
+	}
+	if n := math.Hypot(s.FaceX, s.FaceY); n > 1e-6 {
+		return s.FaceX / n, s.FaceY / n
+	}
+	return 1, 0
+}
+
+// inArcCone 目标在不在身前那扇里：和引擎 sweptArcVsCircle 的角度判定同一套。
+func inArcCone(s unit.Snapshot, o unit.Snapshot) bool {
+	dx, dy := o.X-s.X, o.Y-s.Y
+	n := math.Hypot(dx, dy)
+	if n <= 1e-9 {
+		return true
+	}
+	ax, ay := arcAim(s)
+	return (dx*ax+dy*ay)/n >= math.Cos(unit.Deg(arcSpanDeg)/2)-1e-9
 }
 
 // desiredDir 决定平时往哪走：笔直朝目标，不绕圈。没有目标就顺着朝向。
@@ -672,7 +679,6 @@ func (a *铭刻) applyRecord(ctx unit.Context, s unit.Sense, handOnly bool) {
 		a.progress = r.progress
 		a.cdReadyAt = s.Time + r.cdLeft
 		a.dashing = false
-		a.hudDirty = true
 		return
 	}
 	// 只回位置与朝向，不回血量与上限。
@@ -699,29 +705,4 @@ func (a *铭刻) applyRecord(ctx unit.Context, s unit.Sense, handOnly bool) {
 	ctx.Out <- unit.SetDamageBonus{UnitID: ctx.ID, Amount: float64(r.trace) * traceStep}
 	a.x, a.y = r.x, r.y
 	a.dashing = false
-	a.hudDirty = true
-}
-
-// syncHud 只在状态变化时重发，前端自己按绝对时刻画 20s 冷却环。
-func (a *铭刻) syncHud(ctx unit.Context) {
-	if !a.hudDirty {
-		return
-	}
-	a.hudDirty = false
-	packed := 0
-	n := len(a.hand)
-	if n > handSlots {
-		n = handSlots
-	}
-	for i := 0; i < n; i++ {
-		packed |= int(a.hand[i]) << (i * 4)
-	}
-	ctx.Out <- unit.FX{
-		Name: fxCards, Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
-		Amount: a.progress,              // 抽卡进度：前端画分针
-		VX:     float64(packed),         // 最早 5 张牌，每个 4 bit
-		VY:     float64(n),              // 手牌张数（封顶 5）
-		X:      a.cdReadyAt,             // 20s 命中抽牌的冷却就绪时刻（画冷却环）
-		Y:      float64(len(a.traceAt)), // 时痕层数：前端画时针
-	}
 }

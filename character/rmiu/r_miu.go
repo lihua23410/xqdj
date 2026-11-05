@@ -25,13 +25,15 @@ const (
 	rMiuRadius = miuRadius // 本体与缪同尺寸，伪装成克隆人
 	rMiuMaxHP  = miuHP     // 本体血量实时与缪互换，上限与缪一致
 
-	miuRadius    = 18.0
-	miuHP        = 100.0
+	miuRadius = 18.0
+	// 每只缪的血：5 只就是本体的总池。100 时是 500 的等效血量（别人的 5 倍），
+	// 85 收成 425——还是全场最厚的池子，但不再是「耗到对手先死」。
+	miuHP        = 85.0
 	miuBaseSpeed = 170.0
 	miuVision    = 9999.0
 	miuColor     = "#f0f0f0"
 
-	miuDamage    = 4.5
+	miuDamage    = 4.0
 	miuMeleeCD   = 0.40
 	miuMeleeGap  = 8.0 // 半径之和外的额外近战范围
 	miuMeleeSpan = 60.0

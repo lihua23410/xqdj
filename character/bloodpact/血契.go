@@ -32,7 +32,8 @@ const (
 	pactColor  = "#8c1420" // 暗红
 
 	// 咬合：Attach 薄扇环（地慧星口径）：内 18 / 外 20、110°。
-	biteDamage   = 7.0
+	// 伤 6：0.3s 一轮 ≈ 20 DPS，仍是全场最高的贴身输出，但不再是「咬到就赢」那档。
+	biteDamage   = 6.0
 	biteCD       = 0.30
 	biteCDFeed   = 0.25 // 寄生期更快
 	biteArcSpan  = 110.0
@@ -57,12 +58,12 @@ const (
 	wiltDur   = 3.0
 	wiltDrop  = 30.0
 
-	// 寄生回流：按连接时长分档 25% / 50% / 75%。改这两个秒数。
+	// 寄生回流：按连接时长分档 20% / 40% / 60%。改这两个秒数。
 	feedMidAt   = 3.0
 	feedDeepAt  = 6.0
-	feedShallow = 0.25
-	feedMid     = 0.50
-	feedDeep    = 0.75
+	feedShallow = 0.20
+	feedMid     = 0.40
+	feedDeep    = 0.60
 	feedStep    = 0.5 // 攒够这么多才 Heal 一次（引擎口径：≥0.5 才有治疗特效）
 
 	// 收线：烧 8 血，收网 0.6 秒——每条线的目标都被拽 460 朝血契（快过任何巡航，
@@ -631,7 +632,7 @@ func (b *血契) syncLook(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-// depthOf 血线深度：0 细（25%）、1 粗（50%）、2 深红搏动（75%）。
+// depthOf 血线深度：0 细（20%）、1 粗（40%）、2 深红搏动（60%）。
 func depthOf(held float64) int {
 	switch {
 	case held >= feedDeepAt:

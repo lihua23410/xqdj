@@ -438,6 +438,48 @@ func TestDashIsStraightAndDealsNoDamage(t *testing.T) {
 	}
 }
 
+// 弧只砍身前那 90° 一扇：背后的、正侧面的都不算。
+func TestArcIsDirectional(t *testing.T) {
+	sp, ok := unit.Lookup(KindInscribedArc)
+	if !ok || math.Abs(sp.ArcSpan-unit.Deg(arcSpanDeg)) > 1e-9 {
+		t.Fatalf("弧该是 %v° 的一扇，实得 %+v", arcSpanDeg, sp)
+	}
+
+	r := newRig(t)
+	self := r.self // 静止、面朝 +x
+	before := len(r.a.hand)
+	for _, tc := range []struct {
+		name   string
+		dx, dy float64
+	}{
+		{"身后", -20, 0},
+		{"正侧面", 0, 20},
+	} {
+		o := unit.Snapshot{ID: 2, Kind: "x", Role: unit.RoleFighter, Slot: 1, X: self.X + tc.dx, Y: self.Y + tc.dy, Radius: 18}
+		r.a.touchDraw(r.ctx, unit.Sense{Time: 5, Self: self, Nearby: []unit.Snapshot{o}})
+		if len(r.a.hand) != before {
+			t.Fatalf("%s的敌人不该触发命中抽底", tc.name)
+		}
+	}
+
+	// 弧跟着速度转：往后跑，原来正前方那个人就跑到刀面背后了。
+	moving := self
+	moving.VX = -165
+	target := unit.Snapshot{ID: 3, Kind: "x", Role: unit.RoleFighter, Slot: 1, X: self.X + 20, Y: self.Y, Radius: 18}
+	r.a.touchDraw(r.ctx, unit.Sense{Time: 5, Self: moving, Nearby: []unit.Snapshot{target}})
+	if len(r.a.hand) != before {
+		t.Fatal("往后跑时身后的敌人不该算命中")
+	}
+
+	// 同样一个目标，速度朝 +x 时就在刀面里了。
+	ahead := self
+	ahead.VX = 165
+	r.a.touchDraw(r.ctx, unit.Sense{Time: 5, Self: ahead, Nearby: []unit.Snapshot{target}})
+	if len(r.a.hand) != before+1 {
+		t.Fatal("正对着的敌人该触发命中抽底")
+	}
+}
+
 func TestArcHitsAndRespawns(t *testing.T) {
 	r := newRig(t)
 	self := r.self
