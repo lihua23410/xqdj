@@ -18,13 +18,13 @@
 // 位置自己积分后 Teleport，撞场边 / 预放墙用 Field.Clamp、撞现造的胶囊墙用 Sense.Walls，
 // 都是推到刚好不压住的位置再反射速度，不会穿出去。
 // 敌方战斗机或活随从近了（圆心距 ≤ 双方半径和），按票面金额结算，票随即消失。
+// 发出后超过 ticketStale 还没被捡到，票面伤害翻倍，只翻一次。
 package 传票员
 
 import (
 	"embed"
 	"math"
 	"math/rand/v2"
-	"sync"
 
 	"xqdj/internal/unit"
 )
@@ -55,16 +55,13 @@ const (
 	ticketRadius = 10.0
 	ticketGap    = 8.0
 	ticketColor  = "#f6eed6"
+	ticketStale  = 7.0 // 发出后这么多秒还没被捡到，票面伤害翻倍。改这个数。
 
 	twoSpread = 8 * math.Pi / 180 // 两张故障票从瞄准线左右偏这么多
 	fiveN     = 5
 
 	dt = 1.0 / 60.0
 )
-
-// tickets 把「这张票该记多少伤」从发射者交给新单位。Spawn 没有载荷字段，
-// 父子之间只靠 ctx.Born 定下的 Stream 对号；工厂取一次就删，不留引用。
-var tickets sync.Map // uint64 -> float64
 
 //go:embed fx
 var assets embed.FS
@@ -95,8 +92,7 @@ func init() {
 		Vision: 9999, // 自己按 Nearby 判碰，得看得见全场
 		Look:   unit.Look{Color: ticketColor, FX: []string{"ticket"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
-		dmg, _ := tickets.LoadAndDelete(info.Stream)
-		value, _ := dmg.(float64)
+		value, _ := info.Data.(float64)
 		return &传票{dmg: value, slot: info.Slot}
 	})
 }
@@ -244,7 +240,7 @@ func (a *传票员) launch(ctx unit.Context, s unit.Sense, ang, dmg float64) {
 		OwnerID: ctx.ID,
 		Slot:    s.Self.Slot,
 	})
-	tickets.Store(sp.Stream, dmg)
+	sp.Data = dmg
 	ctx.Out <- sp
 }
 
@@ -294,9 +290,11 @@ type 传票 struct {
 	dmg  float64
 	slot int
 
-	x, y   float64 // 自己维护的位置
-	vx, vy float64 // 自己维护的速度（逐帧匀减速）
-	ready  bool    // 第一帧感知里把出生速度和位置接过来
+	x, y    float64 // 自己维护的位置
+	vx, vy  float64 // 自己维护的速度（逐帧匀减速）
+	ready   bool    // 第一帧感知里把出生速度和位置接过来
+	born    float64 // 第一次感知的时刻，捡票计时从这里起
+	doubled bool    // 过期翻倍只发生一次
 }
 
 func (t *传票) Handle(ctx unit.Context, ev unit.Event) {
@@ -304,20 +302,36 @@ func (t *传票) Handle(ctx unit.Context, ev unit.Event) {
 	if !ok {
 		return
 	}
-	// 票面数字每帧都发一次：前端脚本是异步加载的，只发一次可能被漏掉。
-	ctx.Out <- unit.FX{
-		Name: "ticket", Kind: KindTicket, UnitID: ctx.ID, Slot: t.slot,
-		X: s.Self.X, Y: s.Self.Y, Amount: t.dmg,
-	}
 	if !t.ready {
 		t.ready = true
+		t.born = s.Time
 		t.x, t.y = s.Self.X, s.Self.Y
 		t.vx, t.vy = s.Self.VX, s.Self.VY
+	}
+	t.ripen(s.Time)
+	// 票面数字每帧都发一次：前端脚本是异步加载的，只发一次可能被漏掉。
+	// VX 只当逾期标记：1 时纸条变红。
+	stale := 0.0
+	if t.doubled {
+		stale = 1
+	}
+	ctx.Out <- unit.FX{
+		Name: "ticket", Kind: KindTicket, UnitID: ctx.ID, Slot: t.slot,
+		X: s.Self.X, Y: s.Self.Y, Amount: t.dmg, VX: stale,
 	}
 	if t.serve(ctx, s) {
 		return
 	}
 	t.step(ctx, s)
+}
+
+// ripen 发出后超过 ticketStale 还没被捡走，票面只翻一倍。
+func (t *传票) ripen(now float64) {
+	if t.doubled || now+1e-9 < t.born+ticketStale {
+		return
+	}
+	t.doubled = true
+	t.dmg *= 2
 }
 
 // serve 自己判碰：敌方战斗机 / 活随从的圆心距进了双方半径和，就按票面结算，票随即消失。

@@ -70,6 +70,9 @@ func TestEndLeavesNoPendingCommands(t *testing.T) {
 	if n := len(m.cmds); n != 0 {
 		t.Fatalf("End 之后队列还剩 %d 条指令", n)
 	}
+	if n := m.actorWork.pending.Load(); n != 0 {
+		t.Fatalf("End 之后还剩 %d 个排队或执行中的事件", n)
+	}
 	for _, u := range us {
 		select {
 		case <-u.exited:

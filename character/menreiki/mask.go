@@ -2,57 +2,77 @@ package 面灵气
 
 import (
 	"math"
-	"sync"
+
 	"xqdj/internal/unit"
 )
 
-var (
-	liveMu      sync.Mutex
-	liveFaction = map[uint64]string{}
-	maskReady   = map[uint64][3]bool{}
-)
-
-func setLive(id uint64, faction string) {
-	liveMu.Lock()
-	liveFaction[id] = faction
-	liveMu.Unlock()
+func setLive(scope *unit.MatchState, id uint64, faction string) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	shared.liveFaction[id] = faction
+	shared.liveMu.Unlock()
 }
 
-func ownerFaction(id uint64) string {
-	liveMu.Lock()
-	defer liveMu.Unlock()
-	return liveFaction[id]
+func ownerFaction(scope *unit.MatchState, id uint64) string {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	return shared.liveFaction[id]
 }
 
-func armMask(owner uint64, i int) {
+func armMask(scope *unit.MatchState, owner uint64, i int) {
 	if i < 0 || i > 2 {
 		return
 	}
-	liveMu.Lock()
-	v := maskReady[owner]
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	v := shared.maskReady[owner]
 	v[i] = true
-	maskReady[owner] = v
-	liveMu.Unlock()
+	shared.maskReady[owner] = v
+	shared.liveMu.Unlock()
 }
 
-func armAllMasks(owner uint64) {
-	liveMu.Lock()
-	maskReady[owner] = [3]bool{true, true, true}
-	liveMu.Unlock()
+func armAllMasks(scope *unit.MatchState, owner uint64) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	shared.maskReady[owner] = [3]bool{true, true, true}
+	shared.liveMu.Unlock()
 }
 
-func spendMask(owner uint64, i int) bool {
+func spendMask(scope *unit.MatchState, owner uint64, i int) bool {
 	if i < 0 || i > 2 {
 		return false
 	}
-	liveMu.Lock()
-	defer liveMu.Unlock()
-	v := maskReady[owner]
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	v := shared.maskReady[owner]
 	if !v[i] {
 		return false
 	}
 	v[i] = false
-	maskReady[owner] = v
+	shared.maskReady[owner] = v
+	return true
+}
+
+// maskHitReady 面具对同一目标的出手 CD。三只面具可能同一帧圈住同一个人，
+// 不加限制的话一次贴脸就是三发，多单位/大体型目标还会反复触发。
+func maskHitReady(scope *unit.MatchState, owner, target uint64, now float64) bool {
+	if owner == 0 || target == 0 {
+		return false
+	}
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	m := shared.maskHitAt[owner]
+	if m == nil {
+		m = map[uint64]float64{}
+		shared.maskHitAt[owner] = m
+	}
+	if now+1e-9 < m[target] {
+		return false
+	}
+	m[target] = now + maskHitCD
 	return true
 }
 
@@ -70,9 +90,38 @@ func (a *面具) Handle(ctx unit.Context, ev unit.Event) {
 			a.passed = true
 			ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
 		}
+		a.keepOrbit(ctx, e)
 	case unit.Collision:
 		a.hit(ctx, e)
 	}
+}
+
+// keepOrbit 是眩晕期的保险。眩晕只拦 Sense，不拦物理：主人照旧靠惯性滑走，
+// 但面具是非实心 helper，位置全靠主人每帧 Teleport —— 主人一断 Sense，
+// 面具就定在世界里、被落在后面（看上去就是「脱手」）。
+// 面具自己看得见主人（Spec 的 Vision），离轨道圈太远就顺着当前方向拉回去。
+// 正常跟着转的时候距离就是轨道半径，这条从不触发。
+func (a *面具) keepOrbit(ctx unit.Context, s unit.Sense) {
+	var o *unit.Snapshot
+	for i := range s.Nearby {
+		if s.Nearby[i].ID == a.owner {
+			o = &s.Nearby[i]
+			break
+		}
+	}
+	if o == nil {
+		return
+	}
+	dx, dy := s.Self.X-o.X, s.Self.Y-o.Y
+	d := math.Hypot(dx, dy)
+	if d < 1e-6 {
+		return
+	}
+	want := o.Radius + s.Self.Radius + maskOrbitPad
+	if math.Abs(d-want) <= maskFollowGap {
+		return
+	}
+	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: o.X + dx/d*want, Y: o.Y + dy/d*want}
 }
 
 func (a *面具) hit(ctx unit.Context, e unit.Collision) {
@@ -80,10 +129,13 @@ func (a *面具) hit(ctx unit.Context, e unit.Collision) {
 		return
 	}
 	if hitTarget(e.Other, a.slot) {
-		if !spendMask(a.owner, a.index) {
+		if !spendMask(ctx.State, a.owner, a.index) {
 			return
 		}
-		strike(ctx, e.Other, maskDmg(ownerFaction(a.owner)))
+		if !maskHitReady(ctx.State, a.owner, e.Other.ID, e.Time) {
+			return
+		}
+		strike(ctx, e.Other, maskDmg(ownerFaction(ctx.State, a.owner)))
 	}
 }
 
@@ -126,7 +178,7 @@ func (b *面灵气弹) Handle(ctx unit.Context, ev unit.Event) {
 			return
 		}
 		if hitTarget(e.Other, b.slot) {
-			strike(ctx, e.Other, maskDmg(ownerFaction(b.owner)))
+			strike(ctx, e.Other, maskDmg(ownerFaction(ctx.State, b.owner)))
 			b.die(ctx)
 			return
 		}

@@ -1,0 +1,13 @@
+{
+  "license": "MIT (original synthesis; no external samples)",
+  "generator": "character/surgery/audio/generate_sfx.py",
+  "sampleRate": 44100,
+  "mode": "NORMAL",
+  "priority": 215,
+  "volume": 1,
+  "files": [
+    {"file": "cut.wav", "duration": 0.24, "integratedLUFS": -70, "truePeakDBFS": -7.9, "sha256": "cf07f7b3a322e2af0cea3f305c841adcc7fe5e9e3e1f74252369ca7d7705325b"},
+    {"file": "stitch.wav", "duration": 0.13, "integratedLUFS": -70, "truePeakDBFS": -8, "sha256": "3b713056b969ebd5407cd5b398a187648d629fd2059bbaab7443b3e11a2e4b36"},
+    {"file": "burst.wav", "duration": 0.38, "integratedLUFS": -70, "truePeakDBFS": -7.7, "sha256": "91c92ab05738bb435e7b20e1b3cd4c4fe2ec5ce48a2fd9c0ad66f9a7f2317eb3"}
+  ]
+}

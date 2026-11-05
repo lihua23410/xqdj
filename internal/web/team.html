@@ -8,30 +8,49 @@
 </head>
 <body data-page="team">
   <section id="lobby" class="panel">
-    <h1>团队赛</h1>
-    <p class="sub">选场地 · 点角色加入名单 · 点名单移出 · 每边最多 3 只 · <a href="/">1v1</a></p>
-    <div class="fields" id="fields"></div>
-    <div class="team-pick">
-      <aside class="roster" data-slot="0">
-        <h2>左边</h2>
-        <div class="roster-list" id="roster-list-0"></div>
-      </aside>
-      <div class="slots">
-        <div class="slot" data-slot="0">
-          <h2>左槽</h2>
-          <div class="kinds" id="kinds-0"></div>
-        </div>
-        <div class="slot" data-slot="1">
-          <h2>右槽</h2>
-          <div class="kinds" id="kinds-1"></div>
-        </div>
+    <header class="lobby-header">
+      <div>
+        <p class="lobby-eyebrow">准备对局</p>
+        <h1>小球对战</h1>
+        <p class="sub">每边 1–3 只，自由搭配你的阵容。</p>
       </div>
-      <aside class="roster" data-slot="1">
-        <h2>右边</h2>
-        <div class="roster-list" id="roster-list-1"></div>
+      <nav class="mode-switch" aria-label="对战模式">
+        <a href="/">单挑 <span>1v1</span></a>
+        <a href="/team" aria-current="page">团队赛 <span>最多 3v3</span></a>
+      </nav>
+    </header>
+    <section class="field-picker" aria-labelledby="field-heading">
+      <h2 id="field-heading">对战场地</h2>
+      <div class="fields" id="fields"></div>
+    </section>
+    <div class="pick-layout">
+      <aside class="pick-side" data-slot="0" aria-labelledby="pick-heading-0">
+        <div class="pick-side-heading"><h2 id="pick-heading-0">左边</h2><span id="pick-count-0"></span></div>
+        <div class="pick-seats" id="pick-seats-0"></div>
+      </aside>
+      <section class="pick-catalog" aria-labelledby="catalog-heading">
+        <div class="catalog-heading"><h2 id="catalog-heading">战斗机名册</h2><span id="kind-count"></span></div>
+        <div class="pick-search">
+          <label class="sr-only" for="kind-search">搜索战斗机</label>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+          <input id="kind-search" type="search" placeholder="搜索战斗机名字…" autocomplete="off" />
+          <button id="clear-search" type="button" class="hidden">清空</button>
+        </div>
+        <p class="pick-target" id="pick-target" aria-live="polite"></p>
+        <div class="kind-grid" id="kind-grid"></div>
+        <p class="pick-empty hidden" id="pick-empty">没有找到这只战斗机，试试更短的名字。</p>
+      </section>
+      <aside class="pick-side" data-slot="1" aria-labelledby="pick-heading-1">
+        <div class="pick-side-heading"><h2 id="pick-heading-1">右边</h2><span id="pick-count-1"></span></div>
+        <div class="pick-seats" id="pick-seats-1"></div>
       </aside>
     </div>
-    <button id="btn-start" type="button">开始</button>
+    <footer class="pick-launch">
+      <div class="pick-launch-inner">
+        <div class="launch-summary"><strong id="launch-field">准备对局</strong><span id="launch-lineup" aria-live="polite">正在加载名册…</span></div>
+        <button id="btn-start" type="button" disabled>开始对战 <span aria-hidden="true">→</span></button>
+      </div>
+    </footer>
     <div id="log-lobby" class="log-actions hidden" data-log="lobby">
       <button type="button" data-copy="recap">复制战报</button>
       <button type="button" data-copy="trace">复制排查</button>

@@ -6,12 +6,14 @@ import (
 )
 
 func TestClaimKillOnLastHit(t *testing.T) {
-	resetMiuKillState()
+	matchState := &unit.MatchState{}
+
+	resetMiuKillState(matchState)
 	out := make(chan unit.Cmd, 16)
 	m := meleeMiu()
 	m.prevMiuIDs = map[uint64]bool{2: true}
-	noteMiuHit(2, 10, KindMiu)
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	noteMiuHit(matchState, 2, 10, KindMiu)
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.Sense{Time: 1, Self: miuSelf(), Nearby: nil})
 	if m.killBonus != killBonusPer {
 		t.Fatalf("bonus=%v want %v", m.killBonus, killBonusPer)
@@ -22,12 +24,14 @@ func TestClaimKillOnLastHit(t *testing.T) {
 }
 
 func TestClaimKillIgnoresOtherHitter(t *testing.T) {
-	resetMiuKillState()
+	matchState := &unit.MatchState{}
+
+	resetMiuKillState(matchState)
 	out := make(chan unit.Cmd, 16)
 	m := meleeMiu()
 	m.prevMiuIDs = map[uint64]bool{2: true}
-	noteMiuHit(2, 99, KindMiu)
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	noteMiuHit(matchState, 2, 99, KindMiu)
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.Sense{Time: 1, Self: miuSelf(), Nearby: nil})
 	if m.killBonus != 0 {
 		t.Fatalf("bonus=%v, should not claim others' kills", m.killBonus)
@@ -35,7 +39,9 @@ func TestClaimKillIgnoresOtherHitter(t *testing.T) {
 }
 
 func TestBodySacrificeClaimsKill(t *testing.T) {
-	resetMiuKillState()
+	matchState := &unit.MatchState{}
+
+	resetMiuKillState(matchState)
 	out := make(chan unit.Cmd, 32)
 	r := &R缪{
 		booted: true, hp: 8, x: 0, y: 0,
@@ -44,7 +50,7 @@ func TestBodySacrificeClaimsKill(t *testing.T) {
 		speed:        miuBaseSpeed,
 		meleeReadyAt: 999, fireReadyAt: 999,
 	}
-	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.IncomingDamage{Token: 7, From: 99, Amount: 20})
 	_ = drain(out)
 	r.Handle(ctx, unit.Sense{
@@ -57,40 +63,34 @@ func TestBodySacrificeClaimsKill(t *testing.T) {
 	}
 }
 
-func TestClaimKillHealsHalfLostHP(t *testing.T) {
-	resetMiuKillState()
+func TestClaimKillDoesNotHeal(t *testing.T) {
+	matchState := &unit.MatchState{}
+
+	resetMiuKillState(matchState)
 	out := make(chan unit.Cmd, 32)
 	m := meleeMiu()
 	m.prevMiuIDs = map[uint64]bool{2: true}
-	noteMiuHit(2, 10, KindMiu)
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	noteMiuHit(matchState, 2, 10, KindMiu)
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	self := miuSelf()
 	self.HP = 40
 	m.Handle(ctx, unit.Sense{Time: 1, Self: self})
-	want := (miuHP - 40) * miuHealRatio
-	found := false
 	for _, c := range drain(out) {
-		h, ok := c.(unit.Heal)
-		if !ok || h.UnitID != 10 {
-			continue
+		if h, ok := c.(unit.Heal); ok {
+			t.Fatalf("kill must not heal, got %v", h.Amount)
 		}
-		found = true
-		if mathAbs(h.Amount-want) > 1e-9 {
-			t.Fatalf("heal=%v want %v", h.Amount, want)
-		}
-	}
-	if !found {
-		t.Fatal("kill claim should heal half of lost HP")
 	}
 }
 
 func TestClaimKillNoHealAtFullHP(t *testing.T) {
-	resetMiuKillState()
+	matchState := &unit.MatchState{}
+
+	resetMiuKillState(matchState)
 	out := make(chan unit.Cmd, 32)
 	m := meleeMiu()
 	m.prevMiuIDs = map[uint64]bool{2: true}
-	noteMiuHit(2, 10, KindMiu)
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	noteMiuHit(matchState, 2, 10, KindMiu)
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.Sense{Time: 1, Self: miuSelf()})
 	for _, c := range drain(out) {
 		if h, ok := c.(unit.Heal); ok {
@@ -100,10 +100,12 @@ func TestClaimKillNoHealAtFullHP(t *testing.T) {
 }
 
 func TestLowHPSpeedNotInherited(t *testing.T) {
-	resetMiuKillState()
+	matchState := &unit.MatchState{}
+
+	resetMiuKillState(matchState)
 	out := make(chan unit.Cmd, 16)
 	m := meleeMiu()
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	self := miuSelf()
 	self.HP = 40
 	m.Handle(ctx, unit.Sense{Time: 1, Self: self})
@@ -114,20 +116,20 @@ func TestLowHPSpeedNotInherited(t *testing.T) {
 	if mathAbs(m.speed-want) > 1e-9 {
 		t.Fatalf("speed=%v want %v", m.speed, want)
 	}
-	miuMu.Lock()
-	stored := miuBonus[10]
-	miuMu.Unlock()
+	stateFor(matchState).miuMu.Lock()
+	stored := stateFor(matchState).miuBonus[10]
+	stateFor(matchState).miuMu.Unlock()
 	if stored != 0 {
 		t.Fatalf("inherited store=%v want 0", stored)
 	}
 
-	resetMiuKillState()
+	resetMiuKillState(matchState)
 	m = meleeMiu()
 	m.prevMiuIDs = map[uint64]bool{2: true}
-	noteMiuHit(2, 10, KindMiu)
-	miuMu.Lock()
-	miuBonus[2] = killBonusPer
-	miuMu.Unlock()
+	noteMiuHit(matchState, 2, 10, KindMiu)
+	stateFor(matchState).miuMu.Lock()
+	stateFor(matchState).miuBonus[2] = killBonusPer
+	stateFor(matchState).miuMu.Unlock()
 	full := miuSelf()
 	m.Handle(ctx, unit.Sense{Time: 2, Self: full})
 	if mathAbs(m.killBonus-(killBonusPer+killBonusPer)) > 1e-9 {

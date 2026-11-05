@@ -1,0 +1,127 @@
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+
+	"xqdj/internal/sim"
+)
+
+type pair struct{ a, b string }
+
+type gameRunner func(left, right string, seed uint64, maxTicks int) (winner string, ticks int)
+
+// runPairs 只启动固定数量的工作协程；排队场次不持有协程或 Match。
+// 角色仍由 Match 内原有的异步 actor 执行，工作池只限制同时进行的场次数。
+func runPairs(pairs []pair, nGames, maxTicks, jobs int, play gameRunner, bar *progressBar) ([]pairResult, int) {
+	results := make([]pairResult, len(pairs))
+	for i, p := range pairs {
+		results[i] = pairResult{a: p.a, b: p.b}
+	}
+	total := len(pairs) * nGames
+	if total == 0 {
+		return results, 0
+	}
+	if jobs < 1 {
+		jobs = 1
+	}
+	if jobs > total {
+		jobs = total
+	}
+	type task struct{ pair, round int }
+	type outcome struct {
+		pair        int
+		left, right string
+		winner      string
+		ticks       int
+	}
+	queue := make(chan task, jobs)
+	completed := make(chan outcome, jobs)
+	var workers sync.WaitGroup
+	workers.Add(jobs)
+	for i := 0; i < jobs; i++ {
+		go func() {
+			defer workers.Done()
+			for task := range queue {
+				p := pairs[task.pair]
+				left, right := p.a, p.b
+				if task.round%2 == 1 {
+					left, right = right, left
+				}
+				seed := mixSeed(left, right, uint64(task.round)+1)
+				winner, ticks := runGame(play, left, right, seed, maxTicks)
+				completed <- outcome{task.pair, left, right, winner, ticks}
+			}
+		}()
+	}
+	go func() {
+		// 按轮次交错对阵，避免 -n 较大时工作池同时挤满某一组重对局。
+		for n := 0; n < nGames; n++ {
+			for pi := range pairs {
+				queue <- task{pi, n}
+			}
+		}
+		close(queue)
+		workers.Wait()
+		close(completed)
+	}()
+	done := 0
+	for game := range completed {
+		r := &results[game.pair]
+		if game.ticks >= maxTicks && game.winner == "平局" {
+			r.timeout++
+		}
+		switch game.winner {
+		case r.a:
+			r.winsA++
+		case r.b:
+			r.winsB++
+		default:
+			r.draws++
+		}
+		done++
+		verdict := "平局"
+		switch game.winner {
+		case game.left:
+			verdict = game.left + " 胜"
+		case game.right:
+			verdict = game.right + " 胜"
+		}
+		bar.report(fmt.Sprintf("%-14s vs %-14s → %s", game.left, game.right, verdict))
+	}
+	return results, done
+}
+
+// gameTimeout 是单场硬超时。sim 内部的 actor 一旦卡住不返回，Match.Play
+// 会永远等那一拍，maxTicks 也救不回来——全量就停在 100% 不动了。到点直接
+// 放弃这一场记平局，跑掉的 goroutine 由进程退出带走。
+const gameTimeout = 30 * time.Second
+
+func runGame(play gameRunner, left, right string, seed uint64, maxTicks int) (string, int) {
+	type score struct {
+		winner string
+		ticks  int
+	}
+	ch := make(chan score, 1)
+	go func() {
+		w, t := play(left, right, seed, maxTicks)
+		ch <- score{w, t}
+	}()
+	select {
+	case s := <-ch:
+		return s.winner, s.ticks
+	case <-time.After(gameTimeout):
+		return "平局", maxTicks
+	}
+}
+
+func playMatch(left, right string, seed uint64, maxTicks int) (string, int) {
+	m := sim.NewHeadlessMatchSeeded(seed)
+	m.SetSlot(0, left)
+	m.SetSlot(1, right)
+	m.Start()
+	winner, ticks := m.Play(maxTicks)
+	m.End()
+	return winner, ticks
+}

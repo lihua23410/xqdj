@@ -66,6 +66,7 @@ var assets embed.FS
 
 func init() {
 	p := unit.NewPack(KindEcho, assets)
+	p.RegisterAttackFan(unit.Spec{Kind: KindEchoArc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(90), ArcInner: 18, Look: unit.Look{Color: "#bff6ff", Overlay: true, Glow: true}})
 	p.Register(unit.Spec{
 		Kind:    KindEcho,
 		Role:    unit.RoleFighter,
@@ -122,6 +123,8 @@ func markStacks(o unit.Snapshot, kind string) int {
 
 // 回声本体：平时扫，扫满 10 层就换成穿人冲墙，窗口内不限次数。
 type 回声 struct {
+	fanSense unit.Sense
+
 	slot      int
 	lastTime  float64
 	charge    float64
@@ -136,6 +139,10 @@ type 回声 struct {
 }
 
 func (e *回声) Handle(ctx unit.Context, ev unit.Event) {
+	if sense, ok := ev.(unit.Sense); ok {
+		e.fanSense = sense
+	}
+	defer e.syncAttackFans(ctx)
 	switch v := ev.(type) {
 	case unit.IncomingDamage:
 		unit.ConfirmHit(ctx, v)
@@ -144,9 +151,9 @@ func (e *回声) Handle(ctx unit.Context, ev unit.Event) {
 		if e.mode != modeScan && !e.lockedAt(v.Time) {
 			e.exitDash(ctx)
 		}
-		if e.mode == modeDash && !e.struck && unit.EnemyTarget(v, e.slot) {
+	case unit.FanHit:
+		if v.Kind == KindEchoArc && e.mode == modeDash && !e.struck && e.lockedAt(v.Time) {
 			e.struck = true
-			ctx.Out <- unit.Damage{From: ctx.ID, To: v.Other.ID, Amount: ramDmg}
 			echoSound(ctx, "echo-ram", v.Other.X, v.Other.Y)
 		}
 	case unit.WallHit:
@@ -416,4 +423,20 @@ func (s *碎片) die(ctx unit.Context) {
 	}
 	s.done = true
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+}
+
+const KindEchoArc = "回声突进扇环"
+
+func (e *回声) syncAttackFans(ctx unit.Context) {
+	s := e.fanSense
+	if s.Self.ID == 0 {
+		return
+	}
+	until := 0.0
+	for _, lock := range e.locks {
+		if !lock.reset && lock.until > until {
+			until = lock.until
+		}
+	}
+	unit.SyncAttackFan(ctx, s, KindEchoArc, unit.FanAttack{Active: e.mode == modeDash && e.lockedAt(s.Time), Epoch: e.modeUntil, Until: until, Damage: ramDmg, Once: true})
 }

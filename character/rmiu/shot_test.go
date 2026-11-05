@@ -38,9 +38,11 @@ func hasDmgTo(cmds []unit.Cmd, to uint64) bool {
 }
 
 func TestShotHitsAllyAndDespawns(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	b := &缪弹{owner: 1, slot: 0}
-	ctx := unit.Context{ID: 9, Kind: KindMiuShot, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindMiuShot, Out: out}
 	b.Handle(ctx, unit.Sense{
 		Time:   1,
 		Self:   shotSelf(0, 0),
@@ -56,9 +58,11 @@ func TestShotHitsAllyAndDespawns(t *testing.T) {
 }
 
 func TestShotSweepsThroughAlly(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	b := &缪弹{owner: 1, slot: 0, booted: true, px: -40, py: 0}
-	ctx := unit.Context{ID: 9, Kind: KindMiuShot, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindMiuShot, Out: out}
 	b.Handle(ctx, unit.Sense{
 		Time:   1,
 		Self:   shotSelf(40, 0),
@@ -71,9 +75,11 @@ func TestShotSweepsThroughAlly(t *testing.T) {
 }
 
 func TestShotDoesNotHitShooter(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	b := &缪弹{owner: 1, slot: 0}
-	ctx := unit.Context{ID: 9, Kind: KindMiuShot, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindMiuShot, Out: out}
 	b.Handle(ctx, unit.Sense{
 		Time:   1,
 		Self:   shotSelf(0, 0),
@@ -86,9 +92,11 @@ func TestShotDoesNotHitShooter(t *testing.T) {
 }
 
 func TestShotHitsEnemyCollision(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	b := &缪弹{owner: 1, slot: 0}
-	ctx := unit.Context{ID: 9, Kind: KindMiuShot, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindMiuShot, Out: out}
 	b.Handle(ctx, unit.Collision{
 		Other: unit.Snapshot{ID: 8, Kind: "靶子", Role: unit.RoleFighter, Slot: 1},
 	})
@@ -99,9 +107,11 @@ func TestShotHitsEnemyCollision(t *testing.T) {
 }
 
 func TestBodyFiresWhenReady(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	r := &R缪{booted: true, speed: miuBaseSpeed, meleeReadyAt: 999, fireReadyAt: 0}
-	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.Sense{
 		Time:   12,
 		Self:   bodySelf(0, 0, 100, 170, 0),
@@ -119,8 +129,10 @@ func TestBodyFiresWhenReady(t *testing.T) {
 }
 
 func TestFireSkipsEmptyTargets(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	queue := 2
 	next := 0.0
 	ready := 0.0

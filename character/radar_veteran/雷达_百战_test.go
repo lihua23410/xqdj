@@ -9,7 +9,6 @@ import (
 )
 
 func TestSweepStartsNorth(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	a.Handle(unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}, unit.Sense{
@@ -27,7 +26,6 @@ func TestSweepStartsNorth(t *testing.T) {
 }
 
 func TestSweepQuarterTurnIsEast(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	a.Handle(unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}, unit.Sense{
@@ -42,7 +40,6 @@ func TestSweepQuarterTurnIsEast(t *testing.T) {
 }
 
 func TestNameMarksNearestAndHidesBeam(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	ctx := unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}
@@ -68,7 +65,6 @@ func TestNameMarksNearestAndHidesBeam(t *testing.T) {
 }
 
 func TestNameFiresBigAtCenter(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	ctx := unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}
@@ -96,21 +92,25 @@ func TestNameFiresBigAtCenter(t *testing.T) {
 	}
 }
 
-func TestNameFiresThreeSmallThenRestores(t *testing.T) {
-	clearArmWaits()
+func TestNameFiresSmallRoundsThenRestores(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	a := &百战{mode: modeSmall}
 	ctx := unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}
 	e := enemyAt(0, 80)
 	first := morphDur + nameGap
-	for _, t := range []float64{0, first, first + nameGap, first + 2*nameGap} {
+	a.Handle(ctx, unit.Sense{
+		Time: 0, Self: selfAt(0, 0), Nearby: []unit.Snapshot{e}, Field: unit.HexField(),
+	})
+	drain(out)
+	// 前 nameShots-1 轮只要推进时间，输出丢掉；最后一轮挂出小结并收炮。
+	for k := 0; k < nameShots-1; k++ {
 		a.Handle(ctx, unit.Sense{
-			Time: t, Self: selfAt(0, 0), Nearby: []unit.Snapshot{e}, Field: unit.HexField(),
+			Time: first + float64(k)*nameGap, Self: selfAt(0, 0), Nearby: []unit.Snapshot{e}, Field: unit.HexField(),
 		})
 		drain(out)
 	}
 	a.Handle(ctx, unit.Sense{
-		Time: first + 3*nameGap, Self: selfAt(0, 0), Nearby: []unit.Snapshot{e}, Field: unit.HexField(),
+		Time: first + float64(nameShots-1)*nameGap, Self: selfAt(0, 0), Nearby: []unit.Snapshot{e}, Field: unit.HexField(),
 	})
 	cmds := drain(out)
 	spawns := allSpawns(cmds)
@@ -145,7 +145,7 @@ func TestNameFiresThreeSmallThenRestores(t *testing.T) {
 		t.Fatal("mark should clear with the name")
 	}
 	a.Handle(ctx, unit.Sense{
-		Time: first + 3*nameGap + morphDur, Self: selfAt(0, 0), Field: unit.HexField(),
+		Time: first + float64(nameShots-1)*nameGap + morphDur, Self: selfAt(0, 0), Field: unit.HexField(),
 	})
 	back := drain(out)
 	if lastNamed(back, "beam") == nil || lastNamed(back, "beam").Amount <= 0 {
@@ -157,7 +157,6 @@ func TestNameFiresThreeSmallThenRestores(t *testing.T) {
 }
 
 func TestNameClearsWhenTargetGone(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	ctx := unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}
@@ -186,7 +185,6 @@ func TestNameClearsWhenTargetGone(t *testing.T) {
 }
 
 func TestNameLeavesZeroAim(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	e := enemyAt(0, 80)
@@ -204,7 +202,6 @@ func TestNameLeavesZeroAim(t *testing.T) {
 }
 
 func TestSweepNoDirectDamage(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	a.Handle(unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}, unit.Sense{
@@ -219,7 +216,6 @@ func TestSweepNoDirectDamage(t *testing.T) {
 }
 
 func TestNameDoesNotFireEarly(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	ctx := unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}
@@ -240,7 +236,6 @@ func TestNameDoesNotFireEarly(t *testing.T) {
 }
 
 func TestNameIgnoresOthersWhileHeld(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	ctx := unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}
@@ -264,7 +259,6 @@ func TestNameIgnoresOthersWhileHeld(t *testing.T) {
 }
 
 func TestWallClipsSweep(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	field := unit.HexField()
@@ -290,7 +284,6 @@ func TestWallClipsSweep(t *testing.T) {
 }
 
 func TestActorHardWallClipsSweep(t *testing.T) {
-	clearArmWaits()
 	out := make(chan unit.Cmd, 8)
 	a := &百战{mode: modeBig}
 	a.Handle(unit.Context{ID: 1, Kind: KindRadarVeteran, Out: out}, unit.Sense{
@@ -437,20 +430,6 @@ func shellAt(x, y float64, kind string, radius float64) unit.Snapshot {
 		ID: 9, Kind: kind, Role: unit.RoleHelper, Slot: 0,
 		X: x, Y: y, Radius: 1, Vision: radius + 80,
 	}
-}
-
-func clearArmWaits() {
-	armMu.Lock()
-	armWaits = nil
-	armMu.Unlock()
-}
-
-func drainArmWaits() []float64 {
-	armMu.Lock()
-	defer armMu.Unlock()
-	out := append([]float64(nil), armWaits...)
-	armWaits = nil
-	return out
 }
 
 func drain(out <-chan unit.Cmd) []unit.Cmd {

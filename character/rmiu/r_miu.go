@@ -7,7 +7,7 @@ import (
 	"embed"
 	"math"
 	"math/rand/v2"
-	"sync"
+
 	"xqdj/internal/unit"
 )
 
@@ -31,8 +31,8 @@ const (
 	miuVision    = 9999.0
 	miuColor     = "#f0f0f0"
 
-	miuDamage    = 5.0
-	miuMeleeCD   = 0.35
+	miuDamage    = 4.5
+	miuMeleeCD   = 0.40
 	miuMeleeGap  = 8.0 // 半径之和外的额外近战范围
 	miuMeleeSpan = 60.0
 	miuArcInner  = miuRadius - 1
@@ -51,10 +51,9 @@ const (
 	miuThrustCD    = 6.0
 	miuThrustDur   = 0.4
 
-	killBonusPer  = 100.0
+	killBonusPer  = 70.0
 	lowHPBoost    = 100.0
 	lowHPRatio    = 0.5
-	miuHealRatio  = 0.25 // 击杀缪后恢复自身已损血量的比例
 	dodgeSpeedDiv = 25.0
 	speedDivisor  = 20.0
 	miuSpawnCount = 5
@@ -67,28 +66,24 @@ const (
 )
 
 // 共享状态：击杀加速追踪
-var (
-	miuMu           sync.Mutex
-	miuBonus        = map[uint64]float64{} // 缪 ID → 累计加速值
-	miuLastAttacker = map[uint64]uint64{}  // 被攻击的缪 ID → 最后攻击者 ID
-	miuClaimed      = map[uint64]bool{}    // 已被认领击杀奖励的缪 ID
-)
 
-func resetMiuKillState() {
-	miuMu.Lock()
-	miuBonus = map[uint64]float64{}
-	miuLastAttacker = map[uint64]uint64{}
-	miuClaimed = map[uint64]bool{}
-	miuMu.Unlock()
+func resetMiuKillState(scope *unit.MatchState) {
+	shared := stateFor(scope)
+	shared.miuMu.Lock()
+	shared.miuBonus = map[uint64]float64{}
+	shared.miuLastAttacker = map[uint64]uint64{}
+	shared.miuClaimed = map[uint64]bool{}
+	shared.miuMu.Unlock()
 }
 
-func noteMiuHit(victim, from uint64, kind string) {
+func noteMiuHit(scope *unit.MatchState, victim, from uint64, kind string) {
 	if kind != KindMiu || victim == 0 || from == 0 {
 		return
 	}
-	miuMu.Lock()
-	miuLastAttacker[victim] = from
-	miuMu.Unlock()
+	shared := stateFor(scope)
+	shared.miuMu.Lock()
+	shared.miuLastAttacker[victim] = from
+	shared.miuMu.Unlock()
 }
 
 func lowHP(hp, maxHP float64) bool {
@@ -277,7 +272,7 @@ func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 			r.emitSwap(ctx, r.bestID, r.bestHP, r.bestX, r.bestY, r.bestVX, r.bestVY, bodyHP, r.bestMarks)
 			// 替身先接过本体血，再吃这一击（SetHP 负值会被引擎丢掉）
 			ctx.Out <- unit.Damage{From: ctx.ID, To: r.bestID, Amount: d.Amount}
-			noteMiuHit(r.bestID, ctx.ID, KindMiu)
+			noteMiuHit(ctx.State, r.bestID, ctx.ID, KindMiu)
 			r.skipSync = true
 			r.hasBest = false
 			return
@@ -296,7 +291,7 @@ func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 	rememberSpeeds(&r.seenSp, s)
 	if !r.booted {
 		r.booted = true
-		resetMiuKillState()
+		resetMiuKillState(ctx.State)
 		r.speed = miuBaseSpeed
 		r.spawnMinions(ctx, s)
 		r.meleeReadyAt = s.Time
@@ -312,9 +307,10 @@ func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 	claimMiuKill(ctx, s, &r.prevMiuIDs, &r.killBonus, r.vx, r.vy, s.Self.HP, s.Self.MaxHP)
 	hurt := lowHP(s.Self.HP, s.Self.MaxHP)
 	r.speed = miuMoveSpeed(r.killBonus, s.Self.HP, s.Self.MaxHP)
-	miuMu.Lock()
-	miuBonus[ctx.ID] = r.killBonus
-	miuMu.Unlock()
+	shared := stateFor(ctx.State)
+	shared.miuMu.Lock()
+	shared.miuBonus[ctx.ID] = r.killBonus
+	shared.miuMu.Unlock()
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: r.speed}
 	if hurt != r.wounded {
 		snapMoveSpeed(ctx, r.speed, r.vx, r.vy)
@@ -378,7 +374,7 @@ func (r *R缪) tickStarMiu(ctx unit.Context, s unit.Sense) {
 	}
 	r.starReadyAt = s.Time + starMiuCD
 	ctx.Out <- unit.Damage{From: ctx.ID, To: v.ID, Amount: starMiuDmg}
-	noteMiuHit(v.ID, ctx.ID, KindMiu)
+	noteMiuHit(ctx.State, v.ID, ctx.ID, KindMiu)
 	ctx.Out <- unit.FX{
 		Name: "scream", Kind: ctx.Kind,
 		X: s.Self.X, Y: s.Self.Y, Slot: s.Self.Slot,
@@ -441,7 +437,7 @@ func (r *R缪) moveAndMelee(ctx unit.Context, s unit.Sense) {
 				dmg += (sp - tsp) / speedDivisor
 			}
 			ctx.Out <- unit.Damage{From: ctx.ID, To: best.ID, Amount: dmg}
-			noteMiuHit(best.ID, ctx.ID, best.Kind)
+			noteMiuHit(ctx.State, best.ID, ctx.ID, best.Kind)
 			ctx.Out <- unit.FX{
 				Name: "miu-melee", Kind: ctx.Kind,
 				X: best.X, Y: best.Y, Slot: s.Self.Slot,
@@ -663,7 +659,7 @@ func (m *缪) Handle(ctx unit.Context, ev unit.Event) {
 		if tryMiuDodge(ctx, e, m.seenSp, m.x, m.y, m.slot, m.ensureRNG(ctx.Stream)) {
 			return
 		}
-		noteMiuHit(ctx.ID, e.From, KindMiu)
+		noteMiuHit(ctx.State, ctx.ID, e.From, KindMiu)
 		unit.ConfirmHit(ctx, e)
 	case unit.WallHit:
 		if m.thrusting {
@@ -698,9 +694,10 @@ func (m *缪) tick(ctx unit.Context, s unit.Sense) {
 
 	hurt := lowHP(s.Self.HP, s.Self.MaxHP)
 	m.speed = miuMoveSpeed(m.killBonus, s.Self.HP, s.Self.MaxHP)
-	miuMu.Lock()
-	miuBonus[ctx.ID] = m.killBonus
-	miuMu.Unlock()
+	shared := stateFor(ctx.State)
+	shared.miuMu.Lock()
+	shared.miuBonus[ctx.ID] = m.killBonus
+	shared.miuMu.Unlock()
 	ctx.Out <- unit.SetCruise{UnitID: ctx.ID, Speed: m.speed}
 	if hurt != m.wounded && !m.thrusting {
 		snapMoveSpeed(ctx, m.speed, m.vx, m.vy)
@@ -775,7 +772,7 @@ func (m *缪) tryMelee(ctx unit.Context, s unit.Sense, targets []unit.Snapshot) 
 	}
 	dmg := miuDamage + m.speedBonus(best)
 	ctx.Out <- unit.Damage{From: ctx.ID, To: best.ID, Amount: dmg}
-	noteMiuHit(best.ID, ctx.ID, best.Kind)
+	noteMiuHit(ctx.State, best.ID, ctx.ID, best.Kind)
 
 	ctx.Out <- unit.FX{
 		Name: "miu-melee", Kind: ctx.Kind,
@@ -985,7 +982,7 @@ func (m *缪) moveToward(ctx unit.Context, s unit.Sense, targets []unit.Snapshot
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx / n * m.speed, VY: dy / n * m.speed}
 }
 
-// claimMiuKill：谁打死缪（己方或敌方同类）谁领加速、继承死者加速，并恢复自身已损血量的一半。
+// claimMiuKill：谁打死缪（己方或敌方同类）谁领加速、继承死者加速。
 func claimMiuKill(ctx unit.Context, s unit.Sense, prev *map[uint64]bool, bonus *float64, vx, vy, hp, maxHP float64) {
 	currentIDs := map[uint64]bool{}
 	for i := range s.Nearby {
@@ -1000,20 +997,15 @@ func claimMiuKill(ctx unit.Context, s unit.Sense, prev *map[uint64]bool, bonus *
 			if currentIDs[id] {
 				continue
 			}
-			miuMu.Lock()
-			if !miuClaimed[id] && miuLastAttacker[id] == ctx.ID {
-				miuClaimed[id] = true
-				victimBonus := miuBonus[id]
-				miuMu.Unlock()
+			stateFor(ctx.State).miuMu.Lock()
+			if !stateFor(ctx.State).miuClaimed[id] && stateFor(ctx.State).miuLastAttacker[id] == ctx.ID {
+				stateFor(ctx.State).miuClaimed[id] = true
+				victimBonus := stateFor(ctx.State).miuBonus[id]
+				stateFor(ctx.State).miuMu.Unlock()
 
 				*bonus += killBonusPer + victimBonus
 				speed := miuMoveSpeed(*bonus, hp, maxHP)
 				snapMoveSpeed(ctx, speed, vx, vy)
-
-				// 击杀回血：恢复自身已损血量的一半（引擎自动夹上限并弹 +n 特效）
-				if maxHP > hp {
-					ctx.Out <- unit.Heal{UnitID: ctx.ID, Amount: (maxHP - hp) * miuHealRatio}
-				}
 
 				ctx.Out <- unit.FX{
 					Name: "miu-powerup", Kind: ctx.Kind,
@@ -1021,7 +1013,7 @@ func claimMiuKill(ctx unit.Context, s unit.Sense, prev *map[uint64]bool, bonus *
 					Amount: *bonus,
 				}
 			} else {
-				miuMu.Unlock()
+				stateFor(ctx.State).miuMu.Unlock()
 			}
 		}
 	}
@@ -1122,9 +1114,10 @@ func shotHits(x0, y0, x1, y1, sr, tx, ty, tr float64) bool {
 
 func (b *缪弹) hit(ctx unit.Context, target unit.Snapshot) {
 	dmg := miuShotDamage
-	miuMu.Lock()
-	ownerBonus := miuBonus[b.owner]
-	miuMu.Unlock()
+	shared := stateFor(ctx.State)
+	shared.miuMu.Lock()
+	ownerBonus := shared.miuBonus[b.owner]
+	shared.miuMu.Unlock()
 	ownerSpeed := miuBaseSpeed + ownerBonus
 	targetSpeed := math.Hypot(target.VX, target.VY)
 	if ownerSpeed > targetSpeed {
@@ -1134,7 +1127,7 @@ func (b *缪弹) hit(ctx unit.Context, target unit.Snapshot) {
 	ctx.Out <- unit.Damage{From: b.owner, To: target.ID, Amount: dmg}
 
 	if target.Kind == KindMiu {
-		noteMiuHit(target.ID, b.owner, target.Kind)
+		noteMiuHit(ctx.State, target.ID, b.owner, target.Kind)
 	}
 
 	ctx.Out <- unit.FX{

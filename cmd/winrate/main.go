@@ -4,11 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"xqdj/internal/sim"
@@ -29,15 +28,19 @@ type tally struct {
 
 func main() {
 	nGames := flag.Int("n", 100, "每组对战场次")
-	maxSec := flag.Float64("timeout", 90, "单场模拟超时秒数，超时计平")
+	maxSec := flag.Float64("timeout", 600, "单场模拟超时秒数，超时计平")
 	outPath := flag.String("o", "winrate.md", "输出文件")
-	jobs := flag.Int("j", runtime.NumCPU()*8, "同时进行的场次数")
-	only := flag.String("only", "", "只测该战斗机对其余所有球（不含自己打自己）")
+	jobs := flag.Int("j", runtime.NumCPU()*2, "同时进行的场次数")
+	only := flag.String("only", "", "只测该战斗机并写回全表（不含自己打自己）")
 	flag.Parse()
+	if *nGames < 1 {
+		fmt.Fprintln(os.Stderr, "每组场次 -n 必须大于 0")
+		os.Exit(1)
+	}
 
-	kinds := unit.FighterKinds()
-	if len(kinds) < 1 {
-		fmt.Fprintln(os.Stderr, "没有已注册的战斗机")
+	kinds := rankedKinds(unit.FighterKinds())
+	if len(kinds) < 2 {
+		fmt.Fprintln(os.Stderr, "没有足够的战斗机")
 		os.Exit(1)
 	}
 	if *only != "" {
@@ -61,7 +64,16 @@ func main() {
 		*jobs = 1
 	}
 
-	type pair struct{ a, b string }
+	var prior []pairResult
+	if *only != "" {
+		var err error
+		prior, err = readPrior(*outPath, kinds, *only, *nGames, *maxSec)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+
 	var pairs []pair
 	if *only != "" {
 		for _, k := range kinds {
@@ -78,73 +90,46 @@ func main() {
 		}
 	}
 
-	gate := make(chan struct{}, *jobs)
-	var done atomic.Int64
-	total := int64(len(pairs) * *nGames)
+	total := len(pairs) * *nGames
 	fmt.Fprintf(os.Stderr, "组合 %d，每组 %d 场，共 %d 场，并发 %d\n", len(pairs), *nGames, total, *jobs)
-
-	results := make([]pairResult, len(pairs))
-	var wgPairs sync.WaitGroup
 	t0 := time.Now()
-	for pi, p := range pairs {
-		wgPairs.Add(1)
-		go func(pi int, p pair) {
-			defer wgPairs.Done()
-			var wg sync.WaitGroup
-			wA := make([]int, *nGames)
-			wB := make([]int, *nGames)
-			wD := make([]int, *nGames)
-			wT := make([]int, *nGames)
-			for n := 0; n < *nGames; n++ {
-				wg.Add(1)
-				go func(n int) {
-					defer wg.Done()
-					gate <- struct{}{}
-					defer func() { <-gate }()
-					left, right := p.a, p.b
-					if n%2 == 1 {
-						left, right = p.b, p.a
-					}
-					seed := mixSeed(left, right, uint64(n)+1)
-					m := sim.NewMatchSeeded(seed)
-					m.SetSlot(0, left)
-					m.SetSlot(1, right)
-					m.Start()
-					winner, ticks := m.Play(maxTicks)
-					m.End()
-					if ticks >= maxTicks && winner == "平局" {
-						wT[n] = 1
-					}
-					switch {
-					case winner == "平局" || winner == "":
-						wD[n] = 1
-					case winner == p.a:
-						wA[n] = 1
-					case winner == p.b:
-						wB[n] = 1
-					default:
-						wD[n] = 1
-					}
-					done.Add(1)
-				}(n)
-			}
-			wg.Wait()
-			r := pairResult{a: p.a, b: p.b}
-			for n := 0; n < *nGames; n++ {
-				r.winsA += wA[n]
-				r.winsB += wB[n]
-				r.draws += wD[n]
-				r.timeout += wT[n]
-			}
-			results[pi] = r
-		}(pi, p)
+	bar := newProgress(os.Stderr, total)
+	// Ctrl-C 也要把滚动区还原，不然终端会卡在"只有上面几行能滚"的状态。
+	if bar.live {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, os.Interrupt)
+		go func() {
+			<-sig
+			bar.closeScreen()
+			os.Exit(130)
+		}()
 	}
-	wgPairs.Wait()
+	results, done := runPairs(pairs, *nGames, maxTicks, *jobs, playMatch, bar)
+	bar.finish()
 	elapsed := time.Since(t0)
-	fmt.Fprintf(os.Stderr, "打完 %d 场，用时 %s\n", done.Load(), elapsed.Round(time.Millisecond))
+	fmt.Fprintf(os.Stderr, "打完 %d 场，用时 %s\n", done, elapsed.Round(time.Millisecond))
 
-	text := render(kinds, results, *nGames, *maxSec, elapsed, *only)
-	if err := os.WriteFile(*outPath, []byte(text), 0o644); err != nil {
+	updated := ""
+	merged := results
+	if *only != "" {
+		var err error
+		merged, err = mergeLedger(kinds, *only, prior, results)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		updated = *only
+	} else {
+		var err error
+		merged, err = orientAll(kinds, results)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+
+	text := render(kinds, merged, *nGames, *maxSec, elapsed, *jobs, updated)
+	if err := writeReport(*outPath, text); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -162,59 +147,53 @@ func mixSeed(a, b string, n uint64) uint64 {
 	return h
 }
 
-func render(kinds []string, results []pairResult, nGames int, maxSec float64, elapsed time.Duration, only string) string {
-	byPair := map[[2]string]pairResult{}
-	solo := map[string]*tally{}
-	for _, k := range kinds {
-		solo[k] = &tally{}
-	}
-	for _, r := range results {
-		byPair[[2]string{r.a, r.b}] = r
-		solo[r.a].win += r.winsA
-		solo[r.a].lose += r.winsB
-		solo[r.a].draw += r.draws
-		solo[r.b].win += r.winsB
-		solo[r.b].lose += r.winsA
-		solo[r.b].draw += r.draws
-	}
+func render(kinds []string, results []pairResult, nGames int, maxSec float64, elapsed time.Duration, jobs int, updated string) string {
+	solo, byPair := tallies(kinds, results)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# 小球胜率\n\n")
 	fmt.Fprintf(&b, "- 时间：%s\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(&b, "- 每组对战：%d 场（左右槽各一半）\n", nGames)
 	fmt.Fprintf(&b, "- 超时：%.0f 秒模拟时间，超时计平\n", maxSec)
-	fmt.Fprintf(&b, "- 组合数：%d，用时：%s\n", len(results), elapsed.Round(time.Millisecond))
-	if only != "" {
-		fmt.Fprintf(&b, "- 范围：仅 %s vs 其余战斗机；其他球的单球胜率是对阵 %s 的成绩\n", only, only)
+	fmt.Fprintf(&b, "- 本次并发：%d 场\n", jobs)
+	fmt.Fprintf(&b, "- 事件处理：可靠投递、保留逐拍感知、阶段背压；场内角色仍异步\n")
+	fmt.Fprintf(&b, "- 组合数：%d，本次用时：%s\n", len(results), elapsed.Round(time.Millisecond))
+	if updated != "" {
+		fmt.Fprintf(&b, "- 上次增量：%s\n", updated)
 	}
 	fmt.Fprintf(&b, "\n")
 
 	fmt.Fprintf(&b, "## 单球胜率\n\n")
-	fmt.Fprintf(&b, "胜率 = 胜 /（胜+负+平）。胜平率 =（胜+平）/（胜+负+平）。不含自己打自己。\n\n")
-	fmt.Fprintf(&b, "| 战斗机 | 场次 | 胜 | 负 | 平 | 胜率 | 胜平率 |\n")
-	fmt.Fprintf(&b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	fmt.Fprintf(&b, "胜率 = 胜 /（胜+负），平不计入。胜平率 =（胜+平）/（胜+负+平）。积分 = 胜×2 + 平，负不计分。排名按积分，积分相同则并列，下一名跳号。不含自己打自己。\n")
+	fmt.Fprintf(&b, "t度按这个名次顺序切：先尽量均分成 t0、t1、t2，多出来的人从 t0 起每档多 1 人；每个大档再同样均分成上、中、下，多出来的人从上起每档多 1 人。人数不够的档留空，不占行。\n\n")
+	fmt.Fprintf(&b, "| 排名 | t度 | 战斗机 | 积分 | 场次 | 胜 | 负 | 平 | 胜率 | 胜平率 |\n")
+	fmt.Fprintf(&b, "| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	type row struct {
 		kind string
 		t    tally
 	}
 	var rows []row
 	for _, k := range kinds {
-		rows = append(rows, row{k, *solo[k]})
+		rows = append(rows, row{k, solo[k]})
 	}
 	sort.Slice(rows, func(i, j int) bool {
-		gi, gj := games(rows[i].t), games(rows[j].t)
-		ri, rj := rate(rows[i].t), rate(rows[j].t)
-		if ri != rj {
-			return ri > rj
+		pi, pj := points(rows[i].t), points(rows[j].t)
+		if pi != pj {
+			return pi > pj
 		}
-		if gi != gj {
-			return gi > gj
+		if rows[i].t.win != rows[j].t.win {
+			return rows[i].t.win > rows[j].t.win
 		}
 		return rows[i].kind < rows[j].kind
 	})
-	for _, r := range rows {
+	rank := 1
+	for i, r := range rows {
+		if i > 0 && points(r.t) != points(rows[i-1].t) {
+			rank = i + 1
+		}
 		g := games(r.t)
-		fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %s | %s |\n", r.kind, g, r.t.win, r.t.lose, r.t.draw, pct(rate(r.t)), pct(winDraw(r.t)))
+		fmt.Fprintf(&b, "| %d | %s | %s | %d | %d | %d | %d | %d | %s | %s |\n",
+			rank, tierOf(i, len(rows)), r.kind, points(r.t), g, r.t.win, r.t.lose, r.t.draw, pct(rate(r.t)), pct(winDraw(r.t)))
 	}
 
 	fmt.Fprintf(&b, "\n## 一对一胜率\n\n")
@@ -246,14 +225,91 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 	return b.String()
 }
 
+func tallies(kinds []string, results []pairResult) (map[string]tally, map[[2]string]pairResult) {
+	byPair := map[[2]string]pairResult{}
+	solo := map[string]tally{}
+	for _, k := range kinds {
+		solo[k] = tally{}
+	}
+	for _, r := range results {
+		byPair[[2]string{r.a, r.b}] = r
+		a := solo[r.a]
+		a.win += r.winsA
+		a.lose += r.winsB
+		a.draw += r.draws
+		solo[r.a] = a
+		b := solo[r.b]
+		b.win += r.winsB
+		b.lose += r.winsA
+		b.draw += r.draws
+		solo[r.b] = b
+	}
+	return solo, byPair
+}
+
 func games(t tally) int { return t.win + t.lose + t.draw }
 
+// spread 把 n 个人尽量均分成 k 档。不能整除时，靠前的档各多 1 人；不够分的档是 0。
+func spread(n, k int) []int {
+	sizes := make([]int, k)
+	if n <= 0 || k <= 0 {
+		return sizes
+	}
+	base, rem := n/k, n%k
+	for i := range sizes {
+		sizes[i] = base
+		if i < rem {
+			sizes[i]++
+		}
+	}
+	return sizes
+}
+
+// tierOf 按名次位置给出 t度。先均分 t0、t1、t2，再在该大档内均分上、中、下。
+func tierOf(index, n int) string {
+	if n <= 0 || index < 0 || index >= n {
+		return ""
+	}
+	passed := 0
+	for major, majorN := range spread(n, 3) {
+		if index >= passed+majorN {
+			passed += majorN
+			continue
+		}
+		local := index - passed
+		subPassed := 0
+		for sub, subN := range spread(majorN, 3) {
+			if local < subPassed+subN {
+				return fmt.Sprintf("t%d%s", major, []string{"上", "中", "下"}[sub])
+			}
+			subPassed += subN
+		}
+		return ""
+	}
+	return ""
+}
+
+func points(t tally) int { return t.win*2 + t.draw }
+
+// 靶子是沙包，胜率名册里当它不存在：不对打、不进总榜、不进矩阵、不进明细。
+const benchKind = "靶子"
+
+func rankedKinds(all []string) []string {
+	out := make([]string, 0, len(all))
+	for _, k := range all {
+		if k != benchKind {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
 func rate(t tally) float64 {
-	g := games(t)
-	if g == 0 {
+	decided := t.win + t.lose
+	if decided == 0 {
 		return 0
 	}
-	return float64(t.win) / float64(g)
+	return float64(t.win) / float64(decided)
 }
 
 func winDraw(t tally) float64 {

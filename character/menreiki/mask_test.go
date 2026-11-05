@@ -6,10 +6,70 @@ import (
 	"xqdj/internal/unit"
 )
 
+func TestMaskHitRateLimitedPerTarget(t *testing.T) {
+	sc := &unit.MatchState{}
+	if !maskHitReady(sc, 1, 7, 5) {
+		t.Fatal("第一下该放行")
+	}
+	for _, now := range []float64{5.1, 5.2, 5.39} {
+		if maskHitReady(sc, 1, 7, now) {
+			t.Fatalf("%v 还在 CD 里，不该打中同一目标", now)
+		}
+	}
+	if !maskHitReady(sc, 1, 7, 5.4) {
+		t.Fatalf("过了 %v 秒该再打一下", maskHitCD)
+	}
+	if !maskHitReady(sc, 1, 8, 5.45) {
+		t.Fatal("另一个目标各算各的 CD")
+	}
+}
+
+func TestMaskSnapsBackWhenOwnerLeaves(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 9, Kind: KindMenreikiMask1, Out: out}
+	a := &面具{owner: 1}
+	self := unit.Snapshot{
+		ID: 9, Kind: KindMenreikiMask1, Role: unit.RoleHelper, OwnerID: 1, Slot: 0,
+		X: 40, Y: 0, Radius: maskRadius,
+	}
+	owner := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 120, Y: 0, Radius: menreikiRadius,
+	}
+	a.Handle(ctx, unit.Sense{Time: 1, Self: self, Nearby: []unit.Snapshot{owner}})
+	var tp *unit.Teleport
+	for _, c := range drain(out) {
+		if v, ok := c.(unit.Teleport); ok {
+			tp = &v
+		}
+	}
+	if tp == nil {
+		t.Fatal("主人甩开 80，面具该自己追回来")
+	}
+	want := owner.Radius + maskRadius + maskOrbitPad
+	if d := math.Hypot(tp.X-owner.X, tp.Y-owner.Y); math.Abs(d-want) > 1e-6 {
+		t.Fatalf("追回来该落在轨道圈上：d=%v want=%v", d, want)
+	}
+	if tp.X >= owner.X {
+		t.Fatalf("该留在原来那一侧被拉回轨道，tp=%v", tp)
+	}
+
+	// 已经在轨道上就什么都别发，免得和主人每帧的 Teleport 打架。
+	self.X = owner.X + want
+	a.Handle(ctx, unit.Sense{Time: 1.1, Self: self, Nearby: []unit.Snapshot{owner}})
+	for _, c := range drain(out) {
+		if _, ok := c.(unit.Teleport); ok {
+			t.Fatalf("没掉队不该自发瞬移: %v", c)
+		}
+	}
+}
+
 func TestGrantMarksAllEnemyFighters(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	m := &面灵气{hook: 1}
-	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMenreiki, Out: out}
 	self := unit.Snapshot{
 		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
 		X: 0, Y: 0, Radius: menreikiRadius,
@@ -27,9 +87,11 @@ func TestGrantMarksAllEnemyFighters(t *testing.T) {
 }
 
 func TestCollectPaysEachEnemy(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 64)
 	m := &面灵气{hook: 2, marked: true}
-	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMenreiki, Out: out}
 	self := unit.Snapshot{
 		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
 		X: 0, Y: 0, Radius: menreikiRadius,
@@ -53,9 +115,11 @@ func TestCollectPaysEachEnemy(t *testing.T) {
 }
 
 func TestCollectPaysCompletingColorNotCurrent(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 64)
 	m := &面灵气{hook: 2, marked: true}
-	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMenreiki, Out: out}
 	self := unit.Snapshot{
 		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
 		X: 0, Y: 0, Radius: menreikiRadius,
@@ -82,9 +146,11 @@ func TestCollectPaysCompletingColorNotCurrent(t *testing.T) {
 }
 
 func TestCollectDoesNotRepayWhileComplete(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 64)
 	m := &面灵气{hook: 2, marked: true}
-	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMenreiki, Out: out}
 	self := unit.Snapshot{
 		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
 		X: 0, Y: 0, Radius: menreikiRadius,
@@ -109,9 +175,11 @@ func TestCollectDoesNotRepayWhileComplete(t *testing.T) {
 }
 
 func TestShareStaysOnCollectorNotSeek(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 64)
 	m := &面灵气{hook: 2, marked: true}
-	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMenreiki, Out: out}
 	self := unit.Snapshot{
 		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
 		X: 0, Y: 0, Radius: menreikiRadius,
@@ -137,9 +205,11 @@ func TestShareStaysOnCollectorNotSeek(t *testing.T) {
 }
 
 func TestMaskOrbitHitsMortalMinion(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	m := &面灵气{hook: 1}
-	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMenreiki, Out: out}
 	orbit := menreikiRadius + maskRadius + maskOrbitPad
 	self := unit.Snapshot{
 		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
@@ -177,32 +247,36 @@ func hasDamageTo(cmds []unit.Cmd, to uint64) bool {
 }
 
 func TestMaskHitGateIndependent(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	const owner uint64 = 7
-	if spendMask(owner, 0) {
+	if spendMask(matchState, owner, 0) {
 		t.Fatal("unarmed should not hit")
 	}
-	armMask(owner, 0)
-	if !spendMask(owner, 0) {
+	armMask(matchState, owner, 0)
+	if !spendMask(matchState, owner, 0) {
 		t.Fatal("armed mask 0 should hit")
 	}
-	if spendMask(owner, 0) {
+	if spendMask(matchState, owner, 0) {
 		t.Fatal("spent mask 0 should not hit again")
 	}
-	if spendMask(owner, 1) {
+	if spendMask(matchState, owner, 1) {
 		t.Fatal("mask 1 should stay independent")
 	}
-	armAllMasks(owner)
+	armAllMasks(matchState, owner)
 	for i := 0; i < 3; i++ {
-		if !spendMask(owner, i) {
+		if !spendMask(matchState, owner, i) {
 			t.Fatalf("arm all: mask %d", i)
 		}
 	}
 }
 
 func TestCyanCollectPinsWithoutWritingCruise(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 64)
 	m := &面灵气{hook: 2}
-	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMenreiki, Out: out}
 	self := unit.Snapshot{
 		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
 		X: 0, Y: 0, Radius: menreikiRadius,
@@ -247,9 +321,11 @@ func TestCyanCollectPinsWithoutWritingCruise(t *testing.T) {
 }
 
 func TestCyanLostTargetClearsPin(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 64)
 	m := &面灵气{hook: 2}
-	ctx := unit.Context{ID: 1, Kind: KindMenreiki, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMenreiki, Out: out}
 	self := unit.Snapshot{
 		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
 		X: 0, Y: 0, Radius: menreikiRadius,

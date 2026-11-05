@@ -35,9 +35,11 @@ func foe(id uint64, x, y float64) unit.Snapshot {
 }
 
 func TestMeleeSpawnsRangeArc(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	m := meleeMiu()
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.Sense{Time: 1, Self: miuSelf()})
 	found := false
 	for _, c := range drain(out) {
@@ -71,9 +73,11 @@ func TestFindTargetsIgnoresTeammateBody(t *testing.T) {
 }
 
 func TestMeleeHitsFront(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	m := meleeMiu()
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.Sense{Time: 1, Self: miuSelf(), Nearby: []unit.Snapshot{foe(2, 30, 0)}})
 	if !hasDmgTo(drain(out), 2) {
 		t.Fatal("front of 60° dagger fan should hit")
@@ -81,9 +85,11 @@ func TestMeleeHitsFront(t *testing.T) {
 }
 
 func TestMeleeMissesBack(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	m := meleeMiu()
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.Sense{Time: 1, Self: miuSelf(), Nearby: []unit.Snapshot{foe(3, -30, 0)}})
 	if hasDmgTo(drain(out), 3) {
 		t.Fatal("behind should not take melee")
@@ -91,9 +97,11 @@ func TestMeleeMissesBack(t *testing.T) {
 }
 
 func TestMeleeMissesSideOutsideFan(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	m := meleeMiu()
-	ctx := unit.Context{ID: 10, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.Sense{Time: 1, Self: miuSelf(), Nearby: []unit.Snapshot{foe(4, 0, 30)}})
 	if hasDmgTo(drain(out), 4) {
 		t.Fatal("90° is outside 60° dagger fan")

@@ -7,7 +7,7 @@ import (
 	"xqdj/internal/unit"
 )
 
-func TestDamageStartsFiveSecondInvulnerableDraw(t *testing.T) {
+func TestDamageStartsFourSecondHalfDamageDraw(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	m := &slotMachine{rng: unit.NewRNG(1)}
 	ctx := unit.Context{ID: 1, Kind: KindSlot, Out: out}
@@ -16,15 +16,15 @@ func TestDamageStartsFiveSecondInvulnerableDraw(t *testing.T) {
 	if !hasConfirm(cmds, 7) {
 		t.Fatal("triggering damage should still be confirmed")
 	}
-	if !m.drawing || m.drawUntil != 6 {
-		t.Fatalf("drawing=%v until=%v, want five seconds", m.drawing, m.drawUntil)
+	if !m.drawing || m.drawUntil != 5 {
+		t.Fatalf("drawing=%v until=%v, want four seconds", m.drawing, m.drawUntil)
 	}
 	if !hasFX(cmds, "slot-draw") {
 		t.Fatal("slot-draw FX missing")
 	}
 	m.Handle(ctx, unit.IncomingDamage{Token: 8, From: 2, Amount: 10, Time: 2})
-	if !hasBlock(drain(out), 8) {
-		t.Fatal("damage during draw should be blocked")
+	if !hasConfirmAmount(drain(out), 8, 5) {
+		t.Fatal("damage during draw should be reduced by half")
 	}
 }
 
@@ -155,6 +155,14 @@ func hasConfirm(cmds []unit.Cmd, token uint64) bool {
 	return false
 }
 
+func hasConfirmAmount(cmds []unit.Cmd, token uint64, amount float64) bool {
+	for _, cmd := range cmds {
+		if c, ok := cmd.(unit.ConfirmDamage); ok && c.Token == token && math.Abs(c.Amount-amount) < 1e-9 {
+			return true
+		}
+	}
+	return false
+}
 func hasBlock(cmds []unit.Cmd, token uint64) bool {
 	for _, cmd := range cmds {
 		if c, ok := cmd.(unit.BlockDamage); ok && c.Token == token {

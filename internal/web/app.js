@@ -106,6 +106,21 @@ function registerShot(name, fn) {
   window.shotFX[base][name] = fn;
 }
 
+const unitPaintHooks = [];
+
+function registerUnitPaint(fn) {
+  if (typeof fn !== "function") return;
+  unitPaintHooks.push(fn);
+}
+
+function unitPaintColor(u, units) {
+  for (const fn of unitPaintHooks) {
+    const color = fn(u, units);
+    if (typeof color === "string" && color) return color;
+  }
+  return "";
+}
+
 const factions = [];
 const factionById = {};
 
@@ -272,6 +287,7 @@ window.arena = {
   burst,
   spawnGhostFrom,
   registerShot,
+  registerUnitPaint,
   registerFactions,
   registerOwnHurt,
   registerPresentation(type, player) {
@@ -536,7 +552,9 @@ function spawnGhostFrom(el, kind, layer, extraClass = "") {
   g.className = `ghost${extraClass ? ` ${extraClass}` : ""}`;
     if (el.classList.contains("semi")) g.classList.add("semi");
     if (el.classList.contains("glow")) g.classList.add("glow");
-  g.style.setProperty("--kind", kindColor(kind));
+  const paint = el.dataset.unitPaint || "";
+  g.style.setProperty("--kind", paint || kindColor(kind));
+  if (paint) g.style.color = paint;
   g.style.setProperty("--face-ang", el.style.getPropertyValue("--face-ang") || "0rad");
   g.style.width = el.style.width;
   g.style.height = el.style.height;
@@ -700,8 +718,8 @@ const overEl = document.getElementById("over");
 const wallsEl = document.getElementById("walls");
 const guidesEl = document.getElementById("guides");
 const banner = document.getElementById("banner");
-const kinds0 = document.getElementById("kinds-0");
-const kinds1 = document.getElementById("kinds-1");
+const kindGrid = document.getElementById("kind-grid");
+const kindSearch = document.getElementById("kind-search");
 const fieldsEl = document.getElementById("fields");
 const teamPage = document.body.dataset.page === "team";
 
@@ -1059,99 +1077,224 @@ for (const id of ["side-0", "side-1"]) {
 }
 
 let lobbyKey = "";
+let fieldNamesKey = "";
+let gridKindsKey = null;
+let seatsKey = "";
+let pickSlot = 0;
+// null follows the next empty seat; a number keeps a filled seat selected for replacement.
+let pickSeat = null;
+
+function targetSeat() {
+  if (!teamPage) return 0;
+  const names = sideList(pickSlot);
+  return pickSeat === null ? Math.min(names.length, 2) : pickSeat;
+}
+
+function chooseSeat(slot, index) {
+  pickSlot = slot;
+  pickSeat = index;
+  renderLobby();
+}
+
+function searchName(name) {
+  return name.normalize("NFKC").toLocaleLowerCase().replace(/[\s_()-]/g, "");
+}
+
+if (kindSearch) kindSearch.addEventListener("input", renderLobby);
+const clearSearch = document.getElementById("clear-search");
+if (clearSearch) clearSearch.onclick = () => {
+  kindSearch.value = "";
+  renderLobby();
+  kindSearch.focus();
+};
+
+function pickPortrait(kind) {
+  const portrait = document.createElement("span");
+  portrait.className = "pick-portrait";
+  portrait.setAttribute("aria-hidden", "true");
+  paintKind(portrait, kind);
+  const ball = document.createElement("span");
+  ball.className = "ball";
+  // Static skins only: lobby previews must not start combat effects, timers or audio.
+  applyLookFX(ball, kind);
+  portrait.appendChild(ball);
+  return portrait;
+}
 
 function paintFields(fields) {
   if (!fieldsEl) return;
-  fieldsEl.innerHTML = "";
-  for (const name of fields) {
-    const b = document.createElement("button");
-    b.textContent = name;
-    b.type = "button";
-    if ((state.field || "") === name) b.classList.add("active");
-    b.onclick = () => send({ type: "field", field: name });
-    fieldsEl.appendChild(b);
+  const key = fields.join("\0");
+  if (fieldNamesKey !== key) {
+    fieldNamesKey = key;
+    fieldsEl.replaceChildren();
+    for (const name of fields) {
+      const b = document.createElement("button");
+      b.textContent = name;
+      b.type = "button";
+      b.dataset.field = name;
+      b.onclick = () => send({ type: "field", field: name });
+      fieldsEl.appendChild(b);
+    }
+  }
+  for (const b of fieldsEl.children) {
+    const active = state.field === b.dataset.field;
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-pressed", String(active));
   }
 }
 
 function renderLobby() {
+  if (pickSeat !== null && pickSeat >= sideList(pickSlot).length) pickSeat = null;
   const kinds = state.kinds || [];
   const fields = state.fields || [];
-  const key = `${JSON.stringify(state.slots || [])}\n${kinds.join("\0")}\n${state.field || ""}\n${fields.join("\0")}`;
+  const query = kindSearch ? kindSearch.value : "";
+  const key = JSON.stringify([state.slots, kinds, state.field, fields, pickSlot, pickSeat, query]);
   if (key === lobbyKey) {
     return;
   }
   lobbyKey = key;
   paintFields(fields);
-  paintKindGrids(kinds);
-  if (teamPage) paintRosters();
+  paintKindGrid(kinds, query);
+  paintRosters();
+  const edge = pickSlot === 0 ? "左边" : "右边";
+  const seat = teamPage ? `第 ${targetSeat() + 1} 位` : "";
+  const action = sideList(pickSlot)[targetSeat()] ? "更换" : "加入";
+  document.getElementById("pick-target").textContent = `正在为${edge}${seat}选人 · 点击名册${action}`;
+  document.getElementById("launch-field").textContent = `${teamPage ? "团队赛" : "单挑"} · ${state.field || "选择场地"}`;
+  const left = sideList(0).join("、") || "待选";
+  const right = sideList(1).join("、") || "待选";
+  const summary = document.getElementById("launch-lineup");
+  summary.textContent = `左：${left}  /  右：${right}`;
+  summary.title = summary.textContent;
   updateStartEnabled();
 }
 
-function paintKindGrids(kinds) {
-  for (const [el, slot] of [
-    [kinds0, 0],
-    [kinds1, 1],
-  ]) {
-    if (!el) continue;
-    el.innerHTML = "";
-    const names = sideList(slot);
-    const current = names[0] || "";
-    const full = teamPage && names.length >= 3;
-    for (const kind of kinds) {
+function paintKindGrid(kinds, query) {
+  if (!kindGrid) return;
+  const needle = searchName(query);
+  const filtered = kinds.filter((kind) => searchName(kind).includes(needle));
+  const key = filtered.join("\0");
+  if (key !== gridKindsKey) {
+    gridKindsKey = key;
+    kindGrid.replaceChildren();
+    for (const kind of filtered) {
       const b = document.createElement("button");
-      b.textContent = kind;
+      b.className = "kind-card";
       b.type = "button";
-      b.dataset.slot = String(slot);
+      b.dataset.kind = kind;
       paintKind(b, kind);
-      if (!teamPage && current === kind) b.classList.add("active");
-      if (full) b.disabled = true;
+      const name = document.createElement("span");
+      name.className = "kind-card-name";
+      name.textContent = kind;
+      const membership = document.createElement("span");
+      membership.className = "kind-membership";
+      membership.setAttribute("aria-hidden", "true");
+      b.append(pickPortrait(kind), name, membership);
       b.onclick = () => {
-        if (teamPage && sideList(slot).length >= 3) return;
-        send({ type: "select", slot, kind });
+        const index = targetSeat();
+        const message = { type: "select", slot: pickSlot, kind };
+        if (teamPage && index < sideList(pickSlot).length) message.index = index;
+        send(message);
       };
-      el.appendChild(b);
-    }
-    const slotRoot = el.closest(".slot");
-    if (slotRoot) {
-      const accent = teamPage ? names[names.length - 1] || "" : current;
-      paintKind(slotRoot, accent);
+      kindGrid.appendChild(b);
     }
   }
+  for (const b of kindGrid.children) {
+    const kind = b.dataset.kind;
+    const seats = [];
+    for (const slot of [0, 1]) {
+      sideList(slot).forEach((name, index) => {
+        if (name === kind) seats.push(`${slot === 0 ? "左" : "右"}${teamPage ? index + 1 : ""}`);
+      });
+    }
+    const current = sideList(pickSlot)[targetSeat()] === kind;
+    b.setAttribute("aria-pressed", String(current));
+    b.setAttribute("aria-label", `${kind}${seats.length ? `，已选：${seats.join("、")}` : ""}`);
+    b.classList.toggle("is-picked", seats.length > 0);
+    b.querySelector(".kind-membership").textContent = seats.length ? `${seats.join(" · ")} 已选` : "";
+  }
+  document.getElementById("kind-count").textContent = needle ? `${filtered.length} / ${kinds.length} 只` : `${kinds.length} 只`;
+  document.getElementById("pick-empty").classList.toggle("hidden", filtered.length > 0);
+  clearSearch.classList.toggle("hidden", !query);
 }
 
 function paintRosters() {
+  const key = JSON.stringify([state.slots, pickSlot, targetSeat()]);
+  if (seatsKey === key) return;
+  seatsKey = key;
+  const focusedId = document.activeElement && document.activeElement.id;
   for (const slot of [0, 1]) {
-    const host = document.getElementById(`roster-list-${slot}`);
+    const host = document.getElementById(`pick-seats-${slot}`);
     if (!host) continue;
-    host.innerHTML = "";
+    host.replaceChildren();
     const names = sideList(slot);
-    const head = host.previousElementSibling;
-    if (head && head.tagName === "H2") {
-      head.textContent = slot === 0 ? `左边 ${names.length}/3` : `右边 ${names.length}/3`;
-    }
-    if (!names.length) {
-      const empty = document.createElement("p");
-      empty.className = "roster-empty";
-      empty.textContent = "点击角色加入";
-      host.appendChild(empty);
-      continue;
-    }
-    names.forEach((kind, index) => {
+    const edge = slot === 0 ? "左边" : "右边";
+    const capacity = teamPage ? 3 : 1;
+    host.closest(".pick-side").classList.toggle("is-target", slot === pickSlot);
+    document.getElementById(`pick-count-${slot}`).textContent = `${names.length} / ${capacity}`;
+    for (let index = 0; index < capacity; index++) {
+      const kind = names[index] || "";
+      const selected = slot === pickSlot && index === targetSeat();
+      const wrap = document.createElement("div");
+      wrap.className = "pick-seat";
       const b = document.createElement("button");
+      b.id = `pick-seat-${slot}-${index}`;
       b.type = "button";
-      b.textContent = kind;
-      paintKind(b, kind);
-      b.onclick = () => send({ type: "select", slot, index, kind: "" });
-      host.appendChild(b);
-    });
+      b.className = "pick-seat-button";
+      b.classList.toggle("is-empty", !kind);
+      b.disabled = index > names.length;
+      b.setAttribute("aria-pressed", String(selected));
+      b.setAttribute("aria-label", `${edge}第 ${index + 1} 位，${kind || "空位"}，${kind ? "点击更换" : "点击选人"}`);
+      const number = document.createElement("span");
+      number.className = "pick-seat-number";
+      number.textContent = `0${index + 1}`;
+      const name = document.createElement("span");
+      name.className = "pick-seat-name";
+      name.textContent = kind || "选择战斗机";
+      const hint = document.createElement("span");
+      hint.className = "pick-seat-hint";
+      hint.textContent = selected ? "正在选人" : kind ? "点击更换" : index > names.length ? "等待前一位" : "点击添加";
+      let portrait;
+      if (kind) portrait = pickPortrait(kind);
+      else {
+        portrait = document.createElement("span");
+        portrait.className = "pick-add";
+        portrait.textContent = "+";
+        portrait.setAttribute("aria-hidden", "true");
+      }
+      b.append(number, portrait, name, hint);
+      b.onclick = () => chooseSeat(slot, kind ? index : null);
+      wrap.appendChild(b);
+      if (teamPage && kind) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.id = `pick-remove-${slot}-${index}`;
+        remove.className = "pick-remove";
+        remove.textContent = "×";
+        remove.setAttribute("aria-label", `移除${edge}第 ${index + 1} 位${kind}`);
+        remove.onclick = () => {
+          if (pickSlot === slot && pickSeat !== null) {
+            if (pickSeat === index) pickSeat = null;
+            else if (pickSeat > index) pickSeat--;
+          }
+          send({ type: "select", slot, index, kind: "" });
+        };
+        wrap.appendChild(remove);
+      }
+      host.appendChild(wrap);
+    }
+  }
+  if (focusedId && focusedId.startsWith("pick-seat-")) {
+    document.getElementById(focusedId)?.focus({ preventScroll: true });
   }
 }
 
 function updateStartEnabled() {
   const btn = document.getElementById("btn-start");
   if (!btn) return;
-  const ready = !teamPage || (sideList(0).length > 0 && sideList(1).length > 0);
+  const ready = sideList(0).length > 0 && sideList(1).length > 0;
   btn.disabled = !ready;
+  btn.title = ready ? "开始当前对局" : "请为左右两边各选至少一只战斗机";
 }
 
 function placeSeg(el, x1, y1, x2, y2, kind) {
@@ -1703,6 +1846,9 @@ function renderArena() {
     el.classList.toggle("helper", u.role === "helper");
     const oldCut = el.querySelector(".cut");
     if (oldCut) oldCut.remove();
+    const paint = unitPaintColor(u, state.units || []);
+    if (paint) el.dataset.unitPaint = paint;
+    else delete el.dataset.unitPaint;
     el.style.setProperty("--kind", kindColor(u.kind));
     applyLookFX(el, u.kind);
     const speed = Math.hypot(u.vx || 0, u.vy || 0);
@@ -1864,10 +2010,12 @@ function renderArena() {
 let wasLobby = true;
 
 function releaseLobby() {
-  for (const id of ["roster-list-0", "roster-list-1", "kinds-0", "kinds-1"]) {
+  for (const id of ["pick-seats-0", "pick-seats-1", "kind-grid"]) {
     const el = document.getElementById(id);
     if (el) el.replaceChildren();
   }
+  gridKindsKey = null;
+  seatsKey = "";
 }
 
 function render() {

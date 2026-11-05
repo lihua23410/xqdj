@@ -5,7 +5,6 @@ package 中转站
 import (
 	"embed"
 	"math"
-	"sync"
 
 	"xqdj/internal/unit"
 )
@@ -80,7 +79,7 @@ func (a *中转站) Handle(ctx unit.Context, ev unit.Event) {
 	if !a.booted {
 		a.booted = true
 		a.nextDrop = s.Time
-		clearLive(s.Self.Slot)
+		clearLive(ctx.State, s.Self.Slot)
 	}
 	if s.Time+1e-9 >= a.nextDrop {
 		a.nextDrop += dropGap
@@ -133,7 +132,7 @@ func catch(ctx unit.Context, s unit.Sense, owner uint64, slot int) bool {
 		if math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) > s.Self.Radius+o.Radius {
 			continue
 		}
-		sender, tr := takeShot(*o)
+		sender, tr := takeShot(ctx.State, *o)
 		if tr == nil {
 			tr = newTrack()
 		}
@@ -147,7 +146,7 @@ func catch(ctx unit.Context, s unit.Sense, owner uint64, slot int) bool {
 }
 
 func pass(ctx unit.Context, s unit.Sense, owner uint64, slot int, sender uint64, tr *hopTrack) {
-	if live(slot) >= shotCap {
+	if live(ctx.State, slot) >= shotCap {
 		return
 	}
 	target := choose(s.Self, s.Nearby, owner, sender, tr)
@@ -167,8 +166,8 @@ func pass(ctx unit.Context, s unit.Sense, owner uint64, slot int, sender uint64,
 	x := s.Self.X + ux*place
 	y := s.Self.Y + uy*place
 	vx, vy := ux*shotSpeed, uy*shotSpeed
-	addLive(slot)
-	queuePass(passInfo{sender: s.Self.ID, target: target.ID, x: x, y: y, vx: vx, vy: vy, track: tr, slot: slot})
+	addLive(ctx.State, slot)
+	queuePass(ctx.State, passInfo{sender: s.Self.ID, target: target.ID, x: x, y: y, vx: vx, vy: vy, track: tr, slot: slot})
 	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindRelayShot,
 		X:       x,
@@ -280,77 +279,79 @@ type passInfo struct {
 	slot   int
 }
 
-var (
-	passMu      sync.Mutex
-	passPending []passInfo
-	liveShots   map[int]int
-)
-
-func resetPass() {
-	passMu.Lock()
-	passPending = nil
-	liveShots = nil
-	passMu.Unlock()
+func resetPass(scope *unit.MatchState) {
+	shared := stateFor(scope)
+	shared.passMu.Lock()
+	shared.passPending = nil
+	shared.liveShots = nil
+	shared.passMu.Unlock()
 }
 
-func live(slot int) int {
-	passMu.Lock()
-	defer passMu.Unlock()
-	if liveShots == nil {
+func live(scope *unit.MatchState, slot int) int {
+	shared := stateFor(scope)
+	shared.passMu.Lock()
+	defer shared.passMu.Unlock()
+	if shared.liveShots == nil {
 		return 0
 	}
-	return liveShots[slot]
+	return shared.liveShots[slot]
 }
 
-func addLive(slot int) {
-	passMu.Lock()
-	defer passMu.Unlock()
-	if liveShots == nil {
-		liveShots = map[int]int{}
+func addLive(scope *unit.MatchState, slot int) {
+	shared := stateFor(scope)
+	shared.passMu.Lock()
+	defer shared.passMu.Unlock()
+	if shared.liveShots == nil {
+		shared.liveShots = map[int]int{}
 	}
-	liveShots[slot]++
+	shared.liveShots[slot]++
 }
 
-func dropLive(slot int) {
-	passMu.Lock()
-	defer passMu.Unlock()
-	if liveShots == nil {
+func dropLive(scope *unit.MatchState, slot int) {
+	shared := stateFor(scope)
+	shared.passMu.Lock()
+	defer shared.passMu.Unlock()
+	if shared.liveShots == nil {
 		return
 	}
-	if liveShots[slot] > 0 {
-		liveShots[slot]--
+	if shared.liveShots[slot] > 0 {
+		shared.liveShots[slot]--
 	}
 }
 
-func clearLive(slot int) {
-	passMu.Lock()
-	defer passMu.Unlock()
-	if liveShots != nil {
-		delete(liveShots, slot)
+func clearLive(scope *unit.MatchState, slot int) {
+	shared := stateFor(scope)
+	shared.passMu.Lock()
+	defer shared.passMu.Unlock()
+	if shared.liveShots != nil {
+		delete(shared.liveShots, slot)
 	}
 }
 
-func setLive(slot, n int) {
-	passMu.Lock()
-	defer passMu.Unlock()
-	if liveShots == nil {
-		liveShots = map[int]int{}
+func setLive(scope *unit.MatchState, slot, n int) {
+	shared := stateFor(scope)
+	shared.passMu.Lock()
+	defer shared.passMu.Unlock()
+	if shared.liveShots == nil {
+		shared.liveShots = map[int]int{}
 	}
-	liveShots[slot] = n
+	shared.liveShots[slot] = n
 }
 
-func queuePass(p passInfo) {
-	passMu.Lock()
-	passPending = append(passPending, p)
-	passMu.Unlock()
+func queuePass(scope *unit.MatchState, p passInfo) {
+	shared := stateFor(scope)
+	shared.passMu.Lock()
+	shared.passPending = append(shared.passPending, p)
+	shared.passMu.Unlock()
 }
 
-func takeShot(b unit.Snapshot) (uint64, *hopTrack) {
-	passMu.Lock()
-	defer passMu.Unlock()
+func takeShot(scope *unit.MatchState, b unit.Snapshot) (uint64, *hopTrack) {
+	shared := stateFor(scope)
+	shared.passMu.Lock()
+	defer shared.passMu.Unlock()
 	best := -1
 	bestD := math.MaxFloat64
-	for i, p := range passPending {
+	for i, p := range shared.passPending {
 		if p.target != 0 && b.OwnerID != 0 && p.target != b.OwnerID {
 			continue
 		}
@@ -363,20 +364,21 @@ func takeShot(b unit.Snapshot) (uint64, *hopTrack) {
 	if best < 0 {
 		return 0, nil
 	}
-	p := passPending[best]
-	passPending = append(passPending[:best], passPending[best+1:]...)
-	if liveShots != nil && liveShots[p.slot] > 0 {
-		liveShots[p.slot]--
+	p := shared.passPending[best]
+	shared.passPending = append(shared.passPending[:best], shared.passPending[best+1:]...)
+	if shared.liveShots != nil && shared.liveShots[p.slot] > 0 {
+		shared.liveShots[p.slot]--
 	}
 	return p.sender, p.track
 }
 
-func pokePass(b unit.Snapshot) {
-	passMu.Lock()
-	defer passMu.Unlock()
+func pokePass(scope *unit.MatchState, b unit.Snapshot) {
+	shared := stateFor(scope)
+	shared.passMu.Lock()
+	defer shared.passMu.Unlock()
 	best := -1
 	bestD := math.MaxFloat64
-	for i, p := range passPending {
+	for i, p := range shared.passPending {
 		if p.target != 0 && b.OwnerID != 0 && p.target != b.OwnerID {
 			continue
 		}
@@ -389,18 +391,19 @@ func pokePass(b unit.Snapshot) {
 	if best < 0 {
 		return
 	}
-	passPending[best].x = b.X
-	passPending[best].y = b.Y
-	passPending[best].vx = b.VX
-	passPending[best].vy = b.VY
+	shared.passPending[best].x = b.X
+	shared.passPending[best].y = b.Y
+	shared.passPending[best].vx = b.VX
+	shared.passPending[best].vy = b.VY
 }
 
-func dropPending(b unit.Snapshot) {
-	passMu.Lock()
-	defer passMu.Unlock()
+func dropPending(scope *unit.MatchState, b unit.Snapshot) {
+	shared := stateFor(scope)
+	shared.passMu.Lock()
+	defer shared.passMu.Unlock()
 	best := -1
 	bestD := math.MaxFloat64
-	for i, p := range passPending {
+	for i, p := range shared.passPending {
 		if p.target != 0 && b.OwnerID != 0 && p.target != b.OwnerID {
 			continue
 		}
@@ -413,10 +416,10 @@ func dropPending(b unit.Snapshot) {
 	if best < 0 {
 		return
 	}
-	p := passPending[best]
-	passPending = append(passPending[:best], passPending[best+1:]...)
-	if liveShots != nil && liveShots[p.slot] > 0 {
-		liveShots[p.slot]--
+	p := shared.passPending[best]
+	shared.passPending = append(shared.passPending[:best], shared.passPending[best+1:]...)
+	if shared.liveShots != nil && shared.liveShots[p.slot] > 0 {
+		shared.liveShots[p.slot]--
 	}
 }
 
@@ -431,16 +434,16 @@ func (b *中转弹) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.Sense:
 		b.x, b.y = e.Self.X, e.Self.Y
-		pokePass(e.Self)
+		pokePass(ctx.State, e.Self)
 		if !e.Field.OutlineContains(e.Self.X, e.Self.Y, 0) {
-			dropPending(e.Self)
+			dropPending(ctx.State, e.Self)
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return
 		}
 		b.home(ctx, e)
 	case unit.Collision:
 		if e.Other.Role == unit.RoleFighter && e.Other.Slot == b.slot && e.Other.ID != b.target {
-			dropPending(unit.Snapshot{OwnerID: b.target, X: b.x, Y: b.y})
+			dropPending(ctx.State, unit.Snapshot{OwnerID: b.target, X: b.x, Y: b.y})
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return
 		}

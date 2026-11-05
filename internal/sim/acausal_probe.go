@@ -51,6 +51,7 @@ func (m *Match) runAcausalProbeLocked() {
 		return
 	}
 	probe := newMatch(m.seed, true)
+	probe.headless = m.headless
 	probe.skipProbe = true
 	probe.spawnSilent = true
 	probe.team = m.team
@@ -116,12 +117,14 @@ type probeState struct {
 	frames     []introFrame
 	ticks      int
 	justDied   bool
+	skipFilm   bool
 }
 
 func captureProbe(p *Match, acausalSlot int) (*非因果.Tape, *introFilm) {
 	st := &probeState{
 		slot:       acausalSlot,
 		death:      -1,
+		skipFilm:   p.headless,
 		fighters:   map[uint64]*非因果.FighterTrack{},
 		minions:    map[uint64]*minionBuild{},
 		nextMinion: map[probeKey]int{},
@@ -141,7 +144,7 @@ func captureProbe(p *Match, acausalSlot int) (*非因果.Tape, *introFilm) {
 	}
 	tape := st.finish()
 	var film *introFilm
-	if st.death >= 0 {
+	if !st.skipFilm && st.death >= 0 {
 		film = &introFilm{Death: st.death, Frames: st.frames}
 	}
 	return tape, film
@@ -238,7 +241,7 @@ func (st *probeState) sample(p *Match, initial bool) {
 			mb.track.Samples = append(mb.track.Samples, 非因果.Sample{X: u.p.X, Y: u.p.Y})
 		}
 	}
-	if st.death < 0 || st.justDied {
+	if !st.skipFilm && (st.death < 0 || st.justDied) {
 		if initial || st.ticks%6 == 0 || st.justDied {
 			var bodies []introBody
 			for _, id := range p.order {

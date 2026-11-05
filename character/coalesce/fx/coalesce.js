@@ -9,6 +9,11 @@ window.lookFX = window.lookFX || {};
     return match ? Math.max(1, Math.min(12, Number(match[1]) || 1)) : 1;
   }
 
+  function shotMass(kind) {
+    const match = String(kind || "").match(/^凝聚体压缩弹(\d+)$/);
+    return match ? Math.max(1, Math.min(12, Number(match[1]) || 1)) : 1;
+  }
+
   function state(id) {
     let s = window.coalesceSt[id];
     if (!s) {
@@ -125,11 +130,16 @@ window.lookFX = window.lookFX || {};
       if (!el) return;
       const art = ensure(el, "coalesce-shot-art");
       if (!art.firstElementChild) {
-        art.innerHTML = '<span class="coalesce-shot-core"></span><span class="coalesce-shot-tail"></span>';
+		art.innerHTML = '<span class="coalesce-shot-core"></span><span class="coalesce-shot-tail"></span><b class="coalesce-shot-label"></b>';
       }
+      const mass = shotMass(u.kind);
+      art.dataset.mass = String(mass);
+      art.querySelector(".coalesce-shot-label").textContent = String(mass);
+      art.classList.toggle("coalesce-shot-heavy", mass >= 8);
       const speed = Math.hypot(Number(u.vx) || 0, Number(u.vy) || 0);
       const ang = Math.atan2(-(Number(u.vy) || 0), Number(u.vx) || 1);
       art.style.transform = `rotate(${ang}rad) scaleX(${(0.82 + Math.min(0.5, speed / 900)).toFixed(3)})`;
+      art.querySelector(".coalesce-shot-label").style.transform = `rotate(${-ang}rad)`;
     },
   };
 
@@ -155,12 +165,6 @@ window.lookFX = window.lookFX || {};
     spawnEffect(ctx, "fx-coalesce-absorb");
   });
 
-
-  arena.registerShot("coalesce-collide", (fx, ctx) => {
-    const node = spawnEffect(ctx, "fx-coalesce-collide");
-    if (node) node.style.setProperty("--hit", (0.3 + Math.min(1, (Number(fx.amount) || 1) / 12) * 0.7).toFixed(3));
-    if (ctx && window.arena) arena.burst(ctx.x, ctx.y, fx.kind, 6);
-  });
 
   arena.registerShot("coalesce-shot-hit", (fx, ctx) => {
     spawnEffect(ctx, "fx-coalesce-shot-hit");

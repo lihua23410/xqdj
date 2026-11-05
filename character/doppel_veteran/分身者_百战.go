@@ -202,7 +202,7 @@ func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
 	shadows := a.listShadows(s)
 	a.syncShadowDeaths(ctx, shadows)
 	if a.phase > phaseReform && len(shadows) == 0 {
-		a.clearDashWait()
+		a.clearDashWait(ctx.State)
 		a.beginReform(ctx, s.Time, shadows)
 		return
 	}
@@ -250,11 +250,13 @@ func (a *百战) onSense(ctx unit.Context, s unit.Sense) {
 func (a *百战) beginReform(ctx unit.Context, now float64, shadows []unit.Snapshot) {
 	a.clearPasses(ctx, shadows)
 	a.clearStands(ctx, shadows)
-	clearAllStackGuards()
+	for _, shadow := range shadows {
+		setStackGuard(ctx.State, shadow.ID, false)
+	}
 	a.kickCruise(ctx, shadows)
 	a.phase = phaseReform
 	a.phaseUntil = now + reformDur
-	a.clearDashWait()
+	a.clearDashWait(ctx.State)
 	a.axisID = 0
 	a.stackID = 0
 	a.stackFixed = false
@@ -473,16 +475,16 @@ func (a *百战) kickCruise(ctx unit.Context, shadows []unit.Snapshot) {
 	}
 }
 
-func (a *百战) clearDashWait() {
+func (a *百战) clearDashWait(scope *unit.MatchState) {
 	for _, id := range a.dashIDs {
-		clearDash(id)
+		clearDash(scope, id)
 	}
 	a.dashIDs = nil
 }
 
 func (a *百战) driveDashes(ctx unit.Context, s unit.Sense) {
 	for _, id := range a.dashIDs {
-		j := getDash(id)
+		j := getDash(ctx.State, id)
 		if j == nil {
 			continue
 		}
@@ -491,7 +493,7 @@ func (a *百战) driveDashes(ctx unit.Context, s unit.Sense) {
 }
 
 func (a *百战) tickWaitDashes(ctx unit.Context, s unit.Sense, shadows []unit.Snapshot) {
-	if !dashesDone(a.dashIDs) {
+	if !dashesDone(ctx.State, a.dashIDs) {
 		return
 	}
 	a.beginReform(ctx, s.Time, shadows)

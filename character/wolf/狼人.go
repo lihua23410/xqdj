@@ -3,7 +3,6 @@ package 狼人
 import (
 	"embed"
 	"math"
-	"sync"
 	"xqdj/internal/unit"
 )
 
@@ -102,27 +101,12 @@ func init() {
 	})
 }
 
-// bitePending 把这一发撕咬弧的伤害交到它的出生流号上。工厂取走。不进引擎。
-var bitePending sync.Map
-
-func putBite(stream uint64, dmg float64) {
-	bitePending.Store(stream, dmg)
-}
-
-func takeBite(stream uint64) float64 {
-	v, ok := bitePending.LoadAndDelete(stream)
-	if !ok {
-		return wolfBiteBase
-	}
-	dmg, _ := v.(float64)
-	if dmg <= 0 {
-		return wolfBiteBase
-	}
-	return dmg
-}
-
 func newBiteArc(info unit.SpawnInfo) *狼弧 {
-	return &狼弧{slot: info.Slot, dmg: takeBite(info.Stream)}
+	dmg, _ := info.Data.(float64)
+	if dmg <= 0 {
+		dmg = wolfBiteBase
+	}
+	return &狼弧{slot: info.Slot, dmg: dmg}
 }
 
 // biteNone 游荡积月相；biteLock 站定锁敌 0.3s；biteDash 沿锁定方向冲 180。
@@ -540,7 +524,7 @@ func (w *狼人) spawnArc(ctx unit.Context, s unit.Sense, kind string) {
 		if w.biteDmg == 0 {
 			w.biteDmg = wolfBiteBase
 		}
-		putBite(sp.Stream, w.biteDmg)
+		sp.Data = w.biteDmg
 	}
 	ctx.Out <- sp
 }

@@ -67,6 +67,43 @@ func TestBatDashPassesThrough(t *testing.T) {
 	}
 }
 
+func TestBatDashBlocksDamage(t *testing.T) {
+	out := make(chan unit.Cmd, 4)
+	bat := &血契蝠{dashing: true}
+	ctx := unit.Context{ID: 7, Kind: KindBloodBat, Out: out}
+	bat.Handle(ctx, unit.IncomingDamage{Token: 4, From: 2, Amount: 6, Time: 0.1})
+	if !blockedBat(drainBat(out), 4) {
+		t.Fatal("穿的途中该免伤")
+	}
+	bat.Handle(ctx, unit.WallHit{Time: 0.2})
+	bat.Handle(ctx, unit.IncomingDamage{Token: 5, From: 2, Amount: 6, Time: 0.21})
+	cmds := drainBat(out)
+	if blockedBat(cmds, 5) {
+		t.Fatal("穿完不该还免伤")
+	}
+	if !confirmedBat(cmds, 5) {
+		t.Fatal("穿完该照常吃伤")
+	}
+}
+
+func blockedBat(cmds []unit.Cmd, token uint64) bool {
+	for _, c := range cmds {
+		if b, ok := c.(unit.BlockDamage); ok && b.Token == token {
+			return true
+		}
+	}
+	return false
+}
+
+func confirmedBat(cmds []unit.Cmd, token uint64) bool {
+	for _, c := range cmds {
+		if b, ok := c.(unit.ConfirmDamage); ok && b.Token == token {
+			return true
+		}
+	}
+	return false
+}
+
 func drainBat(out chan unit.Cmd) []unit.Cmd {
 	var cmds []unit.Cmd
 	for {

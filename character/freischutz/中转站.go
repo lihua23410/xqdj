@@ -7,7 +7,6 @@ import (
 	"embed"
 	"math"
 	"math/rand/v2"
-	"sync"
 
 	"xqdj/internal/unit"
 )
@@ -68,7 +67,7 @@ func init() {
 			used: map[uint64]bool{}, rng: unit.NewRNG(info.Stream),
 		}
 		// 碰撞发生在第一拍感知之前。伤害必须在出生时就写上，不能等感知再领。
-		if dmg, ok := takeRepriseStream(info.Stream); ok {
+		if dmg, ok := takeRepriseStream(info.State, info.Stream); ok {
 			b.damage = dmg
 			b.spent = true
 		}
@@ -99,7 +98,7 @@ func (a *中转站) Handle(ctx unit.Context, ev unit.Event) {
 		a.booted = true
 		a.nextDrop = s.Time + dropGap
 		a.nextFire = s.Time + fireDelay
-		clearLive(s.Self.Slot)
+		clearLive(ctx.State, s.Self.Slot)
 		a.scatter(ctx, s)
 	}
 	if s.Time+1e-9 >= a.nextDrop {
@@ -125,7 +124,7 @@ func (a *中转站) Handle(ctx unit.Context, ev unit.Event) {
 	if s.Time+1e-9 < a.nextFire || person == nil {
 		return
 	}
-	if live(a.slot) >= shotCap {
+	if live(ctx.State, a.slot) >= shotCap {
 		a.nextFire += dropGap
 		return
 	}
@@ -275,7 +274,7 @@ type 弹 struct {
 func (b *弹) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.Sense:
-		b.claim(e.Self)
+		b.claim(ctx.State, e.Self)
 		if !e.Field.OutlineContains(e.Self.X, e.Self.Y, 0) {
 			b.end(ctx, e)
 			return
@@ -283,7 +282,7 @@ func (b *弹) Handle(ctx unit.Context, ev unit.Event) {
 		b.boost(ctx, e)
 	case unit.Collision:
 		if e.Other.Role == unit.RoleFighter && e.Other.Slot == b.slot && e.Other.ID != b.owner {
-			dropLive(b.slot)
+			dropLive(ctx.State, b.slot)
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return
 		}
@@ -299,11 +298,11 @@ func (b *弹) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 // claim 接上重射交过来的伤害。这一发已经用过唯一的一次重射。
-func (b *弹) claim(self unit.Snapshot) {
+func (b *弹) claim(scope *unit.MatchState, self unit.Snapshot) {
 	if b.seen {
 		return
 	}
-	if dmg, ok := takeReprise(self.X, self.Y, math.Hypot(self.VX, self.VY)); ok {
+	if dmg, ok := takeReprise(scope, self.X, self.Y, math.Hypot(self.VX, self.VY)); ok {
 		b.damage = dmg
 		b.spent = true
 	}
@@ -314,7 +313,7 @@ func (b *弹) end(ctx unit.Context, s unit.Sense) {
 	if !b.hitPerson && !b.spent {
 		b.reprise(ctx, s)
 	}
-	dropLive(b.slot)
+	dropLive(ctx.State, b.slot)
 	ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 }
 
@@ -356,8 +355,8 @@ func (b *弹) reprise(ctx unit.Context, s unit.Sense) {
 		OwnerID: b.owner,
 		Slot:    b.slot,
 	})
-	queueReprise(born.Stream, node.X, node.Y, b.damage)
-	addLive(b.slot)
+	queueReprise(ctx.State, born.Stream, node.X, node.Y, b.damage)
+	addLive(ctx.State, b.slot)
 	ctx.Out <- born
 }
 
@@ -452,7 +451,7 @@ func crossed(ax, ay, bx, by, px, py, radius float64) bool {
 }
 
 func fire(ctx unit.Context, s unit.Sense, owner uint64, slot int) {
-	if live(slot) >= shotCap {
+	if live(ctx.State, slot) >= shotCap {
 		return
 	}
 	target := unit.SeekIf(s, func(o unit.Snapshot) bool {
@@ -467,7 +466,7 @@ func fire(ctx unit.Context, s unit.Sense, owner uint64, slot int) {
 		return
 	}
 	ux, uy := dx/dist, dy/dist
-	addLive(slot)
+	addLive(ctx.State, slot)
 	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind:    KindFreiShot,
 		X:       s.Self.X,
@@ -479,62 +478,63 @@ func fire(ctx unit.Context, s unit.Sense, owner uint64, slot int) {
 	})
 }
 
-var (
-	liveMu    sync.Mutex
-	liveShots map[int]int
-)
-
-func resetLive() {
-	liveMu.Lock()
-	liveShots = nil
-	reprises = nil
-	liveMu.Unlock()
+func resetLive(scope *unit.MatchState) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	shared.liveShots = nil
+	shared.reprises = nil
+	shared.liveMu.Unlock()
 }
 
-func live(slot int) int {
-	liveMu.Lock()
-	defer liveMu.Unlock()
-	if liveShots == nil {
+func live(scope *unit.MatchState, slot int) int {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	if shared.liveShots == nil {
 		return 0
 	}
-	return liveShots[slot]
+	return shared.liveShots[slot]
 }
 
-func addLive(slot int) {
-	liveMu.Lock()
-	defer liveMu.Unlock()
-	if liveShots == nil {
-		liveShots = map[int]int{}
+func addLive(scope *unit.MatchState, slot int) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	if shared.liveShots == nil {
+		shared.liveShots = map[int]int{}
 	}
-	liveShots[slot]++
+	shared.liveShots[slot]++
 }
 
-func dropLive(slot int) {
-	liveMu.Lock()
-	defer liveMu.Unlock()
-	if liveShots == nil {
+func dropLive(scope *unit.MatchState, slot int) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	if shared.liveShots == nil {
 		return
 	}
-	if liveShots[slot] > 0 {
-		liveShots[slot]--
+	if shared.liveShots[slot] > 0 {
+		shared.liveShots[slot]--
 	}
 }
 
-func clearLive(slot int) {
-	liveMu.Lock()
-	defer liveMu.Unlock()
-	if liveShots != nil {
-		delete(liveShots, slot)
+func clearLive(scope *unit.MatchState, slot int) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	if shared.liveShots != nil {
+		delete(shared.liveShots, slot)
 	}
 }
 
-func setLive(slot, n int) {
-	liveMu.Lock()
-	defer liveMu.Unlock()
-	if liveShots == nil {
-		liveShots = map[int]int{}
+func setLive(scope *unit.MatchState, slot, n int) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	if shared.liveShots == nil {
+		shared.liveShots = map[int]int{}
 	}
-	liveShots[slot] = n
+	shared.liveShots[slot] = n
 }
 
 type reprise struct {
@@ -543,41 +543,42 @@ type reprise struct {
 	damage float64
 }
 
-var reprises []reprise
-
-func queueReprise(stream uint64, x, y, damage float64) {
-	liveMu.Lock()
-	reprises = append(reprises, reprise{stream: stream, x: x, y: y, damage: damage})
-	liveMu.Unlock()
+func queueReprise(scope *unit.MatchState, stream uint64, x, y, damage float64) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	shared.reprises = append(shared.reprises, reprise{stream: stream, x: x, y: y, damage: damage})
+	shared.liveMu.Unlock()
 }
 
-func takeRepriseStream(stream uint64) (float64, bool) {
+func takeRepriseStream(scope *unit.MatchState, stream uint64) (float64, bool) {
 	if stream == 0 {
 		return 0, false
 	}
-	liveMu.Lock()
-	defer liveMu.Unlock()
-	for i, r := range reprises {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	for i, r := range shared.reprises {
 		if r.stream != stream {
 			continue
 		}
 		dmg := r.damage
-		reprises = append(reprises[:i], reprises[i+1:]...)
+		shared.reprises = append(shared.reprises[:i], shared.reprises[i+1:]...)
 		return dmg, true
 	}
 	return 0, false
 }
 
-func takeReprise(x, y, speed float64) (float64, bool) {
-	liveMu.Lock()
-	defer liveMu.Unlock()
+func takeReprise(scope *unit.MatchState, x, y, speed float64) (float64, bool) {
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
 	best := -1
 	bestD := math.MaxFloat64
 	limit := speed/60 + 24
 	if limit < 24 {
 		limit = 24
 	}
-	for i, r := range reprises {
+	for i, r := range shared.reprises {
 		d := math.Hypot(x-r.x, y-r.y)
 		if d < bestD {
 			bestD = d
@@ -587,7 +588,7 @@ func takeReprise(x, y, speed float64) (float64, bool) {
 	if best < 0 || bestD > limit {
 		return 0, false
 	}
-	dmg := reprises[best].damage
-	reprises = append(reprises[:best], reprises[best+1:]...)
+	dmg := shared.reprises[best].damage
+	shared.reprises = append(shared.reprises[:best], shared.reprises[best+1:]...)
 	return dmg, true
 }

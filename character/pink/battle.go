@@ -17,7 +17,7 @@ type crowd struct {
 func (c *crowd) Handle(ctx unit.Context, ev unit.Event) {
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
-		if c.canTakeDamage(e.From) {
+		if (e.SourceOwnerID != 0 && e.SourceOwnerID == c.owner) || c.canTakeDamage(e.From) {
 			unit.ConfirmHit(ctx, e)
 		} else {
 			unit.BlockHit(ctx, e)

@@ -21,7 +21,7 @@ const (
 	bodyColor  = "#b1a78d"
 
 	smashFirst = 1.0 // 开局第一轮砸酒
-	smashGap   = 3.0 // 之后每隔这么久再砸
+	smashGap   = 4.0 // 之后每隔这么久再砸
 	fillGap    = 10.0
 	fillStacks = 3
 
@@ -31,6 +31,7 @@ const (
 	drunkKind = "醉意"
 	drunkIcon = "/ball/酒翁/status/xiaojiu.png"
 	drunkMul  = 0.8
+	drunkLife = 15.0 // 敌人身上每一层从踏进去那一拍起单独活这么久；自己的醉意不掉
 )
 
 //go:embed fx status
@@ -127,6 +128,7 @@ func (a *酒翁) queueSmash(ctx unit.Context, s unit.Sense, have int) {
 	} else if have <= 0 {
 		n = 1
 	} else {
+		// 一次最多把身上的酒全砸出去；have >= 1 时 IntN 不会拿到 0。
 		n = a.rng.IntN(have) + 1
 		ctx.Out <- unit.StackMark{UnitID: ctx.ID, Kind: drunkKind, Delta: -n, Icon: drunkIcon}
 	}

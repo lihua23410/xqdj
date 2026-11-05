@@ -22,7 +22,7 @@ func patrolUnits(m *Match) (*unit, *unit) {
 }
 
 // TestPatrolMarkerCycle 走完一整圈：丢出后站定 → 标识物加速 → 撞中出伤 →
-// 飞回主人消失 → 恢复移动 → 5 秒后再次丢出。随机路径不可控的环节用轮询等相位，
+// 飞满去程窗口后倒带回主人消失 → 恢复移动 → 5 秒后再次丢出。随机路径不可控的环节用轮询等相位，
 // 命中用把标识物挪到靶子身上强制触发（锁内改状态有 glitch 测试先例）。
 func TestPatrolMarkerCycle(t *testing.T) {
 	m := NewMatchSeeded(7)
@@ -101,9 +101,9 @@ func TestPatrolMarkerCycle(t *testing.T) {
 		t.Fatal("marker never damaged the dummy")
 	}
 
-	// 相位四：标识物回家消失，本体恢复移动。记下收回时刻。
+	// 相位四：满 5 秒后还要再撞一次墙才倒带。窗口、飞到墙边、倒带都算在这段里。
 	catchT := -1.0
-	for i := 0; i < 6*60; i++ {
+	for i := 0; i < 12*60; i++ {
 		m.mu.Lock()
 		patrol, _ := patrolUnits(m)
 		mk := patrolMarkerOf(m)

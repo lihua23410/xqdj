@@ -184,4 +184,8 @@
       injection(s, now);
     }
   });
+  hooks["youth-arc"] = {
+    tick(el, u) { el.classList.toggle("youth-arc-buff", !!window.youthBuff[u.ownerId]); },
+    unmount(el) { el.classList.remove("youth-arc-buff"); },
+  };
 })();
