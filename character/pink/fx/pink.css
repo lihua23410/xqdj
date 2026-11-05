@@ -478,3 +478,13 @@
   100% { opacity: 0; transform: rotate(var(--ang, 0rad)) scale(1.35); }
 }
 
+
+/* Native fan geometry keeps the rear gap; paint follows Pink's existing palette. */
+.ball.arc.look-pink-contact {
+  border-color: #ffb4d2;
+  filter: drop-shadow(0 0 2px #fff0f7) drop-shadow(0 0 4px #ff3c8b);
+}
+.ball.arc.look-pink-fuel-arc {
+  border-color: #ffd18b;
+  filter: drop-shadow(0 0 2px #fff4fa) drop-shadow(0 0 5px #ffb21e);
+}

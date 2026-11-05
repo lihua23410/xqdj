@@ -45,9 +45,11 @@ func velCmd(cmds []unit.Cmd) *unit.SetVelocity {
 }
 
 func TestThrustSnapsSpeedOnWall(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	m := thrustingMiu()
-	ctx := unit.Context{ID: 1, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.WallHit{Time: 0.2, NX: 1, NY: 0})
 	if m.thrusting {
 		t.Fatal("thrust should end on wall")
@@ -62,9 +64,11 @@ func TestThrustSnapsSpeedOnWall(t *testing.T) {
 }
 
 func TestThrustSnapsSpeedOnEnemy(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	m := thrustingMiu()
-	ctx := unit.Context{ID: 1, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.Collision{
 		Time:  0.2,
 		Other: unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, Mortal: true},
@@ -84,9 +88,11 @@ func TestThrustSnapsSpeedOnEnemy(t *testing.T) {
 }
 
 func TestThrustSnapsSpeedOnFriendly(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	m := thrustingMiu()
-	ctx := unit.Context{ID: 1, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.Collision{
 		Time:  0.2,
 		Other: unit.Snapshot{ID: 3, Kind: KindMiu, Role: unit.RoleMinion, Slot: 0, Mortal: true},
@@ -106,10 +112,12 @@ func TestThrustSnapsSpeedOnFriendly(t *testing.T) {
 }
 
 func TestThrustTimeoutSnapsSpeed(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	m := thrustingMiu()
 	m.thrustUntil = 0.4
-	ctx := unit.Context{ID: 1, Kind: KindMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindMiu, Out: out}
 	m.Handle(ctx, unit.Sense{
 		Time: 0.4,
 		Self: unit.Snapshot{

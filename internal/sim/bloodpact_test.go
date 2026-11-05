@@ -233,7 +233,7 @@ func TestBloodLineSnapsAndWilts(t *testing.T) {
 	}
 }
 
-// 回流分档：0–5 秒 25%、5–10 秒 50%、10 秒后 75%。
+// 回流分档：0–3 秒 25%、3–6 秒 50%、6 秒后 75%。
 // 每档都往对面灌一大笔伤害（100），这样血契自己那几口咬合的回流只是零头，
 // 量出来就是这一档的回流比例。
 func TestBloodFeedDeepensOverTime(t *testing.T) {
@@ -254,19 +254,19 @@ func TestBloodFeedDeepensOverTime(t *testing.T) {
 		return pactHP(m, pact) - before
 	}
 
-	// 还没到 5 秒：浅寄生 25%。
+	// 还没到 3 秒：浅寄生 25%。
 	if got := feed(); got < 24 || got > 30 {
-		t.Fatalf("0–5 秒档该回流 25（25%%），实际 %v", got)
+		t.Fatalf("0–3 秒档该回流 25（25%%），实际 %v", got)
 	}
-	// 拖到 6 秒档：50%。
-	tickUntil(m, 6.0)
+	// 拖过 3 秒、停在 6 秒前：50%。
+	tickUntil(m, 3.2)
 	if got := feed(); got < 49 || got > 56 {
-		t.Fatalf("5–10 秒档该回流 50（50%%），实际 %v", got)
+		t.Fatalf("3–6 秒档该回流 50（50%%），实际 %v", got)
 	}
-	// 再拖到 10 秒档：75%。
-	tickUntil(m, 4.5)
+	// 再拖过 6 秒：75%。
+	tickUntil(m, 3.2)
 	if got := feed(); got < 74 || got > 82 {
-		t.Fatalf("10 秒后该回流 75（75%%），实际 %v", got)
+		t.Fatalf("6 秒后该回流 75（75%%），实际 %v", got)
 	}
 }
 
@@ -296,8 +296,9 @@ func TestBloodPounceBurnsFiveAndDashes(t *testing.T) {
 		}
 		m.mu.Unlock()
 	}
-	if got := hp0 - pactHP(m, pact); got < 4.5 {
-		t.Fatalf("饿扑该烧 5 血，实际 %v", got)
+	// 开局同一拍饿扑烧 5、召蝠烧 3，合成一次扣掉，一共 8。
+	if got := hp0 - pactHP(m, pact); got < 7.5 || got > 8.5 {
+		t.Fatalf("开局该烧饿扑 5 + 血蝠 3，实际 %v", got)
 	}
 	if peak < 350 {
 		t.Fatalf("饿扑该以 400 速扑出去，峰值速度只有 %.0f", peak)
@@ -470,7 +471,7 @@ func TestBloodReelStandsWhileReeling(t *testing.T) {
 		t.Fatalf("拖拽中靶子该以 460 速被拽，实际 %.1f", vsp)
 	}
 
-	// 主目标拽到身前（92→38 再 0.12 秒）：提前终止。血契自己的 Stand 放开，
+	// 主目标拽到相切之外就提前终止。血契自己的 Stand 放开，
 	// 刚拽到脸前的靶子被清零拽速（460 惯性没了，不会甩出断线）。
 	tickUntil(m, 0.35)
 	m.mu.Lock()
@@ -489,5 +490,45 @@ func TestBloodReelStandsWhileReeling(t *testing.T) {
 	seen := tickUntil(m, 1.0)
 	if seen["blood-snap"] != 0 {
 		t.Fatalf("收网后目标不该甩断血线，却出现了 blood-snap：%v", seen)
+	}
+}
+
+// 收线停在两球相切之外。嵌进去的话碰撞会把站定的血契顶开，撞击特效连闪。
+func TestBloodReelStopsShortOfOverlap(t *testing.T) {
+	m, pact, victim := startPact(t, 53, character.KindDummy)
+	lockBoth(m, pact, victim, 34)
+	noSeek(m, victim)
+	if seen := tickUntil(m, 0.3); seen["blood-bond"] == 0 {
+		t.Fatal("该先建上血线")
+	}
+	m.mu.Lock()
+	m.applyCmdLocked(unitpkg.SetCruise{UnitID: pact.id, Speed: 170})
+	pact.stand = false
+	m.mu.Unlock()
+	putAway(m, pact, victim, 245)
+	if seen := tickUntil(m, 0.15); seen["blood-reel"] == 0 {
+		t.Fatal("距离过警戒线该起手收线")
+	}
+	m.mu.Lock()
+	// 停距要留在贴身弧外。垫成 10 时一拍拽速会扎到表面间隙约 2px，短弧打得到。
+	need := pact.radius + victim.radius + 12
+	m.mu.Unlock()
+	minD := math.MaxFloat64
+	for i := 0; i < 120; i++ {
+		m.Tick()
+		time.Sleep(time.Millisecond)
+		m.mu.Lock()
+		d := math.Hypot(pact.p.X-victim.p.X, pact.p.Y-victim.p.Y)
+		stand := pact.stand
+		m.mu.Unlock()
+		if d < minD {
+			minD = d
+		}
+		if !stand {
+			break
+		}
+	}
+	if minD < need {
+		t.Fatalf("收线最近距离 %.2f，扎进了贴身弧（至少该留 %.2f）", minD, need)
 	}
 }

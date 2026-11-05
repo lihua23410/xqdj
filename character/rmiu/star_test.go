@@ -6,9 +6,11 @@ import (
 )
 
 func TestStarMiuBootsOnCD(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	r := &R缪{rng: lowRNG()}
-	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.Sense{Time: 0, Self: bodySelf(0, 0, 100, 0, 0)})
 	if !r.starMiu {
 		t.Fatal("5% roll hit should grant 天杀星缪")
@@ -31,12 +33,14 @@ func TestStarMiuBootsOnCD(t *testing.T) {
 }
 
 func TestStarMiuStrikesClone(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	r := &R缪{
 		booted: true, starMiu: true, starReadyAt: 5,
 		speed: miuBaseSpeed, meleeReadyAt: 999, fireReadyAt: 999,
 	}
-	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.Sense{
 		Time:   5,
 		Self:   bodySelf(0, 0, 100, 0, 0),
@@ -69,12 +73,14 @@ func TestStarMiuStrikesClone(t *testing.T) {
 }
 
 func TestStarMiuLethalDies(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	r := &R缪{
 		starMiu: true, hp: 8,
 		hasBest: true, bestID: 2, bestHP: 90,
 	}
-	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.IncomingDamage{Token: 7, From: 99, Amount: 20})
 	cmds := drain(out)
 	confirm := false
@@ -92,12 +98,14 @@ func TestStarMiuLethalDies(t *testing.T) {
 }
 
 func TestStarMiuKeepsOwnBody(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	r := &R缪{
 		booted: true, starMiu: true, starReadyAt: 999,
 		speed: miuBaseSpeed, meleeReadyAt: 999, fireReadyAt: 999,
 	}
-	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.Sense{
 		Time:   1,
 		Self:   bodySelf(0, 0, 40, 170, 0),

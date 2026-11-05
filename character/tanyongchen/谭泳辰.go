@@ -1,6 +1,6 @@
 // 谭泳辰老先生：开局空手随机游荡，场上散落铃铛与苦无。自己或同边战斗机碰到都算捡到，效果记在他身上。
-// 捡到苦无后每 2 秒丢一发直线苦无（3 伤，约 10% 暴击 10 伤）；有铃铛时累计
-// 3 次命中或任意暴击就净化（无敌 1.5s + 回已损失血量 20%）；累计 10 次命中或
+// 捡到苦无后每 2 秒丢一发直线苦无（2 伤，约 10% 暴击 12 伤）；有铃铛时累计
+// 3 次命中或任意暴击就净化（无敌 1.5s + 回已损失血量 15%）；累计 10 次命中或
 // 3 次暴击开 5 秒灵狐场域，场内苦无间隔 0.7s 但不再累计。
 package 谭泳辰
 
@@ -18,6 +18,7 @@ var assets embed.FS
 const KindTan = "谭泳辰老先生"
 const KindBell = "铃铛"
 const KindKunai = "苦无"
+const KindTanKunaiShot = "谭泳辰苦无弹"
 const KindDomain = "灵狐场域"
 const KindMilk = "奶符"
 
@@ -34,7 +35,7 @@ const (
 	kunaiInterval       = 2.0
 	kunaiIntervalDomain = 0.55
 	kunaiRange          = 620.0
-	kunaiDamage         = 3.0
+	kunaiDamage         = 2.0
 	kunaiCritDamage     = 12.0
 	kunaiCritChance     = 0.10
 	kunaiFlight         = 0.55  // 苦无飞行时间（秒），伤害在飞到落点时结算
@@ -42,7 +43,7 @@ const (
 
 	bellHitsForPurify = 3
 	purifyInvuln      = 1.5
-	purifyHealFrac    = 0.20
+	purifyHealFrac    = 0.15
 	purifyTeamR       = 240.0 // 净化顺手回血的队友范围
 
 	domainHits     = 10
@@ -107,6 +108,16 @@ func init() {
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &灵狐场域{owner: info.OwnerID, slot: info.Slot}
 	})
+	p.Register(unit.Spec{
+		Kind:      KindTanKunaiShot,
+		Role:      unit.RoleProjectile,
+		Radius:    1,
+		MaxHP:     1,
+		Speed:     0,
+		Vision:    0,
+		PassWalls: true,
+		Look:      unit.Look{Color: "#00000000"},
+	}, func(unit.SpawnInfo) unit.Actor { return &kunaiProxy{} })
 	p.Register(unit.Spec{
 		Kind:     KindMilk,
 		Role:     unit.RoleHelper,
@@ -291,6 +302,11 @@ func (t *谭泳辰老先生) attack(ctx unit.Context, s unit.Sense, inDomain boo
 		start: s.Time, ox: t.x, oy: t.y, ux: ux, uy: uy,
 		total: total, speed: total / kunaiFlight, crit: crit,
 	})
+	ctx.Out <- ctx.Born(unit.Spawn{
+		Kind: KindTanKunaiShot, X: t.x, Y: t.y,
+		VX: ux * total / kunaiFlight, VY: uy * total / kunaiFlight,
+		OwnerID: ctx.ID, Slot: t.slot,
+	})
 	ctx.Out <- unit.FX{Name: "kunai", Kind: ctx.Kind, UnitID: ctx.ID, Slot: t.slot, X: t.x, Y: t.y, VX: ux, VY: uy, Amount: total}
 
 	// 每 milkEvery 次出手掉一个奶符（同队可吃，回 5 血）。
@@ -459,7 +475,7 @@ func (t *谭泳辰老先生) accumulate(ctx unit.Context, s unit.Sense, crit boo
 	}
 }
 
-// purify：白色净化，无敌 1.5 秒并回复已损失生命的 20%。
+// purify：白色净化，无敌 1.5 秒并回复已损失生命的 15%。
 func (t *谭泳辰老先生) purify(ctx unit.Context, s unit.Sense) {
 	t.invulnUntil = s.Time + purifyInvuln
 	missing := t.maxHP - t.hp
@@ -551,5 +567,26 @@ func (m *奶符) Handle(ctx unit.Context, ev unit.Event) {
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return
 		}
+	}
+}
+
+// kunaiProxy 是不可见、无伤害的苦无轨迹单位，供观察者等“观察弹体”的角色感知。
+type kunaiProxy struct {
+	born    float64
+	booting bool
+}
+
+func (p *kunaiProxy) Handle(ctx unit.Context, ev unit.Event) {
+	s, ok := ev.(unit.Sense)
+	if !ok {
+		return
+	}
+	if !p.booting {
+		p.booting = true
+		p.born = s.Time
+		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+	}
+	if s.Time+1e-9 >= p.born+kunaiFlight {
+		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	}
 }

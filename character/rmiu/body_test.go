@@ -20,13 +20,15 @@ func bodySelf(x, y, hp, vx, vy float64) unit.Snapshot {
 }
 
 func TestBodyLethalSwapsThenHitsClone(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	r := &R缪{
 		booted: true, hp: 8, x: 0, y: 0, vx: 10, vy: 0,
 		hasBest: true, bestID: 2, bestHP: 90, bestX: 40, bestY: 0, bestVX: 0, bestVY: 20,
 		meleeReadyAt: 999, fireReadyAt: 999,
 	}
-	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.IncomingDamage{Token: 7, From: 99, Amount: 20})
 	cmds := drain(out)
 
@@ -90,9 +92,11 @@ func TestBodyLethalSwapsThenHitsClone(t *testing.T) {
 }
 
 func TestBodyChipConfirms(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	r := &R缪{hp: 80, hasBest: true, bestID: 2, bestHP: 90}
-	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.IncomingDamage{Token: 3, From: 99, Amount: 10})
 	cmds := drain(out)
 	ok := false
@@ -110,9 +114,11 @@ func TestBodyChipConfirms(t *testing.T) {
 }
 
 func TestBodySwapsWhenCloneHasMoreHP(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	r := &R缪{booted: true, speed: miuBaseSpeed, meleeReadyAt: 999, fireReadyAt: 999}
-	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindRMiu, Out: out}
 	r.Handle(ctx, unit.Sense{
 		Time:   1,
 		Self:   bodySelf(0, 0, 40, 170, 0),
@@ -143,12 +149,14 @@ func TestBodySwapsWhenCloneHasMoreHP(t *testing.T) {
 }
 
 func TestBodySwapLeavesMarksOnBodies(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	r := &R缪{
 		booted: true, speed: miuBaseSpeed, meleeReadyAt: 999, fireReadyAt: 999,
 		marks: []unit.Mark{{Kind: "剑痕", Stacks: 2, Icon: "jianhen.png"}},
 	}
-	ctx := unit.Context{ID: 1, Kind: KindRMiu, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindRMiu, Out: out}
 	clone := cloneAt(2, 50, 0, 90)
 	clone.Marks = []unit.Mark{{Kind: "诅咒", Stacks: 1, Icon: "curse.png"}}
 	self := bodySelf(0, 0, 40, 170, 0)

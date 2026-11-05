@@ -42,6 +42,7 @@ const (
 	mouthReach   = biteArcOuter + 18 + biteSlack // 嘴边：46。建线量这个，收线起手也量这个
 
 	// 饿扑：烧 5 血，朝索敌目标 400 速扑 0.5 秒。扑空 = 白烧。
+	// 扑中敌方战斗机或活随从结一次咬合伤害，并当拍建线。
 	pounceCost  = 5.0
 	pounceCD    = 6.0
 	pounceSpeed = 400.0
@@ -56,16 +57,18 @@ const (
 	wiltDur   = 3.0
 	wiltDrop  = 30.0
 
-	// 寄生回流：按连接时长分档 25% / 50% / 75%。
-	feedMidAt   = 5.0
-	feedDeepAt  = 10.0
+	// 寄生回流：按连接时长分档 25% / 50% / 75%。改这两个秒数。
+	feedMidAt   = 3.0
+	feedDeepAt  = 6.0
 	feedShallow = 0.25
 	feedMid     = 0.50
 	feedDeep    = 0.75
 	feedStep    = 0.5 // 攒够这么多才 Heal 一次（引擎口径：≥0.5 才有治疗特效）
 
 	// 收线：烧 8 血，收网 0.6 秒——每条线的目标都被拽 460 朝血契（快过任何巡航，
-	// 被拽的人看得出来是被拽走的），血契自己站定收网、不跟过去。拉到 38 提前结束。
+	// 被拽的人看得出来是被拽走的），血契自己站定收网、不跟过去。
+	// 停在近战弧外面 reelCushion。贴身弧一般只比身体探出几像素，
+	// 但 460 速一拍约 8px，距离判定在这一拍开头，垫少了会扎进弧里吃伤害。
 	// 只在线快绷断时放：距离冲过警戒线 240（绷断 320 的 3/4）才起手，
 	// 收完照吃 3s CD——收线的本职就是续线，平稳期不烧血。
 	// 墙由物理碰撞免费涌现（隔墙互顶拉不到脸）。
@@ -73,15 +76,15 @@ const (
 	reelCD       = 3.0
 	reelDur      = 0.6
 	reelSpeed    = 460.0 // 拽速：明显快过一切巡航——“拽过来”的观感
-	reelStopGap  = 38.0
+	reelCushion  = 28.0  // 两球表面之外再留这么远，避开贴身弧。改这个数。
 	reelSaveFrom = 240.0 // 警戒线：距离冲过这里才放收线
 
-	// 血蝠：烧 6 血、CD 5s、一次一只、场上至多 3 只。活随从，绕在最近的敌人周围；
-	// 每 0.5 秒朝它穿一次，穿过时咬一口 2，穿到对面环上。6 秒寿终。咬的伤打在血线连着的目标身上就按那条线回流
-	//（来源不挑），所以蝙蝠是在外勤打工、把血抽回总部；蝙蝠自己挨打的伤不回流
-	//（随从不是契约方）。面板按一阶段收支相抵设计：6s 寿命里理论 12 口
-	// × 2 伤 × 25% = 6 血回流，正好抵掉召它的成本——外勤抽血，不赚不亏。
-	batCost      = 6.0
+	// 血蝠：烧 3 血、CD 5s、一次一只、场上至多 3 只。有没有血线都召——
+	// 没贴住的时候场上的伤害就是它们。每 0.5 秒朝最近的敌人穿一次，穿过时咬一口 2，
+	// 穿到对面环上。6 秒寿终。咬的伤打在血线连着的目标身上就按那条线回流
+	//（来源不挑）；蝙蝠自己挨打的伤不回流（随从不是契约方）。
+	// 6 秒理论 12 口 × 2 伤：没线时这 3 血换大约 24 伤；有线时浅层回流 6，净赚 3。改 batCost。
+	batCost      = 3.0
 	batCD        = 5.0
 	batPerCall   = 1
 	batCap       = 3
@@ -107,6 +110,7 @@ var assets embed.FS
 
 func init() {
 	p := unit.NewPack(KindBloodPact, assets)
+	p.RegisterAttackFan(unit.Spec{Kind: KindPounceArc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(110), ArcInner: 18, Look: unit.Look{Color: pactColor, Overlay: true, Glow: true}})
 	p.Register(unit.Spec{
 		Kind:    KindBloodPact,
 		Role:    unit.RoleFighter,
@@ -158,17 +162,21 @@ func init() {
 }
 
 type 血契 struct {
+	fanSense unit.Sense
+
 	x, y   float64
 	radius float64
 	slot   int
 
 	faceX, faceY float64
 
-	fsSeq    uint32
-	pounceAt float64
-	reelAt   float64
-	batAt    float64
-	rng      *rand.Rand
+	fsSeq       uint32
+	pounceAt    float64
+	pounceUntil float64 // 这一扑的结束时刻；撞上人只在这段里结伤
+	pounceHit   bool    // 这一扑已经结过一次
+	reelAt      float64
+	batAt       float64
+	rng         *rand.Rand
 
 	arc unit.AttachState
 
@@ -178,6 +186,7 @@ type 血契 struct {
 
 	reelUntil float64
 	pool      float64
+	pay       float64 // 这一拍要烧的血。同一拍多招各写一次 SetHP 会互相覆盖，结束时一次扣掉
 	state     int
 	booted    bool
 }
@@ -190,11 +199,22 @@ type bloodLine struct {
 }
 
 func (b *血契) Handle(ctx unit.Context, ev unit.Event) {
+	if sense, ok := ev.(unit.Sense); ok {
+		b.fanSense = sense
+	}
+	defer b.syncAttackFans(ctx)
 	if unit.AcceptHit(ctx, ev) {
 		return
 	}
-	if s, ok := ev.(unit.Sense); ok {
-		b.onSense(ctx, s)
+	switch e := ev.(type) {
+	case unit.Sense:
+		b.onSense(ctx, e)
+	case unit.WallHit:
+		b.pounceUntil = 0
+	case unit.FanHit:
+		if e.Kind == KindPounceArc {
+			b.strikePounce(ctx, e)
+		}
 	}
 }
 
@@ -214,6 +234,7 @@ func (b *血契) onSense(ctx unit.Context, s unit.Sense) {
 		b.faceX, b.faceY = 1, 0
 	}
 
+	b.pay = 0
 	b.endWilt(ctx, s)
 	b.updateLine(ctx, s)
 	b.checkBiteTether(ctx, s)
@@ -222,7 +243,16 @@ func (b *血契) onSense(ctx unit.Context, s unit.Sense) {
 	b.tryPounce(ctx, s)
 	b.reel(ctx, s)
 	b.tryCallBats(ctx, s)
+	b.flushPay(ctx, s)
 	b.syncLook(ctx, s)
+}
+
+// flushPay 把这一拍饿扑、收线、召蝠烧的血合成一次扣掉。
+func (b *血契) flushPay(ctx unit.Context, s unit.Sense) {
+	if b.pay <= 0 {
+		return
+	}
+	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: s.Self.HP - b.pay}
 }
 
 // endWilt 蔫置到点：巡航还回去。
@@ -235,7 +265,11 @@ func (b *血契) endWilt(ctx unit.Context, s unit.Sense) {
 }
 
 func (b *血契) wilted(s unit.Sense) bool {
-	return b.wiltUntil > 0 && s.Time+1e-9 < b.wiltUntil
+	return b.wiltedAt(s.Time)
+}
+
+func (b *血契) wiltedAt(now float64) bool {
+	return b.wiltUntil > 0 && now+1e-9 < b.wiltUntil
 }
 
 // updateLine 血线的断法都在这里：目标没了、不再是可咬的、或距离超上限就绷断。
@@ -278,11 +312,14 @@ func (b *血契) breakLine(ctx unit.Context, s unit.Sense, id uint64) {
 
 // tether 建线：单个目标最多一条；可以同时连多个有生命的目标
 // （敌方战斗机或敌方活随从），深度各自按连接时长长。
-func (b *血契) tether(ctx unit.Context, s unit.Sense, o *unit.Snapshot) {
-	if b.lines[o.ID] != nil || b.wilted(s) {
+func (b *血契) tether(ctx unit.Context, now float64, o *unit.Snapshot) {
+	if b.lines == nil {
+		b.lines = map[uint64]*bloodLine{}
+	}
+	if b.lines[o.ID] != nil || b.wiltedAt(now) {
 		return
 	}
-	b.lines[o.ID] = &bloodLine{since: s.Time, lastHP: o.HP, lastMax: o.MaxHP}
+	b.lines[o.ID] = &bloodLine{since: now, lastHP: o.HP, lastMax: o.MaxHP}
 	ctx.Out <- unit.FX{
 		Name: "blood-bond", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
 		X: b.x, Y: b.y, VX: o.X, VY: o.Y,
@@ -328,7 +365,7 @@ func (b *血契) checkBiteTether(ctx unit.Context, s unit.Sense) {
 		if (dx/d)*fx+(dy/d)*fy < cosHalf-1e-8 {
 			continue
 		}
-		b.tether(ctx, s, o)
+		b.tether(ctx, s.Time, o)
 	}
 }
 
@@ -395,7 +432,9 @@ func (b *血契) tryPounce(ctx unit.Context, s unit.Sense) {
 	}
 	ux, uy := unitDir(target.X-b.x, target.Y-b.y)
 	b.pounceAt = s.Time + pounceCD
-	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: s.Self.HP - pounceCost}
+	b.pounceUntil = s.Time + pounceDur
+	b.pounceHit = false
+	b.pay += pounceCost
 	ctx.Out <- unit.AddFS{
 		UnitID: ctx.ID, DX: ux, DY: uy, BaseSpeed: pounceSpeed,
 		OnWall: true, ExpiresAt: s.Time + pounceDur,
@@ -405,6 +444,15 @@ func (b *血契) tryPounce(ctx unit.Context, s unit.Sense) {
 		Name: "blood-pounce", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
 		X: b.x, Y: b.y, VX: ux, VY: uy, Amount: pounceCost,
 	}
+}
+
+// strikePounce only handles the fan's hit effects; the fan quoted the damage.
+func (b *血契) strikePounce(ctx unit.Context, e unit.FanHit) {
+	if b.pounceHit || b.pounceUntil <= 0 || e.Time > b.pounceUntil+1e-9 {
+		return
+	}
+	b.pounceHit = true
+	b.tether(ctx, e.Time, &e.Other)
 }
 
 // reel 收线：有血线、距离冲过警戒线（线快绷断）、CD 好、不在熔断区才烧 8 血起手。
@@ -451,7 +499,7 @@ func (b *血契) reel(ctx unit.Context, s unit.Sense) {
 		}
 		b.reelAt = s.Time + reelCD
 		b.reelUntil = s.Time + reelDur
-		ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: s.Self.HP - reelCost}
+		b.pay += reelCost
 		// 站定收网：挂 Stand 挡巡航带子，并把起手时的残余速度清掉——
 		// 不然血契带着巡航满场飞，被拽的人拽向的是移动靶。
 		ctx.Out <- unit.Stand{UnitID: ctx.ID, Hold: true}
@@ -461,15 +509,21 @@ func (b *血契) reel(ctx unit.Context, s unit.Sense) {
 			Name: "blood-reel", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
 			X: main.X, Y: main.Y, VX: b.x, VY: b.y, Amount: reelCost,
 		}
-	} else if mainD <= reelStopGap {
-		// 拽到身边：整个动作立刻停。
+	} else if mainD <= reelHold(b.radius, main.Radius) {
+		// 拽到近战弧外：整个动作立刻停。
 		b.stopReel(ctx, s)
 		return
 	}
 	// 收网：只拽对面，血契站在原地——拽人的人自己不跟着跑。
+	// 已经进到停距里的那条不再给拽速，免得这一拍还往身上顶。
 	for id := range b.lines {
 		o := findNearby(s.Nearby, id)
 		if o == nil {
+			continue
+		}
+		d := math.Hypot(o.X-b.x, o.Y-b.y)
+		if d <= reelHold(b.radius, o.Radius) {
+			ctx.Out <- unit.SetVelocity{UnitID: o.ID}
 			continue
 		}
 		ux, uy := unitDir(b.x-o.X, b.y-o.Y)
@@ -477,7 +531,12 @@ func (b *血契) reel(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-// tryCallBats 血蝠：烧 6 血、CD 5s、场上至多 3 只。蝙蝠是活随从——它咬敌方
+// reelHold 收线停手的圆心距：两球半径再加上 reelCushion，停在贴身弧外面。
+func reelHold(selfR, otherR float64) float64 {
+	return selfR + otherR + reelCushion
+}
+
+// tryCallBats 血蝠：烧 3 血、CD 5s、场上至多 3 只。有没有血线都召。蝙蝠是活随从——它咬敌方
 // 战斗机的伤走血线回流（来源不挑），所以这笔投资的回报是从敌人身上抽血。
 // 和饿扑/收线一样受熔断管：HP ≤ 10 时召不动。
 func (b *血契) tryCallBats(ctx unit.Context, s unit.Sense) {
@@ -501,7 +560,7 @@ func (b *血契) tryCallBats(ctx unit.Context, s unit.Sense) {
 		b.rng = unit.NewRNG(ctx.Stream)
 	}
 	b.batAt = s.Time + batCD
-	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: s.Self.HP - batCost}
+	b.pay += batCost
 	for i := 0; i < batPerCall; i++ {
 		// 落点挑到不压进任何人：出生圈的随机方向若撞上敌方战斗机或活随从
 		// （引擎出生位本来就贴得近），当拍的重叠会穿透断言；挪远一圈再放。
@@ -618,4 +677,14 @@ func (b *血契) stateCode(s unit.Sense) int {
 func (b *血契) nextFSToken(owner uint64) uint64 {
 	b.fsSeq++
 	return owner<<32 | uint64(b.fsSeq)
+}
+
+const KindPounceArc = "血契饿扑扇环"
+
+func (b *血契) syncAttackFans(ctx unit.Context) {
+	s := b.fanSense
+	if s.Self.ID == 0 {
+		return
+	}
+	unit.SyncAttackFan(ctx, s, KindPounceArc, unit.FanAttack{Active: b.pounceUntil > s.Time, Epoch: b.pounceUntil, Until: b.pounceUntil, Damage: biteDamage, Once: true, FX: "blood-bite", EffectKind: KindBloodPact})
 }

@@ -108,12 +108,9 @@ const (
 	houraiDmg   = 1.4
 )
 
-var (
-	owners sync.Map
-)
-
 func init() {
 	p := unit.NewPack(KindNingyushi, assets)
+	p.RegisterAttackFan(unit.Spec{Kind: KindN24Arc, Role: unit.RoleProjectile, Radius: 20, MaxHP: 1, Attach: true, ArcSpan: unit.Deg(120), ArcInner: 18, Look: unit.Look{Color: "#fff4c8", Overlay: true, Glow: true}})
 	p.Register(unit.Spec{
 		Kind:    KindNingyushi,
 		Role:    unit.RoleFighter,
@@ -177,6 +174,8 @@ func init() {
 }
 
 type 人偶使 struct {
+	fanSense unit.Sense
+
 	cardMu sync.Mutex
 
 	energy    float64
@@ -232,11 +231,17 @@ type job struct {
 }
 
 func (a *人偶使) Handle(ctx unit.Context, ev unit.Event) {
+	if sense, ok := ev.(unit.Sense); ok {
+		a.fanSense = sense
+	}
+	defer a.syncAttackFans(ctx)
 	switch e := ev.(type) {
 	case unit.IncomingDamage:
 		a.onHit(ctx, e)
-	case unit.Collision:
-		a.onCollide(ctx, e)
+	case unit.FanHit:
+		if e.Kind == KindN24Arc && a.job.kind == SkillN24 {
+			a.endRush(ctx, e.Time)
+		}
 	case unit.WallHit:
 		a.onWall(ctx, e)
 	case unit.Sense:
@@ -245,17 +250,6 @@ func (a *人偶使) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 func (a *人偶使) onWall(ctx unit.Context, e unit.WallHit) {
-	a.endRush(ctx, e.Time)
-}
-
-func (a *人偶使) onCollide(ctx unit.Context, e unit.Collision) {
-	if a.job.kind != SkillN24 || a.job.left <= 0 {
-		return
-	}
-	if !unit.EnemyTarget(e, a.slot) {
-		return
-	}
-	deal(ctx, ctx.ID, e.Other.ID, float64(a.job.left)*a.job.dmg)
 	a.endRush(ctx, e.Time)
 }
 
@@ -319,7 +313,7 @@ func (a *人偶使) onSense(ctx unit.Context, s unit.Sense) {
 		a.hx, a.hy = s.Self.VX/n, s.Self.VY/n
 	}
 	a.nearby = append(a.nearby[:0], s.Nearby...)
-	a.countDolls(ctx.ID)
+	a.countDolls(ctx.State, ctx.ID)
 	if a.booted {
 		if !a.lockedOut(s.Time) {
 			dt := s.Time - a.lastT
@@ -335,7 +329,7 @@ func (a *人偶使) onSense(ctx unit.Context, s unit.Sense) {
 	} else {
 		a.boot(ctx, s.Time)
 	}
-	owners.Store(ctx.ID, a)
+	stateFor(ctx.State).owners.Store(ctx.ID, a)
 	a.emitHUD(ctx, s)
 	a.tickJob(ctx, s)
 	if a.lockedOut(s.Time) {
@@ -422,7 +416,7 @@ func (a *人偶使) ensureRNG(ctx unit.Context) {
 	}
 }
 
-func (a *人偶使) countDolls(id uint64) {
+func (a *人偶使) countDolls(scope *unit.MatchState, id uint64) {
 	a.idleDolls = 0
 	a.liveDolls = 0
 	for i := range a.nearby {
@@ -431,7 +425,7 @@ func (a *人偶使) countDolls(id uint64) {
 			continue
 		}
 		a.liveDolls++
-		if stateOf(o.ID) == dollIdle {
+		if stateOf(scope, o.ID) == dollIdle {
 			a.idleDolls++
 		}
 	}
@@ -496,8 +490,8 @@ func enemyOf(s unit.Sense) *unit.Snapshot {
 	return unit.Seek(s)
 }
 
-func noteDealt(owner uint64) {
-	v, ok := owners.Load(owner)
+func noteDealt(scope *unit.MatchState, owner uint64) {
+	v, ok := stateFor(scope).owners.Load(owner)
 	if !ok {
 		return
 	}
@@ -508,8 +502,8 @@ func noteDealt(owner uint64) {
 	a.charge()
 }
 
-func ownerOf(id uint64) *人偶使 {
-	v, ok := owners.Load(id)
+func ownerOf(scope *unit.MatchState, id uint64) *人偶使 {
+	v, ok := stateFor(scope).owners.Load(id)
 	if !ok {
 		return nil
 	}
@@ -522,7 +516,7 @@ func deal(ctx unit.Context, owner, to uint64, amt float64) {
 		return
 	}
 	ctx.Out <- unit.Damage{From: ctx.ID, To: to, Amount: amt}
-	noteDealt(owner)
+	noteDealt(ctx.State, owner)
 }
 
 func pushEnemy(ctx unit.Context, fromX, fromY float64, e unit.Snapshot) (float64, float64) {
@@ -576,4 +570,14 @@ func faceOf(a *人偶使, s unit.Sense, enemy unit.Snapshot) (float64, float64) 
 func randDir(a *人偶使) (float64, float64) {
 	ang := a.rng.Float64() * 2 * math.Pi
 	return math.Cos(ang), math.Sin(ang)
+}
+
+const KindN24Arc = "人偶使冲刺扇环"
+
+func (a *人偶使) syncAttackFans(ctx unit.Context) {
+	s := a.fanSense
+	if s.Self.ID == 0 {
+		return
+	}
+	unit.SyncAttackFan(ctx, s, KindN24Arc, unit.FanAttack{Active: a.job.kind == SkillN24 && a.job.left > 0, Epoch: a.job.until, Until: a.job.until, Damage: float64(a.job.left) * a.job.dmg, Once: true})
 }

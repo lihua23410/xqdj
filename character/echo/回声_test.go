@@ -319,10 +319,10 @@ func TestDashWhenLocked(t *testing.T) {
 		t.Fatalf("突进没追目标：%+v", cmds)
 	}
 
-	e.Handle(ctx, unit.Collision{Time: 0.30, Other: foe})
+	e.Handle(ctx, unit.FanHit{Kind: KindEchoArc, Time: 0.30, Other: foe})
 	cmds = drain(out)
-	if d, ok := damageOf(cmds); !ok || d.Amount != 6 || d.To != 9 {
-		t.Fatalf("突进撞人伤害=%+v %v", d, ok)
+	if _, ok := damageOf(cmds); ok || !e.struck {
+		t.Fatal("fan hit must mark the dash without duplicating its damage")
 	}
 	e.Handle(ctx, unit.Collision{Time: 0.32, Other: foe})
 	if _, ok := damageOf(drain(out)); ok {

@@ -23,7 +23,7 @@ const (
 )
 
 const (
-	bodyHP       = 100.0
+	bodyHP       = 120.0
 	bodyRadius   = 28.0
 	minRadius    = 11.0
 	bodyCruise   = 108.0
@@ -32,15 +32,13 @@ const (
 	bodyColor    = "#74d8c6"
 	shotColor    = "#b6fff0"
 	chunkColor   = "#67c9b8"
-	shotRadius   = 10.0
 	shotSpeed    = 450.0
-	shotDamage   = 12.0
-	shotCost     = 12.0
 	minShotHP    = 24.0
 	shotInterval = 1.8
 	shotLife     = 3.4
 	shotBounces  = 2
 	chunkLife    = 9.0
+	chunkRemain  = 0.5 // 质量块减伤后剩下一半
 	maxChunks    = 24
 	maxShedBits  = 12
 	minChunkMass = 1
@@ -48,8 +46,10 @@ const (
 	shedMinRange = 78.0
 	shedMaxRange = 145.0
 	shedGap      = 0.22
-	contactGap   = 0.75
 	steerGap     = 0.36
+	// 质量块在场时本体让到活随从默认那一档；质量块本身和战斗机同一档。
+	chunkAim       = unit.DefaultFighterAim
+	bodyAimCovered = unit.DefaultMortalAim
 )
 
 type chunkDef struct {
@@ -64,6 +64,18 @@ var chunkList []chunkDef
 
 func massKind(value int) string {
 	return KindMassBlock + strconv.Itoa(value)
+}
+
+func shotKind(value int) string {
+	return KindShot + strconv.Itoa(value)
+}
+
+func shotRadiusForMass(value int) float64 {
+	return 5 + math.Sqrt(float64(value))*1.45
+}
+
+func shotSpeedForMass(value int) float64 {
+	return shotSpeed - float64(value)*5
 }
 
 func initChunkDefs() {
@@ -94,20 +106,23 @@ func init() {
 			Kind: def.kind, Role: unit.RoleMinion,
 			Radius: def.radius, MaxHP: 1, Speed: 0, Vision: bodyVision,
 			Mortal:      true,
-			AimPriority: 255,
+			AimPriority: chunkAim,
 			Look:        unit.Look{Color: chunkColor, FX: []string{"coalesce-chunk"}},
 		}, func(info unit.SpawnInfo) unit.Actor {
-			return &massChunk{bornAt: -1, owner: info.OwnerID, slot: info.Slot}
+			return &massChunk{bornAt: -1, owner: info.OwnerID, slot: info.Slot, hp: 1}
 		})
 	}
 
-	p.Register(unit.Spec{
-		Kind: KindShot, Role: unit.RoleProjectile,
-		Radius: shotRadius, MaxHP: 1, Speed: shotSpeed, Vision: bodyVision,
-		Look: unit.Look{Color: shotColor, Trail: true, Glow: true, FX: []string{"coalesce-shot"}},
-	}, func(info unit.SpawnInfo) unit.Actor {
-		return &massShot{owner: info.OwnerID, slot: info.Slot, bornAt: -1}
-	})
+	for value := minChunkMass; value <= maxChunkMass; value++ {
+		value := value
+		p.Register(unit.Spec{
+			Kind: shotKind(value), Role: unit.RoleProjectile,
+			Radius: shotRadiusForMass(value), MaxHP: 1, Speed: shotSpeedForMass(value), Vision: bodyVision,
+			Look: unit.Look{Color: shotColor, Trail: true, Glow: true, FX: []string{"coalesce-shot"}},
+		}, func(info unit.SpawnInfo) unit.Actor {
+			return &massShot{owner: info.OwnerID, slot: info.Slot, bornAt: -1, mass: value}
+		})
+	}
 }
 
 type point struct {
@@ -126,9 +141,9 @@ type 凝聚体 struct {
 	lastCruise float64
 
 	knownChunks  int
+	chunkCovered bool
 	nextShotAt   float64
 	nextSteerAt  float64
-	nextContact  float64
 	lastShedTime float64
 }
 
@@ -138,8 +153,6 @@ func (a *凝聚体) Handle(ctx unit.Context, ev unit.Event) {
 		a.onIncoming(ctx, e)
 	case unit.Sense:
 		a.onSense(ctx, e)
-	case unit.Collision:
-		a.onCollision(ctx, e)
 	}
 }
 
@@ -158,6 +171,7 @@ func (a *凝聚体) onSense(ctx unit.Context, sense unit.Sense) {
 
 	a.syncMass(ctx, sense)
 	a.knownChunks = a.settleChunks(ctx, sense)
+	a.syncChunkAim(ctx, a.knownChunks)
 	target := unit.Seek(sense)
 	a.steer(ctx, sense, target)
 	a.maybeFire(ctx, sense, target)
@@ -208,6 +222,19 @@ func (a *凝聚体) settleChunks(ctx unit.Context, sense unit.Sense) int {
 		alive++
 	}
 	return alive
+}
+
+func (a *凝聚体) syncChunkAim(ctx unit.Context, alive int) {
+	covered := alive > 0
+	if covered == a.chunkCovered {
+		return
+	}
+	a.chunkCovered = covered
+	value := unit.DefaultFighterAim
+	if covered {
+		value = bodyAimCovered
+	}
+	ctx.Out <- unit.SetAimPriority{From: ctx.ID, UnitID: ctx.ID, Value: value}
 }
 
 func (a *凝聚体) steer(ctx unit.Context, sense unit.Sense, target *unit.Snapshot) {
@@ -270,12 +297,17 @@ func (a *凝聚体) maybeFire(ctx unit.Context, sense unit.Sense, target *unit.S
 	if target == nil || sense.Time+1e-9 < a.nextShotAt || sense.Self.HP <= minShotHP {
 		return
 	}
+	shotMass := minChunkMass
+	if a.rng != nil {
+		shotMass += a.rng.IntN(maxChunkMass)
+	}
 	dx, dy := target.X-a.x, target.Y-a.y
 	length := math.Hypot(dx, dy)
 	if length < 1e-6 {
 		return
 	}
-	lead := math.Min(0.9, length/shotSpeed*0.72)
+	speed := shotSpeedForMass(shotMass)
+	lead := math.Min(0.9, length/speed*0.72)
 	dx += target.VX * lead
 	dy += target.VY * lead
 	length = math.Hypot(dx, dy)
@@ -284,31 +316,17 @@ func (a *凝聚体) maybeFire(ctx unit.Context, sense unit.Sense, target *unit.S
 	}
 	ux, uy := dx/length, dy/length
 	a.nextShotAt = sense.Time + shotInterval
-	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: sense.Self.HP - shotCost}
+	ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: sense.Self.HP - float64(shotMass)}
 	ctx.Out <- ctx.Born(unit.Spawn{
-		Kind: KindShot,
-		X:    a.x + ux*(sense.Self.Radius+shotRadius+4),
-		Y:    a.y + uy*(sense.Self.Radius+shotRadius+4),
-		VX:   ux * shotSpeed, VY: uy * shotSpeed,
+		Kind: shotKind(shotMass),
+		X:    a.x + ux*(sense.Self.Radius+shotRadiusForMass(shotMass)+4),
+		Y:    a.y + uy*(sense.Self.Radius+shotRadiusForMass(shotMass)+4),
+		VX:   ux * speed, VY: uy * speed,
 		OwnerID: ctx.ID, Slot: a.slot,
 	})
 	ctx.Out <- unit.FX{
 		Name: "coalesce-compress", Kind: KindCoalesce, UnitID: ctx.ID, Slot: a.slot,
-		X: a.x, Y: a.y, VX: ux, VY: uy, Amount: shotCost,
-	}
-}
-
-func (a *凝聚体) onCollision(ctx unit.Context, hit unit.Collision) {
-	if !unit.EnemyTarget(hit, a.slot) || hit.Time+1e-9 < a.nextContact {
-		return
-	}
-	a.nextContact = hit.Time + contactGap
-	damage := 4 + a.hp*0.10
-	ctx.Out <- unit.Damage{From: ctx.ID, To: hit.Other.ID, Amount: damage}
-	ctx.Out <- unit.FX{
-		Name: "coalesce-collide", Kind: KindCoalesce, UnitID: ctx.ID, Slot: a.slot,
-		X: hit.Other.X, Y: hit.Other.Y, Amount: damage,
-		VX: hit.NX, VY: hit.NY,
+		X: a.x, Y: a.y, VX: ux, VY: uy, Amount: float64(shotMass),
 	}
 }
 
@@ -422,16 +440,27 @@ type massChunk struct {
 	owner  uint64
 	slot   int
 	x, y   float64
+	hp     float64
 	booted bool
 }
 
 func (c *massChunk) Handle(ctx unit.Context, ev unit.Event) {
 	if hit, ok := ev.(unit.IncomingDamage); ok {
-		ctx.Out <- unit.FX{
-			Name: "coalesce-chunk-break", Kind: KindCoalesce, UnitID: c.owner, Slot: c.slot,
-			X: c.x, Y: c.y, Amount: hit.Amount,
+		if c.hp <= 0 {
+			c.hp = 1
 		}
-		unit.ConfirmHit(ctx, hit)
+		amt := hit.Amount * chunkRemain
+		if amt >= c.hp {
+			ctx.Out <- unit.FX{
+				Name: "coalesce-chunk-break", Kind: KindCoalesce, UnitID: c.owner, Slot: c.slot,
+				X: c.x, Y: c.y, Amount: amt,
+			}
+		}
+		c.hp -= amt
+		if c.hp < 0 {
+			c.hp = 0
+		}
+		ctx.Out <- unit.ConfirmDamage{Token: hit.Token, UnitID: ctx.ID, Amount: amt}
 		return
 	}
 	sense, ok := ev.(unit.Sense)
@@ -439,6 +468,7 @@ func (c *massChunk) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	c.x, c.y = sense.Self.X, sense.Self.Y
+	c.hp = sense.Self.HP
 	if !c.booted {
 		c.booted = true
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
@@ -455,6 +485,7 @@ func (c *massChunk) Handle(ctx unit.Context, ev unit.Event) {
 type massShot struct {
 	owner uint64
 	slot  int
+	mass  int
 
 	bornAt    float64
 	x, y      float64
@@ -490,16 +521,17 @@ func (s *massShot) Handle(ctx unit.Context, ev unit.Event) {
 			return
 		}
 		if unit.Hittable(e.Other, s.slot) {
-			ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: shotDamage}
+			amount := float64(s.mass)
+			ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: amount}
 			ctx.Out <- unit.FX{
 				Name: "coalesce-shot-hit", Kind: KindCoalesce, UnitID: s.owner, Slot: s.slot,
-				X: e.Other.X, Y: e.Other.Y, Amount: shotDamage,
+				X: e.Other.X, Y: e.Other.Y, Amount: amount,
 			}
 			x, y := e.Other.X, e.Other.Y
 			if s.seenOwner {
 				dx, dy := s.ox-x, s.oy-y
 				if length := math.Hypot(dx, dy); length > 1e-6 {
-					def := chunkDefs[massKind(maxChunkMass)]
+					def := chunkDefs[massKind(s.mass)]
 					x += dx / length * (e.Other.Radius + def.radius + 6)
 					y += dy / length * (e.Other.Radius + def.radius + 6)
 				}
@@ -521,7 +553,7 @@ func (s *massShot) returnChunk(ctx unit.Context, x, y float64) {
 		return
 	}
 	s.dead = true
-	def := chunkDefs[massKind(maxChunkMass)]
+	def := chunkDefs[massKind(s.mass)]
 	if s.field.Name != "" {
 		x, y = s.field.Clamp(x, y, def.radius+2)
 	}

@@ -4,6 +4,7 @@
 // （app.js 的 IMMEDIATE_AUDIO / shot 分支），派发时只给一个没有坐标的
 // audioOnly 上下文，画面那一遍会直接跳过——拿来画气泡会画不出来。
 window.subpoenaDmg = window.subpoenaDmg || {};
+window.subpoenaStale = window.subpoenaStale || {};
 
 (function () {
   // 表里只该留下场上的票。超过这个量说明攒了不少作废的 id，整表清一次；
@@ -13,11 +14,14 @@ window.subpoenaDmg = window.subpoenaDmg || {};
   arena.registerShot("ticket", (fx) => {
     if (!fx || fx.unitId == null) return;
     const table = window.subpoenaDmg;
-    if (!table) return;
+    const stale = window.subpoenaStale;
+    if (!table || !stale) return;
     if (Object.keys(table).length > CAP) {
       for (const k in table) delete table[k];
+      for (const k in stale) delete stale[k];
     }
     table[fx.unitId] = fx.amount || 0;
+    stale[fx.unitId] = (fx.vx || 0) > 0;
   });
 
   arena.registerShot("fault", (fx, ctx) => {

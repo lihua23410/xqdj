@@ -8,9 +8,11 @@ import (
 )
 
 func TestHammerSmashStunsInMelee(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	h := &钉与锤{hammerArmed: true, nailReadyAt: 999, ritualReadyAt: 999, dollsSpawned: true}
-	ctx := unit.Context{ID: 1, Kind: KindHammer, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
 	self := me(0, 0)
 	enemy := foe(30, 0)
 	enemy.VX, enemy.VY = 90, 10
@@ -33,9 +35,11 @@ func TestHammerSmashStunsInMelee(t *testing.T) {
 }
 
 func TestHammerStunUsesUntil(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	h := &钉与锤{hammerArmed: true, nailReadyAt: 999, ritualReadyAt: 999, dollsSpawned: true}
-	ctx := unit.Context{ID: 1, Kind: KindHammer, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
 	self := me(0, 0)
 	enemy := foe(30, 0)
 	h.Handle(ctx, unit.Sense{Time: 1, Self: self, Nearby: []unit.Snapshot{enemy}})
@@ -59,9 +63,11 @@ func TestHammerStunUsesUntil(t *testing.T) {
 }
 
 func TestHammerSmashHitsMinion(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	h := &钉与锤{hammerArmed: true, nailReadyAt: 999, ritualReadyAt: 999, dollsSpawned: true}
-	ctx := unit.Context{ID: 1, Kind: KindHammer, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
 	minion := unit.Snapshot{
 		ID: 3, Kind: "活随从", Role: unit.RoleMinion, Slot: 1, Mortal: true,
 		X: 28, Y: 0, Radius: 12, OwnerID: 2,
@@ -78,9 +84,11 @@ func TestHammerSmashHitsMinion(t *testing.T) {
 }
 
 func TestHammerSmashDoesNotMoveDoll(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	h := &钉与锤{hammerArmed: true, nailReadyAt: 999, ritualReadyAt: 999, dollsSpawned: true}
-	ctx := unit.Context{ID: 1, Kind: KindHammer, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
 	doll := unit.Snapshot{
 		ID: 10, Kind: KindDoll, Role: unit.RoleMinion, Slot: 1, Mortal: true,
 		X: 26, Y: 0, Radius: dollRadius, OwnerID: 1, HP: 40,
@@ -99,9 +107,11 @@ func TestHammerSmashDoesNotMoveDoll(t *testing.T) {
 }
 
 func TestHammerSmashHitsOwnDoll(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	h := &钉与锤{hammerArmed: true, nailReadyAt: 999, ritualReadyAt: 999, dollsSpawned: true}
-	ctx := unit.Context{ID: 1, Kind: KindHammer, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
 	doll := unit.Snapshot{
 		ID: 10, Kind: KindDoll, Role: unit.RoleMinion, Slot: 1, Mortal: true,
 		X: 26, Y: 0, Radius: dollRadius, OwnerID: 1,
@@ -116,10 +126,30 @@ func TestHammerSmashHitsOwnDoll(t *testing.T) {
 	}
 }
 
+func TestDollTransferRateLimited(t *testing.T) {
+	sc := &unit.MatchState{}
+	if !transferReady(sc, 1, 10) {
+		t.Fatal("第一下该放行")
+	}
+	for _, now := range []float64{10.1, 10.5, 10.99} {
+		if transferReady(sc, 1, now) {
+			t.Fatalf("%v 在 CD 里不该再转伤", now)
+		}
+	}
+	if !transferReady(sc, 1, 11) {
+		t.Fatal("满 1 秒该再转")
+	}
+	if !transferReady(sc, 2, 10.2) {
+		t.Fatal("两个本体各算各的 CD")
+	}
+}
+
 func TestDollHoldsPassAndExpires(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 8)
 	d := &人偶{}
-	ctx := unit.Context{ID: 10, Kind: KindDoll, Out: out}
+	ctx := unit.Context{State: matchState, ID: 10, Kind: KindDoll, Out: out}
 	self := unit.Snapshot{ID: 10, Kind: KindDoll, Role: unit.RoleMinion, Slot: 1, Mortal: true, Radius: dollRadius}
 	d.Handle(ctx, unit.Sense{Time: 30, Self: self})
 	boot := drain(out)
@@ -142,30 +172,58 @@ func TestDollHoldsPassAndExpires(t *testing.T) {
 	}
 }
 
-func TestArcCopiesDollHitImmediately(t *testing.T) {
-	rememberFoe(1, 2)
-	t.Cleanup(func() { rememberFoe(1, 0) })
+func TestArcCopiesDollHitOncePerTouch(t *testing.T) {
+	matchState := &unit.MatchState{}
+
+	rememberFoe(matchState, 1, 2)
+	t.Cleanup(func() { rememberFoe(matchState, 1, 0) })
 	out := make(chan unit.Cmd, 16)
-	a := &弧{owner: 1, slot: 0}
-	ctx := unit.Context{ID: 8, Kind: KindHammerArc, Out: out}
+	arcCtx := unit.Context{State: matchState, ID: 8, Kind: KindHammerArc, Out: out}
 	doll := unit.Snapshot{
 		ID: 10, Kind: KindDoll, Role: unit.RoleMinion, Slot: 1, Mortal: true,
-		OwnerID: 1, HP: 40, Radius: dollRadius,
+		OwnerID: 1, HP: 40, X: 30, Y: 0, Radius: dollRadius,
 	}
-	a.Handle(ctx, unit.Collision{Time: 1, Other: doll})
+	a := &弧{owner: 1, slot: 0}
+	a.Handle(arcCtx, unit.Collision{Time: 1, Other: doll})
 	cmds := drain(out)
-	if d := damageTo(cmds, 10); d == nil || d.Amount != arcDamage {
+	if d := damageTo(cmds, 10); d == nil || d.Amount != arcDamage || d.From != 8 {
 		t.Fatalf("doll dmg=%v cmds=%v", d, cmds)
 	}
+	if damageTo(cmds, 2) != nil {
+		t.Fatalf("arc must not quote the transfer: %v", cmds)
+	}
+
+	again := &弧{owner: 1, slot: 0}
+	again.Handle(arcCtx, unit.Collision{Time: 1.1, Other: doll})
+	if len(drain(out)) != 0 {
+		t.Fatal("still touching the doll should not hit again")
+	}
+
+	h := &钉与锤{nailReadyAt: 999, ritualReadyAt: 999, dollsSpawned: true}
+	hctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
+	self := me(0, 0)
+	h.Handle(hctx, unit.Sense{Time: 1.1, Self: self, Nearby: []unit.Snapshot{doll, foe(400, 0)}})
+	cmds = drain(out)
 	if d := damageTo(cmds, 2); d == nil || d.Amount != arcDamage || d.From != 1 {
-		t.Fatalf("copy dmg=%v cmds=%v", d, cmds)
+		t.Fatalf("transfer=%v cmds=%v", d, cmds)
+	}
+
+	h.Handle(hctx, unit.Sense{Time: 1.2, Self: me(400, 0), Nearby: []unit.Snapshot{doll}})
+	drain(out)
+	third := &弧{owner: 1, slot: 0}
+	third.Handle(arcCtx, unit.Collision{Time: 1.3, Other: doll})
+	cmds = drain(out)
+	if d := damageTo(cmds, 10); d == nil || d.Amount != arcDamage {
+		t.Fatalf("a new touch should hit the doll again: %v", cmds)
 	}
 }
 
 func TestNailHitPinsThenReleases(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	n := &钉{owner: 1, slot: 0, spawnTime: 0}
-	ctx := unit.Context{ID: 9, Kind: KindNail, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNail, Out: out}
 	enemy := foe(200, 0)
 	enemy.VX, enemy.VY = 80, 0
 	n.Handle(ctx, unit.Collision{Time: 1, Other: enemy})
@@ -224,9 +282,11 @@ func TestNailHitPinsThenReleases(t *testing.T) {
 }
 
 func TestNailLostTargetClearsPin(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	n := &钉{owner: 1, slot: 0, spawnTime: 0}
-	ctx := unit.Context{ID: 9, Kind: KindNail, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNail, Out: out}
 	n.Handle(ctx, unit.Collision{Time: 1, Other: foe(200, 0)})
 	_ = drain(out)
 	n.Handle(ctx, unit.Sense{
@@ -247,9 +307,11 @@ func TestNailLostTargetClearsPin(t *testing.T) {
 }
 
 func TestNailIgnoresSecondHit(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	n := &钉{owner: 1, slot: 0, spawnTime: 0, hit: true, enemyID: 2}
-	ctx := unit.Context{ID: 9, Kind: KindNail, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNail, Out: out}
 	n.Handle(ctx, unit.Collision{Time: 2, Other: foe(10, 0)})
 	if cmds := drain(out); len(cmds) != 0 {
 		t.Fatalf("second collision should be ignored: %v", cmds)
@@ -257,9 +319,11 @@ func TestNailIgnoresSecondHit(t *testing.T) {
 }
 
 func TestNailWallHitComputesBounce(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 16)
 	n := &钉{owner: 1, slot: 0, spawnTime: 0, phase: nailFly, flyX: nailSpeed, flyY: 0}
-	ctx := unit.Context{ID: 9, Kind: KindNail, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNail, Out: out}
 	n.Handle(ctx, unit.WallHit{Time: 1, NX: 1, NY: 0})
 	cmds := drain(out)
 	v := lastVel(cmds, 9)
@@ -279,9 +343,11 @@ func TestNailWallHitComputesBounce(t *testing.T) {
 }
 
 func TestNailHitsLivingMinion(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	n := &钉{owner: 1, slot: 0, spawnTime: 0}
-	ctx := unit.Context{ID: 9, Kind: KindNail, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNail, Out: out}
 	minion := unit.Snapshot{
 		ID: 4, Kind: "活随从", Role: unit.RoleMinion, Slot: 1, Mortal: true,
 		X: 40, Y: 0, Radius: 12, HP: 30, VX: 80,
@@ -304,11 +370,13 @@ func TestNailHitsLivingMinion(t *testing.T) {
 }
 
 func TestNailHitsDollWithoutDisplace(t *testing.T) {
-	rememberFoe(1, 2)
-	t.Cleanup(func() { rememberFoe(1, 0) })
+	matchState := &unit.MatchState{}
+
+	rememberFoe(matchState, 1, 2)
+	t.Cleanup(func() { rememberFoe(matchState, 1, 0) })
 	out := make(chan unit.Cmd, 32)
 	n := &钉{owner: 1, slot: 0, spawnTime: 0}
-	ctx := unit.Context{ID: 9, Kind: KindNail, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNail, Out: out}
 	doll := unit.Snapshot{
 		ID: 10, Kind: KindDoll, Role: unit.RoleMinion, Slot: 1, Mortal: true,
 		OwnerID: 1, HP: 40, X: 20, Y: 0, Radius: dollRadius,
@@ -341,9 +409,11 @@ func TestNailHitsDollWithoutDisplace(t *testing.T) {
 }
 
 func TestCurseSevenBurstsAndClears(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	n := &钉{owner: 1, slot: 0, spawnTime: 0}
-	ctx := unit.Context{ID: 9, Kind: KindNail, Out: out}
+	ctx := unit.Context{State: matchState, ID: 9, Kind: KindNail, Out: out}
 	enemy := foe(40, 0)
 	enemy.HP = 100
 	enemy.Marks = []unit.Mark{{Kind: curseKind, Stacks: 6, Icon: curseIcon}}
@@ -361,9 +431,11 @@ func TestCurseSevenBurstsAndClears(t *testing.T) {
 }
 
 func TestHammerSmashCursesAlreadyCursed(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	h := &钉与锤{hammerArmed: true, nailReadyAt: 999, ritualReadyAt: 999, dollsSpawned: true}
-	ctx := unit.Context{ID: 1, Kind: KindHammer, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
 	enemy := foe(30, 0)
 	enemy.Marks = []unit.Mark{{Kind: curseKind, Stacks: 2, Icon: curseIcon}}
 	h.Handle(ctx, unit.Sense{Time: 1, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
@@ -377,9 +449,11 @@ func TestHammerSmashCursesAlreadyCursed(t *testing.T) {
 }
 
 func TestFireNailSwingsAround(t *testing.T) {
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	h := &钉与锤{nailReadyAt: 0, ritualReadyAt: 999, dollsSpawned: true}
-	ctx := unit.Context{ID: 1, Kind: KindHammer, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
 	near := unit.Snapshot{
 		ID: 4, Kind: "活随从", Role: unit.RoleMinion, Slot: 1, Mortal: true,
 		X: 20, Y: 0, Radius: 12, HP: 30,
@@ -402,11 +476,11 @@ func TestFireNailSwingsAround(t *testing.T) {
 }
 
 func TestRitualNailsFollowThenShoot(t *testing.T) {
-	resetNailJobs()
-	t.Cleanup(resetNailJobs)
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	h := &钉与锤{started: true, nailReadyAt: 999, dollsSpawned: true}
-	ctx := unit.Context{ID: 1, Kind: KindHammer, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
 	enemy := foe(80, 0)
 	h.Handle(ctx, unit.Sense{Time: 1, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
 	cmds := drain(out)
@@ -417,8 +491,15 @@ func TestRitualNailsFollowThenShoot(t *testing.T) {
 		t.Fatalf("ritual CD=%v", h.ritualReadyAt)
 	}
 
-	n := &钉{owner: 1, slot: 0, spawnTime: -1}
-	nctx := unit.Context{ID: 21, Kind: KindNail, Out: out}
+	var birth unit.Spawn
+	for _, cmd := range cmds {
+		if sp, ok := cmd.(unit.Spawn); ok && sp.Kind == KindNail {
+			birth = sp
+			break
+		}
+	}
+	n := unit.NewActor(KindNail, unit.SpawnInfo{State: matchState, OwnerID: 1, Slot: 0, Data: birth.Data}).(*钉)
+	nctx := unit.Context{State: matchState, ID: 21, Kind: KindNail, Out: out}
 	n.Handle(nctx, unit.Sense{
 		Time:   1,
 		Self:   unit.Snapshot{ID: 21, Kind: KindNail, Role: unit.RoleProjectile, Slot: 0, X: 80, Y: 56},
@@ -487,11 +568,11 @@ func TestRitualNailsFollowThenShoot(t *testing.T) {
 }
 
 func TestRitualStartsOnCooldown(t *testing.T) {
-	resetNailJobs()
-	t.Cleanup(resetNailJobs)
+	matchState := &unit.MatchState{}
+
 	out := make(chan unit.Cmd, 32)
 	h := &钉与锤{nailReadyAt: 999, dollsSpawned: true}
-	ctx := unit.Context{ID: 1, Kind: KindHammer, Out: out}
+	ctx := unit.Context{State: matchState, ID: 1, Kind: KindHammer, Out: out}
 	h.Handle(ctx, unit.Sense{Time: 1, Self: me(0, 0), Nearby: []unit.Snapshot{foe(80, 0)}})
 	cmds := drain(out)
 	if countSpawn(cmds, KindNail) != 0 {

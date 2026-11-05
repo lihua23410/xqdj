@@ -22,7 +22,7 @@ const (
 	orcaVision    = 9999.0
 	surfaceCruise = 160.0
 	diveCruise    = 40.0
-	formSec       = 6.0
+	formSec       = 7.0
 	diveSec       = 0.45
 	leapSec       = 0.5
 	surfaceSec    = 1.1
@@ -36,7 +36,7 @@ const (
 	bowlCap       = 5
 	riceEvery     = 3.0
 	eatSec        = 1.5
-	mealHeal      = 5.0
+	mealHeal      = 8.0
 	hungerSec     = 7.0
 	callEvery     = 0.5
 	rushSec       = 0.4

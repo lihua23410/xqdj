@@ -40,18 +40,24 @@ func TestRequestedWeaponDamageValues(t *testing.T) {
 	if gatlingMag != 60 {
 		t.Fatalf("gatling magazine=%d, want 60", gatlingMag)
 	}
-	if dropChance != 0.50 {
-		t.Fatalf("drop chance=%v, want 0.50", dropChance)
+	if dropChance != 0.33 {
+		t.Fatalf("drop chance=%v, want 0.33", dropChance)
+	}
+	if evolvedSpeed >= pinkSpeed {
+		t.Fatalf("evolved speed=%v, want slower than base speed %v", evolvedSpeed, pinkSpeed)
+	}
+	if sawCD <= meleeCD {
+		t.Fatalf("saw cooldown=%v, want slower than axe cooldown %v", sawCD, meleeCD)
 	}
 	if crowdMax != 6 {
 		t.Fatalf("crowd max=%d, want 6", crowdMax)
 	}
-	if crowdKillHeal != 3 || fireDamage != 4 {
-		t.Fatalf("crowd heal/fire damage=%v/%v, want 3/4", crowdKillHeal, fireDamage)
+	if fireDamage != 4 {
+		t.Fatalf("fire damage=%v, want 4", fireDamage)
 	}
 }
 
-func TestCrowdKillGrantsHalfSecondInvulnerability(t *testing.T) {
+func TestCrowdKillGrantsHalfSecondInvulnerabilityWithoutHealing(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	body := &pink{now: 5, slot: 0}
 	ctx := unit.Context{ID: 1, Kind: KindPink, Out: out}
@@ -63,15 +69,15 @@ func TestCrowdKillGrantsHalfSecondInvulnerability(t *testing.T) {
 	blocked := false
 	healed := false
 	for _, cmd := range drainPink(out) {
-		if heal, ok := cmd.(unit.Heal); ok && heal.UnitID == 1 && heal.Amount == crowdKillHeal {
+		if heal, ok := cmd.(unit.Heal); ok && heal.UnitID == 1 {
 			healed = true
 		}
 		if b, ok := cmd.(unit.BlockDamage); ok && b.Token == 3 {
 			blocked = true
 		}
 	}
-	if !healed {
-		t.Fatal("crowd kill should heal Pink by three health")
+	if healed {
+		t.Fatal("crowd kill should not heal Pink")
 	}
 	if !blocked {
 		t.Fatal("damage within half a second of a crowd kill should be blocked")
@@ -92,6 +98,15 @@ func TestCrowdKillsAdvanceEveryTwoAndResetWeapon(t *testing.T) {
 	}
 	if body.weapon != weaponDefault || body.ammo != 0 {
 		t.Fatalf("weapon should reset on form change, got weapon=%d ammo=%d", body.weapon, body.ammo)
+	}
+	speedSet := false
+	for _, cmd := range drainPink(out) {
+		if c, ok := cmd.(unit.SetCruise); ok && c.UnitID == 1 && c.Speed == evolvedSpeed {
+			speedSet = true
+		}
+	}
+	if !speedSet {
+		t.Fatal("evolved form should lower Pink cruise speed")
 	}
 }
 
@@ -123,7 +138,7 @@ func TestCrowdOnlyTakesDamageFromPink(t *testing.T) {
 	}
 }
 
-func TestPlainCollisionDealsSix(t *testing.T) {
+func TestPlainBodyCollisionDoesNotDealDamage(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	body := &pink{form: formPlain, weapon: weaponDefault, slot: 0}
 	body.Handle(unit.Context{ID: 1, Kind: KindPink, Out: out}, unit.Collision{
@@ -131,8 +146,27 @@ func TestPlainCollisionDealsSix(t *testing.T) {
 		Other: unit.Snapshot{ID: 2, Slot: 1, Role: unit.RoleFighter},
 	})
 	cmds := drainPink(out)
-	if d := firstDamage(cmds, 2); d == nil || d.Amount != 6 {
-		t.Fatalf("plain collision damage = %+v, want 6", d)
+	if d := firstDamage(cmds, 2); d != nil {
+		t.Fatalf("body collision must not damage: %+v", d)
+	}
+}
+
+func TestNewFanCanDamageItsOwnCrowdBeforeFirstSense(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	c := &crowd{owner: 1}
+	c.Handle(unit.Context{ID: 3, Out: out}, unit.IncomingDamage{Token: 1, From: 99, SourceOwnerID: 1, Amount: 6})
+	c.Handle(unit.Context{ID: 3, Out: out}, unit.IncomingDamage{Token: 2, From: 100, SourceOwnerID: 2, Amount: 6})
+	confirmed, blocked := false, false
+	for _, cmd := range drainPink(out) {
+		if d, ok := cmd.(unit.ConfirmDamage); ok && d.Token == 1 {
+			confirmed = true
+		}
+		if d, ok := cmd.(unit.BlockDamage); ok && d.Token == 2 {
+			blocked = true
+		}
+	}
+	if !confirmed || !blocked {
+		t.Fatalf("own crowd protection: confirmed=%v blocked=%v", confirmed, blocked)
 	}
 }
 
@@ -216,8 +250,8 @@ func TestFuelDashHitsThreeTimesAndBlocksDamage(t *testing.T) {
 	body.startFuelDash(ctx, 1)
 	cmds := drainPink(out)
 	total, hits := damageTotal(cmds, 2)
-	if hits != sawHits || total != sawHits*sawHit {
-		t.Fatalf("fuel hits=%d total=%v, want %d hits and %v", hits, total, sawHits, sawHits*sawHit)
+	if hits != 0 || total != 0 {
+		t.Fatalf("body must leave damage to fan: hits=%d total=%v (fan expects %d hits and %v)", hits, total, sawHits, sawHits*sawHit)
 	}
 	body.Handle(ctx, unit.IncomingDamage{Token: 3, From: 2, Amount: 99, Time: 1.1})
 	blocked := false

@@ -146,3 +146,23 @@ func TestPurifyUsesUpdatedTiming(t *testing.T) {
 		t.Fatalf("purify invuln until=%v, want 11.5", a.invulnUntil)
 	}
 }
+func TestKunaiAttackSpawnsObservableProjectileProxy(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	a := &谭泳辰老先生{boot: true, hasKunai: true, rng: unit.NewRNG(1), x: 0, y: 0, slot: 0}
+	target := unit.Snapshot{ID: 2, Slot: 1, Role: unit.RoleFighter, X: 100, Y: 0, Radius: 18, AimPriority: 15}
+	ok := a.attack(unit.Context{ID: 1, Kind: KindTan, Out: out}, unit.Sense{
+		Time: 1, Self: tanSelf(0, 0), Nearby: []unit.Snapshot{target},
+	}, false)
+	if !ok || len(a.pending) != 1 {
+		t.Fatalf("attack=%v pending=%d", ok, len(a.pending))
+	}
+	found := false
+	for _, cmd := range drain(out) {
+		if spawn, isSpawn := cmd.(unit.Spawn); isSpawn && spawn.Kind == KindTanKunaiShot && spawn.OwnerID == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("kunai attack should spawn an observable projectile proxy")
+	}
+}

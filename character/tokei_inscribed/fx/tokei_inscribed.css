@@ -1,0 +1,352 @@
+/* 时计·铭刻：外观沿用原版时计——白盘、黑刻度、时针分针。
+   两根针接的是铭刻自己的资源：分针 = 抽卡进度（10 点一圈），时针 = 时痕层数（每层一小时）。
+   球下方一排手牌槽，右下角小环是 20 秒命中抽牌冷却。 */
+.ball.look-tokei-inscribed {
+  box-shadow: 0 0 10px rgba(244, 242, 236, 0.35);
+}
+
+.look-tokei-inscribed .tokei-face {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background: var(--tokei-face, #f4f2ec);
+  border: 2px solid #14161a;
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+/* 12 个刻度：每 30° 一个 */
+.look-tokei-inscribed .tokei-face .tick {
+  position: absolute;
+  left: 50%;
+  top: 4%;
+  width: 1px;
+  height: 8%;
+  margin-left: -0.5px;
+  background: #14161a;
+  transform-origin: 50% 575%;
+}
+
+/* 针的公共部分：底端钉在盘心，0° 朝正上、顺时针为正。
+   时计是黑针；铭刻的针是金色——同一张脸，一眼分得清是谁。 */
+.look-tokei-inscribed .tokei-face .hand {
+  position: absolute;
+  left: 50%;
+  border-radius: 2px;
+  background: #c9a227;
+  box-shadow: 0 0 3px rgba(201, 162, 39, 0.75);
+  transform-origin: 50% 100%;
+  transform: rotate(0deg);
+}
+
+.look-tokei-inscribed .tokei-face .hand.hour {
+  top: 16%;
+  width: 3px;
+  height: 34%;
+  margin-left: -1.5px;
+}
+
+.look-tokei-inscribed .tokei-face .hand.minute {
+  top: 8%;
+  width: 1.5px;
+  height: 42%;
+  margin-left: -0.75px;
+}
+
+/* —— 手牌槽：球下方 5 个格子，空槽用抽卡进度当填充条 —— */
+.inscribed-hand {
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  display: flex;
+  gap: 3px;
+  transform: translate(-50%, 100%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.inscribed-card {
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(244, 242, 236, 0.45);
+  background: linear-gradient(to top, #8d8a80 var(--p, 0%), #22242a var(--p, 0%));
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+  opacity: 0.4;
+}
+
+.inscribed-card.is-on,
+.inscribed-card.is-fill {
+  opacity: 1;
+}
+
+.inscribed-card.is-on[data-c="1"] {
+  border-color: #e8a13a;
+  background: #e8a13a;
+  box-shadow: 0 0 8px #e8a13a;
+}
+
+.inscribed-card.is-on[data-c="2"] {
+  border-color: #9fc6e8;
+  background: #9fc6e8;
+  box-shadow: 0 0 8px #9fc6e8;
+}
+
+.inscribed-card.is-on[data-c="3"] {
+  border-color: #b7e8a1;
+  background: #b7e8a1;
+  box-shadow: 0 0 8px #b7e8a1;
+}
+
+.inscribed-card.is-on[data-c="4"] {
+  border-color: #f4f2ec;
+  background: #f4f2ec;
+  box-shadow: 0 0 10px #f4f2ec;
+}
+
+.inscribed-card.is-on[data-c="5"] {
+  border-color: #ff7a3c;
+  background: #ff7a3c;
+  box-shadow: 0 0 9px #ff7a3c;
+}
+
+.inscribed-card.is-on[data-c="6"] {
+  border-color: #d8c7ff;
+  background: #d8c7ff;
+  box-shadow: 0 0 9px #d8c7ff;
+}
+
+/* —— 20s 命中抽牌冷却：球右下角一个小环 —— */
+.inscribed-cd {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: conic-gradient(#f4f2ec calc(var(--cd, 1) * 360deg), rgba(244, 242, 236, 0.18) 0);
+  mask: radial-gradient(circle, transparent 42%, #000 44%);
+  -webkit-mask: radial-gradient(circle, transparent 42%, #000 44%);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.inscribed-cd.is-ready {
+  box-shadow: 0 0 8px #f4f2ec;
+  animation: inscribed-cd-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes inscribed-cd-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* —— 铭刻 / 回溯：摊开一张半透明表盘（时计场上那张脸的降透明度版），分针转一整圈 ——
+   铭刻顺时针（把时间刻下去），回溯逆时针（把时间拨回来）。容器只管淡入淡出，
+   旋转交给里面的针，免得把基类的 translate(-50%,-50%) 覆盖掉。 */
+.fx.fx-tokei-inscribed-clock {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: rgba(244, 242, 236, 0.1);
+  border: 2px dashed rgba(244, 242, 236, 0.45);
+  box-shadow: 0 0 20px rgba(244, 242, 236, 0.22), inset 0 0 14px rgba(0, 0, 0, 0.28);
+  z-index: 90;
+  animation: inscribed-dial 0.9s ease-out forwards;
+  pointer-events: none;
+}
+
+.fx.fx-tokei-inscribed-clock .tick {
+  position: absolute;
+  left: 50%;
+  top: 4%;
+  width: 1px;
+  height: 8%;
+  margin-left: -0.5px;
+  background: rgba(244, 242, 236, 0.55);
+  transform-origin: 50% 575%;
+}
+
+.fx.fx-tokei-inscribed-clock .hand {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 40%;
+  margin-left: -1.5px;
+  margin-top: -40%;
+  border-radius: 2px;
+  background: #c9a227;
+  box-shadow: 0 0 8px rgba(201, 162, 39, 0.9);
+  transform-origin: 50% 100%;
+  animation: inscribed-spin-cw 0.9s cubic-bezier(0.45, 0, 0.2, 1) forwards;
+}
+
+.fx.fx-tokei-inscribed-clock[data-dir="ccw"] .hand {
+  animation-name: inscribed-spin-ccw;
+}
+
+@keyframes inscribed-dial {
+  0% { opacity: 0; }
+  14% { opacity: 0.85; }
+  84% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+@keyframes inscribed-spin-cw {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes inscribed-spin-ccw {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+/* —— 抽到牌 —— */
+.fx.fx-tokei-inscribed-draw {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f4f2ec;
+  box-shadow: 0 0 10px #f4f2ec;
+  transform: translate(-50%, -50%);
+  animation: inscribed-draw 0.7s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes inscribed-draw {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.4); }
+  30% { opacity: 1; transform: translate(-50%, -8px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -22px) scale(0.7); }
+}
+
+/* —— 冲刺拉丝 —— */
+.fx.fx-tokei-inscribed-dash {
+  width: 34px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #f4f2ec, transparent);
+  transform-origin: 0 50%;
+  transform: translate(0, -50%) rotate(calc(var(--ang, 0rad) * 1));
+  animation: inscribed-dash 0.28s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes inscribed-dash {
+  0% { opacity: 0.95; width: 12px; }
+  100% { opacity: 0; width: 46px; }
+}
+
+/* —— 命中 —— */
+.fx.fx-tokei-inscribed-hit {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid #f4f2ec;
+  box-shadow: 0 0 14px #f4f2ec99;
+  transform: translate(-50%, -50%);
+  animation: inscribed-hit 0.32s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes inscribed-hit {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.4); }
+}
+
+/* —— 时痕层数 —— */
+.fx.fx-tokei-inscribed-trace {
+  font: 700 13px/1.2 sans-serif;
+  color: #f4f2ec;
+  text-shadow: 0 0 8px #000;
+  transform: translate(-50%, -50%);
+  animation: inscribed-float 0.9s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes inscribed-float {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.8); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -140%) scale(1); }
+}
+
+/* —— 长守护罩 —— */
+.fx.fx-tokei-inscribed-guard {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid #f4f2ec;
+  box-shadow: 0 0 16px #f4f2ec, inset 0 0 10px #ffffff88;
+  transform: translate(-50%, -50%);
+  animation: inscribed-guard 0.5s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes inscribed-guard {
+  0% { opacity: 0.9; transform: translate(-50%, -50%) scale(0.8); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.25); }
+}
+
+/* —— 烬时之斩：按半径画火环 —— */
+.fx.fx-tokei-inscribed-ember {
+  width: calc(var(--r, 144px) * 2);
+  height: calc(var(--r, 144px) * 2);
+  border-radius: 50%;
+  border: 3px solid #ff7a3c;
+  box-shadow: 0 0 26px #ff7a3c, inset 0 0 26px #ff7a3c66;
+  transform: translate(-50%, -50%);
+  animation: inscribed-ember 0.45s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes inscribed-ember {
+  0% { opacity: 0.95; transform: translate(-50%, -50%) scale(0.15); }
+  70% { opacity: 0.8; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+
+.fx.fx-tokei-inscribed-pop {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffd98a;
+  box-shadow: 0 0 14px #ff7a3c;
+  transform: translate(-50%, -50%);
+  animation: inscribed-hit 0.3s ease-out forwards;
+  pointer-events: none;
+}
+
+/* —— 长守的额外血条（引擎 Absorb）：挂在球上方，被打掉多少短多少 —— */
+.inscribed-shield {
+  position: absolute;
+  left: 50%;
+  top: -9px;
+  width: 46px;
+  height: 5px;
+  transform: translate(-50%, -100%);
+  border-radius: 3px;
+  border: 1px solid rgba(159, 198, 232, 0.75);
+  background: rgba(12, 16, 22, 0.75);
+  box-shadow: 0 0 8px rgba(159, 198, 232, 0.55);
+  pointer-events: none;
+  overflow: visible;
+}
+
+.inscribed-shield b {
+  position: absolute;
+  inset: 0 0 0 0;
+  width: var(--fill, 100%);
+  border-radius: 2px;
+  background: linear-gradient(to right, #9fc6e8, #dceeff);
+}
+
+.inscribed-shield span {
+  position: absolute;
+  left: 50%;
+  top: -13px;
+  transform: translateX(-50%);
+  font: 700 10px/1 sans-serif;
+  color: #dceeff;
+  text-shadow: 0 0 6px #000;
+}

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"xqdj/internal/audit"
 	"xqdj/internal/replay"
 	unitpkg "xqdj/internal/unit"
 	奇美拉 "xqdj/map/chimera"
@@ -36,7 +37,7 @@ type unit struct {
 	hp              float64
 	maxHP           float64
 	actor           unitpkg.Actor
-	inbox           chan unitpkg.Event
+	inbox           *actorInbox
 	stop            chan struct{}
 	exited          chan struct{} // 角色协程退出时关闭，停场要等它
 	stopped         bool
@@ -51,6 +52,8 @@ type unit struct {
 	semi            bool
 	face            vec
 	passWalls       bool
+	passInnerWalls  bool
+	bodiesOnly      bool
 	breakWalls      bool
 	mortal          bool
 	aimPriority     uint8
@@ -64,10 +67,13 @@ type unit struct {
 	holdVel         vec
 	noFrameFreeze   bool
 	damageScale     float64
+	damageBonus     float64
+	absorb          float64
 	noHealthNumbers bool
 	visionBlock     bool
 	shell           bool
 	attach          bool
+	attachFriends   bool
 	arcSpan         float64
 	arcInner        float64
 	faction         string
@@ -157,7 +163,10 @@ type Match struct {
 	order       []uint64
 	actors      []*unit // 本场开过的所有角色（离场的也留着，停场要等它们的协程真退出）
 	cmds        chan unitpkg.Cmd
+	actorWork   *actorWork
+	cmdBatch    []unitpkg.Cmd
 	nextID      uint64
+	shared      *unitpkg.MatchState
 	time        float64
 	spec        fieldSpec
 	winner      string
@@ -166,6 +175,7 @@ type Match struct {
 	rng         *rand.Rand
 	seed        uint64
 	pinned      bool
+	headless    bool // 统计保留完整规则和异步 actor，省去战报与开场演出素材。
 	skipProbe   bool
 	spawnSilent bool
 	rootN       uint64
@@ -223,6 +233,14 @@ func NewMatchSeeded(seed uint64) *Match {
 	return newMatch(seed, true)
 }
 
+// NewHeadlessMatchSeeded 用于批量统计。种子不保证异步行动的调度次序。
+// 仅关闭日志和探针演出素材，非因果探针与其余战斗规则照常运行。
+func NewHeadlessMatchSeeded(seed uint64) *Match {
+	m := newMatch(seed, true)
+	m.headless = true
+	return m
+}
+
 func newMatch(seed uint64, pinned bool) *Match {
 	kinds := unitpkg.FighterKinds()
 	var slots [2][]string
@@ -234,7 +252,9 @@ func newMatch(seed uint64, pinned bool) *Match {
 		phase:      PhaseSelect,
 		slots:      slots,
 		units:      make(map[uint64]*unit),
+		shared:     &unitpkg.MatchState{},
 		cmds:       make(chan unitpkg.Cmd, 512),
+		actorWork:  newActorWork(),
 		spec:       spec,
 		rng:        unitpkg.EngineRNG(seed),
 		seed:       seed,
@@ -369,6 +389,7 @@ func (u *unit) snap() unitpkg.Snapshot {
 		Nonsolid:        !u.solid,
 		VisionBlock:     u.visionBlock,
 		NoHealthNumbers: u.noHealthNumbers,
+		Absorb:          u.absorb,
 	}
 }
 
@@ -800,6 +821,7 @@ func (m *Match) End() {
 	m.logMute = true
 	m.stopAllLocked()
 	m.logMute = false
+	m.shared = &unitpkg.MatchState{}
 	m.phase = PhaseSelect
 	m.winner = ""
 	m.winnerID = 0
@@ -834,6 +856,9 @@ func (m *Match) Tick() {
 		}
 		return
 	}
+	// Commands/impulses can turn an owner since the previous frame. A fan must
+	// use its owner's current velocity before the next sweep, including returns.
+	m.stickFollowersLocked()
 	m.physicsLocked(DT)
 	m.flushPendingLocked()
 	m.settleHitsLocked()
@@ -927,6 +952,7 @@ func (m *Match) decelerateLocked(dt float64) {
 
 func (m *Match) resetLocked() {
 	m.stopAllLocked()
+	m.shared = &unitpkg.MatchState{}
 	m.units = make(map[uint64]*unit)
 	m.order = nil
 	m.nextID = 0
@@ -1065,6 +1091,9 @@ func (m *Match) killLocked(u *unit) {
 		return
 	}
 	u.stopped = true
+	if u.inbox != nil {
+		u.inbox.close()
+	}
 	close(u.stop)
 }
 
@@ -1086,11 +1115,16 @@ func (m *Match) addUnitLocked(kind string, p, v vec, owner uint64, slot int) *un
 }
 
 func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot int, stream uint64) *unit {
+	return m.addUnitWithDataLocked(kind, p, v, owner, slot, stream, nil)
+}
+
+func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot int, stream uint64, data any) *unit {
 	spec, ok := unitpkg.Lookup(kind)
 	if !ok {
 		return nil
 	}
 	actor := unitpkg.NewActor(kind, unitpkg.SpawnInfo{
+		State: m.shared, Data: data, MatchSeed: m.seed, X: p.X, Y: p.Y,
 		OwnerID: owner, Slot: slot, Stream: stream,
 		Field: m.liveFieldLocked(), Probe: m.probeTape,
 		Silent: m.spawnSilent && kind == acausalKind(),
@@ -1100,36 +1134,43 @@ func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot in
 	}
 	m.nextID++
 	id := m.nextID
+	if m.actorWork == nil {
+		m.actorWork = newActorWork()
+	}
 	u := &unit{
-		id:          id,
-		kind:        kind,
-		role:        spec.Role,
-		slot:        slot,
-		owner:       owner,
-		p:           p,
-		v:           v,
-		radius:      spec.Radius,
-		hp:          spec.MaxHP,
-		maxHP:       spec.MaxHP,
-		vision:      spec.Vision,
-		cruise:      spec.Speed,
-		velM:        1,
-		actor:       actor,
-		inbox:       make(chan unitpkg.Event, 64),
-		stop:        make(chan struct{}),
-		exited:      make(chan struct{}),
-		solid:       spec.Role != unitpkg.RoleHelper && !spec.Nonsolid,
-		semi:        spec.Semi,
-		face:        vec{1, 0},
-		passWalls:   spec.PassWalls,
-		breakWalls:  spec.BreakWalls,
-		mortal:      spec.Mortal,
-		aimPriority: unitpkg.DefaultAimPriority(spec),
-		shell:       spec.Shell,
-		attach:      spec.Attach,
-		arcSpan:     spec.ArcSpan,
-		arcInner:    spec.ArcInner,
-		visionBlock: spec.VisionBlock,
+		id:             id,
+		kind:           kind,
+		role:           spec.Role,
+		slot:           slot,
+		owner:          owner,
+		p:              p,
+		v:              v,
+		radius:         spec.Radius,
+		hp:             spec.MaxHP,
+		maxHP:          spec.MaxHP,
+		vision:         spec.Vision,
+		cruise:         spec.Speed,
+		velM:           1,
+		actor:          actor,
+		inbox:          newActorInbox(m.actorWork),
+		stop:           make(chan struct{}),
+		exited:         make(chan struct{}),
+		solid:          spec.Role != unitpkg.RoleHelper && !spec.Nonsolid,
+		semi:           spec.Semi,
+		face:           vec{1, 0},
+		passWalls:      spec.PassWalls,
+		passInnerWalls: spec.PassInnerWalls,
+		bodiesOnly:     spec.BodiesOnly,
+		breakWalls:     spec.BreakWalls,
+		mortal:         spec.Mortal,
+		aimPriority:    unitpkg.DefaultAimPriority(spec),
+		shell:          spec.Shell,
+		attach:         spec.Attach,
+		attachFriends:  spec.AttachFriends,
+		pass:           spec.Pass,
+		arcSpan:        spec.ArcSpan,
+		arcInner:       spec.ArcInner,
+		visionBlock:    spec.VisionBlock,
 	}
 	if spec.StartHP > 0 && spec.StartHP < spec.MaxHP {
 		u.hp = spec.StartHP
@@ -1147,7 +1188,7 @@ func (m *Match) addUnitStreamLocked(kind string, p, v vec, owner uint64, slot in
 		m.noteBirthLocked(u)
 	}
 	u.stream = stream
-	ctx := unitpkg.Context{ID: id, Kind: kind, Out: m.cmds, Stream: stream, Field: m.liveFieldLocked()}.WithBirths()
+	ctx := unitpkg.Context{State: m.shared, ID: id, Kind: kind, Out: m.cmds, Stream: stream, Field: m.liveFieldLocked()}.WithBirths()
 	go runActor(u, ctx)
 	m.refreshOwnedVelocityLockLocked(owner, kind)
 	return u
@@ -1175,36 +1216,84 @@ func (u *unit) setVel(v vec) {
 
 func runActor(u *unit, ctx unitpkg.Context) {
 	defer close(u.exited)
+	defer u.inbox.close()
+	out, forwarded := actorOutput(u, ctx.Out)
+	ctx.Out = out
+	spec, _ := unitpkg.Lookup(u.kind)
+	defer func() { close(out); <-forwarded }()
 	for {
-		select {
-		case <-u.stop:
+		ev, ok := u.inbox.next(u.stop)
+		if !ok {
 			return
-		case ev, ok := <-u.inbox:
-			if !ok {
-				return
-			}
-			if sense, ok := ev.(unitpkg.Sense); ok {
-				ctx.Field = sense.Field
-			}
-			u.actor.Handle(ctx, ev)
 		}
+		if sense, ok := ev.(unitpkg.Sense); ok {
+			ctx.Field = sense.Field
+		}
+		_, collision := ev.(unitpkg.Collision)
+		if _, fanHit := ev.(unitpkg.FanHit); fanHit {
+			collision = true
+		}
+		out <- actorBegin{origin: audit.Origin{ID: u.id, Kind: u.kind, Role: u.role, Collision: collision, Fan: spec.Attach && spec.ArcSpan > 0}}
+		u.actor.Handle(ctx, ev)
+		done := make(chan struct{})
+		out <- actorEnd{done: done}
+		<-done
+		u.inbox.finish()
 	}
 }
 
 func (m *Match) drainCmdsLocked() {
 	defer m.flushLeapsLocked()
-	for i := 0; i < 512; i++ {
+	batch := m.cmdBatch[:0]
+	// Finish the events already delivered at this boundary. Keep receiving
+	// commands while handlers run, so a full cmds channel cannot deadlock them.
+	// Apply this batch only after collection: reactions it creates belong to
+	// the next boundary, rather than an unbounded chain of same-phase replies.
+collect:
+	for {
 		select {
 		case cmd := <-m.cmds:
-			m.applyCmdLocked(cmd)
+			batch = append(batch, cmd)
 		default:
-			return
+			if m.actorWork == nil || m.actorWork.pending.Load() == 0 {
+				// A last handler may have sent its command between the empty
+				// receive above and the completion load. Completion publishes
+				// all its sends, so check the channel once more.
+				select {
+				case cmd := <-m.cmds:
+					batch = append(batch, cmd)
+					continue
+				default:
+					break collect
+				}
+			}
+			select {
+			case cmd := <-m.cmds:
+				batch = append(batch, cmd)
+			case <-m.actorWork.wake:
+			}
 		}
 	}
+	for i, cmd := range batch {
+		batch[i] = nil
+		m.applyCmdLocked(cmd)
+	}
+	m.cmdBatch = batch[:0]
 }
 
 func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
+	if c, ok := cmd.(actorCommand); ok {
+		audit.CheckCommand(c.origin, c.command)
+		cmd = c.command
+	}
 	switch c := cmd.(type) {
+	case unitpkg.FanContact:
+		fan := m.units[c.From]
+		if fan != nil && fan.attach && fan.arcSpan > 0 {
+			if owner := m.units[fan.owner]; owner != nil && !owner.stopped {
+				m.send(owner, unitpkg.FanHit{From: fan.id, Kind: fan.kind, Time: c.Collision.Time, Other: c.Collision.Other})
+			}
+		}
 	case unitpkg.SetVelocity:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -1278,6 +1367,29 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if !logSame(prevHP, u.hp) || !logSame(prevMax, u.maxHP) {
 			m.noteSetHPLocked(u)
 		}
+	case unitpkg.SetAbsorb:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped {
+			return
+		}
+		next := c.Amount
+		if next < 0 {
+			next = 0
+		}
+		if logSame(u.absorb, next) {
+			return
+		}
+		prev := u.absorb
+		u.absorb = next
+		m.noteSpanLocked(u, "护盾", prev, next)
+	case unitpkg.SetDamageBonus:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || logSame(u.damageBonus, c.Amount) {
+			return
+		}
+		prev := u.damageBonus
+		u.damageBonus = c.Amount
+		m.noteSpanLocked(u, "加伤", prev, c.Amount)
 	case unitpkg.SetAimPriority:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -1339,10 +1451,10 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		u.noteFaction(u.faction)
 	case unitpkg.Spawn:
 		spec, ok := unitpkg.Lookup(c.Kind)
-		if !ok || spec.Fighter {
+		if !ok || spec.Fighter || (spec.RequiresOwner && m.units[c.OwnerID] == nil) {
 			return
 		}
-		u := m.addUnitStreamLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot, c.Stream)
+		u := m.addUnitWithDataLocked(c.Kind, vec{c.X, c.Y}, vec{c.VX, c.VY}, c.OwnerID, c.Slot, c.Stream, c.Data)
 		if u != nil && c.DamageScale > 0 {
 			u.damageScale = c.DamageScale
 		}
@@ -1391,6 +1503,31 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		u.pass = c.Hold
 		m.noteHoldLocked(u, "穿过", c.Hold)
+	case unitpkg.PassWalls:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || u.passWalls == c.Hold {
+			return
+		}
+		u.passWalls = c.Hold
+		m.noteHoldLocked(u, "穿墙", c.Hold)
+	case unitpkg.PassInnerWalls:
+		u := m.units[c.UnitID]
+		if u == nil || u.stopped || u.passInnerWalls == c.Hold {
+			return
+		}
+		u.passInnerWalls = c.Hold
+		m.noteHoldLocked(u, "穿场内墙", c.Hold)
+		if !c.Hold {
+			// A body can be in the middle of a thick or overlapping wall. An
+			// initial projection can still overlap another face, so converge.
+			for i := 0; i < 8; i++ {
+				before := u.p
+				m.constrainUnitLocked(u)
+				if u.p.sub(before).len2() < 1e-12 {
+					break
+				}
+			}
+		}
 	case unitpkg.Stand:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped || u.stand == c.Hold {
@@ -1448,11 +1585,19 @@ func (u *unit) takesHit() bool {
 }
 
 func (m *Match) offerDamageLocked(c unitpkg.Damage) {
+	if from := m.units[c.From]; from != nil {
+		if from.damageScale > 0 {
+			c.Amount *= from.damageScale
+		}
+		// 固定加伤：算在发起者自己身上，外加它主人那一份（弹、弧、随从都归主人）。
+		// 先加再看非正：幻役那种「基础 0 伤、全靠 +X」的攻击也得能过。
+		c.Amount += from.damageBonus
+		if owner := m.units[from.owner]; owner != nil {
+			c.Amount += owner.damageBonus
+		}
+	}
 	if c.Amount <= 0 {
 		return
-	}
-	if from := m.units[c.From]; from != nil && from.damageScale > 0 {
-		c.Amount *= from.damageScale
 	}
 	u := m.units[c.To]
 	if !u.takesHit() {
@@ -1474,26 +1619,31 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 	}
 	m.noteOfferLocked(c)
 	var arc float64
+	var sourceOwner uint64
 	if from := m.units[c.From]; from != nil {
-		off := m.pendingDmg[token]
-		off.atkSpeed = from.v.len()
-		off.atkImpulse = impulseSpeeds(from)
-		m.pendingDmg[token] = off
+		sourceOwner = from.owner
+		if !m.headless {
+			off := m.pendingDmg[token]
+			off.atkSpeed = from.v.len()
+			off.atkImpulse = impulseSpeeds(from)
+			m.pendingDmg[token] = off
+		}
 		arc = from.arcSpan
 	}
-	{
+	if !m.headless {
 		off := m.pendingDmg[token]
 		off.defSpeed = u.v.len()
 		off.defImpulse = impulseSpeeds(u)
 		m.pendingDmg[token] = off
 	}
 	m.send(u, unitpkg.IncomingDamage{
-		Token:   token,
-		From:    c.From,
-		Amount:  c.Amount,
-		Time:    m.time,
-		Speed:   u.v.len(),
-		ArcSpan: arc,
+		SourceOwnerID: sourceOwner,
+		Token:         token,
+		From:          c.From,
+		Amount:        c.Amount,
+		Time:          m.time,
+		Speed:         u.v.len(),
+		ArcSpan:       arc,
 	})
 }
 
@@ -1511,6 +1661,15 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	from := m.units[off.credit]
 	if from == nil {
 		from = m.units[off.from]
+	}
+	// 护盾池：整笔伤害被池子吃掉，本体不掉血；打穿那一下多出来的部分直接无视。
+	if u.absorb > 0 {
+		u.absorb -= off.amount
+		if u.absorb < 0 {
+			u.absorb = 0
+		}
+		m.noteAbsorbLocked(off)
+		return
 	}
 	if u.role == unitpkg.RoleFighter && (off.absorb || m.shellOfLocked(u.id) != nil || m.wardAbsorb[u.id]) {
 		delete(m.wardAbsorb, u.id)
@@ -2273,7 +2432,7 @@ func (m *Match) shoveWallLocked(w *barrier) {
 	still := map[uint64]struct{}{}
 	for _, id := range m.order {
 		u := m.units[id]
-		if u == nil || u.stopped || !u.solid || u.passWalls || u.shell || u.attach || u.role == unitpkg.RoleHelper {
+		if u == nil || u.stopped || !u.solid || u.passWalls || u.passInnerWalls || u.shell || u.attach || u.role == unitpkg.RoleHelper {
 			continue
 		}
 		if u.breakWalls && w.hard {
@@ -2395,6 +2554,9 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 			}
 			cc, cr := colOf(u.p, u.face, u.radius, u.semi)
 			for _, w := range m.walls {
+				if u.passInnerWalls {
+					continue
+				}
 				if ignoreUW[uwID{u.id, w.id}] {
 					continue
 				}
@@ -2437,10 +2599,14 @@ func (m *Match) earliestHitLocked(dt float64, ignore map[pairID]bool, ignoreUW m
 			if ignore[canonPair(a.id, b.id)] {
 				continue
 			}
-			if a.role == unitpkg.RoleProjectile && (a.slot == b.slot || (a.owner != 0 && a.owner == b.id)) {
+			if (a.bodiesOnly && b.role != unitpkg.RoleFighter && !b.mortal) ||
+				(b.bodiesOnly && a.role != unitpkg.RoleFighter && !a.mortal) {
 				continue
 			}
-			if b.role == unitpkg.RoleProjectile && (b.slot == a.slot || (b.owner != 0 && b.owner == a.id)) {
+			if a.role == unitpkg.RoleProjectile && !a.attachFriends && (a.slot == b.slot || (a.owner != 0 && a.owner == b.id)) {
+				continue
+			}
+			if b.role == unitpkg.RoleProjectile && !b.attachFriends && (b.slot == a.slot || (b.owner != 0 && b.owner == a.id)) {
 				continue
 			}
 			if a.attach || b.attach {
@@ -2594,7 +2760,7 @@ func attachHits(atk, target *unit) bool {
 	if atk == nil || target == nil {
 		return false
 	}
-	if target.slot == atk.slot || target.id == atk.owner {
+	if !atk.attachFriends && (target.slot == atk.slot || target.id == atk.owner) {
 		return false
 	}
 	return target.role == unitpkg.RoleFighter || target.mortal
@@ -2611,6 +2777,9 @@ func (m *Match) constrainUnitLocked(u *unit) {
 		return
 	}
 	m.constrainOutlineLocked(u, vec{})
+	if u.passInnerWalls {
+		return
+	}
 	cc, cr := colOf(u.p, u.face, u.radius, u.semi)
 	for _, w := range m.walls {
 		if u.breakWalls && w.hard {
@@ -2684,19 +2853,36 @@ func (m *Match) emitLocked() {
 			continue
 		}
 		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field, Walls: views, Knock: len(u.fsList) > 0}
-		vr2 := u.vision * u.vision
-		for _, o := range snaps {
-			if o.ID == u.id {
-				continue
-			}
-			dx := o.X - u.p.X
-			dy := o.Y - u.p.Y
-			if dx*dx+dy*dy <= vr2 || o.OwnerID == u.id {
-				sense.Nearby = append(sense.Nearby, o)
-			}
-		}
+		sense.Nearby = nearbySnapshots(snaps, u)
 		m.send(u, sense)
 	}
+}
+
+func nearbySnapshots(snaps []unitpkg.Snapshot, u *unit) []unitpkg.Snapshot {
+	vr2 := u.vision * u.vision
+	visible := func(o unitpkg.Snapshot) bool {
+		dx, dy := o.X-u.p.X, o.Y-u.p.Y
+		return o.ID != u.id && (dx*dx+dy*dy <= vr2 || o.OwnerID == u.id)
+	}
+	n := 0
+	for _, o := range snaps {
+		if visible(o) {
+			n++
+		}
+	}
+	if n == 0 {
+		return nil
+	}
+	// actor 可在后续拍仍持有 Sense；每份列表独立拥有内存，不跨拍回收复用。
+	nearby := make([]unitpkg.Snapshot, n)
+	i := 0
+	for _, o := range snaps {
+		if visible(o) {
+			nearby[i] = o
+			i++
+		}
+	}
+	return nearby
 }
 
 func (m *Match) send(u *unit, ev unitpkg.Event) {
@@ -2706,10 +2892,8 @@ func (m *Match) send(u *unit, ev unitpkg.Event) {
 	if u.tap != nil {
 		u.tap(ev)
 	}
-	select {
-	case u.inbox <- ev:
-	case <-u.stop:
-	default:
+	if u.inbox != nil {
+		u.inbox.push(ev)
 	}
 }
 

@@ -337,6 +337,7 @@ window.lookFX = window.lookFX || {};
 
   arena.registerShot("bump", (fx, ctx) => {
     lockAttackFace(fx, 220);
+    bloodSplash(ctx, fx, 0.65);
     arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
     arena.burst(ctx.x, ctx.y, fx.kind, 4);
   });

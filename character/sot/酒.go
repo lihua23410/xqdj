@@ -10,7 +10,7 @@ import (
 const (
 	wineRadius   = 12.0
 	wineFall     = 220.0 // Spec 占位；真正往下走靠重力
-	wineDmg      = 7.0
+	wineDmg      = 6.0
 	wineG        = 380.0 // 向下加速度，丢坛子那种
 	wineToss     = 70.0  // 出生横向初速上限
 	wineDrop     = 50.0  // 出生就往下掉一点
