@@ -24,12 +24,12 @@ const (
 
 var partNames = [...]string{"增压活塞", "分流歧管", "惯性飞轮", "配气凸轮", "燃油喷嘴", "护心夹板", "双联阀组", "偏流叶轮", "捕弹阀笼", "换向喷口", "回收绞盘"}
 
-func TestFivePartsAreUniqueFixedAndMatchLocal(t *testing.T) {
+func TestSevenPartsAreUniqueFixedAndMatchLocal(t *testing.T) {
 	for seed := uint64(1); seed < 40; seed++ {
 		w := &world{}
 		s := unit.Sense{Field: unit.HexField(), Self: unit.Snapshot{ID: 1, X: -100, Radius: 18}}
 		w.initialize(seed, s)
-		if len(w.parts) != 5 {
+		if len(w.parts) != 7 {
 			t.Fatalf("seed %d: got %d parts", seed, len(w.parts))
 		}
 		seen := map[int]bool{}

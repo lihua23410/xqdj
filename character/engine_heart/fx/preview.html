@@ -16,11 +16,11 @@ body.weapons .hero,body.weapons .module:not(.weapon){display:none}body.weapons .
 <div class="hero">
 <section class="card"><div class="stage"><div class="ball" id="bare"></div></div><div class="caption"><b>裸机</b><p>黑铁铸壳与黄铜主回路，保留概念草图的造型</p></div></section>
 <section class="card"><div class="stage"><div class="ball" id="single"></div></div><div class="caption"><b id="single-name">增压活塞</b><p id="single-site">左肋主泵缸 · 加厚泵缸与直连增压回路</p></div></section>
-<section class="card"><div class="stage"><div class="ball" id="full"></div></div><div class="caption"><b>五件装配</b><p id="kit-label">泵缸、压力桥、飞轮、护架与压力腔</p></div></section>
+<section class="card"><div class="stage"><div class="ball" id="full"></div></div><div class="caption"><b>七件装配</b><p id="kit-label">光棱镜、泵缸、压力桥、飞轮、蒸汽缸、凸轮与喷嘴</p></div></section>
 </div>
-<div class="legend"><strong>15 件结构与攻击升级</strong><span>点击比较加装；右侧展示完整场下件</span><button id="kit" style="margin-left:auto">切换五件组合</button></div>
+<div class="legend"><strong>15 件结构与攻击升级</strong><span>点击比较加装；右侧展示完整场下件</span><button id="kit" style="margin-left:auto">切换七件组合</button></div>
 <div class="modules" id="modules"></div>
-<p class="note">三种形态采用相同绘制比例。每次五件至少包含一件额外攻击组件；拾取顺序只决定掉落顺序。<span id="checks"></span></p>
+<p class="note">三种形态采用相同绘制比例。每次七件至少包含一件额外攻击组件；拾取顺序只决定掉落顺序。<span id="checks"></span></p>
 </main><div id="portrait"><div class="ball" id="portrait-ball"></div></div>
 <script>window.arena={registerShot(){}};</script><script src="heart.js"></script>
 <script>
@@ -36,7 +36,7 @@ body.weapons .hero,body.weapons .module:not(.weapon){display:none}body.weapons .
  for(const i of [11,12,13,14,...Array.from({length:11},(_,i)=>i)])document.getElementById('modules').appendChild(moduleEls[i].closest('button'));
  for(const i of [11,12,13,14])moduleEls[i].closest('button').classList.add('weapon');
  if(new URLSearchParams(location.search).has('weapons')){document.body.classList.add('weapons');document.querySelector('.legend strong').textContent='四种额外攻击总成';document.querySelector('.legend span').textContent='左为固定加装效果，右为完整场下件';}
- const kits=[[11,0,1,2,13],[12,5,7,8,14],[11,12,13,14,10]],kitNames=['光棱镜、泵缸、压力桥、飞轮与蒸汽缸','撞角、护架、涡轮、压力腔与电弧线圈','四种攻击总成与回收绞盘'];let kit=0,selected=0,time=.23,paused=false,last,poseStep=-1;
+ const kits=[[11,0,1,2,13,3,4],[12,5,7,8,14,6,9],[11,12,13,14,10,0,1]],kitNames=kits.map(ids=>ids.map(id=>window.pumpParts[id].name).join('、'));let kit=0,selected=0,time=.23,paused=false,last,poseStep=-1;
  document.getElementById('motion').onclick=()=>{paused=!paused;document.getElementById('motion').textContent=paused?'继续搏动':'暂停搏动';};
  document.getElementById('kit').onclick=()=>{kit=(kit+1)%kits.length;};
  document.getElementById('step').onclick=()=>{const phases=[.2,.405,.45,.5,.55,.75],names=['舒张复位','顶部下压','胸段压合','传动座回收','尾段收缩','复位完成'];poseStep=(poseStep+1)%phases.length;paused=true;time=Math.floor(time)+phases[poseStep];document.getElementById('step').textContent=names[poseStep]+' →';document.getElementById('motion').textContent='继续搏动';};
@@ -51,7 +51,7 @@ body.weapons .hero,body.weapons .module:not(.weapon){display:none}body.weapons .
    const loose=moduleEls[type].closest('button').querySelector('.loose-part [data-part]');
    check(loose&&loose.querySelectorAll('*').length===probe.querySelector(`[data-part="${type}"]`).querySelectorAll('*').length,'ground piece is an abbreviated icon');
    check(probe.querySelector(`[data-part="${type}"] > .ph-motion-${window.pumpParts[type].motion}`),'part not attached to its mechanical carriage');
-   const others=Array.from({length:keys.length},(_,i)=>i).filter(i=>i!==type).slice(0,4);
+   const others=Array.from({length:keys.length},(_,i)=>i).filter(i=>i!==type).slice(0,6);
    installed([type,...others]);check(positions()[type]===anchor,`part ${type} moved in mixed build`);
    installed([...others.reverse(),type]);check(positions()[type]===anchor,`part ${type} moved after pickup reorder`);
    installed([]);check(!positions()[type],`part ${type} remained after shedding`);

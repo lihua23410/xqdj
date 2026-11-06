@@ -8,7 +8,7 @@ import (
 	"xqdj/internal/unit"
 )
 
-func TestTwoHeartsKeepSeparateFivePartSelectionsInRealMatch(t *testing.T) {
+func TestTwoHeartsKeepSeparateSevenPartSelectionsInRealMatch(t *testing.T) {
 	m := sim.NewMatchSeeded(89)
 	m.SetSlot(0, heart.KindEngineHeart)
 	m.SetSlot(1, heart.KindEngineHeart)
@@ -36,7 +36,7 @@ func TestTwoHeartsKeepSeparateFivePartSelectionsInRealMatch(t *testing.T) {
 			if err := json.Unmarshal(fx.Data, &data); err != nil {
 				t.Fatal(err)
 			}
-			if len(data.Parts) != 5 {
+			if len(data.Parts) != 7 {
 				t.Fatalf("owner %d has %d parts", fx.UnitID, len(data.Parts))
 			}
 			set := map[int]bool{}

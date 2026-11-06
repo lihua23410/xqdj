@@ -57,7 +57,7 @@ func TestEverySelectionIncludesAnAdditionalWeapon(t *testing.T) {
 				t.Fatal("full component footprint crosses field or wall")
 			}
 		}
-		if len(w.parts) != 5 || count == 0 {
+		if len(w.parts) != 7 || count == 0 {
 			t.Fatalf("seed %d has no guaranteed attack", seed)
 		}
 	}

@@ -114,7 +114,7 @@ func (w *world) initialize(stream uint64, s unit.Sense) {
 		w.outline = append(w.outline, scenePoint{math.Round(x*10) / 10, math.Round(y*10) / 10})
 	}
 	rng := unit.NewRNG(stream)
-	for _, definition := range modules.Select(rng, 5) {
+	for _, definition := range modules.Select(rng, 7) {
 		var p part
 		p.Type = definition.ID
 		found := false
