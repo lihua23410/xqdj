@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>泵之心 · 黑铁黄铜</title><link rel="stylesheet" href="heart.css">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0d151a;color:#d8dfdc;font:14px/1.5 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1220px;margin:auto;padding:26px 32px 30px}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}h1{font-size:25px;margin:0;letter-spacing:2px}header p{color:#8a9a94;margin:6px 0 0}button{background:#243239;color:#e1c991;border:1px solid #58645b;border-radius:6px;padding:8px 14px;cursor:pointer}.hero{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card{background:linear-gradient(140deg,#233038,#162129);border:1px solid #3a494d;border-radius:9px;overflow:hidden}.stage{height:256px;display:grid;place-items:center;background:radial-gradient(ellipse at center,#61766f12,transparent 72%)}.ball{position:relative;width:128px;height:128px}.caption{padding:12px 17px;border-top:1px solid #344348}.caption b{display:block;color:#e4c994;font-size:15px}.caption p{margin:3px 0 0;color:#9aa99f;font-size:12px}.legend{display:flex;gap:16px;align-items:center;margin:23px 0 12px;color:#94a69d}.legend strong{font-size:16px;color:#d8dfdc}.modules{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}.module{text-align:left;padding:0;cursor:pointer;color:inherit;font:inherit}.module:hover,.module.selected{border-color:#c4a166;background:linear-gradient(140deg,#303d40,#1b292d)}.module .stage{height:172px}.module .ball{width:96px;height:96px}.module .caption{padding:8px 12px 10px}.module b{font-size:13px}.module p{font-size:11px}.note{color:#82968b;font-size:12px;margin:17px 0 0}.checks{display:none}#portrait{display:none}body.portrait main{display:none}body.portrait #portrait{display:grid;width:100vw;height:100vh;place-items:center;background:radial-gradient(ellipse at center,#213037,#080f13 72%)}body.portrait #portrait .ball{width:min(75vw,75vh);height:min(75vw,75vh)}@media(max-width:800px){.modules{grid-template-columns:repeat(3,1fr)}main{padding:16px}.ball{width:100px;height:100px}.stage{height:220px}}
+body.portrait{overflow:hidden}body.portrait #portrait{width:100%}body.portrait #portrait .ball{width:min(60vw,60vh);height:min(60vw,60vh)}
+.hero .stage{height:340px}.module .stage{height:212px}
+body.portrait #portrait .ball{width:min(40vw,40vh);height:min(40vw,40vh)}
+@media(max-width:800px){.hero .ball{width:78px;height:78px}.hero .stage{height:240px}.module .ball{width:80px;height:80px}}
+.modules{grid-template-columns:repeat(3,1fr)}.module .stage{position:relative;height:260px;padding-right:50px}.loose-part{position:absolute;right:8px;bottom:12px;width:64px;height:64px;filter:drop-shadow(0 1px 2px #000)}@media(max-width:800px){.modules{grid-template-columns:repeat(2,1fr)}.loose-part{width:54px;height:54px}}
+body.weapons .hero,body.weapons .module:not(.weapon){display:none}body.weapons .modules{grid-template-columns:repeat(2,1fr)}
+</style>
+<main>
+<header><div><h1>泵之心 / 黑铁黄铜</h1><p>厚壁炉心 · 粗大直角压力管路 · 分段机械收缩</p></div><button id="step">逐段检查搏动</button><button id="motion">暂停搏动</button></header>
+<div class="hero">
+<section class="card"><div class="stage"><div class="ball" id="bare"></div></div><div class="caption"><b>裸机</b><p>黑铁铸壳与黄铜主回路，保留概念草图的造型</p></div></section>
+<section class="card"><div class="stage"><div class="ball" id="single"></div></div><div class="caption"><b id="single-name">增压活塞</b><p id="single-site">左肋主泵缸 · 加厚泵缸与直连增压回路</p></div></section>
+<section class="card"><div class="stage"><div class="ball" id="full"></div></div><div class="caption"><b>五件装配</b><p id="kit-label">泵缸、压力桥、飞轮、护架与压力腔</p></div></section>
+</div>
+<div class="legend"><strong>15 件结构与攻击升级</strong><span>点击比较加装；右侧展示完整场下件</span><button id="kit" style="margin-left:auto">切换五件组合</button></div>
+<div class="modules" id="modules"></div>
+<p class="note">三种形态采用相同绘制比例。每次五件至少包含一件额外攻击组件；拾取顺序只决定掉落顺序。<span id="checks"></span></p>
+</main><div id="portrait"><div class="ball" id="portrait-ball"></div></div>
+<script>window.arena={registerShot(){}};</script><script src="heart.js"></script>
+<script>
+(async()=>{
+ const keys=['piston','manifold','flywheel','cam','nozzle','plate','doublevalve','turbine','cage','steer','winch','laser','ram','steam','arc'];
+ const descriptions=['加厚泵缸与直连增压回路','双层粗管取代原来的旁通桥','加大轮毂，接入下部传动座','沿右肋接入封闭正时传动','双联喷嘴直连观察窗下的燃烧室','沿肩肋与底梁包覆承力护架','炉膛进气改为双联阀门','左上进气端接入涡轮增压腔','下腹封口升级为带铜肋的捕弹腔','尾部封帽升级为双向排气机座','绞盘嵌入右下肋，接入导缆器','远距预警后锁角持续灼烧，横移可躲','三次收缩锁向冲撞，按实际路径命中','留在释放位置的蒸汽云，持续灼伤减速','近身搏动储电，实际碰撞才释放麻痹传导'];
+ for(const key of keys){
+  if(['piston','flywheel','cam','turbine','doublevalve','steer','cage','nozzle'].includes(key)){const style=document.createElement('link');style.rel='stylesheet';style.href=`../parts/${key}/fx.css`;document.head.appendChild(style);}
+  await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=`../parts/${key}/fx.js`;s.onload=resolve;s.onerror=reject;document.head.appendChild(s);});
+ }
+ const render=window.lookFX['pump-heart'].render;
+ const moduleEls=keys.map((key,i)=>{const card=document.createElement('button');card.className='card module';card.id=`part-${i}`;card.innerHTML=`<div class="stage"><div class="ball" id="module-${i}"></div><div class="loose-part" title="完整场下零件"></div></div><div class="caption"><b>${window.pumpParts[i].name} / ${window.pumpParts[i].site}</b><p>${descriptions[i]}</p></div>`;document.getElementById('modules').appendChild(card);card.onclick=()=>{selected=i;};window.lookFX['pump-heart'].renderPart(card.querySelector('.loose-part'),i,`loose-${i}`);return card.querySelector('.ball');});
+ for(const i of [11,12,13,14,...Array.from({length:11},(_,i)=>i)])document.getElementById('modules').appendChild(moduleEls[i].closest('button'));
+ for(const i of [11,12,13,14])moduleEls[i].closest('button').classList.add('weapon');
+ if(new URLSearchParams(location.search).has('weapons')){document.body.classList.add('weapons');document.querySelector('.legend strong').textContent='四种额外攻击总成';document.querySelector('.legend span').textContent='左为固定加装效果，右为完整场下件';}
+ const kits=[[11,0,1,2,13],[12,5,7,8,14],[11,12,13,14,10]],kitNames=['光棱镜、泵缸、压力桥、飞轮与蒸汽缸','撞角、护架、涡轮、压力腔与电弧线圈','四种攻击总成与回收绞盘'];let kit=0,selected=0,time=.23,paused=false,last,poseStep=-1;
+ document.getElementById('motion').onclick=()=>{paused=!paused;document.getElementById('motion').textContent=paused?'继续搏动':'暂停搏动';};
+ document.getElementById('kit').onclick=()=>{kit=(kit+1)%kits.length;};
+ document.getElementById('step').onclick=()=>{const phases=[.2,.405,.45,.5,.55,.75],names=['舒张复位','顶部下压','胸段压合','传动座回收','尾段收缩','复位完成'];poseStep=(poseStep+1)%phases.length;paused=true;time=Math.floor(time)+phases[poseStep];document.getElementById('step').textContent=names[poseStep]+' →';document.getElementById('motion').textContent='继续搏动';};
+ // Reverse pickup order, shed and recover every part through the real renderer.
+ const probe=document.createElement('div');probe.className='ball checks';document.body.appendChild(probe);
+ const check=(value,message)=>{if(!value)throw new Error(message);};
+ const installed=stack=>render(probe,{stack,phase:.23},{id:'check',time:.23});
+ const positions=()=>Object.fromEntries([...probe.querySelectorAll('[data-part]')].filter(n=>n.style.display!=='none').map(n=>[n.dataset.part,n.getAttribute('transform')]));
+ try{
+  for(let type=0;type<keys.length;type++){
+   installed([type]);const anchor=positions()[type];check(anchor,`part ${type} not installed`);
+   const loose=moduleEls[type].closest('button').querySelector('.loose-part [data-part]');
+   check(loose&&loose.querySelectorAll('*').length===probe.querySelector(`[data-part="${type}"]`).querySelectorAll('*').length,'ground piece is an abbreviated icon');
+   check(probe.querySelector(`[data-part="${type}"] > .ph-motion-${window.pumpParts[type].motion}`),'part not attached to its mechanical carriage');
+   const others=Array.from({length:keys.length},(_,i)=>i).filter(i=>i!==type).slice(0,4);
+   installed([type,...others]);check(positions()[type]===anchor,`part ${type} moved in mixed build`);
+   installed([...others.reverse(),type]);check(positions()[type]===anchor,`part ${type} moved after pickup reorder`);
+   installed([]);check(!positions()[type],`part ${type} remained after shedding`);
+   for(const socket of probe.querySelectorAll('[data-socket]'))check(socket.style.display!=='none','base circuit did not return');
+   installed([type]);check(positions()[type]===anchor,'recovered part changed mount');
+   for(const socket of window.pumpParts[type].replaces)check(probe.querySelector(`[data-socket="${socket}"]`)?.style.display==='none',`duplicate base socket ${socket}`);
+  }
+  document.body.dataset.checks='pass';document.getElementById('checks').textContent='固定安装位与拆装校验通过。';
+ }catch(error){document.body.dataset.checks='fail';document.getElementById('checks').textContent=error.message;console.error(error);}
+ probe.remove();
+ const portrait=new URLSearchParams(location.search).has('portrait');if(portrait)document.body.classList.add('portrait');
+ const portraitStack=(location.hash||'').slice(1).split(',').filter(Boolean).map(Number);
+ function frame(now){if(last!==undefined&&!paused)time+=(now-last)/1000;last=now;
+  const d={phase:time%1,beats:Math.floor(time),ammo:true};
+  if(portrait){render(document.getElementById('portrait-ball'),{...d,stack:portraitStack},{time,id:'portrait'});}
+  else{
+   render(document.getElementById('bare'),{...d,stack:[]},{time,id:'bare'});
+   render(document.getElementById('single'),{...d,stack:[selected]},{time,id:'single'});
+   render(document.getElementById('full'),{...d,stack:kits[kit]},{time,id:'full'});
+   for(const [i,el] of moduleEls.entries()){render(el,{...d,stack:[i]},{time,id:`module-${i}`});el.closest('button').classList.toggle('selected',i===selected);}
+   document.getElementById('single-name').textContent=window.pumpParts[selected].name;
+   document.getElementById('single-site').textContent=window.pumpParts[selected].site+' · '+descriptions[selected];
+   document.getElementById('kit-label').textContent=kitNames[kit];
+  }
+  document.body.dataset.ready='true';requestAnimationFrame(frame);
+ }
+ requestAnimationFrame(frame);
+})();
+</script></html>

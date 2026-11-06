@@ -1,0 +1,26 @@
+.ball.look-pump-heart { background:transparent!important; border-color:transparent!important; box-shadow:none!important; overflow:visible; }
+.pump-body { position:absolute; inset:-90%; pointer-events:none; transform-origin:center; filter:drop-shadow(0 1px 1px #050a0dc9); }
+.hp-float.pump-heart-hp { transform:translate(-50%,calc(-100% - var(--ph-hp-lift,0px))); }
+.pump-body svg { width:100%; height:100%; overflow:visible; }
+.pump-body .ph-motion-crown { transform:translateY(var(--ph-crown-y,0px)); }
+.pump-body .ph-motion-chest { transform:translateY(var(--ph-chest-y,0px)); }
+.pump-body .ph-motion-drive { transform:translateY(var(--ph-drive-y,0px)); }
+.pump-body .ph-motion-keel { transform:translateY(var(--ph-keel-y,0px)); }
+.pump-body .ph-furnace-fire { opacity:calc(.45 + var(--ph-fire,0)*.55); transform-origin:0px 5px; transform:scaleY(calc(.75 + var(--ph-fire,0)*.25)); }
+.pump-body .ph-cog { transform:rotate(var(--ph-wheel,0rad)); }
+.pump-body .ph-cog-l { transform:rotate(calc(var(--ph-wheel,0rad) * -1.5)); }
+.pump-body .ph-pressure-needle { transform-origin:0 0; transform:rotate(calc(-38deg + var(--ph-stroke,0)*16deg)); }
+.pump-body .ph-steam-valve { transform-origin:0 0; transform:rotate(var(--ph-link,0deg)); }
+.pump-body .ph-steam { opacity:var(--ph-steam,0); transform:translateY(calc(var(--ph-steam-travel,0)*-1px)); }
+.pump-body .ph-glow { opacity:calc(.34 + var(--ph-fire,0)*.66); }
+.pump-body .ph-bellows { transform-box:fill-box; transform-origin:50% 50%; transform:scaleX(calc(1 - var(--ph-fire,0)*.16)); }
+.pump-body [data-part] { display:none; }
+.pump-body .ph-jet { opacity:var(--ph-fire,.5); }
+.ball.look-pump-floor { visibility:hidden; width:0!important; height:0!important; pointer-events:none; }
+.ball.look-pump-attack-contact { visibility:hidden;pointer-events:none; }
+.guide.pump-floor { pointer-events:none; position:absolute; overflow:visible; transform:none; border:0; border-radius:0; background:none; }
+.pump-floor canvas { width:100%; height:100%; display:block; }
+.pump-ground-parts { position:absolute;inset:0;pointer-events:none; }
+.pump-part { position:absolute;pointer-events:none;filter:drop-shadow(0 1px 1px #03090d); }
+.pump-part svg,.loose-part svg { width:100%;height:100%;display:block;overflow:visible; }
+.pump-part .ph-ammo,.loose-part .ph-ammo,.pump-part .ph-injection-flame,.loose-part .ph-injection-flame,.pump-part .ph-left-jet,.pump-part .ph-right-jet,.loose-part .ph-left-jet,.loose-part .ph-right-jet { opacity:0; }

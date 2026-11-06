@@ -1,0 +1,2 @@
+.pump-body .ph-ammo { opacity:0; }
+.pump-body.has-ammo .ph-ammo { opacity:1; }

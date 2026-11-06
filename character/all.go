@@ -17,6 +17,7 @@ import (
 	"xqdj/character/dummy"
 	"xqdj/character/echo"
 	"xqdj/character/engine"
+	"xqdj/character/engine_heart"
 	"xqdj/character/fisher"
 	"xqdj/character/freischutz"
 	"xqdj/character/fujihime"
@@ -108,6 +109,9 @@ const (
 	KindShard              = 回声.KindShard
 	KindStar               = 回声.KindStar
 	KindEngine             = 内燃机.KindEngine
+	KindEngineHeart        = 泵之心.KindEngineHeart
+	KindHeartField         = 泵之心.KindHeartField
+	KindHeartSlag          = 泵之心.KindHeartSlag
 	KindFish               = 钓鱼佬.KindFish
 	KindFishBig            = 钓鱼佬.KindFishBig
 	KindFishMid            = 钓鱼佬.KindFishMid
