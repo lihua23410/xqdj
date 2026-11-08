@@ -26,7 +26,7 @@ body.weapons .hero,body.weapons .module:not(.weapon){display:none}body.weapons .
 <script>
 (async()=>{
  const keys=['piston','manifold','flywheel','cam','nozzle','plate','doublevalve','turbine','cage','steer','winch','laser','ram','steam','arc'];
- const descriptions=['加厚泵缸与直连增压回路','双层粗管取代原来的旁通桥','加大轮毂，接入下部传动座','沿右肋接入封闭正时传动','双联喷嘴直连观察窗下的燃烧室','沿肩肋与底梁包覆承力护架','炉膛进气改为双联阀门','左上进气端接入涡轮增压腔','下腹封口升级为带铜肋的捕弹腔','尾部封帽升级为双向排气机座','绞盘嵌入右下肋，接入导缆器','远距预警后锁角持续灼烧，横移可躲','三次收缩锁向冲撞，按实际路径命中','留在释放位置的蒸汽云，持续灼伤减速','近身搏动储电，实际碰撞才释放麻痹传导'];
+ const descriptions=['加厚泵缸与直连增压回路','双层粗管取代原来的旁通桥','加大轮毂，接入下部传动座','沿右肋接入封闭正时传动','双联喷嘴直连观察窗下的燃烧室','前置108°钢甲沿黄铜导轨回转，滚轮支座接入机身','炉膛进气改为双联阀门','左上进气端接入涡轮增压腔','下腹封口升级为带铜肋的捕弹腔','尾部封帽升级为双向排气机座','绞盘嵌入右下肋，接入导缆器','远距预警后锁角持续灼烧，横移可躲','三次收缩锁向冲撞，按实际路径命中','留在释放位置的蒸汽云，持续灼伤减速','近身搏动储电，实际碰撞才释放麻痹传导'];
  for(const key of keys){
   if(['piston','flywheel','cam','turbine','doublevalve','steer','cage','nozzle'].includes(key)){const style=document.createElement('link');style.rel='stylesheet';style.href=`../parts/${key}/fx.css`;document.head.appendChild(style);}
   await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=`../parts/${key}/fx.js`;s.onload=resolve;s.onerror=reject;document.head.appendChild(s);});

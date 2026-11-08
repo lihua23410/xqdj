@@ -365,6 +365,7 @@
     </g>
     <g class="ph-modules-front"/>
   </g>
+  <g class="ph-modules-overlay"/>
 </svg>`;
   function get(id) { return document.getElementById(`pump-floor-${id}`)?._pump?.data; }
   const partDefs=body.match(/<defs>[\s\S]*?<\/defs>/)[0];
@@ -437,12 +438,15 @@
     const layoutKey=[...parts].sort((a,b)=>a-b).join(","),replaced=new Set();
     for(const t of [...parts].sort((a,b)=>a-b)){
       const def=window.pumpParts?.[t];if(!def?.mount)continue;
-      const layer=art.querySelector(`.ph-modules-${def.mount.layer==="rear"?"rear":"front"}`);
+      const layerName=["rear","front","overlay"].includes(def.mount.layer)?def.mount.layer:"front";
+      const layer=art.querySelector(`.ph-modules-${layerName}`);
       let node=art.querySelector(`[data-part="${t}"]`);
       if(!node){layer.insertAdjacentHTML("beforeend",scopeSVG(def.svg,id));node=art.querySelector(`[data-part="${t}"]`);art.dataset.layout="";}
       node.setAttribute("transform",`translate(${def.mount.x} ${def.mount.y})`);
       node.setAttribute("aria-label",`${def.name} · ${def.site}`);node.style.display="inline";
       if(art.dataset.layout!==layoutKey)layer.appendChild(node);
+      // The 108-unit viewBox spans 2.8 ball diameters (inset: -90%).
+      def.update?.(node,d,{...ctx,worldToArt:108/(5.6*(ctx.radius||18))});
       for(const socket of def.replaces||[])replaced.add(socket);
     }
     for(const node of art.querySelectorAll("[data-part]"))if(!parts.has(Number(node.dataset.part)))node.style.display="none";
@@ -501,14 +505,13 @@
     }
     if(d.winch>=0&&d.parts[d.winch]&&!d.parts[d.winch].equipped){const p=d.parts[d.winch];c.beginPath();c.moveTo(heart.x,heart.y);c.lineTo(p.x,p.y);c.strokeStyle="#b9ab8c";c.lineWidth=1.1;c.setLineDash([2,1]);c.stroke();c.setLineDash([]);}
     for(const p of d.parts){if(p.equipped||!p.flying)continue;c.beginPath();c.moveTo(p.x,p.y);c.lineTo(p.x-p.vx*.045,p.y-p.vy*.045);c.strokeStyle="#deaa6755";c.lineWidth=2;c.stroke();}
-    for(const g of d.guards||[]){if(g.capture)continue;const r=(g.inner+g.outer)/2,a=g.angle;c.beginPath();c.arc(heart.x,heart.y,r,a-g.span/2,a+g.span/2);c.strokeStyle="#10191e";c.lineWidth=g.outer-g.inner+1;c.stroke();c.strokeStyle="#63716f";c.lineWidth=g.outer-g.inner-1;c.stroke();c.strokeStyle="#ce9562";c.lineWidth=1;c.stroke();}
     c.restore();
     Object.assign(el.style,{left:`${ctx.cx+minX*ctx.scale}px`,top:`${ctx.cy-maxY*ctx.scale}px`,width:`${w*ctx.scale}px`,height:`${h*ctx.scale}px`});
     if(d.outline?.length)el.style.clipPath=`polygon(${d.outline.map(p=>`${(p.x-minX)/w*100}% ${(maxY-p.y)/h*100}%`).join(",")})`;
     groundParts(st,el,d,ctx,minX,maxY,w,h);
   },tick(){}};
   hooks["pump-heart"]={render,renderPart,mechanicalPose,tick(el,u,ctx={}){
-    render(el,get(u.id)||{},{...ctx,id:u.id});
+    render(el,get(u.id)||{},{...ctx,id:u.id,radius:u.radius});
     const hp=document.getElementById(`hp-${u.id}`);
     if(hp){hp.classList.add("pump-heart-hp");hp.style.setProperty("--ph-hp-lift",`${u.radius*(ctx.scale||1)}px`);}
   },unmount(el){
