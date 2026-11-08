@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -89,6 +90,86 @@ func TestHeroCollectsRelics(t *testing.T) {
 		}
 		if n := len(unitsOf(m, c.follower)); n == 0 {
 			t.Fatalf("捡了 %s 之后该出现 %s", c.pick, c.follower)
+		}
+	}
+}
+
+func TestHeroCompanionsFollowEveryTick(t *testing.T) {
+	m := NewHeadlessMatchSeeded(11)
+	m.SetSlot(0, character.KindHero)
+	m.SetSlot(1, character.KindDummy)
+	m.Start()
+	t.Cleanup(m.End)
+
+	hero, foe := fighterSlot(m, 0), fighterSlot(m, 1)
+	const speed = 170.0
+	hero.p = vec{-150, 0}
+	hero.setVel(vec{speed, 0})
+	foe.p = vec{0, 195}
+	foe.stand = true
+	foe.hidden = true // Keep the match running without shots or slimes interrupting the path.
+	foe.setVel(vec{})
+
+	m.Tick()
+	m.Tick()
+	for _, kind := range []string{character.KindWarriorPick, character.KindMagePick, character.KindSaintPick} {
+		relics := unitsOf(m, kind)
+		if len(relics) != 1 {
+			t.Fatalf("%s: want one relic, got %d", kind, len(relics))
+		}
+		relics[0].p = hero.p
+	}
+	m.Tick()
+	m.Tick()
+
+	var party []*unit
+	for _, kind := range []string{character.KindWarrior, character.KindMage, character.KindSaint} {
+		friends := unitsOf(m, kind)
+		if len(friends) != 1 {
+			t.Fatalf("%s: want one companion, got %d", kind, len(friends))
+		}
+		party = append(party, friends[0])
+	}
+
+	// Give the last companion enough path to reach its normal spacing.
+	for i := 0; i < 40; i++ {
+		m.Tick()
+	}
+	before := [3]float64{party[0].p.X, party[1].p.X, party[2].p.X}
+	var moves [3][6]float64
+	for frame := range moves[0] {
+		heroBefore := hero.p.X
+		m.Tick()
+		if got := hero.p.X - heroBefore; math.Abs(got-speed*DT) > 1e-6 {
+			t.Fatalf("hero stopped moving steadily: tick step %.3f at t=%.3f (hitstop=%d)", got, m.time, m.hitStop)
+		}
+		for i, friend := range party {
+			moves[i][frame] = friend.p.X - before[i]
+			before[i] = friend.p.X
+		}
+	}
+	for i, steps := range moves {
+		for _, step := range steps {
+			if math.Abs(step-speed*DT) > 1e-6 {
+				t.Errorf("%s tick steps = %.3f, want a steady %.3f", party[i].kind, steps, speed*DT)
+				break
+			}
+		}
+	}
+
+	// After a turn, each companion should pass through the corner in order.
+	const spacing = 34.0
+	corner := hero.p
+	hero.setVel(vec{0, speed})
+	for i := 0; i < 40; i++ {
+		distanceSinceTurn := hero.p.Y - corner.Y
+		m.Tick()
+		for j, friend := range party {
+			offset := distanceSinceTurn - float64(j+1)*spacing
+			want := corner.add(vec{math.Min(0, offset), math.Max(0, offset)})
+			if friend.p.sub(want).len() > 1e-6 {
+				t.Fatalf("%s after turn tick %d: got %v, want %v", friend.kind, i, friend.p, want)
+			}
 		}
 	}
 }

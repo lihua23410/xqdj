@@ -1,7 +1,6 @@
-// 勇者的前端皮肤：手里握着的村好剑、等级/经验/同伴徽标，外加一次性特效。
-// 等级和经验不是标记（标记只能画「图标+层数」），走 unit.FX 送过来自己画。
+// 小队造型、村好剑、队伍徽标与仪式特效。等级和收编状态由 unit.FX 同步。
 window.lookFX = window.lookFX || {};
-window.heroState = window.heroState || {}; // unitId -> {level, exp, need, party}
+window.heroState = window.heroState || {};
 
 (function () {
   const pack = (document.currentScript && document.currentScript.dataset.pack) || "/ball/勇者";
@@ -10,79 +9,107 @@ window.heroState = window.heroState || {}; // unitId -> {level, exp, need, party
   });
   levelupVoice.audio.preload = "auto";
 
+  // relic 的 amount 为 1 村好剑 / 2 战士 / 3 法师 / 4 圣女。
+  const PARTY = ["sword", "warrior", "mage", "saint"];
+  const COMPANIONS = PARTY.slice(1);
+  const ROLE_BY_KIND = {
+    村好剑: "sword",
+    死战士: "warrior",
+    战士: "warrior",
+    死法师: "mage",
+    法师: "mage",
+    死圣女: "saint",
+    圣女: "saint",
+  };
+
   function st(id) {
     let s = window.heroState[id];
     if (!s) {
-      s = { level: 1, exp: 0, need: 2, party: {} };
+      s = { level: 1, exp: 0, need: 2, party: {}, face: 90 };
       window.heroState[id] = s;
     }
     return s;
   }
 
-  function baseOf(kind) {
-    return (window.arena && arena.lookOf && arena.lookOf(kind).base) || "/ball/勇者";
-  }
-
   // 面朝角：和盾斧武器图同一个口径——atan2(vx, vy)，因为图默认朝上。
-  function facingDeg(u, st) {
-    const vx = Number(u && u.vx) || 0;
-    const vy = Number(u && u.vy) || 0;
-    if (Math.hypot(vx, vy) < 1e-6) {
-      return Number.isFinite(st.face) ? st.face : 0;
+  function facingDeg(u, s) {
+    const vx = Number(u.vx) || 0;
+    const vy = Number(u.vy) || 0;
+    if (Math.hypot(vx, vy) >= 1e-6) {
+      s.face = Math.atan2(vx, vy) * (180 / Math.PI);
     }
-    const deg = Math.atan2(vx, vy) * (180 / Math.PI);
-    st.face = deg;
-    return deg;
-  }
-
-  function ensure(el, cls) {
-    let n = el.querySelector(`:scope > .${cls}`);
-    if (!n) {
-      n = document.createElement("div");
-      n.className = cls;
-      el.appendChild(n);
-    }
-    return n;
+    return s.face;
   }
 
   window.lookFX.hero = {
     unmount(el) {
-      el?.querySelector(":scope > .hero-art")?.remove();
-      el?.querySelector(":scope > .hero-badge")?.remove();
+      el.querySelector(":scope > .hero-art")?.remove();
+      el.querySelector(":scope > .hero-badge")?.remove();
+      el.style.removeProperty("--hero-facing");
     },
     tick(el, u) {
-      if (!el || !el.classList.contains("look-hero")) return;
-      const s = window.heroState[u.id] || { level: 1, exp: 0, need: 2, party: {} };
+      const s = st(u.id);
+      el.style.setProperty("--hero-facing", `${facingDeg(u, s)}deg`);
 
-      // 手里的剑：捡到才有，绕球心转向面朝方向。
-      let art = el.querySelector(":scope > .hero-art");
-      if (s.party.sword) {
-        if (!art) art = ensure(el, "hero-art");
-        let img = art.querySelector(":scope > .hero-weapon");
-        if (!img) {
-          img = document.createElement("img");
-          img.className = "hero-weapon";
-          img.alt = "";
-          img.src = `${baseOf(u.kind)}/fx/sword.svg`;
-          art.appendChild(img);
-        }
-        art.style.transform = `rotate(${facingDeg(u, s)}deg)`;
-      } else if (art) {
-        art.remove();
+      const art = el.querySelector(":scope > .hero-art");
+      if (s.party.sword && !art) {
+        const holder = document.createElement("div");
+        holder.className = "hero-art";
+        const img = document.createElement("img");
+        img.className = "hero-weapon";
+        img.alt = "";
+        img.src = `${pack}/fx/sword.svg`;
+        holder.appendChild(img);
+        el.appendChild(holder);
+      } else if (!s.party.sword) {
+        art?.remove();
       }
 
-      let b = el.querySelector(":scope > .hero-badge");
-      if (!b) {
-        b = document.createElement("div");
-        b.className = "hero-badge";
-        el.appendChild(b);
+      let badge = el.querySelector(":scope > .hero-badge");
+      if (!badge) {
+        badge = document.createElement("div");
+        badge.className = "hero-badge";
+        el.appendChild(badge);
       }
-      const dots = ["warrior", "mage", "saint"]
-        .map((k) => `<i class="${k}${s.party[k] ? " on" : ""}"></i>`)
-        .join("");
-      b.innerHTML = `<b>Lv${s.level}</b><span>${s.exp}/${s.need}</span><em>${dots}</em>`;
+      const progress = [s.level, s.exp, s.need, ...COMPANIONS.map((role) => s.party[role] ? 1 : 0)].join(":");
+      if (badge.dataset.progress !== progress) {
+        const icons = COMPANIONS.map((role) => `<i data-hero-role="${role}"${s.party[role] ? ' class="on"' : ""}></i>`).join("");
+        badge.innerHTML = `<b>Lv${s.level}</b><span>${s.exp}/${s.need}</span><em>${icons}</em>`;
+        badge.style.setProperty("--hero-exp", `${Math.min(100, Math.max(0, 100 * s.exp / s.need))}%`);
+        badge.dataset.progress = progress;
+      }
     },
   };
+
+  const roleSkin = {
+    tick(el, u) {
+      const role = ROLE_BY_KIND[u.kind];
+      if (role && el.dataset.heroRole !== role) el.dataset.heroRole = role;
+    },
+    unmount(el) {
+      delete el.dataset.heroRole;
+    },
+  };
+  window.lookFX["hero-friend"] = roleSkin;
+  window.lookFX["hero-relic"] = roleSkin;
+
+  window.lookFX["hero-mage-shot"] = {
+    unmount(el) {
+      el.style.removeProperty("--mage-shot-angle");
+    },
+    tick(el, u) {
+      if (u.vx || u.vy) {
+        el.style.setProperty("--mage-shot-angle", `${Math.atan2(-u.vy, u.vx)}rad`);
+      }
+    },
+  };
+
+  function sigil(ctx, kind, role, diameter) {
+    const el = arena.spawnFx("hero-sigil", ctx.x, ctx.y, kind, {
+      "--hero-sigil-size": `${diameter * ctx.scale}px`,
+    });
+    if (el && role) el.dataset.heroRole = role;
+  }
 
   arena.registerShot("hero-lv", (fx) => {
     const s = st(fx.unitId);
@@ -91,46 +118,46 @@ window.heroState = window.heroState || {}; // unitId -> {level, exp, need, party
     s.need = Math.max(1, Math.round(fx.vy || 2));
   });
 
-  // amount: 1 村好剑 / 2 战士 / 3 法师 / 4 圣女
-  const PARTY = { 1: "sword", 2: "warrior", 3: "mage", 4: "saint" };
-  arena.registerShot("relic", (fx) => {
-    const name = PARTY[Math.round(fx.amount || 0)];
-    if (name) st(fx.unitId).party[name] = true;
-    arena.spawnFx("fx-flash", fx.x, fx.y, fx.kind);
-    arena.spawnFx("fx-ring", fx.x, fx.y, fx.kind);
-    arena.burst(fx.x, fx.y, fx.kind, 12);
+  arena.registerShot("relic", (fx, ctx) => {
+    const role = PARTY[Math.round(fx.amount || 0) - 1];
+    if (role) st(fx.unitId).party[role] = true;
+    sigil(ctx, fx.kind, role, 42);
   });
 
   arena.registerShot("sword-hit", (fx, ctx) => {
-    arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
-    arena.burst(ctx.x, ctx.y, fx.kind, 6);
+    arena.spawnFx("hero-cut", ctx.x, ctx.y, fx.kind, {
+      "--hero-cut-size": `${46 * ctx.scale}px`,
+    });
   });
 
   arena.registerShot("levelup", (fx, ctx) => {
     levelupVoice.stop();
     levelupVoice.reset();
     levelupVoice.play();
-    arena.spawnFx("fx-shock", ctx.x, ctx.y, fx.kind);
-    arena.spawnFx("fx-ring", ctx.x, ctx.y, fx.kind);
-    arena.burst(ctx.x, ctx.y, fx.kind, 18);
+    sigil(ctx, fx.kind, null, 65);
   });
 
   arena.registerShot("shield-up", (fx, ctx) => {
-    arena.spawnFx("fx-ring", ctx.x, ctx.y, fx.kind, { "--ring-size": "58px" });
+    sigil(ctx, fx.kind, "warrior", 46);
   });
 
   arena.registerShot("shield", (fx, ctx) => {
-    arena.spawnFx("fx-flash", ctx.x, ctx.y, fx.kind);
-    arena.spawnFx("fx-shock", ctx.x, ctx.y, fx.kind);
+    sigil(ctx, fx.kind, "warrior", 58);
+  });
+
+  arena.registerShot("mage-cast", (fx, ctx) => {
+    arena.spawnFx("hero-mage-cast", ctx.x, ctx.y, fx.kind, {
+      "--mage-fx-size": `${16 * ctx.scale}px`,
+    });
+  });
+
+  arena.registerShot("mage-shatter", (fx, ctx) => {
+    arena.spawnFx("hero-mage-shatter", ctx.x, ctx.y, fx.kind, {
+      "--mage-fx-size": `${30 * ctx.scale}px`,
+    });
   });
 
   arena.registerShot("heal-saint", (fx, ctx) => {
-    const n = Math.round(fx.amount || 0);
-    const el = arena.spawnFx("fx-dmg heal", ctx.x, ctx.y - 12, fx.kind, {
-      "--dmg-size": "22.5px",
-      "--dmg-dur": "0.9s",
-      "--dmg-rise": "-48px",
-    });
-    if (el) el.textContent = `+${n}`;
+    sigil(ctx, fx.kind, "saint", 56);
   });
 })();

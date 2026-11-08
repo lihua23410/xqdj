@@ -64,9 +64,10 @@ func (s *史莱姆) Handle(ctx unit.Context, ev unit.Event) {
 
 // 法师弹 是法师打出的三连发之一：撞到可打目标结算一次即消失，撞墙也消失。
 type 法师弹 struct {
-	owner uint64
-	slot  int
-	atk   float64
+	owner     uint64
+	slot      int
+	atk       float64
+	shattered bool
 }
 
 func (b *法师弹) Handle(ctx unit.Context, ev unit.Event) {
@@ -78,14 +79,25 @@ func (b *法师弹) Handle(ctx unit.Context, ev unit.Event) {
 		if e.Other.ID == b.owner {
 			return
 		}
-		if !unit.Hittable(e.Other, b.slot) {
-			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
-			return
+		if unit.Hittable(e.Other, b.slot) {
+			ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: mageShotDamage + b.atk}
 		}
-		ctx.Out <- unit.Damage{From: ctx.ID, To: e.Other.ID, Amount: mageShotDamage + b.atk}
+		b.shatter(ctx, e.Other.X+e.NX*e.Other.Radius, e.Other.Y+e.NY*e.Other.Radius)
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 	case unit.WallHit:
+		b.shatter(ctx, e.X, e.Y)
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+	}
+}
+
+func (b *法师弹) shatter(ctx unit.Context, x, y float64) {
+	if b.shattered {
+		return
+	}
+	b.shattered = true
+	ctx.Out <- unit.FX{
+		Name: "mage-shatter", Kind: ctx.Kind, UnitID: ctx.ID, Slot: b.slot,
+		X: x, Y: y,
 	}
 }
 

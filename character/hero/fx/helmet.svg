@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <defs><clipPath id="shell"><circle cx="24" cy="24" r="22.5"/></clipPath></defs>
+  <path d="M13 34c-4 2-8 3-12 2l3 5h4l-3 4 8-1.5 7-6Z" fill="#cf684f" stroke="#16242e" stroke-width="1.8" stroke-linejoin="round"/>
+  <circle cx="24" cy="24" r="22.5" fill="#ddaf64"/>
+  <g clip-path="url(#shell)">
+    <path d="M0 0h25l-4 15-11 5L0 24Z" fill="#ffe0a0"/>
+    <path d="M28 0h20v26l-12-3-4-9Z" fill="#a47549"/>
+    <path d="M3 23q7-5 15-5l17 1q6 1 10 5l-1 10-8 9H13L4 35Z" fill="#8ba4a8" stroke="#344951" stroke-width="1.8" stroke-linejoin="round"/>
+    <path d="m26 27 16-4 3 9-11 10-11 1Z" fill="#587480"/>
+    <path d="M5 23q5-3 13-3l17 1q6 1 8 3l-6 2.5-19 1.5Z" fill="#152731"/>
+    <path d="m10 29 13 3v5l-8-2Z" fill="#c2d5d0"/>
+    <path d="M0 34q19 11 35 4l13-7v17H0Z" fill="#b74f3e" stroke="#443743" stroke-width="1.5"/>
+    <path d="M0 36q14 8 27 6l-4 4Q8 46 0 41Z" fill="#e88261"/>
+    <path d="m24 9.5 2.8 3.8L24 17l-2.8-3.7Z" fill="#fff0c2"/>
+  </g>
+  <circle cx="24" cy="24" r="22.5" fill="none" stroke="#16242e" stroke-width="2.4"/>
+</svg>

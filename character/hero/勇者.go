@@ -10,6 +10,7 @@ import (
 	"embed"
 	"math"
 	"math/rand/v2"
+	"sort"
 
 	"xqdj/internal/unit"
 )
@@ -77,9 +78,8 @@ const (
 	slimeMax     = 4
 
 	// 跟随队形
-	followStep     = 4.0
-	followGap      = 34.0
-	followTrailMax = 48
+	followGap         = 34.0
+	followTrailLength = 3 * followGap
 
 	// 升级
 	levelHPGain    = 10.0
@@ -160,13 +160,13 @@ func init() {
 		Speed:   mageShotSpeed,
 		Vision:  0,
 		Fighter: false,
-		Look:    unit.Look{Color: mageColor, Trail: true},
+		Look:    unit.Look{Color: mageColor, FX: []string{"hero-mage-shot"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &法师弹{owner: info.OwnerID, slot: info.Slot}
 	})
 }
 
-type point struct{ x, y float64 }
+type trailPoint struct{ x, y, distance float64 }
 
 type 勇者 struct {
 	x, y   float64
@@ -208,7 +208,7 @@ type 勇者 struct {
 	atk   float64
 
 	// 跟随：勇者自己的面包屑
-	trail []point
+	trail []trailPoint
 
 	nearby []unit.Snapshot
 	field  unit.Field
@@ -330,17 +330,7 @@ func (h *勇者) follow(ctx unit.Context, s unit.Sense) {
 	if !h.hasWarrior && !h.hasMage && !h.hasSaint {
 		return
 	}
-	if n := len(h.trail); n == 0 {
-		h.trail = append(h.trail, point{h.x, h.y})
-	} else {
-		last := h.trail[n-1]
-		if math.Hypot(h.x-last.x, h.y-last.y) >= followStep {
-			h.trail = append(h.trail, point{h.x, h.y})
-			if len(h.trail) > followTrailMax {
-				h.trail = append([]point(nil), h.trail[len(h.trail)-followTrailMax:]...)
-			}
-		}
-	}
+	h.recordTrailPoint()
 	order := []string{KindWarrior, KindMage, KindSaint}
 	which := []bool{h.hasWarrior, h.hasMage, h.hasSaint}
 	idx := 0
@@ -349,38 +339,45 @@ func (h *勇者) follow(ctx unit.Context, s unit.Sense) {
 			continue
 		}
 		idx++
-		if tx, ty, ok := h.behindAlong(float64(idx) * followGap); ok {
-			for j := range s.Nearby {
-				if s.Nearby[j].Kind == kind && s.Nearby[j].OwnerID == ctx.ID {
-					ctx.Out <- unit.Teleport{UnitID: s.Nearby[j].ID, X: tx, Y: ty}
-					break
-				}
+		tx, ty := h.behindAlong(float64(idx) * followGap)
+		for j := range s.Nearby {
+			if s.Nearby[j].Kind == kind && s.Nearby[j].OwnerID == ctx.ID {
+				ctx.Out <- unit.Teleport{UnitID: s.Nearby[j].ID, X: tx, Y: ty}
+				break
 			}
 		}
 	}
 }
 
+// 每拍记录实际位移。按路程保留最远同伴所需的轨迹，包括插值用的前一个点。
+func (h *勇者) recordTrailPoint() {
+	next := trailPoint{x: h.x, y: h.y}
+	if n := len(h.trail); n > 0 {
+		last := h.trail[n-1]
+		step := math.Hypot(next.x-last.x, next.y-last.y)
+		if step <= 1e-9 {
+			return
+		}
+		next.distance = last.distance + step
+	}
+	h.trail = append(h.trail, next)
+	cutoff := next.distance - followTrailLength
+	for len(h.trail) > 1 && h.trail[1].distance <= cutoff {
+		h.trail = h.trail[1:]
+	}
+}
+
 // behindAlong 沿面包屑往回退 dist，给跟随者算落点。
-func (h *勇者) behindAlong(dist float64) (float64, float64, bool) {
-	n := len(h.trail)
-	if n == 0 {
-		return 0, 0, false
+func (h *勇者) behindAlong(dist float64) (float64, float64) {
+	trail := h.trail
+	target := trail[len(trail)-1].distance - dist
+	i := sort.Search(len(trail), func(i int) bool { return trail[i].distance >= target })
+	if i == 0 {
+		return trail[0].x, trail[0].y
 	}
-	acc := 0.0
-	for i := n - 1; i > 0; i-- {
-		a, b := h.trail[i], h.trail[i-1]
-		seg := math.Hypot(b.x-a.x, b.y-a.y)
-		if seg < 1e-9 {
-			continue
-		}
-		if acc+seg >= dist {
-			t := (dist - acc) / seg
-			return a.x + (b.x-a.x)*t, a.y + (b.y-a.y)*t, true
-		}
-		acc += seg
-	}
-	tail := h.trail[0]
-	return tail.x, tail.y, true
+	a, b := trail[i-1], trail[i]
+	t := (target - a.distance) / (b.distance - a.distance)
+	return a.x + (b.x-a.x)*t, a.y + (b.y-a.y)*t
 }
 
 // tickSword 持剑时的近战：勇者自己算「身前扇区里够得着的人」，命中进 CD。
@@ -488,11 +485,17 @@ func (h *勇者) tickMage(ctx unit.Context, s unit.Sense) {
 		dx, dy, n = 1, 0, 1
 	}
 	ux, uy := dx/n, dy/n
+	shotX := fx + ux*(friendRadius+mageShotRadius+2)
+	shotY := fy + uy*(friendRadius+mageShotRadius+2)
 	ctx.Out <- ctx.Born(unit.Spawn{
 		Kind: KindMageShot, OwnerID: ctx.ID, Slot: h.slot,
-		X: fx + ux*(friendRadius+mageShotRadius+2), Y: fy + uy*(friendRadius+mageShotRadius+2),
+		X: shotX, Y: shotY,
 		VX: ux * mageShotSpeed, VY: uy * mageShotSpeed,
 	})
+	ctx.Out <- unit.FX{
+		Name: "mage-cast", Kind: KindMageShot, UnitID: ctx.ID, Slot: h.slot,
+		X: shotX - ux*mageShotRadius, Y: shotY - uy*mageShotRadius,
+	}
 }
 
 func (h *勇者) tickSaint(ctx unit.Context, s unit.Sense) {

@@ -1,80 +1,270 @@
-/* 勇者：手里的村好剑、等级/经验徽标、已收编同伴的小点。 */
-
+/* 封闭头盔、红围巾与村好剑。 */
 .ball.look-hero {
-  /* 金球，靠 --kind 上色；这里只管挂在身上的附加件 */
-  overflow: visible;
+  background: url("./helmet.svg") center / contain no-repeat;
+  box-shadow: none;
 }
 
-/* 村好剑：一件握在手里的武器图，绕球心转向面朝方向（和盾斧武器图同一套挂法）。 */
 .hero-art {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0;
-  height: 0;
+  inset: 0;
+  z-index: 1;
   pointer-events: none;
-  z-index: 2;
-}
-.hero-weapon {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 40px;
-  height: 40px;
-  margin-left: -20px;
-  margin-top: -31px;
-  object-fit: contain;
-  pointer-events: none;
-  transform-origin: 50% 78%;
-  filter: drop-shadow(0 0 4px #0008);
+  transform: rotate(var(--hero-facing, 90deg));
 }
 
-/* 等级 / 经验 / 同伴小点，挂在球右侧。 */
+.hero-weapon {
+  position: absolute;
+  left: 20%;
+  top: -36%;
+  width: 113%;
+  height: 113%;
+  object-fit: contain;
+}
+
+/* 同一件装备也用在对应的遗物、队伍徽标和法术特效上。 */
+[data-hero-role="sword"] {
+  --hero-glyph: url("./sword.svg");
+  --hero-accent: #d9e6ec;
+}
+
+[data-hero-role="warrior"] {
+  --hero-portrait: url("./warrior-helm.svg");
+  --hero-glyph: url("./shield.svg");
+  --hero-accent: #ef896c;
+}
+
+[data-hero-role="mage"] {
+  --hero-portrait: url("./mage-hat.svg");
+  --hero-glyph: url("./staff.svg");
+  --hero-accent: #a8b8ff;
+}
+
+[data-hero-role="saint"] {
+  --hero-portrait: url("./saint-hood.svg");
+  --hero-glyph: url("./lantern.svg");
+  --hero-accent: #c5efc3;
+}
+
+.ball.look-hero-friend {
+  background: var(--hero-portrait, none) center / contain no-repeat;
+  box-shadow: none;
+}
+
+.ball.look-hero-relic {
+  background: #717c87;
+  box-shadow: none;
+  border-radius: 0;
+  clip-path: polygon(27% 0, 73% 0, 100% 27%, 100% 73%, 73% 100%, 27% 100%, 0 73%, 0 27%);
+}
+
+.ball.look-hero-relic::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  clip-path: inherit;
+  background: #303b4b;
+}
+
+.ball.look-hero-friend::after,
+.ball.look-hero-relic::after {
+  content: "";
+  position: absolute;
+  background: var(--hero-glyph, none) center / contain no-repeat;
+}
+
+.ball.look-hero-friend::after {
+  right: -10%;
+  bottom: -4%;
+  width: 55%;
+  height: 55%;
+}
+
+.ball.look-hero-friend[data-hero-role="warrior"]::after {
+  right: auto;
+  left: -9%;
+}
+
+.ball.look-hero-friend[data-hero-role="mage"]::after {
+  right: -20%;
+  width: 70%;
+  height: 70%;
+  transform: rotate(-22deg);
+}
+
+.ball.look-hero-relic::after {
+  inset: 16%;
+  filter: saturate(0.48);
+}
+
+.ball.look-hero-slime {
+  background: url("./slime.svg") center / contain no-repeat;
+  box-shadow: none;
+}
+
+.ball.look-hero-mage-shot {
+  background: none;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.ball.look-hero-mage-shot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 250%;
+  height: 100%;
+  background: url("./mage-bolt.svg") center / contain no-repeat;
+  transform: rotate(var(--mage-shot-angle, 0rad));
+  /* 晶核在图宽的 80% 处，与弹体中心重合。 */
+  transform-origin: 80% 50%;
+}
+
 .ball.look-hero .hero-badge {
   position: absolute;
-  left: calc(100% + 6px);
+  left: max(calc(100% + 6px), 143%);
   top: 50%;
   transform: translateY(-50%);
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 4px;
   white-space: nowrap;
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: #0d1420d9;
-  border: 1px solid #e0bc6a66;
-  color: #f2e6c4;
+  padding: 1px 5px 3px;
+  border: 1px solid #a78656;
+  border-radius: 4px;
+  background: #17252b;
+  color: #f4e7cd;
   font-size: 10px;
-  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  line-height: 13px;
   pointer-events: none;
 }
-.ball.look-hero .hero-badge b {
-  color: #e0bc6a;
-  font-weight: 700;
+
+.hero-badge::before,
+.hero-badge::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  left: 3px;
+  height: 1px;
 }
-.ball.look-hero .hero-badge span {
-  opacity: 0.75;
+
+.hero-badge::before { background: #554b3a; }
+.hero-badge::after {
+  background: #dfbc75;
+  clip-path: inset(0 calc(100% - var(--hero-exp, 0%)) 0 0);
 }
-.ball.look-hero .hero-badge em {
+
+.hero-badge b { color: #f3ce8b; }
+.hero-badge span { color: #ddd0b6; }
+
+.hero-badge em {
   display: flex;
-  gap: 2px;
-  font-style: normal;
+  gap: 1px;
+  padding-left: 3px;
+  border-left: 1px solid #a7865666;
 }
-.ball.look-hero .hero-badge em i {
-  width: 5px;
-  height: 5px;
+
+.hero-badge i {
+  width: 9px;
+  height: 9px;
+  background: var(--hero-glyph) center / contain no-repeat;
+  filter: grayscale(1);
+  opacity: 0.25;
+}
+
+.hero-badge i.on {
+  filter: none;
+  opacity: 1;
+}
+
+.fx.hero-sigil {
+  box-sizing: border-box;
+  width: var(--hero-sigil-size);
+  aspect-ratio: 1;
+  border: 2px solid var(--hero-accent, #f3ce8b);
   border-radius: 50%;
-  background: #ffffff26;
+  animation: hero-sigil-bloom 0.55s ease-out forwards;
 }
-.ball.look-hero .hero-badge em i.on.warrior {
-  background: #d1483c;
-  box-shadow: 0 0 4px #d1483c;
+
+.hero-sigil::before,
+.hero-sigil::after {
+  content: "";
+  position: absolute;
 }
-.ball.look-hero .hero-badge em i.on.mage {
-  background: #4a72d8;
-  box-shadow: 0 0 4px #4a72d8;
+
+.hero-sigil::before {
+  inset: 4px;
+  border: 1px dashed var(--hero-accent, #f3ce8b);
+  border-radius: 50%;
+  opacity: 0.68;
 }
-.ball.look-hero .hero-badge em i.on.saint {
-  background: #f2f4ef;
-  box-shadow: 0 0 4px #f2f4ef;
+
+.hero-sigil::after {
+  inset: 30%;
+  background: var(--hero-glyph, url("./crest.svg")) center / contain no-repeat;
+}
+
+@keyframes hero-sigil-bloom {
+  from { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
+  to { transform: translate(-50%, -50%) scale(1.75); opacity: 0; }
+}
+
+.fx.hero-cut {
+  width: var(--hero-cut-size);
+  aspect-ratio: 2;
+  background: #ffe1a5;
+  clip-path: polygon(0 96%, 24% 53%, 100% 3%, 73% 42%, 28% 73%);
+  animation: hero-cut-sweep 0.24s ease-out forwards;
+}
+
+@keyframes hero-cut-sweep {
+  from { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
+  to { transform: translate(-50%, -50%) scale(1.15); opacity: 0; }
+}
+
+.fx.hero-mage-cast,
+.fx.hero-mage-shatter {
+  width: var(--mage-fx-size);
+  aspect-ratio: 1;
+}
+
+.fx.hero-mage-cast {
+  box-sizing: border-box;
+  border: 1.5px solid #bac8ff;
+  border-radius: 2px;
+  animation: hero-mage-cast 0.18s ease-out forwards;
+}
+
+.fx.hero-mage-cast::before {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  background: #e4ecff;
+}
+
+@keyframes hero-mage-cast {
+  from { transform: translate(-50%, -50%) rotate(45deg) scale(0.5); opacity: 1; }
+  to { transform: translate(-50%, -50%) rotate(45deg) scale(1.15); opacity: 0; }
+}
+
+.fx.hero-mage-shatter {
+  background: url("./mage-shatter.svg") center / contain no-repeat;
+  animation: hero-mage-shatter 0.26s ease-out forwards;
+}
+
+@keyframes hero-mage-shatter {
+  from { transform: translate(-50%, -50%) scale(0.55); opacity: 1; }
+  to { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx.hero-sigil, .fx.hero-cut, .fx.hero-mage-cast, .fx.hero-mage-shatter { animation-name: hero-fade; }
+  .fx.hero-mage-cast { transform: translate(-50%, -50%) rotate(45deg); }
+}
+
+@keyframes hero-fade {
+  to { opacity: 0; }
 }
