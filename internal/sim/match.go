@@ -1627,8 +1627,10 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 	m.noteOfferLocked(c)
 	var arc float64
 	var sourceOwner uint64
+	var sourceRole, sourceKind string
 	if from := m.units[c.From]; from != nil {
 		sourceOwner = from.owner
+		sourceRole, sourceKind = from.role, from.kind
 		if !m.headless {
 			off := m.pendingDmg[token]
 			off.atkSpeed = from.v.len()
@@ -1645,6 +1647,8 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 	}
 	m.send(u, unitpkg.IncomingDamage{
 		SourceOwnerID: sourceOwner,
+		SourceRole:    sourceRole,
+		SourceKind:    sourceKind,
 		Token:         token,
 		From:          c.From,
 		Amount:        c.Amount,

@@ -19,6 +19,7 @@ import (
 	"xqdj/character/engine"
 	"xqdj/character/engine_heart"
 	"xqdj/character/fisher"
+	"xqdj/character/flicker"
 	"xqdj/character/freischutz"
 	"xqdj/character/fujihime"
 	"xqdj/character/glitch"
@@ -119,12 +120,14 @@ const (
 	KindFisherArc          = 钓鱼佬.KindFisherArc
 	KindFlood              = 钓鱼佬.KindFlood
 	KindPond               = 钓鱼佬.KindPond
+	KindFlicker            = 闪烁.KindFlicker
 	KindFrei               = Freischutz.KindFrei
 	KindFreiNode           = Freischutz.KindFreiNode
 	KindFreiShot           = Freischutz.KindFreiShot
 	KindFujihime           = 藤姬.KindFujihime
 	KindFujihimeArc        = 藤姬.KindFujihimeArc
 	KindFujihimeDoll       = 藤姬.KindFujihimeDoll
+	KindToseKeeper         = 藤姬.KindToseKeeper
 	KindGlitch             = 地慧星.KindGlitch
 	KindGlitchArc          = 地慧星.KindGlitchArc
 	KindGlitchGhost        = 地慧星.KindGlitchGhost

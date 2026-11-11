@@ -234,6 +234,8 @@ type Kill struct {
 // ArcSpan 是报价那一瞬间来源单位的扇环张角；0 表示来源不是扇环。任何战斗机都能读，不专属于某一套。
 type IncomingDamage struct {
 	SourceOwnerID uint64 // 引擎从实际伤害来源读取，出生同拍也可识别所属攻击
+	SourceRole    string // 报价时的来源类型；不依赖受害者上一拍是否看见来源
+	SourceKind    string // 报价时的来源 Kind；来源随后消失仍保留
 	Token         uint64
 	From          uint64
 	Amount        float64

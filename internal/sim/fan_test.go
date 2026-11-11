@@ -40,6 +40,9 @@ func TestOfferDamageCarriesFanSpan(t *testing.T) {
 	if hits[0].SourceOwnerID != wolf.id {
 		t.Fatalf("source owner=%d want %d", hits[0].SourceOwnerID, wolf.id)
 	}
+	if hits[0].SourceRole != arc.role || hits[0].SourceKind != arc.kind || hits[1].SourceRole != unitpkg.RoleFighter {
+		t.Fatalf("damage must carry the actual source at offer time: %+v", hits)
+	}
 	if hits[1].FromFan() || hits[1].Amount != 8 {
 		t.Fatalf("body hit=%+v", hits[1])
 	}
