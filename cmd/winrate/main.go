@@ -94,6 +94,9 @@ func main() {
 	fmt.Fprintf(os.Stderr, "组合 %d，每组 %d 场，共 %d 场，并发 %d\n", len(pairs), *nGames, total, *jobs)
 	t0 := time.Now()
 	bar := newProgress(os.Stderr, total)
+	if *only != "" {
+		bar.watch(*only)
+	}
 	// Ctrl-C 也要把滚动区还原，不然终端会卡在"只有上面几行能滚"的状态。
 	if bar.live {
 		sig := make(chan os.Signal, 1)

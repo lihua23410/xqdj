@@ -44,6 +44,66 @@ func TestProgressBarShowsRemaining(t *testing.T) {
 	}
 }
 
+func TestProgressBarShowsFocusWinRate(t *testing.T) {
+	var buf bytes.Buffer
+	bar := newProgress(&buf, 8)
+	bar.interval = 0
+	bar.watch("时计")
+
+	bar.note("时计", "雷达", "平局")
+	bar.report("draw")
+	if !strings.Contains(buf.String(), "时计 胜率 —") {
+		t.Fatalf("undecided rate missing: %q", buf.String())
+	}
+
+	buf.Reset()
+	bar.note("时计", "雷达", "时计")
+	bar.report("win")
+	if !strings.Contains(buf.String(), "时计 胜率 100.0%") {
+		t.Fatalf("win not counted: %q", buf.String())
+	}
+
+	buf.Reset()
+	bar.note("雷达", "时计", "雷达")
+	bar.note("甲", "乙", "甲")
+	bar.report("lose")
+	if !strings.Contains(buf.String(), "时计 胜率 50.0%") {
+		t.Fatalf("loss or outsider mishandled: %q", buf.String())
+	}
+
+	buf.Reset()
+	bar.note("时计", "雷达", "时计")
+	bar.report("win again")
+	if !strings.Contains(buf.String(), "时计 胜率 66.7%") {
+		t.Fatalf("rate did not refresh: %q", buf.String())
+	}
+}
+
+func TestProgressBarOmitsRateWithoutFocus(t *testing.T) {
+	var buf bytes.Buffer
+	bar := newProgress(&buf, 2)
+	bar.note("时计", "雷达", "时计")
+	bar.report("x")
+	if strings.Contains(buf.String(), "胜率") {
+		t.Fatalf("full run showed a fighter rate: %q", buf.String())
+	}
+}
+
+func TestProgressBarShrinksForFocus(t *testing.T) {
+	var buf bytes.Buffer
+	bar := newProgress(&buf, 10)
+	bar.cols = 80
+	bar.fitWidth()
+	full := bar.width
+	bar.watch("粉红色迷人的pink")
+	if bar.width >= full {
+		t.Fatalf("width %d did not shrink from %d", bar.width, full)
+	}
+	if bar.width < 4 {
+		t.Fatalf("width collapsed to %d", bar.width)
+	}
+}
+
 func TestHumanDur(t *testing.T) {
 	cases := map[time.Duration]string{
 		900 * time.Millisecond:                      "900ms",

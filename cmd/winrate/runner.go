@@ -88,6 +88,7 @@ func runPairs(pairs []pair, nGames, maxTicks, jobs int, play gameRunner, bar *pr
 		case game.right:
 			verdict = game.right + " 胜"
 		}
+		bar.note(game.left, game.right, game.winner)
 		bar.report(fmt.Sprintf("%-14s vs %-14s → %s", game.left, game.right, verdict))
 	}
 	return results, done

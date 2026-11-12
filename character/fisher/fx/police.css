@@ -1,0 +1,95 @@
+.ball.look-fisher-police-car, .ball.look-fisher-police-officer {
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+.ball.look-fisher-police-car { z-index: 3; }
+.ball.look-fisher-police-officer { z-index: 2; }
+.ball.look-fisher-police-officer, .fisher-arrest-officer {
+  border-radius: 50%;
+  background: #172e4b;
+  box-shadow: inset 0 0 0 1px #5c85ab;
+}
+.look-fisher-police-car > svg, .look-fisher-police-officer > svg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  overflow: visible;
+  transform: translate(-50%, -50%) rotate(var(--police-angle, 0rad));
+}
+.look-fisher-police-car > svg { width: 160%; }
+.fisher-police-red { fill: #853444; }
+.fisher-police-blue { fill: #315481; }
+[data-police-flash="0"] .fisher-police-red { fill: #ff5668; filter: drop-shadow(0 0 4px #ff374e); }
+[data-police-flash="1"] .fisher-police-blue { fill: #57b5ff; filter: drop-shadow(0 0 4px #2a89ff); }
+
+.fx-fisher-electric {
+  width: var(--electric-size);
+  height: var(--electric-size);
+  filter: drop-shadow(0 0 4px #4bd2fb);
+  animation: fisher-electric 0.48s ease-out both;
+}
+.fx-fisher-electric svg { display: block; width: 100%; }
+@keyframes fisher-electric {
+  0% { transform: translate(-50%, -50%) scale(.6); opacity: 1; }
+  40% { opacity: .9; }
+  100% { transform: translate(-50%, -50%) scale(1.35); opacity: 0; }
+}
+
+.fx-fisher-arrest {
+  z-index: 10;
+  width: var(--arrest-size);
+  height: var(--arrest-size);
+  transform: translate(-50%, -50%);
+  animation: fisher-arrest 1.65s linear both;
+}
+#arena:has(.fx-fisher-arrest) #banner { visibility: hidden; }
+.fisher-arrest-light {
+  position: absolute;
+  inset: -54%;
+  border-radius: 50%;
+  background: radial-gradient(circle, transparent 25%, #438bfb50 55%, transparent 70%);
+  animation: fisher-arrest-light .32s ease-in-out 5 alternate;
+}
+.fisher-arrest-target {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #ffdc78, #b88739 72%);
+  box-shadow: inset 0 0 0 2px #e9bb56;
+}
+.fisher-arrest-officer {
+  position: absolute;
+  inset: 0;
+  transform: translate(var(--arrest-x), var(--arrest-y)) rotate(var(--arrest-facing));
+  animation: fisher-arrest-grab .36s ease-out both;
+}
+.fisher-arrest-cuffs {
+  position: absolute;
+  width: 82%;
+  top: 27%;
+  left: 9%;
+  color: #eef6ff;
+  filter: drop-shadow(0 1px 2px #0c1728);
+  animation: fisher-arrest-cuffs .25s .23s ease-out both;
+}
+.fisher-arrest-label {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 7px;
+  border: 1px solid #78b3ed;
+  border-radius: 3px;
+  color: #e9f4ff;
+  background: #14243c;
+  font: 700 12px/1.2 sans-serif;
+  white-space: nowrap;
+}
+@keyframes fisher-arrest { 0%, 76% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes fisher-arrest-light { to { background: radial-gradient(circle, transparent 25%, #fb546c55 55%, transparent 70%); } }
+@keyframes fisher-arrest-grab {
+  to { transform: translate(calc(var(--arrest-x) * .65), calc(var(--arrest-y) * .65)) rotate(var(--arrest-facing)); }
+}
+@keyframes fisher-arrest-cuffs { from { opacity: 0; transform: scale(1.6); } to { opacity: 1; transform: scale(1); } }

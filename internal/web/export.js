@@ -206,7 +206,7 @@
     if (winnerEl) winnerEl.style.opacity = String(opacity);
   }
 
-  function pauseAnimations(t) {
+  function pauseAnimations(t, tailOnly = false) {
     let anims;
     try {
       anims = document.getAnimations();
@@ -214,6 +214,7 @@
       return;
     }
     for (const a of anims) {
+      if (tailOnly && !a.effect?.target?.closest?.("[data-export-tail]")) continue;
       let born = bornAt.get(a);
       if (born === undefined) {
         try {
@@ -588,6 +589,7 @@
     } else {
       const j = i - (first + frames.length);
       endShown = true;
+      pauseAnimations((frames.length + j) * 1000 / FPS, true);
       setWinner(Math.min(1, j / 36));
     }
     await new Promise((r) => realRAF(r));

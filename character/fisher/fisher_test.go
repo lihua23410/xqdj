@@ -128,7 +128,7 @@ func TestDebugBootOpensDomain(t *testing.T) {
 
 func TestFishAfterThreeSeconds(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
-	a := &钓鱼佬{booted: true, draw: seq(0.5)}
+	a := &钓鱼佬{booted: true, draw: seq(0.6)}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
 	pond := pondAt(40, 0)
 	a.Handle(ctx, unit.Sense{
@@ -207,7 +207,7 @@ func TestMissMarksStackWalkSpeed(t *testing.T) {
 
 func TestSecondMissAddsFiveNextCatch(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
-	a := &钓鱼佬{booted: true, misses: 2, draw: seq(0.15)}
+	a := &钓鱼佬{booted: true, misses: 2, draw: seq(0.29)}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
 	pond := pondAt(0, 0)
 	a.Handle(ctx, unit.Sense{Time: 0, Self: selfAt(0, 0), Nearby: []unit.Snapshot{pond}})
@@ -215,47 +215,61 @@ func TestSecondMissAddsFiveNextCatch(t *testing.T) {
 	a.Handle(ctx, unit.Sense{Time: 3, Self: selfAt(0, 0), Nearby: []unit.Snapshot{pond}})
 	cmds := drain(out)
 	if lastSpawn(cmds) == nil {
-		t.Fatalf("with +5, x=0.15 should catch: %v y=%v", cmds, catchWeight(0.15, 5))
+		t.Fatalf("with +5, draw=0.29 should catch: %v", cmds)
 	}
-	if catchWeight(0.15, 0) > 0 {
-		t.Fatal("control: x=0.15 without bonus should still be 空军")
-	}
-}
-
-func TestThirdMissUnlocksTenRolls(t *testing.T) {
-	out := make(chan unit.Cmd, 64)
-	a := &钓鱼佬{booted: true, misses: 3, rod: true, draw: seq(
-		0.4, 0, 0.4, 0, 0.4, 0, 0.4, 0, 0.4, 0,
-	)}
-	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
-	pond := pondAt(0, 0)
-	a.Handle(ctx, unit.Sense{
-		Time: 0, Self: selfAt(0, 0),
-		Nearby: []unit.Snapshot{pond, enemyAt(80, 0)},
-	})
-	_ = drain(out)
-	a.Handle(ctx, unit.Sense{
-		Time: 3, Self: selfAt(0, 0),
-		Nearby: []unit.Snapshot{pond, enemyAt(80, 0)},
-	})
-	cmds := drain(out)
-	n := 0
-	for _, c := range cmds {
-		if s, ok := c.(unit.Spawn); ok && isFishKind(s.Kind) {
-			n++
-		}
-	}
-	if n != 5 {
-		t.Fatalf("10 rolls with 5 hits spawned %d: %v", n, cmds)
-	}
-	if a.misses != 3 {
-		t.Fatalf("partial 空军 should not add misses, got %d", a.misses)
+	if len((&钓鱼佬{draw: seq(0.29)}).rolls(1, 0)) != 0 {
+		t.Fatal("control: draw=0.29 without bonus should still be 空军")
 	}
 }
 
-func TestTenRollAllMissVoidsOnce(t *testing.T) {
+func TestUnlockedRodDrawsVariableCount(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		draws []float64
+		fish  int
+	}{
+		{"最低档", []float64{0.05, 0.4, 0.4, 0.4, 0.4}, 3},
+		{"五抽部分有鱼", []float64{0.20, 0.4, 0, 0.4, 0, 0.4, 0.4}, 3},
+		{"最高档", []float64{
+			0.99,
+			0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4,
+			0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4,
+		}, 14},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := make(chan unit.Cmd, 64)
+			a := &钓鱼佬{booted: true, misses: 3, rod: true, draw: seq(tc.draws...)}
+			ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
+			pond := pondAt(0, 0)
+			a.Handle(ctx, unit.Sense{
+				Time: 0, Self: selfAt(0, 0),
+				Nearby: []unit.Snapshot{pond, enemyAt(80, 0)},
+			})
+			_ = drain(out)
+			a.Handle(ctx, unit.Sense{
+				Time: 3, Self: selfAt(0, 0),
+				Nearby: []unit.Snapshot{pond, enemyAt(80, 0)},
+			})
+			cmds := drain(out)
+			n := 0
+			for _, c := range cmds {
+				if s, ok := c.(unit.Spawn); ok && isFishKind(s.Kind) {
+					n++
+				}
+			}
+			if n != tc.fish {
+				t.Fatalf("甩出 %d 条鱼，期望 %d", n, tc.fish)
+			}
+			if a.misses != 3 {
+				t.Fatalf("部分空军不应加次数，空军数为 %d", a.misses)
+			}
+		})
+	}
+}
+
+func TestBatchAllMissVoidsOnce(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
-	a := &钓鱼佬{booted: true, misses: 3, rod: true, draw: seq(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)}
+	a := &钓鱼佬{booted: true, misses: 3, rod: true, draw: seq(0.20, 0, 0, 0, 0, 0, 0.4)}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
 	pond := pondAt(0, 0)
 	a.Handle(ctx, unit.Sense{Time: 0, Self: selfAt(0, 0), Nearby: []unit.Snapshot{pond}})
@@ -599,7 +613,7 @@ func TestFishingDamageReduction(t *testing.T) {
 
 func TestUnlockRodOnThirdMiss(t *testing.T) {
 	out := make(chan unit.Cmd, 64)
-	a := &钓鱼佬{booted: true, misses: 2, draw: seq(0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4)}
+	a := &钓鱼佬{booted: true, misses: 2, draw: seq(0, 0.20, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4)}
 	ctx := unit.Context{ID: 1, Kind: KindFisher, Out: out}
 	pond := pondAt(0, 0)
 	a.Handle(ctx, unit.Sense{
@@ -621,11 +635,20 @@ func TestUnlockRodOnThirdMiss(t *testing.T) {
 			n++
 		}
 	}
-	if n != 10 {
-		t.Fatalf("第3次空军应当场10连, spawned %d: %v", n, cmds)
+	if n != 5 {
+		t.Fatalf("第3次空军应当场按抽中的条数甩鱼, spawned %d: %v", n, cmds)
+	}
+	dispatch := lastSpawnKind(cmds, policeDispatchKind)
+	if lastNamed(cmds, "electric") == nil || dispatch == nil || dispatch.OwnerID != ctx.ID || dispatch.Data != 6.0 {
+		t.Fatalf("首次电鱼应在 3 秒后出警: %v", cmds)
+	}
+	a.reel(ctx, unit.Sense{Time: 5, Self: selfAt(0, 0)}, nil, []float64{20, 21, 22})
+	repeat := drain(out)
+	if lastNamed(repeat, "electric") == nil || lastSpawnKind(repeat, policeDispatchKind) != nil {
+		t.Fatalf("后续电鱼应播放特效，但不另派警车: %v", repeat)
 	}
 	if hasDespawn(cmds, pond.ID) {
-		t.Fatal("10连有鱼时不应作废鱼塘")
+		t.Fatal("连抽有鱼时不应作废鱼塘")
 	}
 }
 

@@ -11,17 +11,21 @@ import (
 // progressBar 把"已完成多少场"画成一行进度条。一次全量要跑十几分钟，默认
 // 就打开——没有进度看不出是在跑还是卡死了。
 type progressBar struct {
-	out      io.Writer
-	total    int
-	done     int
-	start    time.Time
-	last     time.Time
-	interval time.Duration
-	live     bool // 终端上原地刷新，重定向到文件时按百分比打点
-	width    int
-	lineGap  time.Duration
-	lastLine time.Time
-	rows     int // 终端行数；0 表示拿不到，退化成单行原地刷新
+	out       io.Writer
+	total     int
+	done      int
+	start     time.Time
+	last      time.Time
+	interval  time.Duration
+	live      bool // 终端上原地刷新，重定向到文件时按百分比打点
+	width     int
+	cols      int // 终端列数；0 表示拿不到
+	lineGap   time.Duration
+	lastLine  time.Time
+	rows      int // 终端行数；0 表示拿不到，退化成单行原地刷新
+	focus     string
+	focusWin  int
+	focusLose int
 }
 
 func newProgress(out io.Writer, total int) *progressBar {
@@ -33,9 +37,8 @@ func newProgress(out io.Writer, total int) *progressBar {
 			p.live = true
 			if rows, cols := termSize(f); rows >= 4 {
 				p.rows = rows
-				if cols > 40 && p.width > cols-34 {
-					p.width = cols - 34
-				}
+				p.cols = cols
+				p.fitWidth()
 				// 底部一行固定给进度条，上面 (rows-1) 行做滚动区：日志在
 				// 里面自然上滚，抢不到进度条那一行。
 				fmt.Fprintf(out, "\x1b[1;%dr", rows-1)
@@ -44,6 +47,31 @@ func newProgress(out io.Writer, total int) *progressBar {
 		}
 	}
 	return p
+}
+
+// watch 指定增量重测的那只战斗机。进度条右侧跟着它的实时胜率。
+func (p *progressBar) watch(name string) {
+	if p == nil || name == "" {
+		return
+	}
+	p.focus = name
+	p.fitWidth()
+}
+
+// note 记一场胜负。只累计 watch 指定的那只：它赢计胜，对手赢计负，平不计。
+func (p *progressBar) note(left, right, winner string) {
+	if p == nil || p.focus == "" {
+		return
+	}
+	if left != p.focus && right != p.focus {
+		return
+	}
+	switch winner {
+	case p.focus:
+		p.focusWin++
+	case left, right:
+		p.focusLose++
+	}
 }
 
 // step 记一场。节流到 5 场/秒刷新一次，免得进度比模拟本身还贵。
@@ -108,6 +136,9 @@ func (p *progressBar) draw(done bool) {
 		per := elapsed / time.Duration(p.done)
 		line += "  剩 " + humanDur(per*time.Duration(p.total-p.done))
 	}
+	if p.focus != "" {
+		line += "  " + p.focus + " 胜率 " + p.focusRate()
+	}
 	if p.live {
 		if p.rows >= 4 {
 			// 存光标 → 跳到最底一行重画 → 把光标还回去，滚动区里的日志
@@ -139,6 +170,46 @@ func (p *progressBar) closeScreen() {
 		return
 	}
 	fmt.Fprintln(p.out)
+}
+
+// focusRate 与总榜同一口径：胜 /（胜+负），还没有分出胜负时用破折号。
+func (p *progressBar) focusRate() string {
+	decided := p.focusWin + p.focusLose
+	if decided == 0 {
+		return "—"
+	}
+	return pct(float64(p.focusWin) / float64(decided))
+}
+
+// fitWidth 给进度条右侧的数字和胜率留出列宽，避免底行折到滚动区。
+func (p *progressBar) fitWidth() {
+	if p.cols <= 40 {
+		return
+	}
+	reserve := 34
+	if p.focus != "" {
+		reserve += displayWidth("  "+p.focus+" 胜率 ") + 6
+	}
+	width := 28
+	if width > p.cols-reserve {
+		width = p.cols - reserve
+	}
+	if width < 4 {
+		width = 4
+	}
+	p.width = width
+}
+
+func displayWidth(s string) int {
+	n := 0
+	for _, r := range s {
+		if r > 0x7f {
+			n += 2
+		} else {
+			n++
+		}
+	}
+	return n
 }
 
 func humanDur(d time.Duration) string {

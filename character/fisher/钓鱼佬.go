@@ -29,14 +29,16 @@ const (
 	floodRadius  = unit.MaxExtent
 	ramSecs      = 8.0
 
-	missBonus2 = 5.0
-	missBonus3 = 10.0
-	rodRolls   = 10
-	rodUnlock  = 3
-	ramNeed    = 50.0
-	ramCruise  = 380.0
-	ramHitCD   = 0.35
-	maxBounce  = 3
+	missBonus2            = 5.0
+	missBonus3            = 10.0
+	singleExtraMissChance = 0.20
+	rodMinRolls           = 3
+	rodMaxRolls           = 14
+	rodUnlock             = 3
+	ramNeed               = 50.0
+	ramCruise             = 380.0
+	ramHitCD              = 0.35
+	maxBounce             = 3
 )
 
 // debugBootDomain 调试：进场直接开领域（第二次空军后的盖满鱼塘 + 飞着钓）。测完改 false。
@@ -87,6 +89,7 @@ func init() {
 	registerFish(p, KindFish, 10)
 	registerFish(p, KindFishMid, 18)
 	registerFish(p, KindFishBig, 28)
+	registerPolice(p)
 }
 
 func registerFish(p *unit.Pack, kind string, r float64) {
@@ -125,6 +128,7 @@ type 钓鱼佬 struct {
 	holdVY   float64
 	vx, vy   float64
 	held     []float64
+	reported bool
 }
 
 func (a *钓鱼佬) Handle(ctx unit.Context, ev unit.Event) {
@@ -181,7 +185,7 @@ func (a *钓鱼佬) onSense(ctx unit.Context, s unit.Sense) {
 		}
 	}
 	if a.ram && a.ramUntil > 0 && s.Time+1e-9 >= a.ramUntil {
-		a.endRam(ctx)
+		a.endRam(ctx, s.Time)
 	}
 	a.emitHUD(ctx, s)
 
@@ -241,7 +245,7 @@ func (a *钓鱼佬) finish(ctx unit.Context, s unit.Sense) {
 	a.fishing = false
 	n := 1
 	if a.rod || a.misses >= rodUnlock {
-		n = rodRolls
+		n = a.rodCount()
 	}
 	bonus := catchBonus(a.misses, a.rod)
 	got := a.rolls(n, bonus)
@@ -250,7 +254,7 @@ func (a *钓鱼佬) finish(ctx unit.Context, s unit.Sense) {
 		a.misses++
 		if a.misses >= rodUnlock && !a.rod {
 			a.rod = true
-			got = a.rolls(rodRolls, missBonus3)
+			got = a.rolls(a.rodCount(), missBonus3)
 		}
 	}
 	if len(got) == 0 {
@@ -280,10 +284,19 @@ func (a *钓鱼佬) finish(ctx unit.Context, s unit.Sense) {
 	}
 }
 
+func (a *钓鱼佬) rodCount() int {
+	return rodMinRolls + int(a.roll()*(rodMaxRolls-rodMinRolls+1))
+}
+
 func (a *钓鱼佬) rolls(n int, bonus float64) []float64 {
 	var got []float64
 	for i := 0; i < n; i++ {
-		y := catchWeight(a.roll(), bonus)
+		draw := a.roll()
+		if n == 1 {
+			// 保持有鱼时的重量分布；仅提高单抽的空军率。
+			draw = (draw - singleExtraMissChance) / (1 - singleExtraMissChance)
+		}
+		y := catchWeight(draw, bonus)
 		if y > 0 {
 			got = append(got, y)
 		}
@@ -307,6 +320,7 @@ func (a *钓鱼佬) reel(ctx unit.Context, s unit.Sense, enemy *unit.Snapshot, g
 	for i, y := range live {
 		a.toss(ctx, s, enemy, y, i, len(live), false)
 	}
+	a.reportElectric(ctx, s.Time, s.Self.X, s.Self.Y, len(live))
 	if len(a.held) > 0 && !a.ram {
 		a.beginRam(ctx, s, best)
 	}
@@ -375,7 +389,7 @@ func (a *钓鱼佬) beginRam(ctx unit.Context, s unit.Sense, y float64) {
 	}
 }
 
-func (a *钓鱼佬) endRam(ctx unit.Context) {
+func (a *钓鱼佬) endRam(ctx unit.Context, now float64) {
 	held := a.held
 	a.held = nil
 	a.ram = false
@@ -391,6 +405,7 @@ func (a *钓鱼佬) endRam(ctx unit.Context) {
 	for i, y := range held {
 		a.launch(ctx, a.x, a.y, ux, uy, y, i, len(held), true)
 	}
+	a.reportElectric(ctx, now, a.x, a.y, len(held))
 }
 
 func (a *钓鱼佬) walkSpeed() float64 {
