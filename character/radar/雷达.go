@@ -59,6 +59,16 @@ func (r *雷达) Handle(ctx unit.Context, ev unit.Event) {
 	reach := clipReach(s.Self.X, s.Self.Y, dx, dy, visionOf(s), radarWidth/2, s.Field, s.Walls)
 	r.sweep(ctx, s, dx, dy, reach)
 	r.emitBeam(ctx, s, dx, dy, reach)
+	if s.ForecastThreats {
+		length := visionOf(s)
+		ctx.Out <- unit.SetThreats{UnitID: ctx.ID, Areas: []unit.Threat{{
+			Shape: unit.ThreatRay, From: ctx.ID, Slot: s.Self.Slot,
+			X: s.Self.X, Y: s.Self.Y, X2: s.Self.X + dx*length, Y2: s.Self.Y + dy*length,
+			Radius: radarWidth / 2, Spin: -2 * math.Pi / radarSpin,
+			VX: s.Self.VX, VY: s.Self.VY, ObservedAt: s.Time,
+			ActiveAt: s.Time, Until: s.Time + .15, ReadyAt: unit.ThreatReadyAt(r.hitAt, radarHitCD, s.Time),
+		}}}
+	}
 }
 
 func (r *雷达) sweep(ctx unit.Context, s unit.Sense, dx, dy, reach float64) {

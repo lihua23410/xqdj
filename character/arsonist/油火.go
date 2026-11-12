@@ -82,8 +82,52 @@ func (f *油火) onSense(ctx unit.Context, s unit.Sense) {
 	f.walkers(ctx, s, dt)
 	f.surface.advance(s.Time)
 	f.scorch(ctx, s)
+	if s.ForecastThreats {
+		f.forecastIgnition(ctx, s)
+	}
 	f.syncSlow(ctx, s)
 	f.emit(ctx)
+}
+
+// Stepping into flames can be avoided; ticks of an existing burn follow the
+// victim after leaving the oil and do not get a spatial forecast.
+func (f *油火) forecastIgnition(ctx unit.Context, s unit.Sense) {
+	var areas []unit.Threat
+	for _, o := range s.Nearby {
+		if !unit.Hittable(o, f.slot) || o.HP <= 0 {
+			continue
+		}
+		spec, ok := unit.Lookup(o.Kind)
+		if !ok || !spec.ObserveThreats || f.burn[o.ID] != nil {
+			continue
+		}
+		const horizon = .15
+		reach := o.Radius + math.Max(400, math.Hypot(o.VX, o.VY))*horizon
+		left, right := gridCoord(o.X-reach), gridCoord(o.X+reach)
+		for y := gridCoord(o.Y - reach); y <= gridCoord(o.Y+reach); y++ {
+			for x := left; x <= right; {
+				c := f.surface.cell(point{x, y})
+				if c == nil || c.state != flame || c.due <= s.Time {
+					x++
+					continue
+				}
+				start, until := x, math.Min(s.Time+horizon, c.due)
+				for x++; x <= right; x++ {
+					c = f.surface.cell(point{x, y})
+					if c == nil || c.state != flame || c.due <= s.Time {
+						break
+					}
+					until = math.Min(until, c.due)
+				}
+				areas = append(areas, unit.Threat{Shape: unit.ThreatRect, From: f.owner, Slot: f.slot, Target: o.ID,
+					X: float64(start) * surfaceStep, Y: float64(y) * surfaceStep,
+					X2: float64(x) * surfaceStep, Y2: float64(y+1) * surfaceStep,
+					ActiveAt: s.Time, Until: until,
+				})
+			}
+		}
+	}
+	ctx.Out <- unit.SetThreats{UnitID: ctx.ID, Areas: areas}
 }
 func (f *油火) takeMarks(ctx unit.Context, s unit.Sense) {
 	for _, o := range s.Nearby {

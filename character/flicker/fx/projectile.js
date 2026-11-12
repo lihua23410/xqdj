@@ -31,7 +31,8 @@
     g.clearRect(0, 0, size, size);
     g.lineCap = "round";
     const boosted = u.kind === "闪烁强化智能弹";
-    const color = boosted ? "#ffbb55" : "#59eacb";
+    const split = u.kind === "闪烁折线弹";
+    const color = boosted ? "#ffbb55" : split ? "#c9aaff" : "#59eacb";
     const pts = track.points;
     // 分段变细变淡，弯曲来自真实转弯。头部短亮、尾部透明，不堆圆形残影。
     for (let i = 1; i < pts.length; i++) {
@@ -65,6 +66,7 @@
   }
   function unmount(el) { el?.querySelector(":scope > .flicker-round")?.remove(); }
   window.lookFX["flicker-bullet"] = { tick, unmount };
+  window.lookFX["flicker-split"] = { tick, unmount, guide: flight };
   window.lookFX["flicker-smart"] = { tick, unmount, guide: flight };
   window.lookFX["flicker-boost"] = { tick, unmount, guide: flight };
 })();

@@ -473,6 +473,12 @@ func (b *炮击) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	if s.Time+1e-9 < b.boomAt {
+		if s.ForecastThreats {
+			ctx.Out <- unit.SetThreats{UnitID: ctx.ID, Areas: []unit.Threat{{
+				From: b.owner, Slot: b.slot, X: s.Self.X, Y: s.Self.Y, Radius: b.radius,
+				ActiveAt: b.boomAt, Until: b.boomAt,
+			}}}
+		}
 		shadow := b.boomAt - b.showAt
 		if shadow < 0.16 {
 			shadow = 0.16

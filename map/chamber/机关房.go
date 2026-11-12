@@ -83,6 +83,30 @@ func (a *机关房) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	a.tickCycle(ctx, s)
 	a.tickGas(ctx, s)
+	if s.ForecastThreats {
+		a.forecastGas(ctx, s)
+	}
+}
+
+func (a *机关房) forecastGas(ctx unit.Context, s unit.Sense) {
+	if !a.winding && !a.locking {
+		return
+	}
+	regions, at, until := a.gas, s.Time, a.lockUntil
+	if a.winding {
+		at, until = a.windUntil, a.windUntil+lockSec
+		for i, id := range a.toxic {
+			regions[i] = shiftRect(cellInner(squareHalf(), id), s.Self.X, s.Self.Y)
+		}
+	}
+	ready := unit.ThreatReadyAt(a.hitAt, dmgGap, s.Time)
+	areas := make([]unit.Threat, 0, len(regions))
+	for _, r := range regions {
+		areas = append(areas, unit.Threat{Shape: unit.ThreatRect, Slot: -1,
+			X: r.x0, Y: r.y0, X2: r.x1, Y2: r.y1,
+			ActiveAt: at, Until: until, ReadyAt: ready})
+	}
+	ctx.Out <- unit.SetThreats{UnitID: ctx.ID, Areas: areas}
 }
 
 func (a *机关房) boot(ctx unit.Context, s unit.Sense) {

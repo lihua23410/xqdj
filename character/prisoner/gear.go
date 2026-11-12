@@ -103,6 +103,14 @@ func (a *绞刑架) Handle(ctx unit.Context, ev unit.Event) {
 	}
 	if a.locked != 0 {
 		a.hold(ctx, s.Time)
+		if s.ForecastThreats {
+			ctx.Out <- unit.SetThreats{UnitID: ctx.ID}
+		}
+	} else if s.ForecastThreats {
+		ctx.Out <- unit.SetThreats{UnitID: ctx.ID, Areas: []unit.Threat{{
+			From: a.owner, Slot: a.slot, X: s.Self.X, Y: s.Self.Y, Radius: s.Self.Radius,
+			ActiveAt: s.Time, Until: math.Min(s.Time+.15, a.born+gearLife),
+		}}}
 	}
 	if s.Time+1e-9 >= a.born+gearLife {
 		if a.locked != 0 {

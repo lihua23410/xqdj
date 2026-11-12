@@ -59,6 +59,7 @@ func (w *weapon) Handle(ctx unit.Context, ev unit.Event) {
 
 func (w *weapon) stop(ctx unit.Context) {
 	if w.active {
+		ctx.Out <- unit.SetThreats{UnitID: ctx.ID}
 		ctx.Out <- unit.FX{Name: "heart-laser-off", Kind: ctx.Kind, UnitID: ctx.ID}
 	}
 	w.active = false
@@ -73,6 +74,21 @@ func (w *weapon) tick(ctx unit.Context, s unit.Sense) {
 	}
 	d := api.Ray(s, s.Self.X, s.Self.Y, w.dx, w.dy, 360)
 	ex, ey := s.Self.X+w.dx*d, s.Self.Y+w.dy*d
+	if s.ForecastThreats && w.next < w.until {
+		// The same line fires at w.next. No new windup is introduced.
+		at := w.next
+		if at <= s.Time+1e-8 {
+			at = s.Time + .12
+		}
+		if at < w.until {
+			ctx.Out <- unit.SetThreats{UnitID: ctx.ID, Areas: []unit.Threat{{
+				Shape: unit.ThreatCapsule, From: s.Self.OwnerID, Slot: s.Self.Slot,
+				X: s.Self.X, Y: s.Self.Y, X2: ex, Y2: ey, Radius: 6,
+				VX: s.Self.VX, VY: s.Self.VY, ObservedAt: s.Time,
+				ActiveAt: at, Until: at,
+			}}}
+		}
+	}
 	if s.Time+1e-8 < w.fireAt {
 		api.Flash(ctx, s, "heart-laser-aim", s.Self.X, s.Self.Y, ex, ey, math.Max(0, 1-(w.fireAt-s.Time)/.28))
 		return

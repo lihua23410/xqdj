@@ -7,6 +7,7 @@ type Spec struct {
 	MaxHP          float64
 	Speed          float64
 	Vision         float64
+	ObserveThreats bool
 	Fighter        bool
 	Semi           bool
 	RequiresOwner  bool    // 处理出生指令时，主人必须仍在场

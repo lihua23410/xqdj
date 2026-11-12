@@ -48,7 +48,7 @@ canvas.flicker-glitch {
 }
 .flicker-scene > canvas { position: absolute; left: 0; top: 0; pointer-events: none; }
 
-.ball.projectile:is(.look-flicker-bullet, .look-flicker-smart, .look-flicker-boost) {
+.ball.projectile:is(.look-flicker-bullet, .look-flicker-split, .look-flicker-smart, .look-flicker-boost) {
   overflow: visible;
   background: transparent;
   border: 0;
@@ -56,6 +56,7 @@ canvas.flicker-glitch {
   --round-color: #c4eddf;
   --round-glow: #9bdbbd66;
 }
+.ball.projectile.look-flicker-split { --round-color: #d2baff; --round-glow: #b188ff77; }
 .ball.projectile.look-flicker-smart { --round-color: #66ffe0; --round-glow: #49d8c177; }
 .ball.projectile.look-flicker-boost { --round-color: #ffd183; --round-glow: #ffb54888; }
 .flicker-round {

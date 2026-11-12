@@ -66,6 +66,26 @@ func attackState(scope *MatchState, owner uint64, kind string) *attackFanState {
 	return all.entries[k]
 }
 
+// AttackFanThreat returns the current end time of a registered fan's hit window
+// for one target. Custom fans have no shared hit window.
+func AttackFanThreat(scope *MatchState, fan Snapshot, target uint64, now float64) (until float64, possible bool) {
+	if scope == nil {
+		return 0, true
+	}
+	all := StateFor[attackFans](scope)
+	all.Lock()
+	st := all.entries[fanKey{owner: fan.OwnerID, kind: fan.Kind}]
+	all.Unlock()
+	if st == nil {
+		return 0, true
+	}
+	st.Lock()
+	defer st.Unlock()
+	c := st.config
+	return c.Until, c.Active && st.present && !st.used && !st.hit[target] &&
+		(c.TargetID == 0 || c.TargetID == target) && (c.Until <= 0 || now < c.Until)
+}
+
 // SyncAttackFan runs after the owner's state update. Shared mutable state stays
 // in MatchState and is synchronized; no mutable actor pointer goes through Data.
 func SyncAttackFan(ctx Context, s Sense, kind string, cfg FanAttack) {

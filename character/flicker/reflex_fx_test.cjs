@@ -37,12 +37,31 @@ test('pause freezes actual trail positions and expiry removes them', () => {
  assert.ok(!r.draw(null,1.3).some(c=>c[0]==='fillRect'));
 });
 
-test('bounded canvas per owner; focus expires without a new state during stun', () => {
+test('the cooldown ring follows the duration in the state', () => {
+  const r = setup();
+  const [, , , , start, end] = r.draw({ ReadyAt: 1.2, Cooldown: .2 }, 1.1).find(c => c[0] === 'arc');
+  assert.ok(Math.abs(end - start - .925 * Math.PI) < 1e-9);
+});
+
+test('the firing echo is shown at the sidestep origin until it expires', () => {
+  const r = setup();
+  const echo = { X: 0, Y: 20, Until: 1.9 };
+  assert.ok(r.draw({ Echo: echo }, 1.5).some(c => c[0] === 'arc' && c[1] === 278 && c[2] === 260));
+  assert.equal(r.draw(null, 1.9).filter(c => c[0] === 'arc').length, 1);
+});
+
+test('bounded canvas per owner; focus in old recordings expires without a new state', () => {
   const r = setup();
   for (let i = 0; i < 100; i++) r.draw({ Phase: 2, FocusUntil: 1.1 });
   assert.equal(r.guides.size, 1);
   r.draw({}, 1, { ...r.u, id: 2 }); assert.equal(r.guides.size, 2);
-  const classes = new Map(); const el = { classList: { toggle(k, v) { classes.set(k, v); } } };
+  const classes = new Map();
+  let canvas;
+  const el = {
+    classList: { toggle(k, v) { classes.set(k, v); } },
+    querySelector: () => canvas,
+    appendChild(child) { canvas = child; },
+  };
   r.skin.tick(el, r.u, { time: 1 }); assert.equal(classes.get('flicker-focus'), true);
   r.skin.tick(el, r.u, { time: 1.2 }); assert.equal(classes.get('flicker-focus'), false);
 });

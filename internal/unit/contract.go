@@ -50,11 +50,18 @@ type WallView struct {
 }
 
 type Sense struct {
-	Time   float64
-	Self   Snapshot
-	Nearby []Snapshot
-	Walls  []WallView
-	Field  Field
+	Time    float64
+	Self    Snapshot
+	Nearby  []Snapshot
+	Walls   []WallView
+	Field   Field
+	Threats []Threat
+	// ForecastThreats is set when a unit on the field reads spatial threats.
+	ForecastThreats bool
+	// VelocityScale is the multiplier on SetVelocity. Zero means default
+	// unless MovementLocked is set.
+	VelocityScale  float64
+	MovementLocked bool
 	// Knock 身上有击退，当前速度被盖住。
 	Knock bool
 }

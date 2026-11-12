@@ -92,8 +92,12 @@
       if (age < 0 || age >= .25) continue;
       paintTrail(g, x(p.X), y(p.Y), radius, scale, i, (1 - age / .25) * .65);
     }
+    if (st?.Echo?.Until > time) {
+      const p = st.Echo;
+      paintTrail(g, x(p.X), y(p.Y), radius, scale, 1, .25 + clamp((p.Until - time) / .9) * .35);
+    }
     const px = x(u.x), py = y(u.y), ring = radius + (phase === 1 ? 3 : 7) * scale;
-    const charge = st?.ReadyAt > time ? clamp(1 - (st.ReadyAt - time) / 1.4) : 1;
+    const charge = st?.ReadyAt > time ? clamp(1 - (st.ReadyAt - time) / (st.Cooldown || 1.4)) : 1;
     g.strokeStyle = phase ? "#acffeb" : "#6ec2b7";
     g.globalAlpha = phase ? .95 : .18 + charge * .3;
     g.lineWidth = (phase ? 1.7 : 1) * scale;

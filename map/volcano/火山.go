@@ -106,6 +106,33 @@ func (a *火山) Handle(ctx unit.Context, ev unit.Event) {
 	a.flushLobs(ctx, s)
 	a.expirePuddles(ctx, s)
 	a.tickLava(ctx, s)
+	if s.ForecastThreats {
+		a.forecastLava(ctx, s)
+	}
+}
+
+func (a *火山) forecastLava(ctx unit.Context, s unit.Sense) {
+	ready := unit.ThreatReadyAt(a.hitAt, dmgGap, s.Time)
+	areas := []unit.Threat{{
+		Slot: -1, X: a.ox, Y: a.oy, Radius: craterR,
+		ActiveAt: s.Time, Until: s.Time + dmgGap, ReadyAt: ready,
+	}}
+	for _, p := range a.puddles {
+		areas = append(areas, unit.Threat{Slot: -1, X: p.x, Y: p.y, Radius: puddleR,
+			ActiveAt: s.Time, Until: p.until, ReadyAt: ready})
+	}
+	for _, p := range a.lobs {
+		areas = append(areas, unit.Threat{Slot: -1, X: p.x, Y: p.y, Radius: puddleR,
+			ActiveAt: p.at, Until: p.at + puddleLife, ReadyAt: ready})
+	}
+	if a.winding {
+		at := a.windUntil + lobFlight
+		for _, p := range a.spots {
+			areas = append(areas, unit.Threat{Slot: -1, X: p.x, Y: p.y, Radius: puddleR,
+				ActiveAt: at, Until: at + puddleLife, ReadyAt: ready})
+		}
+	}
+	ctx.Out <- unit.SetThreats{UnitID: ctx.ID, Areas: areas}
 }
 
 func (a *火山) boot(ctx unit.Context, s unit.Sense) {

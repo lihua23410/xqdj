@@ -323,6 +323,12 @@ func (t *传票) Handle(ctx unit.Context, ev unit.Event) {
 		return
 	}
 	t.step(ctx, s)
+	if s.ForecastThreats {
+		ctx.Out <- unit.SetThreats{UnitID: ctx.ID, Areas: []unit.Threat{{
+			From: s.Self.OwnerID, Slot: s.Self.Slot, X: t.x, Y: t.y, Radius: ticketRadius,
+			VX: t.vx, VY: t.vy, ObservedAt: s.Time, ActiveAt: s.Time, Until: s.Time + .15,
+		}}}
+	}
 }
 
 // ripen 发出后超过 ticketStale 还没被捡走，票面只翻一倍。

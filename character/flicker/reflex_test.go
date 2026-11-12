@@ -2,7 +2,6 @@ package 闪烁
 
 import (
 	"math"
-	"math/rand/v2"
 	"testing"
 	"xqdj/internal/unit"
 )
@@ -12,44 +11,52 @@ func foe(id uint64, x, y float64) unit.Snapshot {
 }
 func approaching() unit.Snapshot { b := shot(2, 70, 0, -400, 0); b.OwnerID = 8; return b }
 
+func plannedThreat(s unit.Sense) *unit.Threat {
+	_, _, d, ok := planDodge(nil, s, 0)
+	if !ok {
+		return nil
+	}
+	return &d
+}
+
 func TestThreatPredictionAndEarliestImpact(t *testing.T) {
 	me := self()
 	for _, b := range []unit.Snapshot{shot(2, 70, 0, 400, 0), shot(2, 70, 35, -400, 0), shot(2, 180, 0, -400, 0)} {
-		if imminent(sense(0, me, b)) != nil {
+		if plannedThreat(sense(0, me, b)) != nil {
 			t.Fatalf("not an imminent threat: %+v", b)
 		}
 	}
 	near := shot(3, 45, 0, -150, 0)
 	fast := shot(9, 90, 0, -900, 0)
-	if b := imminent(sense(0, me, near, fast)); b == nil || b.ID != 9 {
+	if b := plannedThreat(sense(0, me, near, fast)); b == nil || b.From != 9 {
 		t.Fatalf("earliest threat=%+v", b)
 	}
 	tie := fast
 	tie.ID = 4
-	if b := imminent(sense(0, me, fast, tie)); b == nil || b.ID != 4 {
+	if b := plannedThreat(sense(0, me, fast, tie)); b == nil || b.From != 4 {
 		t.Fatal("ties must be stable")
 	}
 	me.VX = 200
-	if imminent(sense(0, me, shot(2, 100, 0, -400, 0))) == nil {
+	if plannedThreat(sense(0, me, shot(2, 100, 0, -400, 0))) == nil {
 		t.Fatal("must include self velocity")
 	}
 }
 
 func TestThreatFiltersAndWallProtection(t *testing.T) {
-	for _, change := range []func(*unit.Snapshot){func(b *unit.Snapshot) { b.Slot = 0 }, func(b *unit.Snapshot) { b.Kind = bloodBullet }, func(b *unit.Snapshot) { b.ArcSpan = 1 }, func(b *unit.Snapshot) { b.Role = unit.RoleHelper }, func(b *unit.Snapshot) { b.VX = 0 }} {
+	for _, change := range []func(*unit.Snapshot){func(b *unit.Snapshot) { b.Slot = 0 }, func(b *unit.Snapshot) { b.Role = unit.RoleHelper }, func(b *unit.Snapshot) { b.VX = 0 }} {
 		b := approaching()
 		change(&b)
-		if imminent(sense(0, self(), b)) != nil {
+		if plannedThreat(sense(0, self(), b)) != nil {
 			t.Fatalf("filtered threat=%+v", b)
 		}
 	}
 	s := sense(0, self(), approaching())
 	s.Walls = []unit.WallView{{X1: 40, Y1: -100, X2: 40, Y2: 100, Radius: 3}}
-	if imminent(s) != nil {
+	if plannedThreat(s) != nil {
 		t.Fatal("wall will intercept the bullet")
 	}
 	s.Nearby[0].PassWalls = true
-	if imminent(s) == nil {
+	if plannedThreat(s) == nil {
 		t.Fatal("wall-passing bullet is dangerous")
 	}
 }
@@ -62,7 +69,7 @@ func TestSideChoosesClearanceAndCrossfire(t *testing.T) {
 		if walls {
 			s.Walls = []unit.WallView{{X1: -100, Y1: -42, X2: 100, Y2: -42, Radius: 4}}
 		} else {
-			s.Nearby = append(s.Nearby, shot(3, 0, -120, 0, 400))
+			s.Nearby = append(s.Nearby, shot(3, 0, -75, 0, 400))
 		}
 		a.Handle(ctx, s)
 		cmds := drain(out)
@@ -76,63 +83,138 @@ func TestSideChoosesClearanceAndCrossfire(t *testing.T) {
 	}
 }
 
-func TestBurstAimsAtSourceAndDoesNotRequireNoDamage(t *testing.T) {
+func TestEachSidestepCanCounterWithoutAffectingNormalFire(t *testing.T) {
 	a := &闪烁{}
 	ctx, out := newCtx()
-	me := self()
-	target := foe(8, 150, 0)
-	decoy := foe(9, 0, 60)
-	a.Handle(ctx, sense(0, me, approaching(), target, decoy))
-	drain(out)
-	me.HP = 99
-	for i, tm := range []float64{.16, .27, .38} {
-		a.Handle(ctx, sense(tm, me, target, decoy))
+	for _, step := range []struct {
+		time                         float64
+		threat, dodge, fire, counter bool
+	}{
+		{time: 0, dodge: true, fire: true},
+		{time: sideDuration, counter: true},
+		{time: .12},
+		{time: .19, threat: true},
+		{time: .2, dodge: true},
+		{time: .2 + sideDuration, counter: true},
+		{time: .55},
+		{time: .9, dodge: true, fire: true},
+		{time: .9 + sideDuration, counter: true},
+	} {
+		nearby := []unit.Snapshot{foe(8, 150, 0), foe(9, 0, 60)}
+		if step.threat || step.dodge {
+			nearby = append(nearby, approaching())
+		}
+		a.Handle(ctx, sense(step.time, self(), nearby...))
 		cmds := drain(out)
-		n := 0
-		for _, c := range cmds {
-			if d, ok := launched(c); ok {
-				if d.To != 8 || d.Amount != beamDamage {
-					t.Fatalf("shot %d: %+v", i, d)
-				}
-				n++
+		if got := len(fxNamed(cmds, "reflex")); got > 1 || (got == 1) != step.dodge {
+			t.Fatalf("t=%.2f: got %d sidesteps, want dodge=%v", step.time, got, step.dodge)
+		}
+		if step.time == sideDuration {
+			v := velocity(cmds)
+			p := lastPass(cmds)
+			if p == nil || p.Hold || v == nil || math.Abs(math.Hypot(v.VX, v.VY)-cruise) > 1e-9 {
+				t.Fatalf("short sidestep must end and return to cruise at the end of the segment: %+v", cmds)
 			}
 		}
-		if n != 1 {
-			t.Fatalf("shot %d: damage count=%d", i, n)
+		shots, counters := 0, 0
+		for _, c := range cmds {
+			if d, ok := launched(c); ok {
+				switch c.(unit.Spawn).Kind {
+				case kindSplit:
+					shots++
+					if d.To != 9 || d.Amount != 2 || !d.NoFreeze {
+						t.Fatalf("t=%.2f: unexpected shot: %+v", step.time, c)
+					}
+				case kindSmart:
+					counters++
+					if d.To != 8 || d.Amount != 1 || !d.NoFreeze {
+						t.Fatalf("t=%.2f: unexpected counter: %+v", step.time, c)
+					}
+				default:
+					t.Fatalf("t=%.2f: unexpected projectile: %+v", step.time, c)
+				}
+			}
 		}
-	}
-	a.Handle(ctx, sense(.42, me, target))
-	for _, c := range drain(out) {
-		if _, ok := launched(c); ok {
-			t.Fatal("fourth burst shot")
+		if shots > 1 || (shots == 1) != step.fire {
+			t.Fatalf("t=%.2f: got %d shots, want fire=%v", step.time, shots, step.fire)
+		}
+		if counters > 1 || (counters == 1) != step.counter {
+			t.Fatalf("t=%.2f: got %d counters, want counter=%v", step.time, counters, step.counter)
 		}
 	}
 }
 
-func TestPerfectFinalShotAndFallbackTarget(t *testing.T) {
+func TestSidestepChainsWhenTheRemainingRouteWouldBeHit(t *testing.T) {
 	a := &闪烁{}
 	ctx, out := newCtx()
-	target := foe(9, 140, 20)
-	a.Handle(ctx, sense(0, self(), approaching()))
-	drain(out)
-	for i, tm := range []float64{.16, .27, .38} {
-		a.Handle(ctx, sense(tm, self(), target))
+	me := self()
+	targets := []unit.Snapshot{foe(8, 120, 0), foe(9, 110, 0), foe(10, 140, 0)}
+	const tick = 1.0 / 60
+	step := func(at float64, nearby []unit.Snapshot, threats ...unit.Threat) []unit.Cmd {
+		t.Helper()
+		s := sense(at, me, nearby...)
+		s.Threats = threats
+		a.Handle(ctx, s)
 		cmds := drain(out)
-		want := beamDamage
-		if i == 2 {
-			want = perfectDamage
+		v := velocity(cmds)
+		if v == nil {
+			t.Fatalf("t=%g: expected a velocity command", at)
 		}
-		found := false
-		for _, c := range cmds {
-			if d, ok := launched(c); ok {
-				found = true
-				if d.To != 9 || d.Amount != want || d.NoFreeze != (i != 2) {
-					t.Fatalf("shot %d: %+v", i, d)
-				}
+		me.VX, me.VY = v.VX, v.VY
+		me.X, me.Y = me.X+v.VX*tick, me.Y+v.VY*tick
+		return cmds
+	}
+	first := step(0, append(targets, approaching()))
+	if p := lastPass(first); p == nil || !p.Hold || me.VY >= 0 {
+		t.Fatalf("expected the initial downward sidestep: %+v", first)
+	}
+
+	// Continuing downward at 720 would clear the circle. The current
+	// segment only has one tick left, after which cruise would get hit.
+	second := step(tick, targets, unit.Threat{
+		From: 9, Slot: 1, Y: -15, Radius: 3, ActiveAt: .1, Until: .1,
+	})
+	if len(fxNamed(second, "reflex")) != 1 || math.Abs(me.VX-sideSpeed) > 1e-9 || lastPass(second) != nil {
+		t.Fatalf("expected a chained horizontal sidestep without releasing pass: %+v", second)
+	}
+
+	beam := unit.Threat{
+		Shape: unit.ThreatCapsule, From: 10, Slot: 1,
+		X: -70, Y: -12, X2: 70, Y2: -12, Radius: 2, ActiveAt: .1, Until: .1,
+	}
+	third := step(2*tick, targets, beam)
+	if len(fxNamed(third, "reflex")) != 1 || math.Abs(me.VY-sideSpeed) > 1e-9 || lastPass(third) != nil {
+		t.Fatalf("expected a third sidestep away from the horizontal beam: %+v", third)
+	}
+	continued := step(3*tick, targets, beam)
+	if len(fxNamed(continued, "reflex")) != 0 || a.phase != phSide || math.Abs(a.readyAt-(2*tick+reflexCooldown)) > 1e-9 {
+		t.Fatalf("safe current route should run to completion: %+v", continued)
+	}
+	finished := step(4*tick, targets)
+	if p := lastPass(finished); p == nil || p.Hold || a.phase != phIdle || math.Abs(me.VY-cruise) > 1e-9 {
+		t.Fatalf("last segment must release pass and restore cruise: %+v", finished)
+	}
+	if a.visual.Echo == nil || a.visual.Echo.X != 0 || a.visual.Echo.Y != 0 {
+		t.Fatalf("echo must stay at the beginning of the chain: %+v", a.visual.Echo)
+	}
+	for tick, tc := range []struct {
+		cmds []unit.Cmd
+		want uint64
+	}{
+		{first, 0}, {second, 8}, {third, 9}, {continued, 0}, {finished, 10},
+	} {
+		var targets []uint64
+		for _, c := range tc.cmds {
+			if round, ok := c.(unit.Spawn); ok && round.Kind == kindSmart {
+				targets = append(targets, round.Data.(bulletData).Target)
 			}
 		}
-		if !found {
-			t.Fatal("missing fallback counter")
+		if tc.want == 0 {
+			if len(targets) != 0 {
+				t.Fatalf("tick %d: unexpected counters to %v", tick, targets)
+			}
+		} else if len(targets) != 1 || targets[0] != tc.want {
+			t.Fatalf("tick %d: expected one counter to %d, got %v", tick, tc.want, targets)
 		}
 	}
 }
@@ -149,7 +231,7 @@ func TestBasicFireWithoutProjectilesAndAimPriority(t *testing.T) {
 		for _, c := range drain(out) {
 			if d, ok := launched(c); ok {
 				n++
-				if d.To != 8 || d.Amount != shotDamage {
+				if d.To != 8 || d.Amount != splitDamage {
 					t.Fatalf("basic shot=%+v", d)
 				}
 			}
@@ -164,85 +246,90 @@ func TestBasicFireWithoutProjectilesAndAimPriority(t *testing.T) {
 	}
 }
 
-func TestCounterSpendsMissingTargetsAndRespectsAimability(t *testing.T) {
+func TestCompletedSidestepAddsOneShotFromItsOrigin(t *testing.T) {
+	a := &闪烁{}
+	ctx, out := newCtx()
+	target := foe(8, 160, 0)
+	a.Handle(ctx, sense(0, self(), target, approaching()))
+	drain(out)
+
+	me := self()
+	me.Y, me.VY = -sideDist, -sideSpeed
+	a.Handle(ctx, sense(sideDuration, me, target))
+	drain(out)
+	if a.visual.Echo == nil {
+		t.Fatal("completed sidestep should leave a visible firing echo")
+	}
+
+	me.VY = 0
+	a.Handle(ctx, sense(.9, me, target))
+	var rounds []unit.Spawn
+	for _, cmd := range drain(out) {
+		if round, ok := cmd.(unit.Spawn); ok && round.Kind == kindSplit {
+			if data := round.Data.(bulletData); data.Damage != 2 {
+				t.Fatalf("each round must deal 2 damage: %+v", data)
+			}
+			rounds = append(rounds, round)
+		}
+	}
+	if len(rounds) != 2 {
+		t.Fatalf("expected two rounds, got %d", len(rounds))
+	}
+	if echo, body := rounds[0], rounds[1]; echo.Y != 0 || body.Y != me.Y || echo.VY <= 0 || body.VY >= 0 {
+		t.Fatalf("expected shots spreading outward from the start and end of the sidestep: %+v", rounds)
+	}
+	if a.visual.Echo != nil {
+		t.Fatal("the firing echo is consumed by the volley")
+	}
+}
+
+func TestShotRespectsAimabilityAndSight(t *testing.T) {
 	a := &闪烁{}
 	ctx, out := newCtx()
 	hidden := foe(8, 150, 0)
 	hidden.AimPriority = 0
-	a.Handle(ctx, sense(0, self(), approaching()))
-	drain(out)
-	a.Handle(ctx, sense(.16, self(), hidden))
-	for _, c := range drain(out) {
-		if _, ok := launched(c); ok {
-			t.Fatal("must not target aim=0")
-		}
-	}
-	a.Handle(ctx, sense(.27, self(), foe(9, 150, 0)))
-	drain(out)
-	if a.burstIndex != 2 {
-		t.Fatal("missed opportunity must not accumulate")
-	}
-	s := sense(.38, self(), foe(8, 150, 0))
-	s.Walls = []unit.WallView{{X1: 60, Y1: -100, X2: 60, Y2: 100, Radius: 4, VisionBlock: true}}
+	s := sense(0, self(), hidden, foe(9, -150, 0))
+	s.Walls = []unit.WallView{{X1: -60, Y1: -100, X2: -60, Y2: 100, Radius: 4, VisionBlock: true}}
 	a.Handle(ctx, s)
 	for _, c := range drain(out) {
 		if _, ok := launched(c); ok {
-			t.Fatal("wall blocks targeting")
+			t.Fatal("must not shoot at a hidden or obstructed target")
 		}
 	}
 }
 
-func TestProjectileReductionUsesSourceAtOfferTime(t *testing.T) {
-	for _, tc := range []struct {
-		role, kind       string
-		span, time, want float64
-	}{
-		{unit.RoleProjectile, "手枪弹", 0, .05, 3.5},
-		{unit.RoleProjectile, "扇环", 1, .05, 10},
-		{unit.RoleProjectile, bloodBullet, 0, .05, 10},
-		{unit.RoleHelper, "熔岩", 0, .05, 10},
-		{unit.RoleFighter, "射线", 0, .05, 10},
-		{unit.RoleProjectile, "手枪弹", 0, .2, 10},
-	} {
-		a := &闪烁{}
-		ctx, out := newCtx()
-		a.Handle(ctx, sense(0, self(), approaching()))
-		drain(out)
-		a.Handle(ctx, unit.IncomingDamage{Token: 1, From: 999, Amount: 10, Time: tc.time, SourceRole: tc.role, SourceKind: tc.kind, ArcSpan: tc.span})
-		if got := confirmed(drain(out)); math.Abs(got-tc.want) > 1e-9 {
-			t.Fatalf("%+v: got %v", tc, got)
-		}
-	}
-}
-
-func TestCooldownWallStunAndKnockback(t *testing.T) {
-	t.Run("cooldown", func(t *testing.T) {
-		a := &闪烁{}
-		ctx, out := newCtx()
-		a.Handle(ctx, sense(0, self(), approaching()))
-		drain(out)
-		for _, tm := range []float64{.12, .5, 1.39} {
-			a.Handle(ctx, sense(tm, self(), approaching()))
-			if len(fxNamed(drain(out), "reflex")) != 0 {
-				t.Fatal("retrigger before cooldown")
+func TestDamageConfirmedInFullWhileIdleAndDodging(t *testing.T) {
+	a := &闪烁{}
+	ctx, out := newCtx()
+	for _, dodging := range []bool{false, true} {
+		if dodging {
+			a.Handle(ctx, sense(0, self(), approaching()))
+			if velocity(drain(out)) == nil {
+				t.Fatal("expected a sidestep")
 			}
 		}
-		a.Handle(ctx, sense(1.4, self(), approaching()))
-		if len(fxNamed(drain(out), "reflex")) != 1 {
-			t.Fatal("ready ability should react")
+		for i, role := range []string{unit.RoleProjectile, unit.RoleHelper, unit.RoleFighter} {
+			a.Handle(ctx, offer(uint64(i+1), .02, 2, 8, role, "", 0))
+			cmds := drain(out)
+			if len(cmds) != 1 || confirmed(cmds) != 10 {
+				t.Fatalf("dodging=%v role=%s: wanted only full confirmation, got %+v", dodging, role, cmds)
+			}
 		}
-	})
+	}
+}
+
+func TestWallStunAndKnockback(t *testing.T) {
 	t.Run("wall", func(t *testing.T) {
 		a := &闪烁{}
 		ctx, out := newCtx()
 		a.Handle(ctx, sense(0, self(), approaching()))
 		drain(out)
-		a.Handle(ctx, unit.WallHit{Time: .04, NX: 0, NY: 1})
+		a.Handle(ctx, unit.WallHit{Time: .02, NX: 0, NY: 1})
 		drain(out)
 		a.Handle(ctx, sense(.05, self()))
 		cmds := drain(out)
 		v := velocity(cmds)
-		if a.phase != phFocus || v == nil || v.VY <= 0 || math.Abs(math.Hypot(v.VX, v.VY)-cruise) > 1e-9 {
+		if a.phase != phIdle || v == nil || v.VY <= 0 || math.Abs(math.Hypot(v.VX, v.VY)-cruise) > 1e-9 {
 			t.Fatalf("wall recovery=%+v phase=%v", v, a.phase)
 		}
 	})
@@ -251,16 +338,23 @@ func TestCooldownWallStunAndKnockback(t *testing.T) {
 		ctx, out := newCtx()
 		a.Handle(ctx, sense(0, self(), approaching()))
 		drain(out)
-		a.Handle(ctx, unit.Stunned{Time: .05, Until: .8})
+		a.Handle(ctx, unit.Stunned{Time: .03, Until: .8})
 		cmds := drain(out)
 		if p := lastPass(cmds); p == nil || p.Hold {
 			t.Fatal("stun must release pass")
 		}
 		a.Handle(ctx, sense(.8, self(), foe(8, 150, 0)))
+		shots := 0
 		for _, c := range drain(out) {
-			if d, ok := launched(c); ok && d.Amount != shotDamage {
-				t.Fatal("stun must not replay burst")
+			if round, ok := c.(unit.Spawn); ok {
+				shots++
+				if round.Kind != kindSplit {
+					t.Fatalf("stun must cancel the counter: %+v", round)
+				}
 			}
+		}
+		if shots != 1 {
+			t.Fatalf("expected only the normal shot after stun, got %d", shots)
 		}
 	})
 	t.Run("knock", func(t *testing.T) {
@@ -287,6 +381,74 @@ func TestClipReachChecksFinalPartialStep(t *testing.T) {
 	walls := []unit.WallView{{X1: 7, Y1: -10, X2: 7, Y2: 10, Radius: 1}}
 	if reach := clipReach(0, 0, 1, 0, 7, 1, unit.Field{}, walls); reach > 5.01 {
 		t.Fatalf("unchecked tail crossed wall: %v", reach)
+	}
+}
+
+func TestWallRecoveryWithReflectedSideVelocity(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		hits         int
+		extraTargets bool
+	}{
+		{name: "one bullet without damage"},
+		{name: "repeated damage", hits: 4},
+		{name: "multiple targets", extraTargets: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &闪烁{}
+			ctx, out := newCtx()
+			nearby := []unit.Snapshot{approaching()}
+			if tc.extraTargets {
+				nearby = append(nearby, foe(8, 150, 0), foe(9, 0, 60))
+			}
+			a.Handle(ctx, sense(0, self(), nearby...))
+			v := velocity(drain(out))
+			if v == nil {
+				t.Fatal("missing sidestep")
+			}
+			me := self()
+			me.VX, me.VY = v.VX, -v.VY
+			a.Handle(ctx, unit.WallHit{Time: .02, NX: 0, NY: 1})
+			drain(out)
+			for i := 0; i < tc.hits; i++ {
+				a.Handle(ctx, offer(uint64(i+1), .02, 2, 8, unit.RoleProjectile, "原型机_整合弹", 0))
+				drain(out)
+				me.HP -= 10
+			}
+			a.Handle(ctx, sense(.05, me, nearby[1:]...))
+			v = velocity(drain(out))
+			if v == nil || math.Abs(v.VX) > 1e-9 || math.Abs(v.VY-cruise) > 1e-9 {
+				t.Fatalf("reflected sidestep must recover to cruise: velocity=%+v phase=%v pending=%v", v, a.phase, a.wantCruise)
+			}
+		})
+	}
+}
+
+func TestWallRecoveryWaitsForKnockbackAndTracksFurtherBounces(t *testing.T) {
+	a := &闪烁{}
+	ctx, out := newCtx()
+	a.Handle(ctx, sense(0, self(), approaching()))
+	drain(out)
+	a.Handle(ctx, unit.WallHit{Time: .02, NX: 0, NY: 1})
+	drain(out)
+	me := self()
+	me.VY = sideSpeed
+	a.Handle(ctx, senseKnock(.05, me))
+	if v := velocity(drain(out)); v != nil {
+		t.Fatalf("wall recovery overwrote active knockback: %+v", v)
+	}
+	// A second wall is reached before the knockback releases the velocity.
+	a.Handle(ctx, unit.WallHit{Time: .06, NX: math.Sqrt(.5), NY: math.Sqrt(.5)})
+	drain(out)
+	me.VX, me.VY = -sideSpeed, 0
+	a.Handle(ctx, senseKnock(.07, me))
+	if v := velocity(drain(out)); v != nil {
+		t.Fatalf("second bounce overwrote active knockback: %+v", v)
+	}
+	a.Handle(ctx, sense(.08, me))
+	v := velocity(drain(out))
+	if v == nil || math.Abs(v.VX+cruise) > 1e-9 || math.Abs(v.VY) > 1e-9 {
+		t.Fatalf("must recover along the twice-reflected direction: %+v", v)
 	}
 }
 
@@ -345,258 +507,97 @@ func TestBulletCollisionAndLimitedTracking(t *testing.T) {
 	}
 }
 
-func TestNonMissileRejectSpendsSide(t *testing.T) {
-	owner := foe(8, 0, 120)
-	from := foe(9, 120, 0)
+func TestSplitRoundBendsOnce(t *testing.T) {
+	ctx, out := newCtx()
+	b := &projectile{bulletData: bulletData{Target: 8, Until: 1, BendAt: .1}}
+	me := self()
+	me.X, me.Y = 43, 39
+	target := foe(8, 140, 39)
+	target.VY = 150
 
-	t.Run("reject then slide", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, from.ID, owner.ID, unit.RoleProjectile, "扇环", 1))
-		cmds := drain(out)
-		if !hasBlock(cmds, 1) || confirmed(cmds) >= 0 {
-			t.Fatal("must reject the whole packet")
-		}
-		if math.Abs(a.readyAt-reflexCooldown) > 1e-9 || !a.pending {
-			t.Fatal("cooldown starts at the offer")
-		}
-		a.Handle(ctx, offer(2, 0, from.ID, owner.ID, unit.RoleHelper, "熔岩", 0))
-		cmds = drain(out)
-		if hasBlock(cmds, 2) || math.Abs(confirmed(cmds)-10) > 1e-9 {
-			t.Fatal("a second packet in the same moment must land")
-		}
-		a.Handle(ctx, sense(0.02, self(), owner, from, approaching()))
-		cmds = drain(out)
-		v := velocity(cmds)
-		if v == nil || math.Abs(v.VY) > 1e-6 || math.Abs(math.Abs(v.VX)-sideSpeed) > 1e-6 {
-			t.Fatalf("queued side keeps its heading: %+v", v)
-		}
-		if p := lastPass(cmds); p == nil || !p.Hold {
-			t.Fatal("side must pass")
-		}
-		if math.Abs(a.readyAt-reflexCooldown) > 1e-9 || a.sourceID != owner.ID {
-			t.Fatalf("ready=%v source=%d", a.readyAt, a.sourceID)
-		}
-	})
+	b.Handle(ctx, sense(.09, me, target))
+	if v := velocity(drain(out)); v != nil {
+		t.Fatalf("turned too early: %+v", v)
+	}
+	b.Handle(ctx, sense(.1, me, target))
+	if v := velocity(drain(out)); v == nil || v.VX <= 0 || v.VY <= 0 || math.Abs(math.Hypot(v.VX, v.VY)-bulletSpeed) > 1e-9 {
+		t.Fatalf("expected a single turn ahead of the moving target: %+v", v)
+	}
+	target.Y = -50
+	b.Handle(ctx, sense(.11, me, target))
+	if v := velocity(drain(out)); v != nil {
+		t.Fatalf("round kept steering after its turn: %+v", v)
+	}
+}
 
-	t.Run("miss", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(false)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, from.ID, owner.ID, unit.RoleProjectile, "扇环", 1))
-		cmds := drain(out)
-		if hasBlock(cmds, 1) || math.Abs(confirmed(cmds)-10) > 1e-9 || a.pending {
-			t.Fatal("a missed roll pays the packet and does not side")
-		}
-		a.Handle(ctx, sense(0.02, self(), owner))
-		if len(fxNamed(drain(out), "reflex")) != 0 {
-			t.Fatal("miss must not side on the next sense")
-		}
-	})
+func TestForecastFanUsesItsAttackSide(t *testing.T) {
+	fan := shot(2, 80, 0, -400, 0)
+	fan.OwnerID, fan.Radius, fan.ArcInner, fan.ArcSpan = 8, 32, 15, math.Pi/3
+	fan.FaceX = 1
+	if plannedThreat(sense(0, self(), fan)) != nil {
+		t.Fatal("approaching with the fan pointing away should not trigger")
+	}
+	fan.FaceX = -1
+	if dx, dy, d, ok := planDodge(nil, sense(0, self(), fan), 0); !ok || d.From != 8 || math.Abs(dx) > 1e-9 || math.Abs(dy) < .99 {
+		t.Fatalf("expected a lateral dodge from the front-facing fan, got (%g,%g), %+v", dx, dy, d)
+	}
+}
 
-	t.Run("missile", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, 2, 8, unit.RoleProjectile, "手枪弹", 0))
-		cmds := drain(out)
-		if hasBlock(cmds, 1) || math.Abs(confirmed(cmds)-10) > 1e-9 || a.pending {
-			t.Fatal("flying shots do not roll")
+func TestBeamDodgeFollowsTheBeamNormal(t *testing.T) {
+	me := self()
+	me.X, me.Y, me.VY = 30, -40, 170
+	for _, shape := range []unit.ThreatShape{unit.ThreatRay, unit.ThreatCapsule} {
+		s := sense(0, me)
+		s.Threats = []unit.Threat{{Shape: shape, Slot: 1, X: -40, X2: 100, Radius: 6, ActiveAt: .12, Until: .12}}
+		if dx, dy, _, ok := planDodge(nil, s, 0); !ok || math.Abs(dx) > 1e-9 || dy > -.99 {
+			t.Fatalf("expected to dodge perpendicular to the beam, got (%g,%g), ok=%v", dx, dy, ok)
 		}
-	})
+	}
+}
 
-	t.Run("blood", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, 2, 8, unit.RoleProjectile, bloodBullet, 0))
-		if !hasBlock(drain(out), 1) {
-			t.Fatal("blood is not a flying shot")
-		}
-	})
-
-	t.Run("body", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, from.ID, 0, unit.RoleFighter, "相撞", 0))
-		if !hasBlock(drain(out), 1) {
-			t.Fatal("body impact must be able to reject")
-		}
-		a.Handle(ctx, sense(0.02, self(), from))
-		v := velocity(drain(out))
-		if v == nil || math.Abs(v.VX) > 1e-6 || math.Abs(math.Abs(v.VY)-sideSpeed) > 1e-6 || a.sourceID != from.ID {
-			t.Fatalf("no owner uses From: %+v source=%d", v, a.sourceID)
-		}
-	})
-
-	t.Run("unseen", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, from.ID, owner.ID, unit.RoleFighter, "相撞", 0))
-		drain(out)
-		me := self()
-		me.VY = 200
-		a.Handle(ctx, sense(0.02, me))
-		v := velocity(drain(out))
-		if v == nil || math.Abs(v.VY) > 1e-6 || math.Abs(math.Abs(v.VX)-sideSpeed) > 1e-6 || a.sourceID != owner.ID {
-			t.Fatalf("unseen owner follows velocity: %+v source=%d", v, a.sourceID)
-		}
-	})
-
-	t.Run("still", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, 0, 0, unit.RoleHelper, "熔岩", 0))
-		drain(out)
-		a.Handle(ctx, sense(0.02, self()))
-		v := velocity(drain(out))
-		if v == nil || math.Abs(v.VX) > 1e-6 || v.VY <= 0 {
-			t.Fatalf("still body steps off +X: %+v", v)
-		}
-	})
-
-	t.Run("cramped", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, 0, owner.ID, unit.RoleHelper, "熔岩", 0))
-		drain(out)
-		s := sense(0.02, self(), foe(owner.ID, 90, 0))
-		s.Walls = []unit.WallView{
-			{X1: -80, Y1: 22, X2: 80, Y2: 22, Radius: 1},
-			{X1: -80, Y1: -22, X2: 80, Y2: -22, Radius: 1},
-		}
-		a.Handle(ctx, s)
-		cmds := drain(out)
-		if a.phase != phFocus || velocity(cmds) != nil || lastPass(cmds) != nil {
-			t.Fatal("no room opens the counter without moving or passing")
-		}
-		a.Handle(ctx, sense(0.07, self(), foe(owner.ID, 90, 0)))
-		found := false
-		for _, c := range drain(out) {
-			if d, ok := launched(c); ok {
-				found = true
-				if d.To != owner.ID || d.Amount != beamDamage {
-					t.Fatalf("counter=%+v", d)
-				}
+func TestTimedTerrainDodgeLeavesEchoAndCounters(t *testing.T) {
+	a := &闪烁{}
+	ctx, out := newCtx()
+	me, target := self(), foe(8, 140, 0)
+	me.VX = cruise
+	s := sense(0, me, target)
+	s.Threats = []unit.Threat{{Slot: -1, X: 25, Radius: 20, ActiveAt: .1, Until: .1}}
+	a.Handle(ctx, s)
+	v := velocity(drain(out))
+	if v == nil || math.Abs(v.VX) > 1e-9 || math.Abs(math.Abs(v.VY)-sideSpeed) > 1e-9 {
+		t.Fatalf("expected a sidestep perpendicular to the approach: %+v", v)
+	}
+	me.X, me.Y, me.VX, me.VY = v.VX*sideDuration, v.VY*sideDuration, v.VX, v.VY
+	a.Handle(ctx, sense(sideDuration, me, target))
+	if a.visual.Echo == nil {
+		t.Fatal("terrain sidestep must leave an echo")
+	}
+	for _, cmd := range drain(out) {
+		if round, ok := cmd.(unit.Spawn); ok && round.Kind == kindSmart {
+			if data := round.Data.(bulletData); data.Target != target.ID {
+				t.Fatalf("terrain counter must use normal aim: %+v", data)
 			}
+			return
 		}
-		if !found {
-			t.Fatal("cramped reject still fires")
-		}
-	})
+	}
+	t.Fatal("terrain sidestep must counter")
+}
 
-	t.Run("stun before slide", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, from.ID, owner.ID, unit.RoleProjectile, "扇环", 1))
-		drain(out)
-		a.Handle(ctx, unit.Stunned{Time: 0.01, Until: 0.4})
-		drain(out)
-		a.Handle(ctx, sense(0.05, self(), owner))
-		cmds := drain(out)
-		if a.phase != phIdle || a.pending || len(fxNamed(cmds, "reflex")) != 0 || velocity(cmds) != nil {
-			t.Fatal("stun before the slide cancels the move and the counter")
-		}
-		if math.Abs(a.readyAt-reflexCooldown) > 1e-9 {
-			t.Fatal("cooldown stays spent")
-		}
-	})
-
-	t.Run("death before slide", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, 0, owner.ID, unit.RoleHelper, "熔岩", 0))
-		drain(out)
-		me := self()
-		me.HP = 0
-		a.Handle(ctx, sense(0.02, me, owner))
-		if a.phase != phIdle || a.pending || len(fxNamed(drain(out), "reflex")) != 0 || math.Abs(a.readyAt-reflexCooldown) > 1e-9 {
-			t.Fatal("death before the slide cancels it and keeps the cooldown")
-		}
-	})
-
-	t.Run("knock", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, 0, owner.ID, unit.RoleHelper, "熔岩", 0))
-		drain(out)
-		a.Handle(ctx, senseKnock(0.02, self(), owner))
-		cmds := drain(out)
-		if a.phase != phSide || velocity(cmds) != nil {
-			t.Fatal("knock must not cancel or rewrite the slide")
-		}
-		if p := lastPass(cmds); p == nil || !p.Hold {
-			t.Fatal("knock keeps the slide's pass")
-		}
-		a.Handle(ctx, sense(0.05, self(), owner))
-		v := velocity(drain(out))
-		if v == nil || math.Abs(math.Abs(v.VX)-sideSpeed) > 1e-6 {
-			t.Fatalf("slide resumes after knock: %+v", v)
-		}
-	})
-
-	t.Run("busy", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, sense(0, self(), approaching()))
-		drain(out)
-		a.Handle(ctx, offer(1, 0.05, from.ID, owner.ID, unit.RoleProjectile, "扇环", 1))
-		cmds := drain(out)
-		if hasBlock(cmds, 1) || math.Abs(confirmed(cmds)-10) > 1e-9 || len(fxNamed(cmds, "reflex")) != 0 {
-			t.Fatal("side already running does not roll")
-		}
-		a.Handle(ctx, sense(0.12, self(), owner))
-		drain(out)
-		if a.phase != phFocus {
-			t.Fatal("expected the counter window")
-		}
-		a.Handle(ctx, offer(2, 0.2, from.ID, owner.ID, unit.RoleProjectile, "扇环", 1))
-		cmds = drain(out)
-		if hasBlock(cmds, 2) || math.Abs(confirmed(cmds)-10) > 1e-9 {
-			t.Fatal("counter window does not roll")
-		}
-	})
-
-	t.Run("cooldown", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, 0, owner.ID, unit.RoleHelper, "熔岩", 0))
-		drain(out)
-		a.Handle(ctx, sense(0.02, self(), owner))
-		drain(out)
-		a.Handle(ctx, sense(0.6, self(), owner))
-		drain(out)
-		if a.phase != phIdle {
-			t.Fatalf("phase=%v", a.phase)
-		}
-		a.rng = rngHit(true)
-		a.Handle(ctx, offer(2, 1.0, 0, owner.ID, unit.RoleHelper, "熔岩", 0))
-		cmds := drain(out)
-		if hasBlock(cmds, 2) || math.Abs(confirmed(cmds)-10) > 1e-9 {
-			t.Fatal("cooldown must still be running")
-		}
-		a.rng = rngHit(true)
-		a.Handle(ctx, offer(3, 1.4, 0, owner.ID, unit.RoleHelper, "熔岩", 0))
-		if !hasBlock(drain(out), 3) {
-			t.Fatal("ready again at 1.4")
-		}
-	})
-
-	t.Run("perfect", func(t *testing.T) {
-		a := &闪烁{rng: rngHit(true)}
-		ctx, out := newCtx()
-		a.Handle(ctx, offer(1, 0, 0, owner.ID, unit.RoleHelper, "熔岩", 0))
-		drain(out)
-		var shots []unit.Damage
-		for _, tm := range []float64{0.02, 0.14, 0.18, 0.28, 0.38} {
-			a.Handle(ctx, sense(tm, self(), owner))
-			for _, c := range drain(out) {
-				if d, ok := launched(c); ok {
-					shots = append(shots, d)
-				}
-			}
-		}
-		if len(shots) != 3 || shots[2].To != owner.ID || shots[2].Amount != perfectDamage {
-			t.Fatalf("rejected packet keeps the clean counter: %+v", shots)
-		}
-	})
+func TestNoDodgeWhenEveryPathStillGetsHit(t *testing.T) {
+	s := sense(0, self())
+	s.Threats = []unit.Threat{{Slot: 1, From: 8, Radius: 80, ActiveAt: .1, Until: .1}}
+	if d := plannedThreat(s); d != nil {
+		t.Fatalf("no reachable exit from a blast centered on the fighter: %+v", d)
+	}
+	s.Threats[0].ActiveAt, s.Threats[0].Until = .5, .5
+	if d := plannedThreat(s); d == nil {
+		t.Fatal("long warning allows the sidestep and following cruise to clear the blast")
+	}
+	s.Self.VX = cruise
+	s.Threats[0] = unit.Threat{Slot: 1, From: 8, X: 25, Radius: 40, ActiveAt: .1, Until: .1}
+	if d := plannedThreat(s); d != nil {
+		t.Fatalf("both normals are unsafe, retreating must not spend a sidestep: %+v", d)
+	}
 }
 
 func TestTrailSamplesTwiceAsOften(t *testing.T) {
@@ -627,23 +628,4 @@ func offer(token uint64, t float64, from, owner uint64, role, kind string, span 
 		Token: token, From: from, SourceOwnerID: owner, Amount: 10, Time: t,
 		SourceRole: role, SourceKind: kind, ArcSpan: span,
 	}
-}
-
-func hasBlock(cmds []unit.Cmd, token uint64) bool {
-	for _, c := range cmds {
-		if b, ok := c.(unit.BlockDamage); ok && b.Token == token {
-			return true
-		}
-	}
-	return false
-}
-
-func rngHit(hit bool) *rand.Rand {
-	for stream := uint64(1); stream < 20000; stream++ {
-		r := unit.NewRNG(stream)
-		if (r.Float64() < nonMissileReject) == hit {
-			return unit.NewRNG(stream)
-		}
-	}
-	panic("no rng stream")
 }

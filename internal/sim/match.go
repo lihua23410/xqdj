@@ -44,6 +44,8 @@ type unit struct {
 	stopped         bool
 	solid           bool
 	vision          float64
+	observeThreats  bool
+	threats         []unitpkg.Threat
 	cruise          float64
 	cruiseFS        *cruiseFS
 	velM            float64 // 已经乘进当前速度的巡航 M，出生为 1
@@ -1152,6 +1154,7 @@ func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot 
 		hp:             spec.MaxHP,
 		maxHP:          spec.MaxHP,
 		vision:         spec.Vision,
+		observeThreats: spec.ObserveThreats,
 		cruise:         spec.Speed,
 		velM:           1,
 		actor:          actor,
@@ -1291,6 +1294,10 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		cmd = c.command
 	}
 	switch c := cmd.(type) {
+	case unitpkg.SetThreats:
+		if u := m.units[c.UnitID]; u != nil && !u.stopped {
+			u.threats = c.Areas
+		}
 	case unitpkg.FanContact:
 		fan := m.units[c.From]
 		if fan != nil && fan.attach && fan.arcSpan > 0 {
@@ -2851,22 +2858,77 @@ func (m *Match) pushOutOBB(u *unit, w *barrier, cc vec, cr float64) {
 func (m *Match) emitLocked() {
 	field := m.liveFieldLocked()
 	snaps := make([]unitpkg.Snapshot, 0, len(m.order))
+	forecast := false
 	for _, id := range m.order {
 		u := m.units[id]
 		if u != nil && !u.stopped {
 			snaps = append(snaps, u.snap())
+			forecast = forecast || u.observeThreats
 		}
 	}
 	views := m.wallViewsLocked()
+	var threats []unitpkg.Threat
+	if forecast {
+		for _, id := range m.order {
+			if u := m.units[id]; u != nil && !u.stopped && !u.stun {
+				for _, d := range u.threats {
+					if d.Until+1e-9 >= m.time {
+						threats = append(threats, d)
+					}
+				}
+			}
+		}
+	}
 	for _, id := range m.order {
 		u := m.units[id]
 		if u == nil || u.stopped || u.stun {
 			continue
 		}
 		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field, Walls: views, Knock: len(u.fsList) > 0}
+		sense.ForecastThreats = forecast
+		if u.observeThreats {
+			sense.Threats = m.threatsForLocked(u, threats)
+			sense.VelocityScale = u.cruiseMul()
+			sense.MovementLocked = u.held || u.velocityLocked || sense.VelocityScale <= 0
+		}
 		sense.Nearby = nearbySnapshots(snaps, u)
 		m.send(u, sense)
 	}
+}
+
+func (m *Match) threatsForLocked(u *unit, all []unitpkg.Threat) []unitpkg.Threat {
+	var out []unitpkg.Threat
+	for _, d := range all {
+		if d.Slot != u.slot && d.From != u.id && (d.Target == 0 || d.Target == u.id) {
+			out = append(out, d)
+		}
+	}
+	for _, w := range m.walls {
+		if w.slot == u.slot || w.owner == u.id || (w.amount <= 0 && w.ram <= 0) {
+			continue
+		}
+		_, rammed := w.rammed[u.id]
+		if w.amount <= 0 && rammed {
+			continue
+		}
+		at := m.time
+		if w.ram <= 0 || rammed {
+			at = math.Max(at, w.hitAt[u.id])
+		}
+		until := m.time + .15
+		if w.until > 0 {
+			until = math.Min(until, w.until)
+		}
+		if at >= until {
+			continue
+		}
+		out = append(out, unitpkg.Threat{
+			Shape: unitpkg.ThreatCapsule, From: w.owner, Slot: w.slot,
+			X: w.a.X, Y: w.a.Y, X2: w.b.X, Y2: w.b.Y, Radius: w.radius,
+			VX: w.vx, VY: w.vy, ObservedAt: m.time, ActiveAt: at, Until: until,
+		})
+	}
+	return out
 }
 
 func nearbySnapshots(snaps []unitpkg.Snapshot, u *unit) []unitpkg.Snapshot {
