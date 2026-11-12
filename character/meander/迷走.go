@@ -16,14 +16,14 @@ const KindLit = "迷走点亮"
 const (
 	bodyRadius = 18.0
 	bodyHP     = 100.0
-	cruise     = 170.0
+	cruise     = 221.0
 	bodyColor  = "#5e6d78"
 
 	ringColor = "#3d5c66"
 	litColor  = "#1a6f82"
 
 	litDamage = 3.0
-	litHitCD  = 0.4
+	litHitCD  = 0.3
 
 	arriveR     = 12.0
 	junctionCD  = 0.18

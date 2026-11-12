@@ -1,6 +1,7 @@
 // 时计：白色时钟，表针就是资源条。
 // 每 8s 时针 +2h；仅当读数落在 2/4/6/8/10/12 且该刻度本场从未落下过时刻下时刻。
-// 无常态弧；敌方踩进时刻判定圈才瞬移冲撞并短窗挂弧。致命伤才回拨（表针 −2h）。
+// 无常态弧。敌方踩进时刻判定圈，或自己踩进某一档，才瞬移冲撞并短窗挂弧。致命伤才回拨（表针 −2h）。
+// 开局先在出生点留一个时刻，不占钟点，垫在栈底；钟点档仍从 2:00 起刻。
 // 时刻永久耗尽时，本体播放 3 秒死亡演出后用既有 Despawn 指令退场。
 // 单位：距离 px、速度 px/s、时间 s、角度 度（unit.Deg 转弧度）、伤害 HP 点。
 package 时计
@@ -100,6 +101,7 @@ type moment struct {
 	marks    []unit.Mark
 	pin      uint64  // 认领到的时刻实体 ID；0 = 还没认上
 	inCircle bool    // 上一拍判定圈里有没有鱼（边沿触发用）
+	selfIn   bool    // 上一拍自己在不在这圈里（边沿触发用）
 	silent   float64 // 静默到这个时刻
 }
 
@@ -165,6 +167,7 @@ func (a *时计) tick(ctx unit.Context, s unit.Sense) {
 	if !a.booted {
 		a.booted = true
 		a.nextAt = s.Time + saveGap // 开场先等满一次 8s
+		a.dropMoment(ctx, s, 0)     // 出生点这一档不占钟点，垫在栈底
 		a.syncFx(ctx)
 	}
 	a.bindPins(ctx, s)
@@ -172,7 +175,8 @@ func (a *时计) tick(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	a.save(ctx, s)
-	a.trap(ctx, s)
+	rammed := a.trap(ctx, s)
+	a.selfTrip(ctx, s, rammed)
 	a.armArc(ctx, s) // 踩影之后再挂，触发当帧就能出第一发弧
 }
 
@@ -203,28 +207,35 @@ func (a *时计) save(ctx unit.Context, s unit.Sense) {
 	}
 	if !a.carved[a.hand] {
 		a.carved[a.hand] = true
-		m := moment{
-			hour: a.hand,
-			x:    s.Self.X, y: s.Self.Y,
-			vx: s.Self.VX, vy: s.Self.VY,
-			hp: s.Self.HP, maxHP: s.Self.MaxHP,
-			fx: s.Self.FaceX, fy: s.Self.FaceY,
-			marks: append([]unit.Mark(nil), s.Self.Marks...),
-		}
-		a.moments = append(a.moments, m)
-		ctx.Out <- ctx.Born(unit.Spawn{
-			Kind: KindTokeiMoment, X: m.x, Y: m.y,
-			OwnerID: ctx.ID, Slot: s.Self.Slot,
-		})
-		ctx.Out <- unit.FX{
-			Name: "carve", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
-			Amount: float64(m.hour), X: m.x, Y: m.y,
-		}
+		a.dropMoment(ctx, s, a.hand)
 	}
 	if a.hand >= handCap {
 		a.stopped = true
 	}
 	a.syncFx(ctx)
+}
+
+// dropMoment 在脚下留一档。hour 为 0 是开局那一档，不写入已刻钟点。
+// 刻在脚下，这一拍不算自己踩进去。
+func (a *时计) dropMoment(ctx unit.Context, s unit.Sense, hour int) {
+	m := moment{
+		hour: hour,
+		x:    s.Self.X, y: s.Self.Y,
+		vx: s.Self.VX, vy: s.Self.VY,
+		hp: s.Self.HP, maxHP: s.Self.MaxHP,
+		fx: s.Self.FaceX, fy: s.Self.FaceY,
+		marks:  append([]unit.Mark(nil), s.Self.Marks...),
+		selfIn: true,
+	}
+	a.moments = append(a.moments, m)
+	ctx.Out <- ctx.Born(unit.Spawn{
+		Kind: KindTokeiMoment, X: m.x, Y: m.y,
+		OwnerID: ctx.ID, Slot: s.Self.Slot,
+	})
+	ctx.Out <- unit.FX{
+		Name: "carve", Kind: ctx.Kind, UnitID: ctx.ID, Slot: s.Self.Slot,
+		Amount: float64(hour), X: m.x, Y: m.y,
+	}
 }
 
 // pinRef 是扫到的一个时刻实体：认领档位时按位置就近配对。
@@ -272,7 +283,8 @@ func (a *时计) bindPins(ctx unit.Context, s unit.Sense) {
 				continue
 			}
 			d := math.Hypot(p.x-a.moments[i].x, p.y-a.moments[i].y)
-			if d < bestD {
+			// 叠在同一点时留更早生成的实体。开局档在栈底，先认领，才会对上出生点那一枚。
+			if best == 0 || d < bestD-1e-6 || (d <= bestD+1e-6 && p.id < best) {
 				best, bestD = p.id, d
 			}
 		}
@@ -401,7 +413,7 @@ func (a *时计) rewind(ctx unit.Context, now float64) {
 // trap 踩影：敌方战斗机或敌方活随从「进入」某个时刻的判定圈（边沿触发）就把时计拉过去撞。
 // 弹体不在 Hittable 里（朝弹撞毫无意义）；同一时刻被踩后静默 3s；时计眩晕时收不到 Sense，自然不触发。
 // 一拍只拉一次，同时踩中多个就按档位顺序取最先的那个。触发后打开临时弧窗口。
-func (a *时计) trap(ctx unit.Context, s unit.Sense) {
+func (a *时计) trap(ctx unit.Context, s unit.Sense) bool {
 	for i := range a.moments {
 		m := &a.moments[i]
 		bait, ok := a.bait(s, *m)
@@ -412,32 +424,107 @@ func (a *时计) trap(ctx unit.Context, s unit.Sense) {
 		}
 		m.silent = s.Time + tripSilence
 		a.syncFx(ctx)
-		dx, dy := bait.X-m.x, bait.Y-m.y
-		if math.Hypot(dx, dy) < 1e-6 {
-			dx, dy = 1, 0 // 鱼正好压在档位上：没方向可用，随便朝一边顶
+		a.ram(ctx, s, *m, bait)
+		return true
+	}
+	return false
+}
+
+// selfTrip 自己踩进某一档时，先看有没有能出发的时刻。
+// 自己踩到的这一档不参加挑选，静默中的也不参加。没有索敌目标，或挑不出档，这一拍不进入冲撞：不瞬移、不开弧、任何档都不进静默。
+// 挑中了才从那一档的位置朝目标冲，不闪到目标身边；踩到的档和出发的档一起静默。敌方踩影已经拉过这一拍就不再拉第二次，但自己的进圈边沿照样记下。
+func (a *时计) selfTrip(ctx unit.Context, s unit.Sense, rammed bool) {
+	var entered []int
+	for i := range a.moments {
+		inside := a.selfInside(s, a.moments[i])
+		if inside && !a.moments[i].selfIn && s.Time+1e-9 >= a.moments[i].silent {
+			entered = append(entered, i)
 		}
-		// 落脚点：不能直接落在档位中心。踩圈的人就站在档位旁边，两边半径 18 一重叠，
-		// 引擎当场把这对单位弹开、冲撞速度被反弹覆盖（弧的朝向跟着速度走，于是"根本撞不到"）。
-		// 所以沿「档位→鱼」这条线退到刚好够得着之外（留 ramGap 的空隙，小骑士 beside 同款），
-		// 档位只当锚点；冲撞方向再从落脚点重新指向鱼。
-		sx, sy := a.ramStart(s.Field, bait, dx, dy, *m)
-		vx, vy := bait.X-sx, bait.Y-sy
-		vn := math.Hypot(vx, vy)
-		if vn < 1e-6 {
-			vx, vy, vn = 1, 0, 1
-		}
-		ux, uy := vx/vn, vy/vn
-		ctx.Out <- unit.FX{
-			Name: "trip", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
-			X: m.x, Y: m.y, VX: ux, VY: uy,
-		}
-		ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: sx, Y: sy}
-		// 撞击本身无伤，出伤靠瞬过去之后的临时弧
-		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * ramSpeed, VY: uy * ramSpeed}
-		a.arc = unit.AttachState{} // 窗口一开立刻能挂第一发
-		a.arcUntil = s.Time + arcWindow
+		a.moments[i].selfIn = inside
+	}
+	if rammed {
 		return
 	}
+	enemy := unit.Seek(s)
+	for _, i := range entered {
+		launch, ok := a.elect(s, i, enemy)
+		if !ok {
+			continue
+		}
+		a.moments[i].silent = s.Time + tripSilence
+		a.moments[launch].silent = s.Time + tripSilence
+		a.syncFx(ctx)
+		a.ramOut(ctx, s, a.moments[launch], *enemy)
+		return
+	}
+}
+
+// ramOut 从这一档的位置朝目标冲。不闪到目标身边；这段路上够不着就打不中。
+func (a *时计) ramOut(ctx unit.Context, s unit.Sense, m moment, bait unit.Snapshot) {
+	dx, dy := bait.X-m.x, bait.Y-m.y
+	if n := math.Hypot(dx, dy); n < 1e-6 {
+		dx, dy = 1, 0
+	} else {
+		dx, dy = dx/n, dy/n
+	}
+	ctx.Out <- unit.FX{
+		Name: "trip", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
+		X: m.x, Y: m.y, VX: dx, VY: dy,
+	}
+	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: m.x, Y: m.y}
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: dx * ramSpeed, VY: dy * ramSpeed}
+	a.arc = unit.AttachState{}
+	a.arcUntil = s.Time + arcWindow
+}
+
+// elect 在除踩到的那一档之外，挑一个没在静默、离目标最近的时刻。距离相同留更早刻下的。
+func (a *时计) elect(s unit.Sense, stepped int, enemy *unit.Snapshot) (int, bool) {
+	if enemy == nil {
+		return 0, false
+	}
+	best, bestD := -1, 0.0
+	for i := range a.moments {
+		if i == stepped || s.Time+1e-9 < a.moments[i].silent {
+			continue
+		}
+		d := math.Hypot(a.moments[i].x-enemy.X, a.moments[i].y-enemy.Y)
+		if best < 0 || d < bestD {
+			best, bestD = i, d
+		}
+	}
+	return best, best >= 0
+}
+
+func (a *时计) selfInside(s unit.Sense, m moment) bool {
+	return math.Hypot(s.Self.X-m.x, s.Self.Y-m.y) <= tripR+s.Self.Radius
+}
+
+// ram 沿现成的踩影冲撞：落在档位朝目标的那一侧，再朝目标冲，并打开临时弧窗口。
+func (a *时计) ram(ctx unit.Context, s unit.Sense, m moment, bait unit.Snapshot) {
+	dx, dy := bait.X-m.x, bait.Y-m.y
+	if math.Hypot(dx, dy) < 1e-6 {
+		dx, dy = 1, 0 // 鱼正好压在档位上：没方向可用，随便朝一边顶
+	}
+	// 落脚点：不能直接落在档位中心。踩圈的人就站在档位旁边，两边半径 18 一重叠，
+	// 引擎当场把这对单位弹开、冲撞速度被反弹覆盖（弧的朝向跟着速度走，于是"根本撞不到"）。
+	// 所以沿「档位→鱼」这条线退到刚好够得着之外（留 ramGap 的空隙，小骑士 beside 同款），
+	// 档位只当锚点；冲撞方向再从落脚点重新指向鱼。
+	sx, sy := a.ramStart(s.Field, bait, dx, dy, m)
+	vx, vy := bait.X-sx, bait.Y-sy
+	vn := math.Hypot(vx, vy)
+	if vn < 1e-6 {
+		vx, vy, vn = 1, 0, 1
+	}
+	ux, uy := vx/vn, vy/vn
+	ctx.Out <- unit.FX{
+		Name: "trip", Kind: ctx.Kind, UnitID: ctx.ID, Slot: a.slot,
+		X: m.x, Y: m.y, VX: ux, VY: uy,
+	}
+	ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: sx, Y: sy}
+	// 撞击本身无伤，出伤靠瞬过去之后的临时弧
+	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * ramSpeed, VY: uy * ramSpeed}
+	a.arc = unit.AttachState{} // 窗口一开立刻能挂第一发
+	a.arcUntil = s.Time + arcWindow
 }
 
 // ramStart 挑落脚点：优先站在档位那一侧（贴回档位，观众看起来还是"被拉到那个时刻"），

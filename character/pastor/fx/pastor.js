@@ -1,5 +1,6 @@
 (function () {
   const RUNES = "哎呦我去巴哈丢雷老某吼";
+  const ownersBySnapshot = new WeakMap();
 
   window.lookFX = window.lookFX || {};
 
@@ -9,11 +10,16 @@
   }
 
   function ownerOf(u, units) {
-    if (!u) return null;
-    for (const o of units || []) {
-      if (o && o.id === u.ownerId) return o;
+    if (!units) return null;
+    let owners = ownersBySnapshot.get(units);
+    if (!owners) {
+      owners = new Map();
+      for (const unit of units) {
+        if (unit?.kind === "老牧师") owners.set(unit.id, unit);
+      }
+      ownersBySnapshot.set(units, owners);
     }
-    return null;
+    return owners.get(u.ownerId);
   }
 
   window.lookFX.pastor = {
@@ -29,27 +35,25 @@
   window.lookFX["pastor-glyph"] = {
     tick(el, u, ctx) {
       if (!el || !u) return;
-      let mark = el.querySelector(":scope > i");
+      let mark = el.pastorGlyphMark;
       if (!mark) {
         mark = document.createElement("i");
+        mark.style.animationDelay = (-((u.id || 0) % 7) * 0.33) + "s";
         el.appendChild(mark);
+        el.pastorGlyphMark = mark;
       }
       const ch = runeChar(u);
       if (mark.textContent !== ch) mark.textContent = ch;
-      const size = Math.max(20, el.clientWidth * 1.12);
-      mark.style.fontSize = size + "px";
-      mark.style.animationDelay = (-((u.id || 0) % 7) * 0.33) + "s";
+      const diameter = Math.round(2 * u.radius * (ctx?.scale ?? 1));
+      const fontSize = Math.max(20, diameter * 1.12) + "px";
+      if (mark.style.fontSize !== fontSize) mark.style.fontSize = fontSize;
       const owner = ownerOf(u, ctx && ctx.units);
-      let rot = 0;
-      if (owner && ctx && typeof ctx.scale === "number") {
-        const [gx, gy] = arena.screenPos(u.x, u.y, ctx.scale, ctx.cx, ctx.cy);
-        const [ox, oy] = arena.screenPos(owner.x, owner.y, ctx.scale, ctx.cx, ctx.cy);
-        rot = Math.atan2(ox - gx, oy - gy);
-      }
+      const rot = owner ? Math.atan2(owner.x - u.x, u.y - owner.y) : 0;
       mark.style.transform = "translate(-50%, -50%) rotate(" + rot + "rad)";
     },
     unmount(el) {
-      el?.querySelector(":scope > i")?.remove();
+      el.pastorGlyphMark?.remove();
+      delete el.pastorGlyphMark;
     },
   };
 })();

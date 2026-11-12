@@ -20,17 +20,14 @@ const (
 
 	kindShield     = "盾"
 	kindShard      = "盾碎片"
-	kindWeakShard  = "弱化碎片"
 	shieldRadius   = 20.0
 	shardRadius    = 6.0
 	shardMinSpeed  = 90.0
 	shardMaxSpeed  = 280.0
 	fullShardN     = 8
-	weakShardN     = 6
 	fullShardDmg   = 6.0
-	weakShardDmg   = 4.0
 	shardWallHits  = 2 // 弹 1 次，第 2 次撞墙消失
-	shieldRefresh  = 8.0
+	shieldRefresh  = 5.0
 	shieldLostTrig = 40.0
 )
 
@@ -72,18 +69,6 @@ func init() {
 		Look:    unit.Look{Color: "#8b9cb3", FX: []string{"warden-shard"}},
 	}, func(info unit.SpawnInfo) unit.Actor {
 		return &盾碎片{owner: info.OwnerID, slot: info.Slot, dmg: fullShardDmg}
-	})
-	p.Register(unit.Spec{
-		Kind:    kindWeakShard,
-		Role:    unit.RoleProjectile,
-		Radius:  shardRadius,
-		MaxHP:   1,
-		Speed:   shardMaxSpeed,
-		Vision:  0,
-		Fighter: false,
-		Look:    unit.Look{Color: "#c47a4a", FX: []string{"warden-shard"}},
-	}, func(info unit.SpawnInfo) unit.Actor {
-		return &盾碎片{owner: info.OwnerID, slot: info.Slot, dmg: weakShardDmg}
 	})
 }
 
@@ -128,12 +113,9 @@ func (s *盾士) maybeRefresh(ctx unit.Context, sense unit.Sense) {
 	if sense.Time+1e-9 < s.refreshAt && s.lost < shieldLostTrig {
 		return
 	}
-	if s.armed {
-		ctx.Out <- unit.DespawnOwned{OwnerID: ctx.ID, Kind: kindShield}
-		s.armed = false
-		s.burst(ctx, kindWeakShard, weakShardN)
+	if !s.armed {
+		s.putShield(ctx, sense)
 	}
-	s.putShield(ctx, sense)
 	s.refreshAt = sense.Time + shieldRefresh
 	s.lost = 0
 }

@@ -16,7 +16,7 @@ const (
 	rangedSpeed        = 148.0
 	rangedVision       = 9999.0
 	rangedHP           = 100.0
-	rangedFireInterval = 1.6
+	rangedFireInterval = 1.3
 
 	kindBullet    = "子弹"
 	bulletRadius  = 6.0

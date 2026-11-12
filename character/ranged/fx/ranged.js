@@ -57,7 +57,7 @@ window.lookFX = window.lookFX || {};
         }
       }
       data.target = targetFor(u, ctx);
-      const load = data.shot ? Math.min(1, Math.max(0, (time - data.shot.at) / 1.6)) : 1;
+      const load = data.shot ? Math.min(1, Math.max(0, (time - data.shot.at) / 1.3)) : 1;
       el.querySelector('.ranged-load-ring').style.strokeDashoffset = `${100 * (1 - load)}`;
       el.classList.toggle('reloading', load < 1);
       el.classList.toggle('acquired', !!data.target);

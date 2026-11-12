@@ -18,7 +18,7 @@ const (
 	sideSpeed      = 720.0
 	sideDist       = 24.0
 	sideDuration   = sideDist / sideSpeed
-	reflexCooldown = 0.20
+	reflexCooldown = 0.25
 	shotRange      = 280.0
 	shotGap        = 0.9
 	counterDamage  = 1.0

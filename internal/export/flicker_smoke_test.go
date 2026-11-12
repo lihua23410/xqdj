@@ -28,9 +28,9 @@ func TestFlickerRenderSmoke(t *testing.T) {
 	units := []unit.Snapshot{
 		{ID: 1, Kind: "闪烁", Role: unit.RoleFighter, Slot: 0, X: -80, Y: 0, Radius: 18, HP: 100, MaxHP: 100, AimPriority: 15},
 		{ID: 2, Kind: "原型机_远程", Role: unit.RoleFighter, Slot: 1, X: 100, Y: 0, Radius: 18, HP: 80, MaxHP: 100, AimPriority: 15},
-		{ID: 10, Kind: "闪烁子弹", Role: unit.RoleProjectile, OwnerID: 1, X: -60, Y: 100, VX: 580, Radius: 3, HP: 1},
-		{ID: 11, Kind: "闪烁智能弹", Role: unit.RoleProjectile, OwnerID: 1, X: -60, Y: 50, VX: 580, Radius: 3, HP: 1},
-		{ID: 12, Kind: "闪烁强化智能弹", Role: unit.RoleProjectile, OwnerID: 1, X: -60, Y: -65, VX: 580, Radius: 3, HP: 1},
+		{ID: 10, Kind: "闪烁子弹", Role: unit.RoleProjectile, OwnerID: 1, X: -60, Y: 100, VX: 464, Radius: 3, HP: 1},
+		{ID: 11, Kind: "闪烁智能弹", Role: unit.RoleProjectile, OwnerID: 1, X: -60, Y: 50, VX: 464, Radius: 3, HP: 1},
+		{ID: 12, Kind: "闪烁强化智能弹", Role: unit.RoleProjectile, OwnerID: 1, X: -60, Y: -65, VX: 464, Radius: 3, HP: 1},
 	}
 	visual := json.RawMessage(`{"Phase":2,"ReadyAt":1.4,"SideAt":0,"SideUntil":0.111,"FocusUntil":0.461,"Aim":true,"AimX":100,"AimY":0,"ThreatX":-30,"ThreatY":0,"Trail":[{"X":-80,"Y":70,"T":0},{"X":-80,"Y":48,"T":0.033},{"X":-80,"Y":24,"T":0.066},{"X":-80,"Y":0,"T":0.1}],"Beams":[]}`)
 	frame := map[string]any{"phase": "running", "slots": [2][]string{{"闪烁"}, {"原型机_远程"}}, "units": units, "looks": unit.Looks(), "packs": unit.Packs(), "field": "六边形", "fieldShape": "hex", "hexRadius": 280, "time": .18, "seq": 1, "effects": []unit.FX{{Name: "flicker-state", Kind: "闪烁", UnitID: 1, Data: visual}, {Name: "shot", Kind: "闪烁", UnitID: 1}}}

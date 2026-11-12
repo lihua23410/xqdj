@@ -19,7 +19,7 @@ const (
 	knightHP       = 100.0
 	knightStartHP  = 85.0
 	knightVision   = 9999.0
-	knightDamage   = 8.0
+	knightDamage   = 7.0
 	knightHitCD    = 0.11
 	knightCD       = 6.0
 	knightChainGap = 0.5

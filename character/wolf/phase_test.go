@@ -145,7 +145,7 @@ func TestFullMoonStartsLockThenDash(t *testing.T) {
 		_ = drain(out)
 	}
 	touch(w, ctx, 4, true)
-	if w.phase != fullMoon || w.bite != biteLock || abs(w.biteUntil-10) > 1e-9 {
+	if w.phase != fullMoon || w.bite != biteLock || abs(w.biteUntil-(4+wolfBiteTime)) > 1e-9 {
 		t.Fatalf("phase=%d bite=%d until=%v", w.phase, w.bite, w.biteUntil)
 	}
 	_ = drain(out)

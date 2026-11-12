@@ -13,7 +13,7 @@
     soundTime = time;
   }
   function playShatter(fx, ctx = {}) {
-    if (!fx || ctx.visualOnly || (fx.kind !== "盾碎片" && fx.kind !== "弱化碎片")) return;
+    if (!fx || ctx.visualOnly || fx.kind !== "盾碎片") return;
     const time = Number.isFinite(ctx.time) ? ctx.time : 0;
     syncSoundTime(time);
     const key = `${fx.unitId ?? "unknown"}:${fx.kind}`;
@@ -21,8 +21,7 @@
     sounded.add(key);
     let voice = voices.get(key);
     if (!voice) {
-      const file = fx.kind === "弱化碎片" ? "shatter-weak.wav" : "shatter-full.wav";
-      const audio = new Audio(`${audioBase}/fx/${file}`);
+      const audio = new Audio(`${audioBase}/fx/shatter-full.wav`);
       audio.preload = "auto";
       voice = arena.voice(audio, { mode: arena.SOUND_MODE.IMMUNE, priority: 0, volume: 1.0 });
       voices.set(key, voice);
@@ -41,7 +40,6 @@
     <circle class="warden-body-flash" cx="50" cy="50" r="49"/>
   </svg>`;
   const thick = "M-8 -4 -3 -7 8 -3 6 5 -4 7 -8 3Z";
-  const thin = "M-8 -2 6 -4 8 2 -5 4Z";
   const pulse = (time, at, duration) => {
     const age = time - at;
     return age >= 0 && age < duration ? 1 - age / duration : 0;
@@ -92,27 +90,25 @@
       data.known = true;
       data.time = time;
       for (const fx of ctx.effects || []) {
-        if (fx.name !== "shatter" || fx.unitId !== u.id || (fx.kind !== "盾碎片" && fx.kind !== "弱化碎片")) continue;
-        const mode = fx.kind === "弱化碎片" ? "weak" : "full";
-        const key = `${time}:${mode}`;
+        if (fx.name !== "shatter" || fx.unitId !== u.id || fx.kind !== "盾碎片") continue;
+        const key = `${time}:full`;
         if (key === data.key) continue;
         data.key = key;
         data.burstAt = time;
-        data.mode = mode;
+        data.mode = "full";
         data.x = fx.x ?? u.x;
         data.y = fx.y ?? u.y;
       }
-      const strength = pulse(time, data.burstAt, data.mode === "weak" ? 0.32 : 0.38);
+      const strength = pulse(time, data.burstAt, 0.38);
       node.style.display = strength > 0 ? "block" : "none";
-      node.classList.toggle("warden-burst-weak", data.mode === "weak");
       if (strength > 0) {
         const [x, y] = arena.screenPos(data.x, data.y, ctx.scale, ctx.cx, ctx.cy);
         const size = 120 * ctx.scale;
         Object.assign(node.style, { left: `${x}px`, top: `${y}px`, width: `${size}px`, height: `${size}px` });
-        node.style.setProperty("--kind", arena.kindColor(data.mode === "weak" ? "弱化碎片" : "盾碎片"));
+        node.style.setProperty("--kind", arena.kindColor("盾碎片"));
         node.style.setProperty("--warden-phase", (1 - strength).toFixed(4));
         node.style.setProperty("--warden-fade", (strength * strength).toFixed(4));
-        node.style.setProperty("--warden-flash", pulse(time, data.burstAt, data.mode === "weak" ? 0.12 : 0.09).toFixed(4));
+        node.style.setProperty("--warden-flash", pulse(time, data.burstAt, 0.09).toFixed(4));
       }
       ctx.seenGuides.add(node.id);
     },
@@ -146,7 +142,6 @@
       const node = ctx.ensureGuide(`warden-trail-${u.id}`, "warden-shard-trail");
       const time = ctx.time || 0;
       const angle = Math.atan2(-(u.vy || 0), u.vx || 0) * 180 / Math.PI;
-      const weak = u.kind === "弱化碎片";
       if (!node._wardenTrail || time < node._wardenTrail.time) {
         node._wardenTrail = { time, x: u.x, y: u.y, samples: [] };
         node.innerHTML = '<svg aria-hidden="true"><path/><path/></svg>';
@@ -175,25 +170,22 @@
         if (!p) return;
         const fade = 1 - (time - p.at) / 0.065;
         const [x, y] = arena.screenPos(p.x, p.y, ctx.scale, ctx.cx, ctx.cy);
-        path.setAttribute("d", weak ? thin : thick);
+        path.setAttribute("d", thick);
         path.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${p.angle.toFixed(2)}) scale(${(u.radius * 2 / 20 * ctx.scale * 0.9).toFixed(4)})`);
         path.style.opacity = (fade * 0.24).toFixed(4);
       });
       ctx.seenGuides.add(node.id);
     },
     tick(el, u) {
-      const weak = u.kind === "弱化碎片";
       const art = mount(el, "warden-fragment", "");
-      if (art.dataset.mode !== u.kind) {
-        art.dataset.mode = u.kind;
-        art.innerHTML = `<svg viewBox="-10 -10 20 20" aria-hidden="true"><path class="warden-fragment-face" d="${weak ? thin : thick}"/><path class="warden-fragment-facet" d="${weak ? 'M-8 -2 6 -4 1 0Z' : 'M-8 -4 -3 -7 8 -3 -1 0Z'}"/><path class="warden-fragment-edge" d="${weak ? 'M-7 -2 6 -4 7 -1' : 'M-7 -4 -3 -6 7 -3'}"/></svg>`;
+      if (art.dataset.mode !== "盾碎片") {
+        art.dataset.mode = "盾碎片";
+        art.innerHTML = `<svg viewBox="-10 -10 20 20" aria-hidden="true"><path class="warden-fragment-face" d="${thick}"/><path class="warden-fragment-facet" d="M-8 -4 -3 -7 8 -3 -1 0Z"/><path class="warden-fragment-edge" d="M-7 -4 -3 -6 7 -3"/></svg>`;
       }
-      el.classList.toggle("warden-weak", weak);
       art.style.transform = `rotate(${Math.atan2(-(u.vy || 0), u.vx || 0)}rad)`;
     },
     unmount(el) {
       el.querySelector(":scope > .warden-fragment")?.remove();
-      el.classList.remove("warden-weak");
     },
   };
   // 画面由快照钩子绘制；声音只跟随真实碎盾事件，不因重复渲染重播。

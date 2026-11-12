@@ -26,29 +26,28 @@ def filtered_noise(rng, count, low, high):
     return result / max(np.std(result), 1e-9)
 
 
-def shield_sound(weak):
-    duration = 0.18 if weak else 0.28
-    rng = np.random.default_rng(4817 if weak else 4816)
+def shield_sound():
+    duration = 0.28
+    rng = np.random.default_rng(4816)
     t = np.arange(round(RATE * duration)) / RATE
     signal = np.zeros_like(t)
-    modes = [580, 1127, 2073, 3299, 4921, 6839] if weak else [233, 479, 857, 1391, 2137, 3181, 4621, 6317]
+    modes = [233, 479, 857, 1391, 2137, 3181, 4621, 6317]
     for index, frequency in enumerate(modes):
-        decay = (0.052 if weak else 0.105) / (1 + index * 0.18)
+        decay = 0.105 / (1 + index * 0.18)
         attack = 1 - np.exp(-t / 0.0012)
-        signal += (0.12 if weak else 0.16) * attack * np.exp(-t / decay) * np.sin(2 * math.pi * frequency * t + index * 0.37)
-    if not weak:
-        # A brief low plate impact gives the full break weight without a long boom.
-        phase = 2 * math.pi * (175 * t + 42 * 0.018 * (1 - np.exp(-t / 0.018)))
-        signal += 0.48 * np.sin(phase) * (1 - np.exp(-t / 0.0008)) * np.exp(-t / 0.028)
-    noise = filtered_noise(rng, len(t), 1000 if weak else 620, 6200)
-    signal += noise * (0.17 if weak else 0.28) * (1 - np.exp(-t / 0.0005)) * np.exp(-t / (0.009 if weak else 0.021))
+        signal += 0.16 * attack * np.exp(-t / decay) * np.sin(2 * math.pi * frequency * t + index * 0.37)
+    # A brief low plate impact gives the break weight without a long boom.
+    phase = 2 * math.pi * (175 * t + 42 * 0.018 * (1 - np.exp(-t / 0.018)))
+    signal += 0.48 * np.sin(phase) * (1 - np.exp(-t / 0.0008)) * np.exp(-t / 0.028)
+    noise = filtered_noise(rng, len(t), 620, 6200)
+    signal += noise * 0.28 * (1 - np.exp(-t / 0.0005)) * np.exp(-t / 0.021)
     # Uneven, damped fragment clicks keep the tail granular rather than tonal.
-    onsets = [0.006, 0.021, 0.041, 0.067] if weak else [0.009, 0.019, 0.035, 0.056, 0.083, 0.119]
+    onsets = [0.009, 0.019, 0.035, 0.056, 0.083, 0.119]
     for index, onset in enumerate(onsets):
         age = np.maximum(0, t - onset)
-        envelope = (t >= onset) * (1 - np.exp(-age / 0.0007)) * np.exp(-age / (0.008 if weak else 0.013))
+        envelope = (t >= onset) * (1 - np.exp(-age / 0.0007)) * np.exp(-age / 0.013)
         grit = filtered_noise(rng, len(t), 1800, 7200)
-        signal += grit * envelope * (0.11 if weak else 0.14) / (1 + index * 0.28)
+        signal += grit * envelope * 0.14 / (1 + index * 0.28)
     signal -= np.mean(signal)
     signal *= np.minimum(1, t / 0.0006)
     signal *= np.minimum(1, np.maximum(0, (duration - t) / 0.024)) ** 2
@@ -78,10 +77,10 @@ def measure(path):
 def main():
     DRAFT.mkdir(parents=True, exist_ok=True)
     records = []
-    for name, weak in [("shatter-full.wav", False), ("shatter-weak.wav", True)]:
+    for name in ["shatter-full.wav"]:
         raw = DRAFT / name
         output = PACK / "fx" / name
-        write_wav(raw, shield_sound(weak))
+        write_wav(raw, shield_sound())
         _, peak = measure(raw)
         gain = -1.05 - peak
         subprocess.run(
@@ -95,7 +94,7 @@ def main():
             duration = audio.getnframes() / audio.getframerate()
         records.append({
             "file": name, "source": "Original deterministic modal/noise synthesis; no external samples",
-            "license": "MIT (repository LICENSE)", "seed": 4817 if weak else 4816,
+            "license": "MIT (repository LICENSE)", "seed": 4816,
             "duration_seconds": duration, "sample_rate": RATE, "channels": 1,
             "integrated_lufs": loudness, "true_peak_dbfs": final_peak,
             "normalization": "Short effect: true peak target -1 dBFS; integrated LUFS is not meaningful",

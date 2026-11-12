@@ -29,7 +29,7 @@ func TestMeanderKeepsAdvancingAroundDriftingRing(t *testing.T) {
 			ctx := unit.Context{ID: 1, Out: out, Stream: 1}
 			s := unit.Sense{
 				Time: 1, Field: unit.HexField(),
-				Self: unit.Snapshot{X: 0, Y: 100, VX: 170},
+				Self: unit.Snapshot{X: 0, Y: 100, VX: cruise},
 			}
 			const dt = 1.0 / 60
 			start := math.Pi / 2

@@ -10,7 +10,7 @@ const (
 	kindSplit   = "闪烁折线弹"
 	kindSmart   = "闪烁智能弹"
 	kindBoost   = "闪烁强化智能弹"
-	bulletSpeed = 580.0
+	bulletSpeed = 464.0
 	roundRadius = 3.0
 	turnRate    = 2.4 // 每秒弧度；不瞬转、不掉头重锁。
 	splitAngle  = 42 * math.Pi / 180

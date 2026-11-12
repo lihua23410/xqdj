@@ -330,6 +330,23 @@ func TestIncomingBecomesCoalNotHP(t *testing.T) {
 	}
 }
 
+func TestTransferHalvesRemainingFuse(t *testing.T) {
+	matchState := &unit.MatchState{}
+
+	a := &炭翁{brain: newBrain()}
+	a.brain.owner = 1
+	a.brain.nextSelf = 100
+	a.brain.coals = []placed{{holder: 1, value: 4, due: 10}}
+	ctx, _ := pipe(matchState, 1)
+	a.Handle(ctx, sense(4, selfAt(0, 0), foeAt(20, 0)))
+	if len(a.brain.coals) != 1 || a.brain.coals[0].holder != 2 || a.brain.coals[0].value != 4 {
+		t.Fatalf("coals=%+v", a.brain.coals)
+	}
+	if math.Abs(a.brain.coals[0].due-7) > 1e-9 {
+		t.Fatalf("due=%v, want 7", a.brain.coals[0].due)
+	}
+}
+
 func TestExpireBeforeBook(t *testing.T) {
 	matchState := &unit.MatchState{}
 
@@ -346,7 +363,7 @@ func TestExpireBeforeBook(t *testing.T) {
 	if len(a.brain.coals) != 1 || a.brain.coals[0].value != 5 || a.brain.coals[0].holder != 2 {
 		t.Fatalf("booked coal should transfer, coals=%+v", a.brain.coals)
 	}
-	if math.Abs(a.brain.coals[0].due-(2+coalFuse)) > 1e-9 {
+	if math.Abs(a.brain.coals[0].due-(2+coalFuse/2)) > 1e-9 {
 		t.Fatalf("due=%v", a.brain.coals[0].due)
 	}
 }

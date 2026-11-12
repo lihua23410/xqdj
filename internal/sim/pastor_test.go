@@ -190,7 +190,7 @@ func TestPastorBodyDoesNotDamage(t *testing.T) {
 	}
 }
 
-func TestPastorPushesToThreeRingsThenDropsOldest(t *testing.T) {
+func TestPastorPushesToTwoRingsThenParksOldest(t *testing.T) {
 	m := startPastor(t, character.KindDummy)
 	defer m.End()
 	waitTicks(m, 4)
@@ -225,7 +225,7 @@ func TestPastorPushesToThreeRingsThenDropsOldest(t *testing.T) {
 		if now > 1.2 && n46 == 5 && n78 == 4 && n110 == 0 {
 			gotSecond = true
 		}
-		if now > 4.2 && n46 == 5 && n78 == 5 && n110 == 4 {
+		if now > 4.2 && n46 == 5 && n78 == 9 && n110 == 0 {
 			gotThird = true
 			break
 		}

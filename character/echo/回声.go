@@ -46,7 +46,7 @@ const (
 	dashSpeed = 640.0
 	dashLock  = 0.08
 	dashGap   = 0.10
-	ramDmg    = 6.0
+	ramDmg    = 8.0
 
 	countMax  = 10
 	countLife = 10.0

@@ -24,7 +24,7 @@ const (
 	fleeBoost    = 70.0
 	fleeExtraMax = 300.0
 	trackSeconds = 5.0
-	fireInterval = 0.5
+	fireInterval = 0.55
 	cone         = 60 * math.Pi / 180
 	turnStep     = 1.8 * math.Pi / 180
 

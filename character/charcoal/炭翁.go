@@ -304,7 +304,7 @@ func (b *brain) transfer(ctx unit.Context, s unit.Sense) {
 	if t == nil || dist2(s.Self, *t) > bodyVision*bodyVision+timeEps {
 		return
 	}
-	idx, ok := b.giveOne(t.ID)
+	idx, ok := b.giveOne(t.ID, s.Time)
 	if !ok {
 		return
 	}
@@ -319,7 +319,7 @@ func (b *brain) transfer(ctx unit.Context, s unit.Sense) {
 	b.nextHand = s.Time + handCD
 }
 
-func (b *brain) giveOne(id uint64) (int, bool) {
+func (b *brain) giveOne(id uint64, now float64) (int, bool) {
 	if id == 0 || id == b.owner {
 		return -1, false
 	}
@@ -337,7 +337,13 @@ func (b *brain) giveOne(id uint64) (int, bool) {
 	if best < 0 {
 		return -1, false
 	}
-	b.coals[best].holder = id
+	c := &b.coals[best]
+	c.holder = id
+	remain := c.due - now
+	if remain < 0 {
+		remain = 0
+	}
+	c.due = now + remain/2
 	return best, true
 }
 

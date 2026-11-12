@@ -17,7 +17,7 @@ const (
 	radarDamage = 7.0
 	radarHitCD  = 0.3 // 同一目标两次激光之间的间隔
 	radarWidth  = 4.0 // 判定总宽；看起来是细线
-	radarSpin   = 5.5 // 顺时针转一圈的秒数
+	radarSpin   = 4.0 // 顺时针转一圈的秒数
 	radarColor  = "#3eb87a"
 )
 

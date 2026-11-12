@@ -1,4 +1,4 @@
-// 老牧师不索敌、不转向。出伤是身外三圈经文里的字：碰到敌方才扣血，确认扣了才消失。
+// 老牧师不索敌、不转向。出伤是身外两圈经文里的字：碰到敌方才扣血，确认扣了才消失。
 package 老牧师
 
 import (
@@ -32,7 +32,7 @@ const (
 	ringTurnMax = 2.5
 )
 
-var ringRadius = [3]float64{46, 78, 110}
+var ringRadius = [2]float64{46, 78}
 
 var phrases = []string{"哎呦我去", "巴哈哈哈哈", "我丢雷老某", "呦吼吼吼吼"}
 
@@ -90,9 +90,18 @@ type ring struct {
 	spin   float64
 }
 
+type looseGlyph struct {
+	id     uint64
+	vx, vy float64
+	speed  float64
+	hold   bool // 刚被顶掉，先留在原地；下一轮再顶掉、并且当时有目标时才飞
+}
+
+type glyphPosition struct{ x, y float64 }
+
 type 老牧师 struct {
-	rings       [3]ring
-	omegas      [3]float64
+	rings       [2]ring
+	omegas      [2]float64
 	phrase      int
 	verseUntil  float64
 	screamUntil float64
@@ -102,6 +111,8 @@ type 老牧师 struct {
 	sx, sy      float64
 	slot        int
 	known       map[uint64]struct{}
+	positions   map[uint64]glyphPosition // 本次感知中的直属字，供补位和飞行共用
+	loose       []looseGlyph
 	rng         *rand.Rand
 }
 
@@ -156,26 +167,24 @@ func (a *老牧师) onSense(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	a.sync(s)
+	// 视野平时是 0。顶开前很短的一段先打开，好让这一拍的飞出能看见当前目标，顶完再关上。
+	if a.verseUntil > 0 && s.Time+0.5 >= a.verseUntil && s.Time+timeEps < a.verseUntil {
+		ctx.Out <- unit.SetVision{UnitID: ctx.ID, Vision: glyphVision}
+	}
 	if a.verseUntil > 0 && s.Time+timeEps >= a.verseUntil {
 		a.push(ctx, s)
+		ctx.Out <- unit.SetVision{UnitID: ctx.ID, Vision: 0}
 	}
-	a.advance(s.Time)
+	dt := a.advance(s.Time)
 	a.place(ctx, s)
+	a.flyLoose(ctx, s.Field, dt)
 }
 
 func (a *老牧师) push(ctx unit.Context, s unit.Sense) {
-	for i := range a.rings[2].slots {
-		id := a.rings[2].slots[i].id
-		if id == 0 {
-			continue
-		}
-		ctx.Out <- unit.Despawn{UnitID: id}
-		delete(a.known, id)
-	}
+	a.releaseOuter(ctx, s)
 	a.phrase = (a.phrase + 1) % len(phrases)
 	carried := a.rings[0].spin
-	a.rings[2] = cloneRing(a.rings[1])
-	a.rings[1] = cloneRing(a.rings[0])
+	a.rings[1] = a.rings[0]
 	a.rings[0] = newRing(a.phrase)
 	a.rings[0].spin = carried
 	a.verseUntil += phraseDur[a.phrase]
@@ -183,15 +192,92 @@ func (a *老牧师) push(ctx unit.Context, s unit.Sense) {
 	a.fxVerse(ctx, s, a.phrase)
 }
 
+// releaseOuter 顶掉外圈。这一轮还在的字先留在原地。
+// 上一轮留着的字，若这一拍有索敌目标，才朝目标当时的位置定一次向后飞出，之后不改向。
+// 方向从每个字自己的位置射向目标，速率仍是被顶开时外圈的角速度乘半径。没有目标就继续留着。
+// 字不是实心单位，引擎不按速度积分，飞的时候每拍自己瞬移。
+// 字仍留在 known 里，避免下一拍被当成新出生的字绑回圈上。
+func (a *老牧师) releaseOuter(ctx unit.Context, s unit.Sense) {
+	ring := a.rings[1]
+	if !ring.active {
+		return
+	}
+	if target := unit.Seek(s); target != nil {
+		for i := range a.loose {
+			f := &a.loose[i]
+			if !f.hold {
+				continue
+			}
+			x, y := a.sx, a.sy
+			if p, ok := a.positions[f.id]; ok {
+				x, y = p.x, p.y
+			}
+			dx, dy := target.X-x, target.Y-y
+			n := math.Hypot(dx, dy)
+			if n < 1e-6 {
+				dx, dy, n = 1, 0, 1
+			}
+			f.vx, f.vy = dx/n*f.speed, dy/n*f.speed
+			f.hold = false
+			ctx.Out <- unit.SetVelocity{UnitID: f.id, VX: f.vx, VY: f.vy}
+		}
+	}
+	speed := a.omegas[1] * ringRadius[1]
+	for i := range ring.slots {
+		id := ring.slots[i].id
+		if id == 0 {
+			continue
+		}
+		a.loose = append(a.loose, looseGlyph{id: id, speed: speed, hold: true})
+		ctx.Out <- unit.SetVelocity{UnitID: id}
+	}
+}
+
+func (a *老牧师) flyLoose(ctx unit.Context, field unit.Field, dt float64) {
+	if len(a.loose) == 0 {
+		return
+	}
+	extent := field.Extent
+	if extent < unit.MinExtent {
+		extent = unit.HexRadius
+	}
+	// 用整张场地的外接圆，再多留一个外圈的距离。越过这条线仍向外走的字不会回场。
+	// 不按场皮逐点裁剪，避免提前回收经过奇美拉凹口、随后又回到场内的字。
+	limit := extent + ringRadius[1] + glyphRadius
+	keep := a.loose[:0]
+	for _, f := range a.loose {
+		o, ok := a.positions[f.id]
+		if !ok {
+			delete(a.known, f.id)
+			continue
+		}
+		if !f.hold {
+			if o.x*o.x+o.y*o.y > limit*limit && o.x*f.vx+o.y*f.vy >= 0 {
+				ctx.Out <- unit.Despawn{UnitID: f.id}
+				delete(a.known, f.id)
+				continue
+			}
+			if dt > 0 {
+				ctx.Out <- unit.Teleport{UnitID: f.id, X: o.x + f.vx*dt, Y: o.y + f.vy*dt}
+			}
+		}
+		keep = append(keep, f)
+	}
+	a.loose = keep
+}
+
 func (a *老牧师) sync(s unit.Sense) {
-	seen := map[uint64]struct{}{}
+	if a.positions == nil {
+		a.positions = make(map[uint64]glyphPosition)
+	}
+	clear(a.positions)
 	var fresh []uint64
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
 		if o.Kind != KindGlyph || o.OwnerID != s.Self.ID {
 			continue
 		}
-		seen[o.ID] = struct{}{}
+		a.positions[o.ID] = glyphPosition{x: o.X, y: o.Y}
 		if _, ok := a.known[o.ID]; !ok {
 			fresh = append(fresh, o.ID)
 		}
@@ -212,7 +298,7 @@ func (a *老牧师) sync(s unit.Sense) {
 			if sl.id == 0 {
 				continue
 			}
-			if _, ok := seen[sl.id]; ok {
+			if _, ok := a.positions[sl.id]; ok {
 				continue
 			}
 			delete(a.known, sl.id)
@@ -306,11 +392,11 @@ func runeCode(r rune) int {
 	return 1
 }
 
-func (a *老牧师) advance(t float64) {
+func (a *老牧师) advance(t float64) float64 {
 	if !a.haveT {
 		a.lastT = t
 		a.haveT = true
-		return
+		return 0
 	}
 	dt := t - a.lastT
 	if dt < 0 {
@@ -324,6 +410,7 @@ func (a *老牧师) advance(t float64) {
 		a.ensureOmega(i)
 		a.rings[i].spin += a.omegas[i] * dt
 	}
+	return dt
 }
 
 func (a *老牧师) ensureOmega(i int) {
@@ -338,22 +425,18 @@ func (a *老牧师) ensureOmega(i int) {
 	a.omegas[i] = 2 * math.Pi / turn
 }
 
-func cloneRing(r ring) ring {
-	if r.slots != nil {
-		slots := make([]glyphSlot, len(r.slots))
-		copy(slots, r.slots)
-		r.slots = slots
-	}
-	return r
-}
-
-func glyphXY(x, y float64, ring, i, n int, spin float64) (float64, float64) {
+func glyphAngle(i, n int, spin float64) float64 {
 	if n < 1 {
 		n = 1
 	}
-	ang := -math.Pi/2 + float64(i)*2*math.Pi/float64(n) - spin
+	return -math.Pi/2 + float64(i)*2*math.Pi/float64(n) - spin
+}
+
+func glyphXY(x, y float64, ring, i, n int, spin float64) (float64, float64) {
+	ang := glyphAngle(i, n, spin)
 	r := ringRadius[ring]
-	return x + r*math.Cos(ang), y + r*math.Sin(ang)
+	sin, cos := math.Sincos(ang)
+	return x + r*cos, y + r*sin
 }
 
 type pendingHit struct {
@@ -386,7 +469,7 @@ func (g *字) Handle(ctx unit.Context, ev unit.Event) {
 			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
 			return
 		}
-		g.pending = nil
+		g.pending = g.pending[:0]
 	}
 	g.strike(ctx, s)
 }
@@ -412,7 +495,6 @@ func (g *字) strike(ctx unit.Context, s unit.Sense) {
 }
 
 func glyphConfirmed(s unit.Sense, pending []pendingHit) bool {
-	loss := false
 	for _, p := range pending {
 		var found *unit.Snapshot
 		for i := range s.Nearby {
@@ -422,8 +504,8 @@ func glyphConfirmed(s unit.Sense, pending []pendingHit) bool {
 			}
 		}
 		if found == nil || found.HP < p.hp-1e-6 {
-			loss = true
+			return true
 		}
 	}
-	return loss
+	return false
 }

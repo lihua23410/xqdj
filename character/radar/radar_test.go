@@ -28,7 +28,7 @@ func TestLaserQuarterTurnIsEast(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	e := &雷达{}
 	e.Handle(unit.Context{ID: 1, Kind: KindRadar, Out: out}, unit.Sense{
-		Time:  5.5 / 4, // 1/4 圈 = radarSpin/4
+		Time:  radarSpin / 4, // 顺时针 1/4 圈，正北转到正东
 		Self:  selfAt(0, 0),
 		Field: unit.HexField(),
 	})

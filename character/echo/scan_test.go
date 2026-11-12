@@ -245,8 +245,8 @@ func TestFrozenScanInMatchSurvivesOldDecayAndStartsFreshCycle(t *testing.T) {
 				t.Fatal("window duration, clean restart, or mark ownership is wrong")
 			}
 			damage := foe.MaxHP - foe.HP
-			if damage <= 0 || math.Mod(damage, 6) != 0 {
-				t.Fatalf("dash damage must be six per hit, got total %v", damage)
+			if damage <= 0 || math.Mod(damage, 8) != 0 {
+				t.Fatalf("dash damage must be eight per hit, got total %v", damage)
 			}
 			return
 		}

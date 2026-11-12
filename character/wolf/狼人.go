@@ -27,7 +27,7 @@ const (
 	wolfArcSpan   = 110.0
 	wolfBiteBase  = 6.0
 	wolfBiteSpan  = 150.0
-	wolfBiteTime  = 6.0
+	wolfBiteTime  = 8.0
 	wolfDashSpeed = 640.0
 	wolfDashLock  = 0.3
 	wolfDashLen   = 180.0

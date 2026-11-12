@@ -148,7 +148,7 @@ window.lookFX = window.lookFX || {};
       if (fx && data.shot?.at !== time) {
         data.shot = { at: time, angle: Math.atan2(-(fx.vy || 0), fx.vx || 0) };
       }
-      const load = data.shot ? Math.min(1, Math.max(0, (time - data.shot.at) / 0.5)) : 1;
+      const load = data.shot ? Math.min(1, Math.max(0, (time - data.shot.at) / 0.55)) : 1;
       el.querySelector('.integrated-load-ring').style.strokeDashoffset = `${100 * (1 - load)}`;
       el.classList.toggle('reloading', load < 1);
       position(el, u, (u.radius + 6) * ctx.scale * 2, ctx);
@@ -161,7 +161,7 @@ window.lookFX = window.lookFX || {};
       const data = document.getElementById(`integrated-control-${u.id}`)?._integrated;
       const shot = data?.shot;
       const age = shot ? Math.max(0, (ctx.time || 0) - shot.at) : Infinity;
-      const plate = Math.min(1, Math.max(0, (age - peelSeconds) / (0.5 - peelSeconds)));
+      const plate = Math.min(1, Math.max(0, (age - peelSeconds) / (0.55 - peelSeconds)));
       const boost = Math.min(1, Math.max(0, (Math.hypot(u.vx || 0, u.vy || 0) - cruise) / 300));
       el.style.setProperty('--integrated-heading', `${heading(u)}rad`);
       el.style.setProperty('--integrated-shell-angle', `${shot?.angle ?? heading(u)}rad`);

@@ -14,21 +14,5 @@
     "priority": 0,
     "volume": 1.0,
     "sha256": "ede740633e9dea3f2704c85e0cf0957d78f3b488814e6b2f5da97a77f29207aa"
-  },
-  {
-    "file": "shatter-weak.wav",
-    "source": "Original deterministic modal/noise synthesis; no external samples",
-    "license": "MIT (repository LICENSE)",
-    "seed": 4817,
-    "duration_seconds": 0.18,
-    "sample_rate": 44100,
-    "channels": 1,
-    "integrated_lufs": -70.0,
-    "true_peak_dbfs": -1.0,
-    "normalization": "Short effect: true peak target -1 dBFS; integrated LUFS is not meaningful",
-    "mode": 2,
-    "priority": 0,
-    "volume": 1.0,
-    "sha256": "c5dfc1df23cfad37bc2bf67dc94c1ae9ea9bfcdd97ba23178214736099aa2a05"
   }
 ]

@@ -30,14 +30,64 @@
   to   { filter: brightness(1.8); }
 }
 
-/* 闪电链的一跳：几何、描线进度、明暗全部由 shot.js 的 rAF 逐帧用普通属性驱动
-   （追踪每帧都改几何，这类动态交给 CSS 动画在部分引擎会卡住不释放）。
-   这里只留静态增强：辉光层模糊。描边等关键属性都内联在元素上。 */
-.static-bolt-glow {
-  filter: blur(1px);
+/* 预警线的宽度与后端判定一致。 */
+.guide.static-warning {
+  border: 1px solid #9ddfff88;
+  border-inline: 2px solid #c3eeff;
+  background: linear-gradient(90deg, #60cfff4d, #60cfff12);
+  opacity: calc(.68 + var(--static-warning-progress, 0) * .32);
+  box-shadow: 0 0 6px #5ac7ff70;
+}
+.static-warning::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  border-top: 1px dashed #d0f5ff;
+}
+.static-warning::after {
+  content: "";
+  position: absolute;
+  inset: -3px auto -3px -3px;
+  width: 4px;
+  border-radius: 2px;
+  background: #d7f7ff;
 }
 
-/* 命中点的小闪光。初始透明，等电弧尖端描到（JS 设 animation-delay）再炸。 */
+.fx-static-bolt {
+  width: var(--static-length);
+  height: var(--static-height);
+  transform: translateY(-50%) rotate(var(--static-angle));
+  transform-origin: left center;
+  animation: static-bolt-fade .24s ease-out both;
+}
+.fx-static-bolt.static-relay { animation-duration: .17s; }
+.fx-static-bolt svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.fx-static-bolt polyline {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.static-bolt-glow {
+  stroke: #6fcfff;
+  stroke-width: 7;
+  stroke-opacity: .62;
+  filter: blur(1px);
+}
+.static-bolt-core { stroke: #f2fbff; stroke-width: 2.3; }
+.static-relay .static-bolt-core { stroke: #9fd9ee; stroke-width: 1.4; }
+@keyframes static-bolt-fade {
+  0% { opacity: 1; }
+  30% { opacity: .88; }
+  100% { opacity: 0; }
+}
+
+/* 命中时的闪光。 */
 .fx-static-flash {
   position: absolute;
   width: 26px;
