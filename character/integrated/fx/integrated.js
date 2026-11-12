@@ -1,249 +1,248 @@
+// 整合弹从分段外壳剥离。出弹方向取自 shot，追踪状态取自 track。
 window.lookFX = window.lookFX || {};
-window.integratedTrack = window.integratedTrack || {};
 
-const nearRadius = 185;
-const fleeRadius = 100;
-const fleeTrailAt = 148;
-const trackSeconds = 5;
-const arcFull = 270;
-const ringWas = new Map();
-
-function applyTrackFX(into, fx, time) {
-  if (!fx || fx.name !== "track" || !fx.unitId) return;
-  if (fx.amount > 0) {
-    const remain = fx.vy > 0 ? fx.vy : trackSeconds;
-    into[fx.unitId] = { id: fx.vx, until: (time || 0) + remain };
-    return;
+(function () {
+  const nearRadius = 185;
+  const fleeRadius = 100;
+  const cruise = 148;
+  const trackSeconds = 5;
+  const peelSeconds = 0.13;
+  const plates = Array.from({ length: 8 }, (_, i) =>
+    `<span class="integrated-segment" style="--segment-angle:${i * 45}deg"><i class="integrated-plate"></i></span>`).join('');
+  const body = '<div class="integrated-body" aria-hidden="true"><i class="integrated-drive"></i>' +
+    '<i class="integrated-core"></i><div class="integrated-shell"><i class="integrated-exposed"></i>' +
+    plates + '</div></div>';
+  function ticks(count, length) {
+    return Array.from({ length: count }, (_, i) => {
+      const angle = i * 2 * Math.PI / count;
+      const x = Math.sin(angle);
+      const y = -Math.cos(angle);
+      return `M${(200 + x * 200).toFixed(2)} ${(200 + y * 200).toFixed(2)}l${(-x * length).toFixed(2)} ${(-y * length).toFixed(2)}`;
+    }).join('');
   }
-  delete into[fx.unitId];
-}
+  const minorTicks = [ticks(60, 4), ticks(60, 8)];
+  const majorTicks = [ticks(12, 9), ticks(12, 16)];
+  const radar = '<svg viewBox="0 0 400 400" aria-hidden="true">' +
+    '<circle class="integrated-range-line" cx="200" cy="200" r="200"/>' +
+    '<circle class="integrated-range-inset" cx="200" cy="200" r="188"/>' +
+    `<path class="integrated-ticks minor" d="${minorTicks[0]}"/><path class="integrated-ticks major" d="${majorTicks[0]}"/>` +
+    '<path class="integrated-range-gates" d="M163 8h-15l-11 4M237 8h15l11 4M163 392h-15l-11-4M237 392h15l11-4"/>' +
+    '<g class="integrated-heading"><path d="M365 194l10 6-10 6"/></g></svg>' +
+    '<span class="integrated-range-label"></span>';
+  const collar = '<svg viewBox="0 0 100 100" aria-hidden="true">' +
+    '<circle class="integrated-load-ring" cx="50" cy="50" r="46" pathLength="100"/></svg>';
 
-function syncTracks(ctx) {
-  if (ctx._trackSynced) return;
-  ctx._trackSynced = true;
-  const next = {};
-  for (const fx of ctx.effects || []) applyTrackFX(next, fx, ctx.time);
-  window.integratedTrack = next;
-  // #region agent log
-  const now = Date.now();
-  window.__knightDbgAt = window.__knightDbgAt || {};
-  if (now - (window.__knightDbgAt.E || 0) > 500) {
-    window.__knightDbgAt.E = now;
-    const names = {};
-    for (const fx of ctx.effects || []) names[fx.name] = (names[fx.name] || 0) + 1;
-    fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "bd0da0" }, body: JSON.stringify({ sessionId: "bd0da0", hypothesisId: "E", location: "integrated.js:syncTracks", message: "tracks rebuilt", data: { names, tracks: next, time: ctx.time || 0 }, timestamp: now }) }).catch(() => {});
+  function heading(u) {
+    const moving = Math.hypot(u.vx || 0, u.vy || 0) > 1e-6;
+    return Math.atan2(-((moving ? u.vy : u.faceY) || 0), (moving ? u.vx : u.faceX) || 0);
   }
-  // #endregion
-}
 
-function trackOf(id) {
-  const t = window.integratedTrack[id];
-  if (!t || typeof t !== "object") return null;
-  return t;
-}
-
-function placeRing(ctx, u, id, cls, radius) {
-  const g = ctx.ensureGuide(id, cls);
-  const d = radius * 2 * ctx.scale;
-  g.style.width = `${d}px`;
-  g.style.height = `${d}px`;
-  g.style.left = `${ctx.cx + u.x * ctx.scale}px`;
-  g.style.top = `${ctx.cy - u.y * ctx.scale}px`;
-  const engaged = (ctx.units || []).some((o) => {
-    if (!o || o.id === u.id || o.slot === u.slot) return false;
-    if (o.role !== "fighter" && !o.mortal) return false;
-    return Math.hypot(o.x - u.x, o.y - u.y) <= radius;
-  });
-  const prev = ringWas.get(id);
-  g.classList.toggle("alert", engaged);
-  if (prev === false && engaged) {
-    g.classList.remove("flash");
-    void g.offsetWidth;
-    g.classList.add("flash");
-  }
-  ringWas.set(id, engaged);
-  ensureTicks(g);
-  if (ctx.seenGuides) ctx.seenGuides.add(g.id);
-}
-
-function ensureTicks(g) {
-  if (g.querySelector(":scope > .ticks")) return;
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("class", "ticks");
-  svg.setAttribute("viewBox", "-100 -100 200 200");
-  const minor = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-  minor.setAttribute("class", "minor");
-  minor.setAttribute("r", "98");
-  minor.setAttribute("stroke-dasharray", "1.3 24.8");
-  const major = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-  major.setAttribute("class", "major");
-  major.setAttribute("r", "96");
-  major.setAttribute("stroke-dasharray", "1.8 73.7");
-  for (const c of [minor, major]) {
-    c.setAttribute("cx", "0");
-    c.setAttribute("cy", "0");
-  }
-  svg.append(minor, major);
-  g.appendChild(svg);
-}
-
-function placeArc(ctx, u) {
-  const lock = trackOf(u.id);
-  if (!lock) return;
-  const remain = (lock.until - (ctx.time || 0)) / trackSeconds;
-  if (remain <= 0) return;
-  const target = (ctx.units || []).find((o) => o.id === lock.id);
-  if (!target) return;
-  const m = ctx.ensureGuide(`guide-mark-${u.id}`, "integrated-mark");
-  const span = arcFull * Math.min(remain, 1);
-  const mark = Math.max(target.radius || 18, 8) * 3.2 * 2 * ctx.scale;
-  m.style.width = `${mark}px`;
-  m.style.height = `${mark}px`;
-  m.style.left = `${ctx.cx + target.x * ctx.scale}px`;
-  m.style.top = `${ctx.cy - target.y * ctx.scale}px`;
-  m.style.setProperty("--arc", `${span}deg`);
-  if (ctx.seenGuides) ctx.seenGuides.add(m.id);
-}
-
-window.lookFX.integrated = {
-  tick(el, u, ctx) {
-    if (!el || !u || !ctx || !ctx.spawnGhost) return;
-    if (Math.hypot(u.vx || 0, u.vy || 0) <= fleeTrailAt) return;
-    const now = ctx.now || 0;
-    if (now - (el._fleeAt || 0) < 16) return;
-    el._fleeAt = now;
-    const g = ctx.spawnGhost(el, u.kind, ctx.fxRoot, "trail");
-    if (g) g.classList.add("integrated-ghost");
-  },
-  guide(u, ctx) {
-    if (!u || u.role !== "fighter" || !ctx || !ctx.ensureGuide) return;
-    syncTracks(ctx);
-    sweepTrails(ctx);
-    placeRing(ctx, u, `guide-near-${u.id}`, "integrated-ring", nearRadius);
-    placeRing(ctx, u, `guide-flee-${u.id}`, "integrated-flee", fleeRadius);
-    placeArc(ctx, u);
-  },
-};
-
-const shotPaths = new Map();
-
-function ensureShot(el) {
-  let shape = el.querySelector(":scope > .integrated-shot-shape");
-  if (shape) return shape;
-  shape = document.createElement("div");
-  shape.className = "integrated-shot-shape";
-  const nose = document.createElement("i");
-  nose.className = "nose";
-  shape.append(nose);
-  el.appendChild(shape);
-  return shape;
-}
-
-function trailLayer(ctx) {
-  const root = ctx && ctx.fxRoot;
-  if (!root) return null;
-  let svg = root.querySelector(":scope > .integrated-trails");
-  if (svg) return svg;
-  svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("class", "integrated-trails");
-  root.appendChild(svg);
-  return svg;
-}
-
-function orangeAt(t) {
-  const from = [168, 72, 16];
-  const to = [240, 160, 80];
-  const c = from.map((v, i) => Math.round(v + (to[i] - v) * t));
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
-}
-
-function dropShotTrail(id) {
-  shotPaths.delete(id);
-  document.querySelector(`#itrail-${id}`)?.remove();
-}
-
-function sweepTrails(ctx) {
-  if (!ctx || ctx._trailSwept) return;
-  ctx._trailSwept = true;
-  const alive = new Set((ctx.units || []).map((o) => o.id));
-  for (const id of shotPaths.keys()) {
-    if (!alive.has(id)) dropShotTrail(id);
-  }
-}
-
-function paintTrail(el, u, ctx, tracking) {
-  if (!tracking) {
-    dropShotTrail(u.id);
-    return;
-  }
-  const svg = trailLayer(ctx);
-  if (!svg) return;
-  const x = parseFloat(el.style.left);
-  const y = parseFloat(el.style.top);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-  const ang = parseFloat(el.style.getPropertyValue("--shot-ang")) || 0;
-  const back = parseFloat(el.style.getPropertyValue("--shot-r")) || 6;
-  const hx = x - Math.cos(ang) * back * 0.85;
-  const hy = y - Math.sin(ang) * back * 0.85;
-  let pts = shotPaths.get(u.id);
-  if (!pts) pts = [];
-  const last = pts[pts.length - 1];
-  if (!last || Math.hypot(hx - last.x, hy - last.y) >= 2.5) pts.push({ x: hx, y: hy });
-  if (pts.length > 18) pts.splice(0, pts.length - 18);
-  shotPaths.set(u.id, pts);
-  let g = svg.querySelector(`#itrail-${u.id}`);
-  if (pts.length < 2) {
-    g?.remove();
-    return;
-  }
-  if (!g) {
-    g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    g.id = `itrail-${u.id}`;
-    svg.appendChild(g);
-  }
-  g.replaceChildren();
-  for (let i = 1; i < pts.length; i++) {
-    const seg = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    const t = i / (pts.length - 1);
-    const a = pts[i - 1];
-    const b = pts[i];
-    seg.setAttribute("x1", a.x);
-    seg.setAttribute("y1", a.y);
-    seg.setAttribute("x2", b.x);
-    seg.setAttribute("y2", b.y);
-    seg.setAttribute("stroke", orangeAt(t));
-    seg.setAttribute("stroke-opacity", String(0.05 + 0.52 * t));
-    seg.setAttribute("stroke-width", "1.4");
-    seg.setAttribute("stroke-linecap", "round");
-    g.appendChild(seg);
-  }
-}
-
-window.lookFX["integrated-shot"] = {
-  tick(el, u, ctx) {
-    if (!el || !u) return;
-    ensureShot(el);
-    const r = (u.radius || 6) * (ctx && ctx.scale ? ctx.scale : 1);
-    el.style.setProperty("--shot-r", `${r}px`);
-    const vx = u.vx || 0;
-    const vy = u.vy || 0;
-    if (vx * vx + vy * vy > 1e-6) {
-      el.style.setProperty("--shot-ang", `${Math.atan2(-vy, vx)}rad`);
+  // 每帧从 track FX 重建，不把上一场或已消失主人的追踪留在全局表里。
+  function tracks(ctx) {
+    if (ctx._integratedTracks) return ctx._integratedTracks;
+    const result = new Map();
+    for (const fx of ctx.effects || []) {
+      if (fx.name !== 'track' || !fx.unitId) continue;
+      const target = (ctx.units || []).find(u => u.id === fx.vx && u.hp > 0);
+      const owner = (ctx.units || []).find(u => u.id === fx.unitId && u.kind === fx.kind);
+      if (owner && target && fx.amount > 0 && fx.vy > 0) result.set(fx.unitId, { target, remain: fx.vy });
+      else result.delete(fx.unitId);
     }
-    const owner = trackOf(u.ownerId);
-    const tracking = !!(owner && (ctx.units || []).some((o) => o.id === u.ownerId));
-    el.classList.toggle("tracking", tracking);
-    sweepTrails(ctx);
-    paintTrail(el, u, ctx, tracking);
-  },
-  unmount(el) {
-    el.querySelector(":scope > .integrated-shot-shape")?.remove();
-    el.classList.remove("tracking");
-    const id = Number(String(el.id || "").replace(/^u-/, ""));
-    if (id) dropShotTrail(id);
-  },
-};
+    ctx._integratedTracks = result;
+    return result;
+  }
 
-arena.registerShot("track", (fx, ctx) => {
-  applyTrackFX(window.integratedTrack, fx, ctx && ctx.time);
-});
+  function position(el, u, size, ctx) {
+    Object.assign(el.style, {
+      left: `${ctx.cx + u.x * ctx.scale}px`, top: `${ctx.cy - u.y * ctx.scale}px`,
+      width: `${size}px`, height: `${size}px`,
+    });
+    ctx.seenGuides.add(el.id);
+  }
+
+  function placeRing(u, ctx, radius, inner, locked) {
+    const el = ctx.ensureGuide(`integrated-${inner ? 'flee' : 'near'}-${u.id}`, `integrated-radar ${inner ? 'inner' : 'outer'}`);
+    if (!el._integratedRing) {
+      el.innerHTML = radar;
+      el._integratedRing = {};
+    }
+    const data = el._integratedRing;
+    const time = ctx.time || 0;
+    // 与后端相同：两圈只看敌方战斗机或活随从的圆心距离。
+    if (time < data.time) {
+      delete data.inside;
+      delete data.flashAt;
+    }
+    const inside = new Map();
+    let engaged = false;
+    for (const o of ctx.units || []) {
+      if (o.slot === u.slot || o.nonsolid || !(o.hp > 0) || (o.role !== 'fighter' && !o.mortal)) continue;
+      const close = Math.hypot(o.x - u.x, o.y - u.y) <= radius;
+      inside.set(o.id, close);
+      if (close) {
+        engaged = true;
+        if (data.inside?.get(o.id) === false) data.flashAt = time;
+      }
+    }
+    if (engaged !== data.engaged) {
+      el.querySelector('.integrated-ticks.minor').setAttribute('d', minorTicks[Number(engaged)]);
+      el.querySelector('.integrated-ticks.major').setAttribute('d', majorTicks[Number(engaged)]);
+    }
+    data.engaged = engaged;
+    data.inside = inside;
+    data.time = time;
+    const flash = data.flashAt == null ? 0 : Math.max(0, 1 - (time - data.flashAt) / 0.32);
+    el.style.setProperty('--integrated-cross', flash.toFixed(3));
+    el.style.setProperty('--integrated-minor-angle', `${time * (inner ? -360 / 5.6 : 360 / 7.2)}deg`);
+    el.style.setProperty('--integrated-major-angle', `${time * (inner ? 360 / 11 : -360 / 14)}deg`);
+    el.style.setProperty('--integrated-heading', `${heading(u)}rad`);
+    el.classList.toggle('alert', engaged);
+    const label = el.querySelector('.integrated-range-label');
+    const status = inner ? 'EVADE' : locked ? 'TRACK' : 'SCAN';
+    const text = `${status} / ${radius}`;
+    if (label.textContent !== text) label.textContent = text;
+    position(el, u, radius * ctx.scale * 2, ctx);
+  }
+
+  function placeTrack(u, ctx, lock) {
+    if (!lock) return;
+    const { target, remain } = lock;
+    const el = ctx.ensureGuide(`integrated-mark-${u.id}`, 'integrated-mark');
+    if (!el.firstChild) el.innerHTML = '<i class="integrated-track-arc"></i>';
+    // 缺口保持朝上，弧从橙色尾端收短。
+    el.style.setProperty('--arc', `${270 * Math.min(1, remain / trackSeconds)}deg`);
+    position(el, target, (Math.max(target.radius || 18, 8) + 18) * ctx.scale * 2, ctx);
+  }
+
+  function findShot(owner, ctx) {
+    return (ctx.effects || []).find(fx => fx.name === 'shot' && fx.kind === owner.kind && fx.unitId === owner.id);
+  }
+
+  function releaseFromShell(u, ctx) {
+    const owner = (ctx.units || []).find(o => o.id === u.ownerId);
+    const fx = owner && findShot(owner, ctx);
+    if (!fx) return null;
+    const angle = Math.atan2(-(fx.vy || 0), fx.vx || 0);
+    // 与外壳上装甲片的中心 86.25% 对齐。
+    const rim = owner.radius * 0.725;
+    const x = (fx.x || 0) + Math.cos(angle) * rim;
+    const y = (fx.y || 0) - Math.sin(angle) * rim;
+    return { x: x - u.x, y: y - u.y };
+  }
+
+  window.lookFX.integrated = {
+    guide(u, ctx) {
+      if (u.role !== 'fighter') return;
+      const time = ctx.time || 0;
+      const lock = tracks(ctx).get(u.id);
+      const el = ctx.ensureGuide(`integrated-control-${u.id}`, 'integrated-control');
+      if (!el._integrated) {
+        el.innerHTML = collar;
+        el._integrated = {};
+      }
+      const data = el._integrated;
+      if (time < data.time) delete data.shot;
+      data.time = time;
+      data.lock = lock;
+      const fx = findShot(u, ctx);
+      if (fx && data.shot?.at !== time) {
+        data.shot = { at: time, angle: Math.atan2(-(fx.vy || 0), fx.vx || 0) };
+      }
+      const load = data.shot ? Math.min(1, Math.max(0, (time - data.shot.at) / 0.5)) : 1;
+      el.querySelector('.integrated-load-ring').style.strokeDashoffset = `${100 * (1 - load)}`;
+      el.classList.toggle('reloading', load < 1);
+      position(el, u, (u.radius + 6) * ctx.scale * 2, ctx);
+      placeRing(u, ctx, nearRadius, false, !!lock);
+      placeRing(u, ctx, fleeRadius, true, !!lock);
+      placeTrack(u, ctx, lock);
+    },
+    tick(el, u, ctx) {
+      if (!el.querySelector(':scope > .integrated-body')) el.insertAdjacentHTML('beforeend', body);
+      const data = document.getElementById(`integrated-control-${u.id}`)?._integrated;
+      const shot = data?.shot;
+      const age = shot ? Math.max(0, (ctx.time || 0) - shot.at) : Infinity;
+      const plate = Math.min(1, Math.max(0, (age - peelSeconds) / (0.5 - peelSeconds)));
+      const boost = Math.min(1, Math.max(0, (Math.hypot(u.vx || 0, u.vy || 0) - cruise) / 300));
+      el.style.setProperty('--integrated-heading', `${heading(u)}rad`);
+      el.style.setProperty('--integrated-shell-angle', `${shot?.angle ?? heading(u)}rad`);
+      el.style.setProperty('--integrated-plate', plate.toFixed(3));
+      el.style.setProperty('--integrated-boost', boost.toFixed(3));
+      el.classList.toggle('integrated-boosting', boost > 0.1);
+      el.classList.toggle('integrated-tracking', !!data?.lock);
+    },
+    unmount(el) {
+      el.querySelector(':scope > .integrated-body')?.remove();
+      el.classList.remove('integrated-boosting', 'integrated-tracking');
+      const id = el.id.replace(/^u-/, '');
+      for (const part of ['control', 'near', 'flee', 'mark']) document.getElementById(`integrated-${part}-${id}`)?.remove();
+    },
+  };
+
+  window.lookFX['integrated-shot'] = {
+    guide(u, ctx) {
+      // 出弹和轨迹归属于导引节点，单位离场后由通用 seenGuides 清理。
+      const el = ctx.ensureGuide(`integrated-flight-${u.id}`, 'integrated-flight');
+      const time = ctx.time || 0;
+      if (!el._integratedFlight || time < el._integratedFlight.time) {
+        el._integratedFlight = { points: [], startedAt: time, release: releaseFromShell(u, ctx) };
+      }
+      const data = el._integratedFlight;
+      const age = time - data.startedAt;
+      data.peel = data.release ? Math.min(1, age / peelSeconds) : 1;
+      data.roll = (u.id % 2 ? 1 : -1) * age * 5 * data.peel;
+      data.offsetX = (data.release?.x || 0) * (1 - data.peel) ** 2;
+      data.offsetY = (data.release?.y || 0) * (1 - data.peel) ** 2;
+      ctx.seenGuides.add(el.id);
+      if (!tracks(ctx).has(u.ownerId) || data.peel < 1) {
+        el.firstChild?.remove();
+        data.points.length = 0;
+        data.time = time;
+        return;
+      }
+      if (!el.firstChild) {
+        el.innerHTML = '<svg aria-hidden="true"><polyline class="tail"/><polyline class="middle"/><polyline class="head"/></svg>';
+      }
+      // 储存世界坐标；缩放、导出画布改变时不会拉出一条错位长线。
+      const angle = heading(u);
+      const back = u.radius || 6;
+      const point = { x: u.x - Math.cos(angle) * back, y: u.y + Math.sin(angle) * back };
+      const last = data.points[data.points.length - 1];
+      if (time !== data.time && (!last || Math.hypot(point.x - last.x, point.y - last.y) >= 2.5)) data.points.push(point);
+      if (data.points.length > 18) data.points.splice(0, data.points.length - 18);
+      data.time = time;
+      const points = [...data.points, point];
+      const stride = Math.ceil((points.length - 1) / 3);
+      el.querySelectorAll('polyline').forEach((line, i) => {
+        line.setAttribute('points', points.slice(i * stride, (i + 1) * stride + 1)
+          .map(p => `${(ctx.cx + p.x * ctx.scale).toFixed(2)},${(ctx.cy - p.y * ctx.scale).toFixed(2)}`).join(' '));
+      });
+    },
+    tick(el, u, ctx) {
+      let shape = el.querySelector(':scope > .integrated-shot-shape');
+      if (!shape) {
+        shape = document.createElement('div');
+        shape.className = 'integrated-shot-shape';
+        shape.setAttribute('aria-hidden', 'true');
+        shape.innerHTML = '<i class="integrated-shot-shell"></i>';
+        el.appendChild(shape);
+      }
+      const speed = Math.hypot(u.vx || 0, u.vy || 0);
+      const scale = ctx.scale || 1;
+      const flight = document.getElementById(`integrated-flight-${u.id}`)?._integratedFlight;
+      if (speed > 1e-6) el.style.setProperty('--shot-ang', `${heading(u)}rad`);
+      el.style.setProperty('--shot-r', `${(u.radius || 6) * scale}px`);
+      el.style.setProperty('--shot-peel', flight?.peel ?? 1);
+      el.style.setProperty('--shot-roll', `${flight?.roll || 0}rad`);
+      el.style.setProperty('--shot-dx', `${(flight?.offsetX || 0) * scale}px`);
+      el.style.setProperty('--shot-dy', `${-(flight?.offsetY || 0) * scale}px`);
+    },
+    unmount(el) {
+      el.querySelector(':scope > .integrated-shot-shape')?.remove();
+      document.getElementById(`integrated-flight-${el.id.replace(/^u-/, '')}`)?.remove();
+    },
+  };
+
+  // 演出由皮肤按模拟时间绘制，消费事件以免退化成无动画的临时 DOM。
+  arena.registerShot('track', () => {});
+  arena.registerShot('shot', () => {});
+})();

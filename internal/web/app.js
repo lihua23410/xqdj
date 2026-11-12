@@ -1993,7 +1993,6 @@ function renderArena() {
         if (!seen.has(id)) child.remove();
         continue;
       }
-      if (child.classList.contains("integrated-trails")) continue;
       const id = child.id.slice(2);
       if (!seen.has(id)) child.remove();
     }
