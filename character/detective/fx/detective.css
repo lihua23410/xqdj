@@ -1,0 +1,110 @@
+/* 暖褐球身。帽子和左轮画在 200% 的叠层上，viewBox 中心 100 单位对齐球径。 */
+.ball.look-detective {
+  overflow: visible;
+  background: radial-gradient(circle at 36% 32%, #e2bc78 0%, #c4893c 58%, #8d5528 100%);
+  box-shadow: inset -2px -3px 4px #4a281466;
+}
+
+.ball.look-detective::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 200%;
+  height: 200%;
+  transform: translate(-50%, -50%);
+  background: url("gear.svg") center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+
+.ball.look-detective-scene {
+  background: transparent;
+  border: 2px dashed rgba(236, 228, 210, 0.9);
+  box-shadow: none;
+}
+.ball.look-detective-scene::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22%;
+  height: 22%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #a33b32;
+}
+
+.ball.look-detective-charge,
+.ball.look-detective-forgery {
+  background: #f3efe4;
+  border: 2px solid #2c261e;
+  box-shadow: none;
+}
+.ball.look-detective-forgery { background: #b7b1a6; }
+.ball.look-detective-charge::after,
+.ball.look-detective-forgery::after {
+  content: "!";
+  position: absolute;
+  inset: 0;
+  color: #2c261e;
+  font: 700 12px/1 "Segoe UI", sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ball.look-detective-forgery::after { content: "?"; }
+
+.ball.look-detective-slug {
+  background: #e7eef2;
+  box-shadow: 0 0 6px #f7fbff;
+}
+
+.fx-judge {
+  width: 180px;
+  height: 48px;
+  animation: detective-judge 3s linear forwards;
+}
+.fx-judge::before {
+  content: "JUDGE";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #f4efe4;
+  font: 700 36px/1 "Segoe UI", sans-serif;
+  letter-spacing: 0.18em;
+  text-shadow: 0 2px 0 #1a120c;
+}
+@keyframes detective-judge {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.fx-verdict {
+  font: 700 36px/1 "Segoe UI", sans-serif;
+  letter-spacing: 0.12em;
+  text-shadow: 0 2px 0 #1a120c;
+  white-space: nowrap;
+  animation: detective-verdict 1.6s ease-out forwards;
+}
+@keyframes detective-verdict {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.86); }
+  14% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  68% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.fx-detective-shot {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  border-radius: 50%;
+  background: #f4f7f8;
+  animation: detective-shot 0.18s ease-out forwards;
+}
+@keyframes detective-shot {
+  from { opacity: 0.95; transform: translate(-50%, -50%) scale(0.4); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+}

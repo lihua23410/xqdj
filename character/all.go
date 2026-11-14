@@ -12,6 +12,7 @@ import (
 	"xqdj/character/bundle"
 	"xqdj/character/charcoal"
 	"xqdj/character/coalesce"
+	"xqdj/character/detective"
 	"xqdj/character/doppel"
 	"xqdj/character/doppel_veteran"
 	"xqdj/character/dummy"
@@ -99,6 +100,11 @@ const (
 	KindCoalesce           = 凝聚体.KindCoalesce
 	KindMassBlock          = 凝聚体.KindMassBlock
 	KindShot               = 凝聚体.KindShot
+	KindBullet             = 探长.KindBullet
+	KindCharge             = 探长.KindCharge
+	KindDetective          = 探长.KindDetective
+	KindForgery            = 探长.KindForgery
+	KindScene              = 探长.KindScene
 	KindClone              = 分身者.KindClone
 	KindCloneArc           = 分身者.KindCloneArc
 	KindDoppel             = 分身者.KindDoppel
