@@ -27,6 +27,10 @@ type emptyActor struct{}
 
 func (emptyActor) Handle(Context, Event) {}
 
+type pointerValueActor struct{ value *int }
+
+func (pointerValueActor) Handle(Context, Event) {}
+
 func TestForkActorValue(t *testing.T) {
 	cloned, ok := ForkActor(valueActor{n: 4}, nil).(valueActor)
 	if !ok || cloned.n != 4 {
@@ -34,6 +38,12 @@ func TestForkActorValue(t *testing.T) {
 	}
 	if _, ok := ForkActor(emptyActor{}, nil).(emptyActor); !ok {
 		t.Fatal("empty actor")
+	}
+	number := 0
+	original := pointerValueActor{value: &number}
+	clonedPointer, ok := ForkActor(original, nil).(pointerValueActor)
+	if !ok || clonedPointer.value == nil || clonedPointer.value == original.value || *clonedPointer.value != number {
+		t.Fatalf("single-pointer value actor lost its private copy: %+v", clonedPointer)
 	}
 	var typedNil *secret
 	if ForkActor(Actor(typedNil), nil) != nil {

@@ -164,7 +164,7 @@ func TestOverlappingRoutersAndConcurrentFlights(t *testing.T) {
 	}
 	cs = nil
 	for _, hop := range hops {
-		if hop.target != far || dr.db[hop.flood.lsaKey].sequence < hop.flood.sequence || overlap.db[hop.flood.lsaKey].sequence < hop.flood.sequence {
+		if hop.target != far || dr.sequence(hop.flood.lsaKey) < hop.flood.sequence || overlap.sequence(hop.flood.lsaKey) < hop.flood.sequence {
 			t.Fatal("expected overlapped nodes to be visited before launch")
 		}
 		n.deliver(far, hop.flood, &cs)
@@ -304,7 +304,7 @@ func TestBackboneSummaryIsReoriginatedOnArrival(t *testing.T) {
 	var cs commands
 	n.deliver(br, round(a, 0), &cs)
 	crossing := flights(cs)
-	if len(crossing) != 1 || crossing[0].target != abr || !crossing[0].flood.importSummary || len(abr.db) != 0 {
+	if len(crossing) != 1 || crossing[0].target != abr || !crossing[0].flood.importSummary || abr.recordCount() != 0 {
 		t.Fatal("area1 should learn the backbone summary on arrival")
 	}
 	cs = nil
@@ -330,7 +330,7 @@ func TestNewNeighborSyncsDRDatabaseWithoutReplayingOldPackets(t *testing.T) {
 	n.deliver(dr, round(old, 1), &cs)
 	n.install(point{150, 0}, 1, &cs)
 	neighbor := n.areas[1][1]
-	if got := neighbor.db[old.lsaKey]; got != latest {
+	if got := neighbor.record(old.lsaKey); got != latest {
 		t.Fatalf("neighbor synchronized %+v, want %+v", got, latest)
 	}
 	n.deliver(neighbor, round(old, 1), &cs)
@@ -350,7 +350,7 @@ func TestNSSAExportsPendingRouteWhenBackboneAppears(t *testing.T) {
 	localOnly := n.originate(nssaLSA, asbr, destination{area: 3})
 	localOnly.forwarding = asbr
 	n.deliver(asbr, round(localOnly, 3), &cs)
-	if len(flights(cs)) != 0 || len(asbr.db) != 2 {
+	if len(flights(cs)) != 0 || asbr.recordCount() != 2 {
 		t.Fatal("isolated NSSA should keep both routes in its database")
 	}
 	n.install(point{}, 0, &cs)
@@ -386,12 +386,12 @@ func TestNewArea1ABRRepublishesReachableSummaries(t *testing.T) {
 	oldHop := flights(cs)[0]
 	n.deliver(oldABR, oldHop.flood, &cs)
 	previous := lsaKey{kind: summaryLSA, destination: a.destination, advertiser: oldABR}
-	if oldABR.db[previous].sequence == 0 {
+	if oldABR.record(previous).sequence == 0 {
 		t.Fatal("old ABR never advertised the learned summary")
 	}
 	cs = nil
 	n.install(point{290, 0}, 0, &cs)
-	if n.bridges[1].abr != newABR || oldABR.db[previous].sequence != 0 {
+	if n.bridges[1].abr != newABR || oldABR.record(previous).sequence != 0 {
 		t.Fatal("new BR should change the ABR and withdraw the old summaries")
 	}
 	var imported, backbone, asbr bool
@@ -413,7 +413,7 @@ func TestNewABRSyncsPreviouslyIsolatedExternalRouteSilently(t *testing.T) {
 	var cs commands
 	n.deliver(asbr, round(a, 1), &cs)
 	n.install(point{}, 0, &cs)
-	if got := n.areas[0][0].db[a.lsaKey]; got != a {
+	if got := n.areas[0][0].record(a.lsaKey); got != a {
 		t.Fatalf("backbone learned %+v, want %+v", got, a)
 	}
 	for _, hop := range flights(cs) {

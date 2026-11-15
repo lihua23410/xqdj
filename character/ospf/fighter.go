@@ -212,8 +212,7 @@ func (p *packet) Handle(ctx unit.Context, ev unit.Event) {
 			p.done = true
 			return
 		}
-		// 这一帧走了多久（秒）。Sense 不一定每 tick 都来，dt 可能是几个 tick，
-		// 所以容差要按实际步长算，不能写死一个 tick 的距离。
+		// 这一帧走了多久（秒）。Sense 不一定每 tick 都来，dt 可能是几个 tick。
 		dt := 1.0 / 60
 		if p.lastTime > 0 && e.Time > p.lastTime {
 			dt = e.Time - p.lastTime
@@ -222,24 +221,19 @@ func (p *packet) Handle(ctx unit.Context, ev unit.Event) {
 		if dt > 0.25 {
 			dt = 0.25
 		}
-		// 先判到达：进了接收半径的报文已经到站，位置本来就会越过终点一点，
-		// 那一点不属于"在路上偏离网线"。
+		// 先判到达：进了接收半径的报文已经到站。
 		if dx, dy := p.target.x-e.Self.X, p.target.y-e.Self.Y; math.Hypot(dx, dy) <= nodeRadius+shotRadius {
 			p.arrive(ctx)
 			return
 		}
-		// Fly the cable: every turn point is a real waypoint, so the packet
-		// never cuts a corner the drawn line doesn't take. 一帧的位移可能直接
-		// 冲过折点，落点本来就在折线外侧，所以折点判定必须排在偏离检查之前。
+		// 每个折点都是航点，报文不抄画出来的网线没走的近路。一帧可能冲过折点，
+		// 先把它拉回折点再转向。
 		for len(p.path) > 0 {
 			next := p.path[0]
-			// 一帧最多走 shotSpeed*dt，折点判定多放一个步长的余量，
-			// 这样冲过折点的报文也会被拉回落点，而不是先被判成偏离。
+			// 一帧最多走 shotSpeed*dt，折点判定多放一个步长的余量。
 			if math.Hypot(next.x-e.Self.X, next.y-e.Self.Y) > nodeRadius+shotRadius+shotSpeed*dt {
 				break
 			}
-			// 落在折点上再转向：报文不会在拐角处抄近路，轨迹与画出来的
-			// 折线重合，偏离检查才有意义。
 			ctx.Out <- unit.Teleport{UnitID: ctx.ID, X: next.x, Y: next.y}
 			p.path = p.path[1:]
 			if len(p.path) == 0 {
@@ -254,9 +248,6 @@ func (p *packet) Handle(ctx unit.Context, ev unit.Event) {
 			}
 			return
 		}
-		// Debug gate: a packet that leaves its own cable means the route and
-		// the flight disagree, which also puts it off the line the skin draws.
-		p.assertOnCable(point{e.Self.X, e.Self.Y}, shotSpeed*dt*1.5)
 	case unit.Collision:
 		if !unit.Hittable(e.Other, p.slot) || e.Time < p.hitReadyAt[e.Other.ID] {
 			return

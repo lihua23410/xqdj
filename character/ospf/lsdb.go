@@ -1,6 +1,9 @@
 package ospf
 
-import "sort"
+import (
+	"sort"
+	"sync"
+)
 
 type lsa uint8
 
@@ -36,15 +39,94 @@ type announcement struct {
 
 type database map[lsaKey]announcement
 
+// lsdb 是一张链路状态表。锁和记录放在同一块上：浅拷贝会连锁一起带走，
+// 深拷贝则整张换新。沙盘拆开网络那把锁之后，两边仍不会并发读写同一张表。
+type lsdb struct {
+	mu  sync.Mutex
+	rec database
+}
+
+func (r *router) table() *lsdb {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.db == nil {
+		r.db = &lsdb{}
+	}
+	return r.db
+}
+
 func (r *router) learn(a announcement) bool {
-	if r.db[a.lsaKey].sequence >= a.sequence {
+	db := r.table()
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if db.rec[a.lsaKey].sequence >= a.sequence {
 		return false
 	}
-	if r.db == nil {
-		r.db = make(database)
+	if db.rec == nil {
+		db.rec = make(database)
 	}
-	r.db[a.lsaKey] = a
+	db.rec[a.lsaKey] = a
 	return true
+}
+
+func (r *router) sequence(k lsaKey) uint64 {
+	if r == nil {
+		return 0
+	}
+	r.mu.Lock()
+	db := r.db
+	r.mu.Unlock()
+	if db == nil {
+		return 0
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.rec[k].sequence
+}
+
+func (r *router) record(k lsaKey) announcement {
+	if r == nil {
+		return announcement{}
+	}
+	r.mu.Lock()
+	db := r.db
+	r.mu.Unlock()
+	if db == nil {
+		return announcement{}
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.rec[k]
+}
+
+func (r *router) recordCount() int {
+	if r == nil {
+		return 0
+	}
+	r.mu.Lock()
+	db := r.db
+	r.mu.Unlock()
+	if db == nil {
+		return 0
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return len(db.rec)
+}
+
+func (r *router) records() []announcement {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	db := r.db
+	r.mu.Unlock()
+	if db == nil {
+		return nil
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.rec.ordered()
 }
 
 func (db database) ordered() []announcement {
@@ -83,11 +165,14 @@ func (n *network) withdrawSummaries(abr *router) {
 	clear(abr.imported)
 	for _, area := range n.areas {
 		for _, r := range area {
-			for key := range r.db {
+			db := r.table()
+			db.mu.Lock()
+			for key := range db.rec {
 				if key.advertiser == abr && isSummary(key.kind) {
-					delete(r.db, key)
+					delete(db.rec, key)
 				}
 			}
+			db.mu.Unlock()
 			for key := range r.imported {
 				if key.advertiser == abr {
 					delete(r.imported, key)

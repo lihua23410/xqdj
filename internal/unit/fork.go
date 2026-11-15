@@ -180,18 +180,8 @@ func (g *Fork) write(dst, src reflect.Value) {
 	if !dst.IsValid() || !src.IsValid() || dst.Type() != src.Type() {
 		return
 	}
-	if dst.CanAddr() && src.CanAddr() {
-		n := dst.Type().Size()
-		if n > 0 {
-			rawCopy(dst.Addr().UnsafePointer(), src.Addr().UnsafePointer(), n)
-		}
-		return
-	}
+	// Typed assignment keeps the GC write barrier for slices, maps, and other pointers.
 	dst.Set(src)
-}
-
-func rawCopy(dst, src unsafe.Pointer, n uintptr) {
-	copy(unsafe.Slice((*byte)(dst), n), unsafe.Slice((*byte)(src), n))
 }
 
 func asAddr(v reflect.Value) reflect.Value {
@@ -201,16 +191,11 @@ func asAddr(v reflect.Value) reflect.Value {
 	if v.Kind() != reflect.Struct && v.Kind() != reflect.Array {
 		return v
 	}
-	iface := v.Interface()
-	type hdr struct {
-		t unsafe.Pointer
-		d unsafe.Pointer
-	}
-	h := (*hdr)(unsafe.Pointer(&iface))
-	if h.d == nil {
-		return v
-	}
-	return reflect.NewAt(v.Type(), h.d).Elem()
+	// An interface can hold a single-pointer struct directly, so its data word
+	// is not necessarily the address of a copy of the struct.
+	addressable := reflect.New(v.Type()).Elem()
+	addressable.Set(v)
+	return addressable
 }
 
 func isSync(t reflect.Type) bool {

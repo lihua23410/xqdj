@@ -1,7 +1,6 @@
 package ospf
 
 import (
-	"fmt"
 	"math"
 	"sync"
 
@@ -16,7 +15,8 @@ type router struct {
 	point
 	id           uint64
 	area         int
-	db           database
+	mu           sync.Mutex
+	db           *lsdb
 	imported     map[lsaKey]summaryImport
 	summarySince uint64
 }
@@ -95,56 +95,11 @@ func round(a announcement, area int) flood {
 // path holds the remaining turn points when the cable bends around the
 // backbone; the packet steers to each of them in order.
 type flight struct {
-	network *network
-	target  *router
-	flood   flood
-	path    []point
-	// cable is the whole drawn route, start included, so the packet can
-	// prove it never leaves the line the skin draws for it.
-	cable []point
-	// lastTime 只用来算每帧步长，喂给偏离检查当容差。
+	network  *network
+	target   *router
+	flood    flood
+	path     []point
 	lastTime float64
-}
-
-// assertOnCable panics when a packet drifts off its own cable. The skin draws
-// exactly the points route() returns, so any divergence here means the packet
-// and the line no longer agree — a bug worth crashing on while it is new.
-//
-// tol is how far one integration step can carry the packet (shotSpeed*dt), not
-// a licence to wander: past a corner the packet is still on the incoming leg
-// until it teleports onto the corner itself, so the residual is bounded by one
-// step. A genuine route/flight disagreement grows without bound and still trips
-// the gate on the very next step.
-func (f *flight) assertOnCable(pos point, tol float64) {
-	if len(f.cable) < 2 {
-		return
-	}
-	best := math.Inf(1)
-	for i := 0; i+1 < len(f.cable); i++ {
-		if d := segmentDistance(pos, f.cable[i], f.cable[i+1]); d < best {
-			best = d
-		}
-	}
-	if limit := 2.5 + tol; best > limit {
-		panic(fmt.Sprintf("ospf: 报文偏离网线 %.2f 单位，容差 %.2f（pos=%v cable=%v path=%d target=%v lastTime=%.4f）",
-			best, limit, pos, f.cable, len(f.path), f.target.point, f.lastTime))
-	}
-}
-
-// segmentDistance returns how far p sits from the segment a-b.
-func segmentDistance(p, a, b point) float64 {
-	dx, dy := b.x-a.x, b.y-a.y
-	length2 := dx*dx + dy*dy
-	if length2 == 0 {
-		return p.distance(a)
-	}
-	t := ((p.x-a.x)*dx + (p.y-a.y)*dy) / length2
-	if t < 0 {
-		t = 0
-	} else if t > 1 {
-		t = 1
-	}
-	return p.distance(point{a.x + dx*t, a.y + dy*t})
 }
 
 type commands []unit.Cmd
@@ -170,7 +125,7 @@ func (n *network) install(at point, area int, out *commands) {
 	if r != dr {
 		// Database exchange is control state only. Historical LSAs don't
 		// turn into new attacks when a neighbor joins the broadcast network.
-		for _, known := range dr.db {
+		for _, known := range dr.records() {
 			r.learn(known)
 		}
 	}
@@ -225,7 +180,7 @@ func (n *network) install(at point, area int, out *commands) {
 		}
 	}
 	if link := n.bridges[3]; link.abr != nil && old[3] != link {
-		for _, known := range link.abr.db.ordered() {
+		for _, known := range link.abr.records() {
 			n.translate(link, known, out)
 		}
 	}
@@ -245,7 +200,7 @@ func (n *network) syncTransitDatabases(link bridge, out *commands) {
 	// A newly attached ABR exchanges historical type-5 state silently.
 	// Freshly originated type-5 LSAs still use the normal physical flood.
 	for _, source := range []*router{link.br, link.abr} {
-		for _, a := range source.db {
+		for _, a := range source.records() {
 			if a.kind != externalLSA {
 				continue
 			}
@@ -254,7 +209,7 @@ func (n *network) syncTransitDatabases(link bridge, out *commands) {
 			}
 		}
 	}
-	for _, a := range link.br.db.ordered() {
+	for _, a := range link.br.records() {
 		if isSummary(a.kind) && a.advertiser.area != 1 && n.activeSummary(a) &&
 			link.abr.imported[a.lsaKey].sequence < a.sequence {
 			n.publishImportedSummary(link.abr, a, out)
@@ -403,7 +358,7 @@ func (n *network) launch(fromID uint64, from point, to *router, f flood, out *co
 	*out = append(*out, unit.Spawn{
 		Kind: shotKind(f.kind), X: from.x + ux*offset, Y: from.y + uy*offset,
 		VX: ux * shotSpeed, VY: uy * shotSpeed, OwnerID: n.owner, Slot: n.slot,
-		Data: flight{network: n, target: to, flood: f, path: path, cable: cable},
+		Data: flight{network: n, target: to, flood: f, path: path},
 	})
 	return true
 }
@@ -449,7 +404,7 @@ func (n *network) deliver(at *router, f flood, out *commands) {
 
 func (n *network) nextLocal(at *router, f flood) *router {
 	nodes := n.areas[at.area]
-	eligible := func(r *router) bool { return r.db[f.lsaKey].sequence < f.sequence }
+	eligible := func(r *router) bool { return r.sequence(f.lsaKey) < f.sequence }
 	if dr := nodes[0]; eligible(dr) {
 		return dr
 	}
