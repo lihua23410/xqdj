@@ -69,4 +69,25 @@ test('private FX drives the skin without extending unit snapshots',()=>{
   shots.get('clock')({unitId:1,amount:0,x:0,y:8});
   skin.tick(el,{id:1},{time:0});
   assert.equal(el.classList.contains('tokei-dying'),false);
+
+  // The same fighter and moment IDs exist in both arenas.
+  const sandbox={};
+  const paper={sandbox,time:4};
+  skin.tick(el,{id:1},paper);
+  assert.equal(minute.style.transform,'rotate(180deg)');
+  shots.get('clock')({unitId:1,amount:2,x:8,y:16},paper);
+  skin.tick(el,{id:1},{sandbox,time:9});
+  assert.equal(minute.style.transform,'rotate(45deg)');
+  skin.tick(el,{id:1},{time:2});
+  assert.equal(minute.style.transform,'rotate(90deg)');
+
+  const moment=scene.window.lookFX['tokei-moment'];
+  shots.get('moment')({unitId:2,amount:2}, {time:2});
+  shots.get('moment')({unitId:2,amount:2,x:4,y:7}, paper);
+  moment.tick(el,{id:2},{sandbox,time:5.5});
+  assert.equal(face.classList.contains('cooling'),true);
+  assert.equal(minute.style.transform,'rotate(180deg)');
+  moment.tick(el,{id:2},{time:2});
+  assert.equal(face.classList.contains('cooling'),false);
+  assert.equal(hour.style.transform,'rotate(60deg)');
 });

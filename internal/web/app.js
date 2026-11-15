@@ -107,6 +107,7 @@ function registerShot(name, fn) {
 }
 
 const unitPaintHooks = [];
+const arenaOverlays = [];
 
 function registerUnitPaint(fn) {
   if (typeof fn !== "function") return;
@@ -288,6 +289,9 @@ window.arena = {
   spawnGhostFrom,
   registerShot,
   registerUnitPaint,
+  registerArenaOverlay(draw) {
+    if (typeof draw === "function") arenaOverlays.push(draw);
+  },
   registerFactions,
   registerOwnHurt,
   registerPresentation(type, player) {
@@ -338,11 +342,34 @@ function ensurePacks() {
   }
 }
 
+const ENGINE_BALL = new Set(["ball", "projectile", "clone", "semi", "arc", "glow", "ring", "fighter", "helper", "dashing"]);
+
 function applyLookFX(el, kind) {
   const want = new Set();
   for (const name of lookOf(kind).fx || []) {
     const id = fxID(name);
     if (id) want.add(id);
+  }
+  const have = new Set();
+  for (const c of el.classList) {
+    if (c.startsWith("look-")) have.add(c.slice("look-".length));
+  }
+  let lookChanged = have.size !== want.size;
+  if (!lookChanged) {
+    for (const id of want) if (!have.has(id)) lookChanged = true;
+  }
+  if (lookChanged) {
+    const dropped = [];
+    for (const c of [...el.classList]) {
+      if (c.startsWith("look-") || ENGINE_BALL.has(c)) continue;
+      el.classList.remove(c);
+      dropped.push(c);
+    }
+    // #region agent log
+    if (dropped.length) {
+      fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7e8d9b" }, body: JSON.stringify({ sessionId: "7e8d9b", runId: "post-fix", hypothesisId: "E", location: "app.js:applyLookFX", message: "dropped leftover skin class", data: { id: el.id, kind, dropped }, timestamp: Date.now() }) }).catch(() => {});
+    }
+    // #endregion
   }
   for (const c of [...el.classList]) {
     if (!c.startsWith("look-")) continue;
@@ -353,6 +380,33 @@ function applyLookFX(el, kind) {
     if (hook && typeof hook.unmount === "function") hook.unmount(el);
   }
   for (const id of want) el.classList.add("look-" + id);
+  // #region agent log
+  const imgs = el.querySelectorAll("img").length;
+  const looks = [...el.classList].filter((c) => c.startsWith("look-"));
+  if (imgs > 1 || looks.length > 1) {
+    const now = Date.now();
+    const key = `${el.id}:${imgs}:${looks.join(",")}`;
+    if (window.__skinDbg !== key) {
+      window.__skinDbg = key;
+      const bg = getComputedStyle(el).backgroundColor;
+      fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7e8d9b" }, body: JSON.stringify({ sessionId: "7e8d9b", runId: "vis1", hypothesisId: "E", location: "app.js:applyLookFX", message: "stacked skins", data: { id: el.id, kind, imgs, looks, bg }, timestamp: now }) }).catch(() => {});
+    }
+  }
+  // #endregion
+  // #region agent log
+  if (String(kind).includes("大肥鱼") && el.id && el.id.startsWith("u-")) {
+    const now = Date.now();
+    const looks2 = [...el.classList].filter((c) => c.startsWith("look-"));
+    const arts = [...el.querySelectorAll("img")].map((img) => img.className);
+    const sig = `${el.id}|${kind}|${arts.join("+")}|${looks2.join(",")}|${el.style.background || ""}`;
+    if (window.__hffSkinSig !== sig && now - (window.__hffSkinAt || 0) > 250) {
+      window.__hffSkinSig = sig;
+      window.__hffSkinAt = now;
+      const cs = getComputedStyle(el);
+      fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7e8d9b" }, body: JSON.stringify({ sessionId: "7e8d9b", runId: "vis1", hypothesisId: "E", location: "app.js:applyLookFX", message: "hff ball skin", data: { id: el.id, kind, arts, looks: looks2, bg: cs.backgroundColor, shadow: cs.boxShadow }, timestamp: now }) }).catch(() => {});
+    }
+  }
+  // #endregion
 }
 
 // 演出和常规节点共用皮肤销毁入口，避免私有挂件遗留到下一段。
@@ -380,6 +434,13 @@ function runLookFX(el, u, ctx) {
   if (holder && typeof holder.tick === "function") holder.tick(el, u, ctx);
 }
 
+function effectTime() {
+  const matchTime = state.time || 0;
+  if (!state.paper) return matchTime;
+  // Earlier recordings have the sandbox elapsed time instead of the scene clock.
+  return state.sceneTime ?? (matchTime + (state.paperView?.elapsed ?? 0));
+}
+
 function runLookGuides(scale, cx, cy, seen) {
   const hooks = window.lookFX;
   if (!hooks) return;
@@ -387,7 +448,7 @@ function runLookGuides(scale, cx, cy, seen) {
     scale,
     cx,
     cy,
-    time: state.time || 0,
+    time: effectTime(),
     effects: state.effects || [],
     units: state.units || [],
     ensureGuide,
@@ -659,10 +720,11 @@ function playSoundFX(fx) {
 }
 
 function playEffects(effects, scale, cx, cy) {
+  const time = effectTime();
   for (const fx of effects || []) {
     const [x, y] = screenPos(fx.x, fx.y, scale, cx, cy);
     const kind = fx.kind;
-    const ctx = { x, y, kind, scale, cx, cy, time: state.time || 0 };
+    const ctx = { x, y, kind, scale, cx, cy, time, sandbox: sandboxEffects };
     if (fx.name === "heal") {
       const n = Math.round(fx.amount || 0);
       const el = spawnFx("fx-dmg heal", x, y - 12, kind, dmgPop(n));
@@ -670,10 +732,12 @@ function playEffects(effects, scale, cx, cy) {
     } else if (fx.name === "faction") {
       spawnFx("fx-flash", x, y, kind);
       spawnFx("fx-ring", x, y, kind);
-    } else if (fx.name === "hurt") {
-      const n = Math.round(fx.amount || 0);
-      const el = spawnFx("fx-dmg", x, y - 12, kind, dmgPop(n));
-      if (el) el.textContent = `-${n}`;
+    } else if (fx.name === "hurt" || fx.name === "paper-hurt") {
+      if (fx.name === "hurt") {
+        const n = Math.round(fx.amount || 0);
+        const el = spawnFx("fx-dmg", x, y - 12, kind, dmgPop(n));
+        if (el) el.textContent = `-${n}`;
+      }
       if (!ownHurtKinds.has(kind)) playDefaultSfx("hit");
     } else if (fx.name === "swap") {
       spawnFx("fx-swap", x, y, kind);
@@ -701,6 +765,15 @@ function playEffects(effects, scale, cx, cy) {
         else hook(fx, ctx);
       } else if (fx.name) {
         // #region agent log
+        if (fx.name === "line") {
+          const now = Date.now();
+          window.__hffDbgAt = window.__hffDbgAt || 0;
+          if (now - window.__hffDbgAt > 400) {
+            window.__hffDbgAt = now;
+            const base = lookOf(kind).base || "";
+            fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7e8d9b" }, body: JSON.stringify({ sessionId: "7e8d9b", runId: "vis1", hypothesisId: "D", location: "app.js:playEffects", message: "line fell through", data: { kind, base, stuck: document.querySelectorAll("#fx .fx-line, #fx .hff-line").length }, timestamp: now }) }).catch(() => {});
+          }
+        }
         if (fx.name === "fire-ring") {
           const now = Date.now();
           window.__knightDbgAt = window.__knightDbgAt || {};
@@ -730,6 +803,7 @@ const fieldsEl = document.getElementById("fields");
 const teamPage = document.body.dataset.page === "team";
 
 let state = { phase: "select", slots: [[], []], kinds: [], units: [] };
+let sandboxEffects = null;
 let hexR = 280;
 let follow = null;
 let followHeld = false;
@@ -781,6 +855,19 @@ if (ws) ws.onmessage = (ev) => {
   }
   if (Array.isArray(msg.effects)) {
     for (const fx of msg.effects) playSoundFX(fx);
+  }
+  const leavingPaper = window.__sawPaper && !msg.paper;
+  window.__sawPaper = !!msg.paper;
+  if (leavingPaper) {
+    pendingEffects = [];
+    const gone = document.querySelectorAll("#fx .fx").length;
+    document.querySelectorAll("#fx .fx").forEach((el) => el.remove());
+    if (window.__hffLine) window.__hffLine.remove();
+    window.__hffLine = null;
+    clearTimeout(window.__hffLineTimer);
+    // #region agent log
+    fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7e8d9b" }, body: JSON.stringify({ sessionId: "7e8d9b", runId: "post-fix", hypothesisId: "D", location: "app.js:onmessage", message: "cleared sandbox fx", data: { gone, t: msg.time }, timestamp: Date.now() }) }).catch(() => {});
+    // #endregion
   }
   pendingFrame = msg;
   if (Array.isArray(msg.effects) && msg.effects.length) {
@@ -1789,6 +1876,8 @@ function playOpening(scale, cx, cy) {
 }
 
 function renderArena() {
+  // Keeps stateful skin effects separate even when the fork reuses the same unit IDs.
+  sandboxEffects = state.paper ? (sandboxEffects ?? {}) : null;
   // 场皮外形/尺寸由各 map 私产 CSS 按 [data-field] 自绘，引擎不按 fieldShape 分支。
   if (state.field) hex.dataset.field = state.field;
   else delete hex.dataset.field;
@@ -1803,6 +1892,10 @@ function renderArena() {
     return;
   }
   if (unitsEl) unitsEl.style.visibility = "";
+  const overlayContext = presentationContext(scale, cx, cy);
+  for (const draw of arenaOverlays) {
+    draw(state, hex, (x, y) => screenPos(x, y, scale, cx, cy), overlayContext);
+  }
   hex.classList.toggle(
     "flooded",
     (state.units || []).some((u) => u.kind === "钓鱼佬场鱼塘"),
@@ -1818,9 +1911,24 @@ function renderArena() {
   renderGuides(fighters, scale, cx, cy);
   renderWalls(scale, cx, cy);
   playEffects(state.effects, scale, cx, cy);
+  // #region agent log
+  {
+    const stuck = document.querySelectorAll("#fx .fx-line, #fx .hff-line").length;
+    const live = (state.effects || []).some((fx) => fx && fx.name === "line");
+    const skins = [...document.querySelectorAll(".ball")].filter((el) => el.querySelectorAll("img").length > 1).length;
+    if ((stuck && !live) || skins) {
+      const now = Date.now();
+      if (now - (window.__fxDbgAt || 0) > 500) {
+        window.__fxDbgAt = now;
+        fetch("http://127.0.0.1:7695/ingest/ebd3d2b1-55a0-4ce8-b18e-b4c5f3e8e896", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "7e8d9b" }, body: JSON.stringify({ sessionId: "7e8d9b", runId: "vis1", hypothesisId: "D", location: "app.js:renderArena", message: "leftover fx or skins", data: { stuck, live, skins, fxCount: document.querySelectorAll("#fx .fx").length }, timestamp: now }) }).catch(() => {});
+      }
+    }
+  }
+  // #endregion
 
   const seen = new Set();
   const now = performance.now();
+  const time = effectTime();
   for (const u of state.units || []) {
     seen.add(String(u.id));
     if (!(u.radius > 0)) {
@@ -1900,7 +2008,8 @@ function renderArena() {
     }
     runLookFX(el, u, {
       now,
-      time: state.time || 0,
+      time,
+      sandbox: sandboxEffects,
       scale,
       cx,
       cy,

@@ -208,17 +208,34 @@ type Match struct {
 	activeOpening       []replay.Presentation
 	openingUntil        time.Time
 	presentationN       uint64
+
+	paper           *paperRun
+	paperClose      *paperView
+	paperCloseSeq   uint64
+	paperCloseUntil uint64
+	paperFrame      bool
+	ready           []uint64
+	paperHold       map[uint64]bool
+	paperRelease    uint64
+	settleQ         []unitpkg.Damage
+	settleHost      uint64
+	settling        bool
+	arming          bool
+	pendingPaper    unitpkg.Paper
+	sandbox         bool
+	ledger          *paperLedger
 }
 
 type dmgOffer struct {
-	from      uint64
-	to        uint64
-	amount    float64
-	absorb    bool
-	noFreeze  bool
-	markKind  string
-	markDelta int
-	markIcon  string
+	paperTarget *paperTarget
+	from        uint64
+	to          uint64
+	amount      float64
+	absorb      bool
+	noFreeze    bool
+	markKind    string
+	markDelta   int
+	markIcon    string
 	// credit 是「这笔伤害记谁的功」，在发起那一刻就定下来。
 	// 不能等确认时才去找发起者：剑弧、子弹这类发起者往往发完伤害就自己消失了，
 	// 到确认那一拍 m.units[from] 已经是 nil，击杀就记丢了。
@@ -291,6 +308,7 @@ func (m *Match) snapshotJSONLocked(withOpening bool) []byte {
 		Winner        string                      `json:"winner"`
 		WinnerID      uint64                      `json:"winnerId"`
 		Time          float64                     `json:"time"`
+		SceneTime     *float64                    `json:"sceneTime,omitempty"`
 		Seq           uint64                      `json:"seq"`
 		HexR          float64                     `json:"hexRadius"`
 		Fields        []string                    `json:"fields"`
@@ -298,6 +316,8 @@ func (m *Match) snapshotJSONLocked(withOpening bool) []byte {
 		Shape         string                      `json:"fieldShape"`
 		HitStop       int                         `json:"hitStop"`
 		LogReady      bool                        `json:"logReady"`
+		Paper         bool                        `json:"paper,omitempty"`
+		PaperView     *paperView                  `json:"paperView,omitempty"`
 		Units         []unitpkg.Snapshot          `json:"units"`
 		Walls         []wallSnap                  `json:"walls"`
 		Effects       []unitpkg.FX                `json:"effects"`
@@ -357,6 +377,18 @@ func (m *Match) snapshotJSONLocked(withOpening bool) []byte {
 				Radius: c.radius, Field: true,
 			})
 		}
+	}
+	msg.PaperView = m.paperViewLocked()
+	if msg.PaperView != nil && msg.PaperView.OpenProgress > 0 {
+		msg.Effects = nil
+	} else if m.paper != nil && m.paper.child != nil {
+		units, walls, fx, hit, sceneTime := m.collectPaperLocked()
+		msg.Units = units
+		msg.Walls = walls
+		msg.Effects = fx
+		msg.HitStop = hit
+		msg.SceneTime = &sceneTime
+		msg.Paper = true
 	}
 	b, _ := json.Marshal(msg)
 	return b
@@ -817,6 +849,7 @@ func (m *Match) Pause() {
 func (m *Match) End() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.stopPaperLocked()
 	if m.phase == PhaseRunning || m.phase == PhasePaused {
 		m.closeLogLocked("中止")
 	}
@@ -838,7 +871,13 @@ func (m *Match) End() {
 func (m *Match) Tick() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.paperFrame = false
 	if m.phase != PhaseRunning {
+		return
+	}
+	if m.stepSandboxLocked() {
+		m.paperFrame = true
+		m.seq++
 		return
 	}
 	m.fx = m.fx[:0]
@@ -859,6 +898,11 @@ func (m *Match) Tick() {
 		if m.hitStop == 0 {
 			m.checkWinLocked()
 		}
+		return
+	}
+	if m.maybeArmPaperLocked() {
+		m.paperFrame = true
+		m.seq++
 		return
 	}
 	// Commands/impulses can turn an owner since the previous frame. A fan must
@@ -883,21 +927,30 @@ func (m *Match) Tick() {
 }
 
 func (m *Match) Play(maxTicks int) (winner string, ticks int) {
-	for t := 0; t < maxTicks; t++ {
+	if maxTicks < 1 {
+		maxTicks = 1
+	}
+	played := 0
+	ceiling := maxTicks * 40
+	for guard := 0; played < maxTicks && guard < ceiling; guard++ {
 		m.Tick()
 		m.mu.Lock()
 		ended := m.phase == PhaseEnded
+		paper := m.paperFrame
 		w := m.winner
 		m.mu.Unlock()
+		if !paper {
+			played++
+		}
 		if ended {
 			if w == "" {
 				w = "平局"
 			}
-			return w, t + 1
+			return w, played
 		}
 		runtime.Gosched()
 	}
-	return "平局", maxTicks
+	return "平局", played
 }
 
 func (m *Match) decelerateLocked(dt float64) {
@@ -957,6 +1010,7 @@ func (m *Match) decelerateLocked(dt float64) {
 
 func (m *Match) resetLocked() {
 	m.stopAllLocked()
+	m.paperClose = nil
 	m.shared = &unitpkg.MatchState{}
 	m.units = make(map[uint64]*unit)
 	m.order = nil
@@ -1250,7 +1304,13 @@ func runActor(u *unit, ctx unitpkg.Context) {
 }
 
 func (m *Match) drainCmdsLocked() {
-	defer m.flushLeapsLocked()
+	defer func() {
+		m.flushLeapsLocked()
+		if m.paperRelease != 0 {
+			delete(m.paperHold, m.paperRelease)
+			m.paperRelease = 0
+		}
+	}()
 	batch := m.cmdBatch[:0]
 	// Finish the events already delivered at this boundary. Keep receiving
 	// commands while handlers run, so a full cmds channel cannot deadlock them.
@@ -1289,8 +1349,10 @@ collect:
 }
 
 func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
+	var origin audit.Origin
 	if c, ok := cmd.(actorCommand); ok {
 		audit.CheckCommand(c.origin, c.command)
+		origin = c.origin
 		cmd = c.command
 	}
 	switch c := cmd.(type) {
@@ -1417,6 +1479,12 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		}
 		u.aimPriority = c.Value
 		m.noteAimLocked(c.From, u, c.Value)
+	case unitpkg.Ready:
+		m.queueReadyLocked(c.UnitID)
+	case unitpkg.Paper:
+		if m.arming {
+			m.pendingPaper = c
+		}
 	case unitpkg.Damage:
 		m.offerDamageLocked(c)
 	case unitpkg.ConfirmDamage:
@@ -1427,6 +1495,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 			return
 		}
 		m.noteBlockLocked(off)
+		off.paperTarget.finish(0)
 		delete(m.pendingDmg, c.Token)
 		delete(m.wardAbsorb, off.to)
 	case unitpkg.StackMark:
@@ -1478,6 +1547,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if u == nil {
 			return
 		}
+		m.notePaperWipeLocked(u, origin.ID)
 		m.removeLocked(u)
 	case unitpkg.DespawnOwned:
 		m.despawnOwnedLocked(c.OwnerID, c.Kind)
@@ -1598,7 +1668,7 @@ func (u *unit) takesHit() bool {
 	return u != nil && !u.stopped && (u.role == unitpkg.RoleFighter || u.mortal)
 }
 
-func (m *Match) offerDamageLocked(c unitpkg.Damage) {
+func (m *Match) offerDamageLocked(c unitpkg.Damage) uint64 {
 	if from := m.units[c.From]; from != nil {
 		if from.damageScale > 0 {
 			c.Amount *= from.damageScale
@@ -1611,11 +1681,11 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 		}
 	}
 	if c.Amount <= 0 {
-		return
+		return 0
 	}
 	u := m.units[c.To]
 	if !u.takesHit() {
-		return
+		return 0
 	}
 	m.dmgSeq++
 	token := m.dmgSeq
@@ -1663,6 +1733,7 @@ func (m *Match) offerDamageLocked(c unitpkg.Damage) {
 		Speed:         u.v.len(),
 		ArcSpan:       arc,
 	})
+	return token
 }
 
 func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
@@ -1673,7 +1744,12 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 	delete(m.pendingDmg, c.Token)
 	u := m.units[off.to]
 	if u == nil || u.stopped || !u.takesHit() {
+		off.paperTarget.finish(0)
 		return
+	}
+	if off.paperTarget != nil {
+		before := u.hp
+		defer func() { off.paperTarget.finish(max(0, before-u.hp)) }()
 	}
 	// 用发起那一刻记下的记功对象；找不到才退回原始的 from（比如记功对象也同拍没了）。
 	from := m.units[off.credit]
@@ -1723,19 +1799,24 @@ func (m *Match) confirmDamageLocked(c unitpkg.ConfirmDamage) {
 		}
 	}
 	m.noteConfirmLocked(off, amt, remain)
-	if u.role != unitpkg.RoleFighter {
-		m.applyHurtLocked(from, u, amt, false, false)
-		return
+	effect := "hurt"
+	if off.paperTarget != nil {
+		effect = "paper-hurt"
 	}
-	m.applyHurtLocked(from, u, amt, !off.noFreeze, true)
+	fighter := u.role == unitpkg.RoleFighter
+	m.applyHurtEffectLocked(from, u, amt, fighter && !off.noFreeze, fighter, effect)
 }
 
 func (m *Match) applyHurtLocked(from, u *unit, amt float64, freeze, swap bool) {
+	m.applyHurtEffectLocked(from, u, amt, freeze, swap, "hurt")
+}
+
+func (m *Match) applyHurtEffectLocked(from, u *unit, amt float64, freeze, swap bool, effect string) {
 	if u == nil || amt <= 0 {
 		return
 	}
 	m.fx = append(m.fx, unitpkg.FX{
-		Name:   "hurt",
+		Name:   effect,
 		UnitID: u.id,
 		Kind:   u.kind,
 		X:      u.p.X,
@@ -1743,9 +1824,19 @@ func (m *Match) applyHurtLocked(from, u *unit, amt float64, freeze, swap bool) {
 		Slot:   u.slot,
 		Amount: amt,
 	})
+	before := u.hp
 	u.hp -= amt
 	if u.hp < 0 {
 		u.hp = 0
+	}
+	m.notePaperLossLocked(u.id, before-u.hp)
+	if m.sandbox || m.settling {
+		// #region agent log
+		agentLog("A", "match.go:applyHurt", "hp drop", map[string]any{
+			"sandbox": m.sandbox, "settling": m.settling, "id": u.id, "kind": u.kind,
+			"amt": amt, "before": before, "after": u.hp,
+		})
+		// #endregion
 	}
 	m.noteHurtLocked(from, u, amt)
 	if freeze {
@@ -2881,7 +2972,7 @@ func (m *Match) emitLocked() {
 	}
 	for _, id := range m.order {
 		u := m.units[id]
-		if u == nil || u.stopped || u.stun {
+		if u == nil || u.stopped || u.stun || m.paperHold[u.id] {
 			continue
 		}
 		sense := unitpkg.Sense{Time: m.time, Self: u.snap(), Field: field, Walls: views, Knock: len(u.fsList) > 0}
@@ -2891,7 +2982,7 @@ func (m *Match) emitLocked() {
 			sense.VelocityScale = u.cruiseMul()
 			sense.MovementLocked = u.held || u.velocityLocked || sense.VelocityScale <= 0
 		}
-		sense.Nearby = nearbySnapshots(snaps, u)
+		sense.Nearby = m.touchForHFFLocked(u, snaps, nearbySnapshots(snaps, u))
 		m.send(u, sense)
 	}
 }
@@ -2974,6 +3065,9 @@ func (m *Match) send(u *unit, ev unitpkg.Event) {
 }
 
 func (m *Match) checkWinLocked() {
+	if m.sandbox || m.settling {
+		return
+	}
 	alive := [2]int{}
 	for _, id := range m.order {
 		u := m.units[id]
@@ -2986,6 +3080,11 @@ func (m *Match) checkWinLocked() {
 		alive[u.slot]++
 	}
 	if alive[0] > 0 && alive[1] > 0 {
+		return
+	}
+	// A final settlement hit keeps its readout on screen before victory.
+	if m.paperClose != nil && m.seq < m.paperCloseUntil {
+		m.hitStop = int(m.paperCloseUntil - m.seq)
 		return
 	}
 	m.phase = PhaseEnded

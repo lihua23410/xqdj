@@ -32,9 +32,12 @@ arena.registerShot("revive", () => {
   tokeiReviveVoice.play();
 });
 
-arena.registerShot("clock", (fx) => {
-  window.tokeiSt = window.tokeiSt || {};
-  window.tokeiSt[fx.unitId] = {
+function tokeiEventState(ctx) {
+  return typeof tokeiStateFor === "function" ? tokeiStateFor(ctx) : (window.tokeiSt ||= {});
+}
+
+arena.registerShot("clock", (fx, ctx) => {
+  tokeiEventState(ctx)[fx.unitId] = {
     hours: Number(fx.amount) || 0,
     full: (fx.vx || 0) > 0,
     from: Number(fx.x) || 0,
@@ -42,21 +45,19 @@ arena.registerShot("clock", (fx) => {
   };
 });
 
-arena.registerShot("overclock", (fx) => {
-  window.tokeiSt = window.tokeiSt || {};
-  const st = window.tokeiSt[fx.unitId] || {};
-  window.tokeiSt[fx.unitId] = {
-    ...st,
+arena.registerShot("overclock", (fx, ctx) => {
+  const store = tokeiEventState(ctx);
+  store[fx.unitId] = {
+    ...store[fx.unitId],
     deathFrom: Number(fx.x) || 0,
     deathTo: Number(fx.y) || 0,
   };
 });
 
-arena.registerShot("moment", (fx) => {
-  window.tokeiSt = window.tokeiSt || {};
+arena.registerShot("moment", (fx, ctx) => {
   // 残影的针停在它刻下那一刻的读数上；X/Y 是踩影后的静默窗口，
   // 冷却期间 tokei.js 会把盘面压暗、把时针从上一小时拨回这个读数。
-  window.tokeiSt[fx.unitId] = {
+  tokeiEventState(ctx)[fx.unitId] = {
     hours: Number(fx.amount) || 0,
     full: false,
     ghost: true,

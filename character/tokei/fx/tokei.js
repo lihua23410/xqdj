@@ -1,15 +1,19 @@
 // 时计皮肤：白盘 + 黑针（时针 + 分针）。
 // 状态由 shot.js 的两个 FX 喂进来：clock（本体表针 + 本拍窗口）、moment（每个残影自己的针位）。
-// 两根针都按**模拟时间**逐帧算角度（不是 CSS 过渡）：引擎停帧/暂停时快照的 time 不走，针也就不走。
+// 两根针按所在场地的模拟时间逐帧算角度，停帧和暂停时一起停。
 window.lookFX = window.lookFX || {};
 window.tokeiSt = window.tokeiSt || {};
+const tokeiSandboxes = new WeakMap();
 
-// 当前模拟时刻。锤子的 nail.js 也是这么读全局 state 的（包脚本和 app.js 共享同一个全局作用域）。
-function tokeiNow() {
-  if (typeof state !== "undefined" && state && Number.isFinite(Number(state.time))) {
-    return Number(state.time);
+function tokeiStateFor(ctx) {
+  if (!ctx?.sandbox) return window.tokeiSt;
+  let store = tokeiSandboxes.get(ctx.sandbox);
+  if (!store) {
+    // 进沙盘时带入当时的表盘。FX 处理器总是替换整条记录，沙盘的变化不会写回实盘。
+    store = { ...window.tokeiSt };
+    tokeiSandboxes.set(ctx.sandbox, store);
   }
-  return 0;
+  return store;
 }
 
 function tokeiEnsure(el, cls) {
@@ -70,16 +74,28 @@ window.tokeiAngles = function (st, now) {
   return { hour: (hours + step * phase) * 30, minute: phase * 360, cooling: false };
 };
 
-function paintTokei(el, id, ghost) {
-  const st = window.tokeiSt[id] || { hours: 0, full: false };
+function paintTokei(el, id, ghost, ctx) {
+  const store = tokeiStateFor(ctx);
+  el.tokeiView = { store, id };
+  const st = store[id] || {};
   const face = tokeiFace(el);
   face.classList.toggle("dust", !ghost && !!st.full);
-  const a = window.tokeiAngles(st, tokeiNow());
+  const a = window.tokeiAngles(st, ctx?.time ?? 0);
   face.classList.toggle("cooling", !!a.cooling);
   const hour = face.querySelector(".hand.hour");
   const minute = face.querySelector(".hand.minute");
   if (hour) hour.style.transform = `rotate(${a.hour}deg)`;
   if (minute) minute.style.transform = `rotate(${a.minute}deg)`;
+  return st;
+}
+
+function clearTokei(el) {
+  el.querySelector(":scope > .tokei-face")?.remove();
+  if (el.tokeiView) {
+    const { store, id } = el.tokeiView;
+    delete store[id];
+    delete el.tokeiView;
+  }
 }
 
 // 以模拟时间计算超频失控：连续加速叠加反向抖动，不用随机数或真实时钟。
@@ -97,19 +113,17 @@ window.tokeiDeathAngles = function (from, until, now) {
 
 window.lookFX.tokei = {
   unmount(el) {
-    el.querySelector(":scope > .tokei-face")?.remove();
+    clearTokei(el);
     el.classList.remove("tokei-dying");
-    delete window.tokeiSt[el.id.replace(/^u-/, "")];
     for (const prop of ["--tokei-death","--tokei-fade","--tokei-jitter"]) el.style.removeProperty(prop);
   },
   tick(el, u, ctx) {
-    paintTokei(el, u.id, false);
-    const st = window.tokeiSt[u.id] || {};
+    const now = ctx?.time ?? 0;
+    const st = paintTokei(el, u.id, false, ctx);
     const dying = Number(st.deathTo) > Number(st.deathFrom);
     el.classList.toggle("tokei-dying", dying);
     if (dying) {
       const start=Number(st.deathFrom)||0;
-      const now=ctx && Number.isFinite(ctx.time) ? ctx.time : tokeiNow();
       const d=window.tokeiDeathAngles(start,Number(st.deathTo),now);
       el.style.setProperty("--tokei-death",String(d.progress));
       el.style.setProperty("--tokei-fade",String(d.fade));
@@ -124,10 +138,8 @@ window.lookFX.tokei = {
 };
 
 window.lookFX["tokei-moment"] = {
-  unmount(el) {
-    el.querySelector(":scope > .tokei-face")?.remove();
-  },
-  tick(el, u) {
-    paintTokei(el, u.id, true);
+  unmount: clearTokei,
+  tick(el, u, ctx) {
+    paintTokei(el, u.id, true, ctx);
   },
 };

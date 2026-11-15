@@ -29,6 +29,7 @@ import (
 	"xqdj/character/hajimi"
 	"xqdj/character/hammer"
 	"xqdj/character/hero"
+	"xqdj/character/hff"
 	"xqdj/character/integrated"
 	"xqdj/character/knight"
 	"xqdj/character/maggot"
@@ -165,6 +166,7 @@ const (
 	KindSwordPick          = 勇者.KindSwordPick
 	KindWarrior            = 勇者.KindWarrior
 	KindWarriorPick        = 勇者.KindWarriorPick
+	KindHFF                = hff.KindHFF
 	KindIntegrated         = 原型机_整合.KindIntegrated
 	KindIntegratedRound    = 原型机_整合.KindIntegratedRound
 	KindKnight             = 小骑士.KindKnight

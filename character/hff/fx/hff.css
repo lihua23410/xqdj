@@ -1,0 +1,213 @@
+.ball.look-hff {
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ball.look-hff > .hff-art {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150%;
+  height: 150%;
+  object-fit: contain;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.hff-stock-shadow {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 7px #8cd2ff);
+  pointer-events: none;
+}
+.hff-stock-shadow[hidden] { display: none; }
+.hff-stock-shadow > img {
+  display: block;
+  width: 100%;
+  filter: saturate(.65) brightness(1.4);
+  mask-image: linear-gradient(to bottom, #000 50%, #000c 68%, transparent 98%);
+}
+
+.hff-stock-reveal {
+  position: absolute;
+  z-index: 2;
+  transform: scale(var(--hff-reveal-scale, 1));
+  pointer-events: none;
+}
+.hff-stock-reveal > .ball { left: 0; top: 0; }
+
+.fx.hff-line {
+  position: absolute;
+  width: 2px;
+  margin: 0;
+  background: #e6d39a;
+  color: #fff;
+  font: 700 14px sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+  z-index: 4;
+}
+
+.hff-market, .hff-settlement-fx {
+  --hff-gain: #ff8c96;
+  --hff-loss: #77dfba;
+}
+.hff-market {
+  --hff-accent: #83caff;
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  width: 252px;
+  transform: translateX(-50%);
+  color: #e4edf8;
+  font: 12px/1.35 system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px #101922;
+  pointer-events: none;
+  opacity: var(--hff-opacity, 1);
+}
+
+#hex[data-field="机关房"] > .hff-market { top: 23%; }
+#hex[data-field="奇美拉"] > .hff-market {
+  top: 43%;
+  left: 85.4%;
+  width: min(252px, 21%);
+}
+
+.hff-market [hidden],
+.hff-market[hidden],
+.hff-market-decision[hidden] { display: none; }
+
+.hff-market[data-phase="stare"],
+.hff-market[data-phase="close"] { --hff-accent: #fbd588; }
+
+.hff-market-top,
+.hff-market-title,
+.hff-market-readout,
+.hff-market-clock {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hff-market-top {
+  padding-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--hff-accent) 45%, transparent);
+  color: #b1c6da;
+  font-size: 11px;
+  letter-spacing: .12em;
+}
+.hff-market-top b { color: var(--hff-accent); font-size: 12px; }
+.hff-market-title { margin: 6px 0 5px; }
+.hff-market-title strong { font-size: 17px; overflow-wrap: anywhere; }
+.hff-market-title b { white-space: nowrap; }
+.hff-market[data-side="long"] .hff-market-title b,
+.hff-market [data-result="gain"] { color: var(--hff-gain); }
+.hff-market[data-side="short"] .hff-market-title b,
+.hff-market [data-result="loss"] { color: var(--hff-loss); }
+.hff-market-readout { color: #cfdded; }
+.hff-market-readout strong { color: white; font-size: 18px; line-height: 1.1; }
+.hff-market [data-part="book"] { opacity: var(--hff-ink, 1); }
+.hff-market svg { display: block; width: 100%; opacity: var(--hff-chart-opacity, 1); }
+.hff-market[data-cue="freeze"] svg g:last-child { color: #ffda88; filter: drop-shadow(0 0 3px #ffc457); }
+.hff-market[data-cue="flight"] svg g { visibility: hidden; }
+.hff-market svg text { fill: #aebfd3; font-size: 10px; }
+.hff-market svg .grid { stroke: #2f4459; }
+.hff-market svg .zero { stroke: #8298af; stroke-dasharray: 3 3; }
+.hff-market svg g { fill: currentColor; stroke: currentColor; }
+:is(.hff-market svg, .hff-settlement-fx) .rise { color: var(--hff-gain); }
+:is(.hff-market svg, .hff-settlement-fx) .fall { color: var(--hff-loss); }
+:is(.hff-market svg, .hff-settlement-fx) .flat { color: #aebfd3; }
+.hff-market-clock { color: #adbed1; font-size: 10px; }
+
+.hff-market-decision {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  --hff-zone: #ff8c962b;
+}
+.hff-market-decision[data-side="short"] { --hff-zone: #77dfba2b; }
+.hff-market-decision i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: clamp(0px, var(--hff-line), 100%);
+  background: linear-gradient(90deg, transparent, var(--hff-zone));
+  opacity: var(--hff-scan, 1);
+}
+.hff-market-decision[data-side="short"] i {
+  inset: 0 0 0 auto;
+  width: clamp(0px, calc(100% - var(--hff-line)), 100%);
+  background: linear-gradient(90deg, var(--hff-zone), transparent);
+}
+.hff-market-decision::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 var(--hff-line);
+  border-left: 2px dashed #fbd588;
+  transform: scaleY(var(--hff-scan, 1));
+  transform-origin: top;
+}
+.hff-market-decision b {
+  position: absolute;
+  left: var(--hff-x);
+  top: var(--hff-y);
+  width: 38px;
+  height: 38px;
+  border: 2px solid #fbd588;
+  border-radius: 50%;
+  box-shadow: 0 0 11px #fbd58870;
+  transform: translate(-50%, -50%);
+}
+
+.hff-settlement-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  transform: none;
+}
+.hff-settlement-fx[hidden] { display: none; }
+.hff-stock-cutin {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  transform: none;
+  background: radial-gradient(ellipse at center, #081222e8 25%, #08122295 62%, transparent 81%);
+}
+.hff-stock-cutin[hidden] { display: none; }
+.hff-stock-cutin > img {
+  display: block;
+  width: min(78%, 600px);
+  max-height: 78%;
+  object-fit: contain;
+}
+.hff-shot-self { color: #ff8490; }
+.hff-shot-enemy { color: #ffd486; }
+.hff-shot-candle { fill: currentColor; stroke: currentColor; filter: drop-shadow(0 0 3px currentColor); }
+.hff-shot-trail { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.hff-impact { fill: none; stroke: currentColor; stroke-width: 2; }
+.hff-impact-text {
+  fill: currentColor;
+  stroke: #121925;
+  stroke-width: 3;
+  paint-order: stroke;
+  text-anchor: middle;
+  font: 700 14px system-ui, sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hff-stock-reveal { transform: none; }
+  .hff-market [data-part="book"] { opacity: 1; }
+  .hff-market-decision i { opacity: 1; }
+  .hff-market-decision::after { transform: none; }
+  .hff-settlement-fx .hff-candle-shot { display: none; }
+}

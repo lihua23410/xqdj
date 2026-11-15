@@ -467,6 +467,31 @@ type VisionBlock struct {
 	Hold   bool
 }
 
+// Ready 巡航到点，请求盯盘。股票和看涨看空等 Stare 再定。
+type Ready struct {
+	UnitID uint64
+}
+
+// Stare 真实场地已经冻住。演员据此抽操盘股票、画决定线。
+type Stare struct {
+	Time  float64
+	Self  Snapshot
+	Field Field
+}
+
+// Paper 这一轮沙盘。Stock 为空表示这一轮不操盘。
+type Paper struct {
+	UnitID uint64
+	Stock  string
+	Long   bool
+	Line   float64
+}
+
+// PaperDone 交割写完。Time 是真实对局时间。
+type PaperDone struct {
+	Time float64
+}
+
 type Context struct {
 	// State 供本场的同包演员协作，不得用进程级可变表保存对局状态。
 	State *MatchState
