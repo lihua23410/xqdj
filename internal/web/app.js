@@ -580,6 +580,7 @@ function screenPos(x, y, scale, cx, cy) {
 function drawHealthNumber(el, u, ctx, hp = u.hp) {
   const value = Number(hp) || 0;
   el.classList.add("hp-float");
+  el.dataset.slot = u.slot;
   el.textContent = String(value > 0 ? Math.max(1, Math.round(value)) : 0);
   const [x, y] = screenPos(u.x, u.y, ctx.scale, ctx.cx, ctx.cy);
   el.style.left = `${x}px`;
@@ -2134,6 +2135,7 @@ function releaseLobby() {
 
 function render() {
   const inLobby = state.phase === "select";
+  arenaEl.toggleAttribute("data-scheduled-battle", state.scheduledBattle === true);
   if (inLobby) {
     window.presentationPlayer.clear();
     openingStart=null; openingKey=""; openingFinished=false;

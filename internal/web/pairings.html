@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>随机分组 · 小球对战</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #edf5ff;
+      --muted: #a2b4cb;
+      --line: #25364a;
+      --accent: #72e6c2;
+      font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background: radial-gradient(ellipse at top, #172b43, transparent 36rem), #0b121c;
+    }
+    main { max-width: 69rem; margin: auto; padding: 2rem clamp(1rem, 4vw, 3rem) 4rem; }
+    a { color: var(--muted); text-underline-offset: .24em; }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: end;
+      gap: 1.25rem;
+      margin: 2.25rem 0 1.5rem;
+    }
+    h1 { margin: 0 0 .5rem; font-size: clamp(2rem, 6vw, 3rem); }
+    p { margin: 0; line-height: 1.6; color: var(--muted); }
+    button {
+      border: 0;
+      border-radius: .55rem;
+      min-height: 2.75rem;
+      padding: .65rem 1.25rem;
+      background: var(--accent);
+      color: #09281e;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: #a0f9dd; }
+    button:disabled { opacity: .65; cursor: wait; }
+    .links { display: flex; flex-wrap: wrap; gap: 1rem; }
+    #start-tournament {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .75rem;
+      margin: 0 0 1.25rem;
+    }
+    #start-tournament[hidden] { display: none; }
+    #round-count { width: 4rem; padding: .5rem; font: inherit; }
+    :focus-visible { outline: 2px solid #ffce84; outline-offset: 4px; }
+    #status {
+      border-block: 1px solid var(--line);
+      padding: .85rem 0;
+      margin-bottom: 1.25rem;
+    }
+    #status[data-error] { color: #ffb3a9; }
+    #pairs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+      gap: .75rem;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    #pairs > li, #bye {
+      padding: .8rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: .7rem;
+      background: #121e2e;
+    }
+    .group { display: block; margin-bottom: .45rem; color: var(--muted); font-size: .8rem; }
+    .members {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      align-items: center;
+      gap: .55rem;
+      text-align: center;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+    .plus { color: var(--accent); }
+    #bye { margin-top: .75rem; color: var(--ink); border-color: #77582e; background: #261e16; }
+    #bye strong { color: #ffce84; margin-right: .65rem; }
+  </style>
+  <script src="/pairings.js" type="module"></script>
+</head>
+<body>
+  <main>
+    <nav class="links" aria-label="页面">
+      <a href="/">← 小球对战</a>
+      <a href="/tournament.html">已保存的赛程</a>
+    </nav>
+    <header>
+      <div>
+        <h1>战斗机随机分组</h1>
+        <p>两只一组，组内是队友。排除靶子，单出的战斗机留作候补。</p>
+      </div>
+      <button id="redraw" type="button">重新分组</button>
+    </header>
+    <p id="status" role="status">正在读取战斗机名单…</p>
+    <form id="start-tournament" hidden>
+      <label for="round-count">瑞士轮轮数</label>
+      <input id="round-count" type="number" min="1" step="1" required>
+      <button type="submit">用本次分组开赛</button>
+    </form>
+    <p id="tournament-error" role="alert"></p>
+    <ol id="pairs" aria-label="分组结果"></ol>
+    <p id="bye" hidden><strong>候补</strong><span id="bye-name"></span></p>
+  </main>
+</body>
+</html>

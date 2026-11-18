@@ -28,6 +28,24 @@ func agentLog(hyp, loc, msg string, data map[string]any) {
 	// #endregion
 }
 
+func debugPaper(hyp, loc, msg string, data map[string]any) {
+	// #region agent log
+	b, err := json.Marshal(map[string]any{
+		"sessionId": "a294b7", "runId": "post-fix", "hypothesisId": hyp,
+		"location": loc, "message": msg, "data": data, "timestamp": time.Now().UnixMilli(),
+	})
+	if err != nil {
+		return
+	}
+	f, err := os.OpenFile("/home/lihua/xqdj/.cursor/debug-a294b7.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	_, _ = f.Write(append(b, '\n'))
+	_ = f.Close()
+	// #endregion
+}
+
 const (
 	kindHFF  = "大肥鱼(幻方量化)"
 	kindRice = "大肥鱼白饭"
@@ -51,9 +69,11 @@ type paperRun struct {
 
 type paperRow struct {
 	id     uint64
+	owner  uint64
 	slot   int
 	role   string
 	mortal bool
+	passHP bool // 挨打把同一笔转给主人，掉量已经在主人账上
 }
 
 type paperLedger struct {
@@ -235,7 +255,11 @@ func (m *Match) forkPaperLocked(host *unit, p unitpkg.Paper) *paperRun {
 		child.units[cu.id] = cu
 		child.order = append(child.order, cu.id)
 		child.actors = append(child.actors, cu)
-		rows = append(rows, paperRow{id: u.id, slot: u.slot, role: u.role, mortal: u.mortal})
+		spec, _ := unitpkg.Lookup(u.kind)
+		rows = append(rows, paperRow{
+			id: u.id, owner: u.owner, slot: u.slot, role: u.role,
+			mortal: u.mortal, passHP: spec.Look.ShareHP,
+		})
 		ctx := unitpkg.Context{
 			State: child.shared, ID: cu.id, Kind: cu.kind, Out: child.cmds,
 			Stream: cu.stream, Field: child.liveFieldLocked(),
@@ -381,6 +405,38 @@ func (m *Match) closePaperLocked() {
 	if run.child.ledger != nil {
 		maps.Copy(loss, run.child.ledger.loss)
 	}
+	bodies := make([]map[string]any, 0, len(run.rows))
+	run.child.mu.Lock()
+	for _, row := range run.rows {
+		end, kind, gone := -1.0, "", true
+		if u := run.child.units[row.id]; u != nil {
+			end, kind, gone = u.hp, u.kind, false
+		}
+		bodies = append(bodies, map[string]any{
+			"id": row.id, "slot": row.slot, "role": row.role, "mortal": row.mortal,
+			"kind": kind, "end": end, "gone": gone, "loss": loss[row.id],
+		})
+	}
+	var extra []map[string]any
+	if run.child.ledger != nil {
+		inRow := map[uint64]bool{}
+		for _, row := range run.rows {
+			inRow[row.id] = true
+		}
+		for id, amt := range run.child.ledger.loss {
+			if inRow[id] {
+				continue
+			}
+			kind, role, mortal := "", "", false
+			if u := run.child.units[id]; u != nil {
+				kind, role, mortal = u.kind, u.role, u.mortal
+			}
+			extra = append(extra, map[string]any{
+				"id": id, "kind": kind, "role": role, "mortal": mortal, "loss": amt,
+			})
+		}
+	}
+	run.child.mu.Unlock()
 	run.child.stopAllLocked()
 	m.settleQ = settleQuotes(run.host, run.rows, loss, run.long)
 	if run.view != nil {
@@ -398,6 +454,11 @@ func (m *Match) closePaperLocked() {
 	agentLog("C", "paper.go:close", "sandbox closed", map[string]any{
 		"loss": loss, "long": run.long, "parentHP": parentHP, "quotes": quotes,
 	})
+	// #region agent log
+	debugPaper("A", "paper.go:close", "minion ledger vs hp", map[string]any{
+		"long": run.long, "host": run.host, "bodies": bodies, "extra": extra, "quotes": quotes,
+	})
+	// #endregion
 	if len(m.settleQ) == 0 {
 		m.releaseSettleLocked()
 		return
@@ -431,25 +492,47 @@ func settleQuotes(host uint64, rows []paperRow, loss map[uint64]float64, long bo
 	if !have {
 		return nil
 	}
+	fighter := map[uint64]bool{}
+	for _, row := range rows {
+		if row.id == host || row.slot == hostSlot || row.role != unitpkg.RoleFighter {
+			continue
+		}
+		fighter[row.id] = true
+	}
+	// 活随从的掉量并进主人。转伤的那一份已经在主人账上，不再加一次。
+	extra := map[uint64]float64{}
+	var solo []paperRow
+	for _, row := range rows {
+		if row.id == host || row.slot == hostSlot || row.role == unitpkg.RoleFighter || !row.mortal || row.passHP {
+			continue
+		}
+		if fighter[row.owner] {
+			extra[row.owner] += loss[row.id]
+			continue
+		}
+		solo = append(solo, row)
+	}
 	hers := loss[host]
 	var self float64
 	var out []unitpkg.Damage
-	for _, row := range rows {
-		if row.id == host || row.slot == hostSlot {
-			continue
-		}
-		if row.role != unitpkg.RoleFighter && !row.mortal {
-			continue
-		}
-		delta := hers - loss[row.id]
+	add := func(id uint64, theirs float64) {
+		delta := hers - theirs
 		if math.Abs(delta) < 1e-9 {
-			continue
+			return
 		}
 		if long == (delta > 0) {
 			self += math.Abs(delta)
-			continue
+			return
 		}
-		out = append(out, unitpkg.Damage{From: host, To: row.id, Amount: math.Abs(delta) * paperProfitScale})
+		out = append(out, unitpkg.Damage{From: host, To: id, Amount: math.Abs(delta) * paperProfitScale})
+	}
+	for _, row := range rows {
+		if fighter[row.id] {
+			add(row.id, loss[row.id]+extra[row.id])
+		}
+	}
+	for _, row := range solo {
+		add(row.id, loss[row.id])
 	}
 	if self > 0 {
 		out = append([]unitpkg.Damage{{From: host, To: host, Amount: self}}, out...)
@@ -472,6 +555,12 @@ func (m *Match) notePaperWipeLocked(u *unit, originID uint64) {
 		return
 	}
 	m.ledger.loss[u.id] += u.hp
+	// #region agent log
+	debugPaper("D", "paper.go:wipe", "remaining hp counted", map[string]any{
+		"id": u.id, "kind": u.kind, "role": u.role, "mortal": u.mortal,
+		"hp": u.hp, "origin": originID,
+	})
+	// #endregion
 }
 
 func (m *Match) stopPaperLocked() {

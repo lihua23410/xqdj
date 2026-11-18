@@ -175,6 +175,8 @@ type Match struct {
 	spec        fieldSpec
 	winner      string
 	winnerID    uint64
+	scheduledID string
+	scheduled   map[string]ScheduledBattle
 	seq         uint64
 	rng         *rand.Rand
 	seed        uint64
@@ -302,6 +304,7 @@ func (m *Match) snapshotJSONLocked(withOpening bool) []byte {
 		Slots         [2][]string                 `json:"slots"`
 		Roster        [2][]string                 `json:"roster"`
 		Team          bool                        `json:"team"`
+		Scheduled     bool                        `json:"scheduledBattle,omitempty"`
 		Kinds         []string                    `json:"kinds"`
 		Looks         map[string]unitpkg.Look     `json:"looks"`
 		Packs         map[string]unitpkg.PackInfo `json:"packs"`
@@ -344,6 +347,8 @@ func (m *Match) snapshotJSONLocked(withOpening bool) []byte {
 		Units:    make([]unitpkg.Snapshot, 0, len(m.order)),
 		Walls:    make([]wallSnap, 0, len(m.walls)),
 		Effects:  append([]unitpkg.FX(nil), m.fx...),
+
+		Scheduled: m.scheduledID != "",
 	}
 	if withOpening {
 		msg.Presentations = m.takeOpeningLocked()
@@ -681,6 +686,10 @@ func nextSideKind(kinds, cur []string) string {
 func (m *Match) Start() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.startLocked("")
+}
+
+func (m *Match) startLocked(scheduledID string) {
 	if m.phase == PhasePaused {
 		m.phase = PhaseRunning
 		return
@@ -691,6 +700,7 @@ func (m *Match) Start() {
 	if m.team && (len(m.slots[0]) == 0 || len(m.slots[1]) == 0) {
 		return
 	}
+	m.scheduledID = scheduledID
 	if !m.pinned {
 		m.seed = unitpkg.NextStream()
 	}
@@ -852,7 +862,9 @@ func (m *Match) End() {
 	m.stopPaperLocked()
 	if m.phase == PhaseRunning || m.phase == PhasePaused {
 		m.closeLogLocked("中止")
+		m.finishScheduledLocked("aborted", "")
 	}
+	m.scheduledID = ""
 	m.openingUntil = time.Time{}
 	m.activeOpening = nil
 	m.pendingOpening = nil
@@ -1440,6 +1452,14 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if !logSame(prevHP, u.hp) || !logSame(prevMax, u.maxHP) {
 			m.noteSetHPLocked(u)
 		}
+		// #region agent log
+		if m.sandbox && prevHP-u.hp > 1e-9 && (u.mortal || u.role == unitpkg.RoleMinion) {
+			debugPaper("E", "match.go:SetHP", "minion hp rewritten", map[string]any{
+				"id": u.id, "kind": u.kind, "role": u.role, "mortal": u.mortal,
+				"before": prevHP, "after": u.hp, "max": u.maxHP,
+			})
+		}
+		// #endregion
 	case unitpkg.SetAbsorb:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -1830,6 +1850,14 @@ func (m *Match) applyHurtEffectLocked(from, u *unit, amt float64, freeze, swap b
 		u.hp = 0
 	}
 	m.notePaperLossLocked(u.id, before-u.hp)
+	// #region agent log
+	if m.settling && (u.mortal || u.role == unitpkg.RoleMinion) {
+		debugPaper("B", "match.go:settleHurt", "settlement hit minion", map[string]any{
+			"id": u.id, "kind": u.kind, "role": u.role, "mortal": u.mortal,
+			"amt": amt, "before": before, "after": u.hp,
+		})
+	}
+	// #endregion
 	if m.sandbox || m.settling {
 		// #region agent log
 		agentLog("A", "match.go:applyHurt", "hp drop", map[string]any{
@@ -2122,6 +2150,14 @@ func (m *Match) removeLocked(u *unit) {
 	if u == nil || u.stopped {
 		return
 	}
+	// #region agent log
+	if m.sandbox && u.hp > 0 && (u.mortal || u.role == unitpkg.RoleMinion) {
+		debugPaper("D", "match.go:remove", "minion left with hp", map[string]any{
+			"id": u.id, "kind": u.kind, "role": u.role, "mortal": u.mortal,
+			"hp": u.hp, "max": u.maxHP, "born": m.ledger != nil && m.ledger.born[u.id],
+		})
+	}
+	// #endregion
 	m.noteGoneLocked(u)
 	id := u.id
 	m.killLocked(u)
@@ -3096,15 +3132,18 @@ func (m *Match) checkWinLocked() {
 			m.winnerID = u.id
 		}
 		m.closeLogLocked("胜：" + m.rosterLine(0))
+		m.finishScheduledLocked("finished", "left")
 	case alive[1] > 0:
 		m.winner = strings.Join(m.lineup[1], "、")
 		if u := m.livingFighterLocked(1); u != nil {
 			m.winnerID = u.id
 		}
 		m.closeLogLocked("胜：" + m.rosterLine(1))
+		m.finishScheduledLocked("finished", "right")
 	default:
 		m.winner = "平局"
 		m.closeLogLocked("平局")
+		m.finishScheduledLocked("finished", "draw")
 	}
 }
 

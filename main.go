@@ -132,6 +132,8 @@ func main() {
 		_, _ = w.Write(b)
 	})
 	mux.Handle("/", http.FileServer(http.FS(static)))
+	mux.HandleFunc("GET /api/pairing-roster", web.PairingRoster(os.DirFS("character")))
+	registerScheduledBattles(mux, match)
 	mux.Handle("/ball/", http.StripPrefix("/ball/", http.FileServer(http.FS(unit.BallFS()))))
 	exporter := export.NewManager(base, match.Recording)
 	exporter.Handle(mux)

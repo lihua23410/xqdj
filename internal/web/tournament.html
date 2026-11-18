@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>战斗机赛程 · 小球对战</title>
+  <link rel="stylesheet" href="/tournament.css">
+  <script src="/tournament.js" type="module"></script>
+</head>
+<body>
+  <main>
+    <a href="/pairings.html">← 随机分组</a>
+    <header>
+      <div>
+        <h1>战斗机赛程</h1>
+        <p id="summary">正在读取已保存的赛程…</p>
+      </div>
+      <label id="tournament-picker" hidden>
+        选择赛程
+        <select id="tournament"></select>
+      </label>
+    </header>
+    <p id="message" role="status"></p>
+    <div id="competition" hidden>
+      <section aria-labelledby="swiss-heading">
+        <div class="section-header">
+          <h2 id="swiss-heading">瑞士轮</h2>
+          <label>查看轮次 <select id="round"></select></label>
+        </div>
+        <p>胜 1 分，平 0.5 分，负 0 分，轮空 1 分。按积分、对手分、胜场和首轮抽签顺序排定名次。</p>
+        <p id="round-status" role="status"></p>
+        <div id="swiss-matches" class="matches"></div>
+        <button id="advance" type="button"></button>
+      </section>
+      <section aria-labelledby="rank-heading">
+        <h2 id="rank-heading">瑞士轮积分榜</h2>
+        <p>对手分是已交手对手的积分总和，轮空不计对手分。</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">排名</th><th scope="col">分组与队友</th>
+                <th scope="col">积分</th><th scope="col">对手分</th>
+                <th scope="col">胜</th><th scope="col">平</th><th scope="col">负</th><th scope="col">轮空</th>
+              </tr>
+            </thead>
+            <tbody id="standings"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="playoff" aria-labelledby="playoff-heading" hidden>
+        <h2 id="playoff-heading">淘汰赛</h2>
+        <p id="champion" role="status"></p>
+        <div id="bracket" tabindex="0" role="region" aria-label="淘汰赛晋级树，可横向滚动"></div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

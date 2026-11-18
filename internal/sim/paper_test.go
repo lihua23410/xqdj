@@ -354,6 +354,28 @@ func TestLethalPaperImpactKeepsReadoutBeforeWinner(t *testing.T) {
 	}
 }
 
+func TestSettleQuotesFoldMinionLoss(t *testing.T) {
+	host := uint64(1)
+	rows := []paperRow{
+		{id: 1, slot: 0, role: unitpkg.RoleFighter},
+		{id: 2, slot: 1, role: unitpkg.RoleFighter},
+		{id: 3, slot: 1, role: unitpkg.RoleMinion, mortal: true, owner: 2},
+		{id: 4, slot: 1, role: unitpkg.RoleMinion, mortal: true, owner: 2},
+		{id: 5, slot: 1, role: unitpkg.RoleMinion, mortal: true, owner: 2, passHP: true},
+		{id: 6, slot: 1, role: unitpkg.RoleMinion, mortal: true},
+	}
+	loss := map[uint64]float64{1: 34, 2: 6, 3: 10, 4: 8, 5: 50, 6: 4}
+	long := settleQuotes(host, rows, loss, true)
+	// 34 − (6+10+8) = 10 她付；转伤的 50 已在主人账上不再加。没主人的 4 单独比，34−4=30 也是她付。
+	if len(long) != 1 || long[0].To != 1 || math.Abs(long[0].Amount-40) > 1e-9 {
+		t.Fatalf("long %+v", long)
+	}
+	short := settleQuotes(host, rows, loss, false)
+	if len(short) != 2 || short[0].To != 2 || math.Abs(short[0].Amount-20) > 1e-9 || short[1].To != 6 || math.Abs(short[1].Amount-60) > 1e-9 {
+		t.Fatalf("short %+v", short)
+	}
+}
+
 func findKind(m *Match, kind string) *unit {
 	m.mu.Lock()
 	defer m.mu.Unlock()

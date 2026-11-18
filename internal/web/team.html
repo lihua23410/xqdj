@@ -7,6 +7,10 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body data-page="team">
+  <aside id="scheduled-arena" class="panel" hidden>
+    <a id="back-to-tournament" href="/tournament.html">← 返回赛程</a>
+    <span id="scheduled-arena-status" role="status">正在读取对局…</span>
+  </aside>
   <section id="lobby" class="panel">
     <header class="lobby-header">
       <div>
@@ -14,9 +18,10 @@
         <h1>小球对战</h1>
         <p class="sub">每边 1–3 只，自由搭配你的阵容。</p>
       </div>
-      <nav class="mode-switch" aria-label="对战模式">
+      <nav class="mode-switch" aria-label="小球对战页面">
         <a href="/">单挑 <span>1v1</span></a>
         <a href="/team" aria-current="page">团队赛 <span>最多 3v3</span></a>
+        <a href="/pairings.html">随机分组</a>
       </nav>
     </header>
     <section class="field-picker" aria-labelledby="field-heading">
@@ -110,5 +115,6 @@
   <script src="/lib/gsap.min.js"></script>
   <script src="/presentation.js"></script>
   <script src="/app.js"></script>
+  <script src="/scheduled-arena.js" type="module"></script>
 </body>
 </html>

@@ -1,0 +1,133 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ink: #edf5ff;
+  --muted: #a2b4cb;
+  --line: #25364a;
+  --accent: #72e6c2;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background: radial-gradient(ellipse at top, #172b43, transparent 36rem), #0b121c;
+}
+main { max-width: 69rem; margin: auto; padding: 2rem clamp(1rem, 4vw, 3rem) 4rem; }
+a { color: var(--muted); text-underline-offset: .24em; }
+header, .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: .75rem;
+}
+header { margin: 2rem 0; }
+h1 { font-size: clamp(2rem, 6vw, 3rem); }
+h1, h2, h3 { margin: 0 0 .5rem; }
+p { margin: 0 0 .65rem; color: var(--muted); line-height: 1.6; }
+section { padding-block: 1.25rem; border-top: 1px solid var(--line); }
+select, button {
+  min-height: 2.55rem;
+  padding: .45rem .65rem;
+  border: 1px solid var(--line);
+  border-radius: .45rem;
+  background: #142235;
+  color: var(--ink);
+  font: inherit;
+}
+select { max-width: 100%; }
+button {
+  margin-top: .85rem;
+  background: var(--accent);
+  color: #09281e;
+  font-weight: 700;
+  cursor: pointer;
+}
+button:disabled { opacity: .55; cursor: default; }
+:focus-visible { outline: 2px solid #ffce84; outline-offset: 3px; }
+#message { color: #ffce84; }
+#round-status, #champion { color: var(--accent); }
+.matches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: .65rem;
+}
+.match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: .55rem;
+  padding: .7rem;
+  border: 1px solid var(--line);
+  border-radius: .65rem;
+  background: #121e2e;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.match p, .match-actions { grid-column: 1 / -1; margin: 0; }
+.match-actions { display: flex; gap: .5rem; }
+.match-actions select { flex: 1; min-width: 0; }
+.match-actions button, .battle-link { margin: 0; white-space: nowrap; }
+.battle-link { align-self: center; color: var(--accent); }
+.members { display: block; font-size: .82rem; line-height: 1.4; color: var(--muted); }
+.group-side.won strong { color: var(--accent); }
+.battle-details { font-size: .78rem; }
+.versus { color: var(--muted); font-size: .85rem; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: .5rem .65rem; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:nth-child(2), td:nth-child(2) { text-align: left; }
+th { color: var(--muted); }
+tr.qualified > td:first-child { color: var(--accent); font-weight: 700; }
+#bracket { overflow-x: auto; padding: .4rem .4rem 1rem; }
+.bracket-tree {
+  --column-gap: 2.1rem;
+  --slot-height: 10.5rem;
+  --connector: #51758b;
+  display: grid;
+  grid-auto-columns: 15.5rem;
+  grid-auto-flow: column;
+  gap: var(--column-gap);
+  width: max-content;
+}
+.tree-column { padding: 0; border: 0; }
+.tree-column h3 { margin: 0; padding: 0 0 .55rem; color: var(--accent); }
+.tree-games {
+  display: flex;
+  flex-direction: column;
+  height: calc(var(--slots) * var(--slot-height));
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.tree-node {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.tree-node .match { width: 100%; }
+.tree-column:not(:last-child) .tree-node::before,
+.tree-column:not(:last-child) .tree-node::after,
+.tree-column:not(:first-child) .tree-node .match::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+.tree-column:not(:last-child) .tree-node::after,
+.tree-column:not(:first-child) .tree-node .match::before {
+  top: 50%;
+  width: calc(var(--column-gap) / 2);
+  border-top: 1px solid var(--connector);
+}
+.tree-column:not(:last-child) .tree-node::after { left: 100%; }
+.tree-column:not(:first-child) .tree-node .match::before { right: 100%; }
+.tree-column:not(:last-child) .tree-node::before {
+  left: calc(100% + var(--column-gap) / 2);
+  height: 50%;
+  border-left: 1px solid var(--connector);
+}
+.tree-node:nth-child(odd)::before { top: 50%; }
+.tree-node:nth-child(even)::before { bottom: 50%; }
