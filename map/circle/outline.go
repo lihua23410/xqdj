@@ -57,9 +57,7 @@ func (c *circleOutline) Sweep(px, py, vx, vy, faceX, faceY, radius, dt float64, 
 		}
 		return 0, px / n, py / n, true
 	}
-	if px*vx+py*vy <= 1e-9 {
-		return 0, 0, 0, false
-	}
+	// 贴着圆周时，径向速度略朝内仍可能沿直线切出圆外。不能用 px*vx+py*vy 早退。
 	a := vx*vx + vy*vy
 	if a < 1e-16 {
 		return 0, 0, 0, false
