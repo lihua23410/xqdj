@@ -146,6 +146,25 @@ func TestRefusePartialSampleRosterAndMissingFile(t *testing.T) {
 	if err := mustRefuse(loadLedger(kinds, "甲", 10, 60, complete)); !strings.Contains(err, "不一致") || !strings.Contains(err, "-timeout") {
 		t.Fatalf("timeout: %v", err)
 	}
+	fractional := oldReport(10, 90.4, `
+| 甲 vs 乙 | 10 | 1 | 1 | 8 | 0 | 90.0% | 90.0% |
+| 甲 vs 丙 | 10 | 1 | 1 | 8 | 0 | 90.0% | 90.0% |
+| 乙 vs 丙 | 10 | 1 | 1 | 8 | 0 | 90.0% | 90.0% |
+`)
+	if _, err := loadLedger(kinds, "甲", 10, 90.4, fractional); err != nil {
+		t.Fatalf("fractional timeout: %v", err)
+	}
+	written := render(kinds, []pairResult{
+		{"甲", "乙", 1, 1, 8, 0},
+		{"甲", "丙", 1, 1, 8, 0},
+		{"乙", "丙", 1, 1, 8, 0},
+	}, 10, 90.4, time.Second, 2, "")
+	if _, err := loadLedger(kinds, "甲", 10, 90.4, written); err != nil {
+		t.Fatalf("rendered fractional timeout: %v", err)
+	}
+	if err := mustRefuse(loadLedger(kinds, "甲", 10, 90, fractional)); !strings.Contains(err, "-timeout") {
+		t.Fatalf("rounded timeout should not match 90.4: %v", err)
+	}
 	broken := oldReport(10, 90, "| 甲 vs 乙 | 10 | 1 | 1 | 1 | 0 | 20.0% | 20.0% |\n")
 	if err := mustRefuse(loadLedger(kinds, "甲", 10, 90, broken)); !strings.Contains(err, "胜负平") {
 		t.Fatalf("counts: %v", err)
@@ -388,7 +407,7 @@ func oldReport(n int, sec float64, rows string) string {
 
 - 时间：2026-11-02 09:54:25
 - 每组对战：%d 场（左右槽各一半）
-- 超时：%.0f 秒模拟时间，超时计平
+- 超时：%s 秒模拟时间，超时计平
 - 并发上限：32 场
 - 事件处理：可靠投递、保留逐拍感知、阶段背压；场内角色仍异步
 - 组合数：1，用时：1s
@@ -397,7 +416,7 @@ func oldReport(n int, sec float64, rows string) string {
 
 | 对阵 | 场次 | 前者胜 | 后者胜 | 平 | 超时平 | 前者胜平率 | 后者胜平率 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-%s`, n, sec, rows)
+%s`, n, formatSec(sec), rows)
 }
 
 func mustRefuse(_ []pairResult, err error) string {

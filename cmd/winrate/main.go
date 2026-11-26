@@ -157,7 +157,7 @@ func render(kinds []string, results []pairResult, nGames int, maxSec float64, el
 	fmt.Fprintf(&b, "# 小球胜率\n\n")
 	fmt.Fprintf(&b, "- 时间：%s\n", time.Now().Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(&b, "- 每组对战：%d 场（左右槽各一半）\n", nGames)
-	fmt.Fprintf(&b, "- 超时：%.0f 秒模拟时间，超时计平\n", maxSec)
+	fmt.Fprintf(&b, "- 超时：%s 秒模拟时间，超时计平\n", formatSec(maxSec))
 	fmt.Fprintf(&b, "- 本次并发：%d 场\n", jobs)
 	fmt.Fprintf(&b, "- 事件处理：可靠投递、保留逐拍感知、阶段背压；场内角色仍异步\n")
 	fmt.Fprintf(&b, "- 组合数：%d，本次用时：%s\n", len(results), elapsed.Round(time.Millisecond))

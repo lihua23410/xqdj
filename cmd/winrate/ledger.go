@@ -87,6 +87,11 @@ func preamble(text string) string {
 	return text
 }
 
+// formatSec 保留超时的小数。%.0f 会把 90.4 写成 90，-only 再按精确秒数核对时就会拒绝合并。
+func formatSec(sec float64) string {
+	return strconv.FormatFloat(sec, 'f', -1, 64)
+}
+
 func parseHead(head string) (int, float64, error) {
 	gm := reGames.FindStringSubmatch(head)
 	if gm == nil {
