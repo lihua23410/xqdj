@@ -818,16 +818,92 @@ window.addEventListener("error", (ev) => {
 // #endregion
 const EXPORT = new URLSearchParams(location.search).has("export");
 const wsProto = location.protocol === "https:" ? "wss" : "ws";
-const ws = EXPORT ? null : new WebSocket(`${wsProto}://${location.host}/ws`);
-if (ws) ws.onopen = () => send({ type: "mode", team: teamPage });
+let ws = null;
+let linkTimer = 0;
+let linkAttempt = 0;
+let linkAnnounced = false;
+
+function linkBanner(text) {
+  let el = document.getElementById("link-status");
+  if (!text) {
+    if (el) {
+      el.dataset.action = "";
+      el.textContent = "";
+      el.classList.add("hidden");
+    }
+    return;
+  }
+  // 重连失败会反复触发关闭。已经提示「操作没发出去」时不要盖回去。
+  if (el && !el.classList.contains("hidden") && el.dataset.action === "1" && text.indexOf("没发出去") < 0) return;
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "link-status";
+    el.className = "link-status";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "assertive");
+    document.body.appendChild(el);
+  }
+  el.dataset.action = text.indexOf("没发出去") >= 0 ? "1" : "";
+  el.textContent = text;
+  el.classList.remove("hidden");
+}
+
+function scheduleReconnect() {
+  if (EXPORT || linkTimer) return;
+  const delay = Math.min(400 * 2 ** linkAttempt, 4000);
+  linkAttempt += 1;
+  linkTimer = window.setTimeout(() => {
+    linkTimer = 0;
+    openSocket();
+  }, delay);
+}
+
+function openSocket() {
+  if (EXPORT) return;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  let socket;
+  try {
+    socket = new WebSocket(`${wsProto}://${location.host}/ws`);
+  } catch {
+    linkBanner("连不上服务器，正在重试…");
+    scheduleReconnect();
+    return;
+  }
+  ws = socket;
+  const slow = window.setTimeout(() => {
+    if (ws === socket && socket.readyState !== WebSocket.OPEN) linkBanner("正在连接服务器…");
+  }, 800);
+  socket.onopen = () => {
+    window.clearTimeout(slow);
+    if (ws !== socket) return;
+    linkAttempt = 0;
+    linkBanner("");
+    if (!linkAnnounced) {
+      linkAnnounced = true;
+      send({ type: "mode", team: teamPage });
+    }
+  };
+  socket.onmessage = (ev) => onSocketMessage(ev);
+  socket.onclose = () => {
+    window.clearTimeout(slow);
+    if (ws === socket) ws = null;
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+    linkBanner("与服务器断开了，正在重连…");
+    scheduleReconnect();
+  };
+}
 
 let exporting = false;
 let exportPicking = false;
 function send(obj) {
   if (exporting) return;
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(obj));
+    try {
+      ws.send(JSON.stringify(obj));
+      return;
+    } catch { /* 连接正在关掉，按断开处理 */ }
   }
+  if (!EXPORT) linkBanner("与服务器断开了，刚才的操作没发出去。正在重连…");
 }
 
 function sideList(slot) {
@@ -847,12 +923,15 @@ let pendingFrame = null;
 let pendingEffects = [];
 let frameScheduled = false;
 let pendingCopy = null;
-if (ws) ws.onmessage = (ev) => {
+function onSocketMessage(ev) {
   let msg;
   try { msg = JSON.parse(ev.data); } catch { return; }
   if (msg && msg.type === "log") {
     takeLog(msg);
     return;
+  }
+  if (msg && msg.phase === "select" && !!msg.team !== teamPage) {
+    send({ type: "mode", team: teamPage });
   }
   if (Array.isArray(msg.effects)) {
     for (const fx of msg.effects) playSoundFX(fx);
@@ -889,7 +968,8 @@ if (ws) ws.onmessage = (ev) => {
     hexR = state.hexRadius || 280;
     render();
   });
-};
+}
+if (!EXPORT) openSocket();
 
 function rosterStatus(slot) {
   const edge = slot === 0 ? "左" : "右";
