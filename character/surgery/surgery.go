@@ -8,20 +8,20 @@ import (
 )
 
 const (
-	KindSurgery       = "外科手术"
-	KindSurgeryField  = "外科手术场地伤口"
-	KindScalpel       = "外科手术手术刀"
-	KindSutureNeedle  = "外科手术缝合针"
-	KindBloodBullet   = "外科手术血液子弹"
-	bodyRadius        = 18.0
-	cruise            = 170.0
-	knifeSpeed        = 1000.0
-	knifeWindup       = 0.1
-	stitchSpeed       = 360.0
-	approachSpeed     = 420.0
-	stepTime          = 1.0 / 60
-	maxWounds         = 6
-	burstCharge       = 200.0
+	KindSurgery      = "外科手术"
+	KindSurgeryField = "外科手术场地伤口"
+	KindScalpel      = "外科手术手术刀"
+	KindSutureNeedle = "外科手术缝合针"
+	KindBloodBullet  = "外科手术血液子弹"
+	bodyRadius       = 18.0
+	cruise           = 170.0
+	knifeSpeed       = 1000.0
+	knifeWindup      = 0.1
+	stitchSpeed      = 360.0
+	approachSpeed    = 420.0
+	stepTime         = 1.0 / 60
+	maxWounds        = 6
+	burstCharge      = 200.0
 )
 
 //go:embed fx
@@ -144,7 +144,15 @@ func (o *operation) onSense(id uint64, s unit.Sense, cmds *commands) {
 	}
 	if o.stage == cutting {
 		if o.knifeOn {
-			return
+			// 刀飞到终点或撞上场边时自己会松开。中途被吃掉、偷走或转化时没有这段收尾，
+			// 本体会停在出刀站定里直到对局结束。刀已经不在场上，就按刀消失来收。
+			if unit.HasOwned(s, id, KindScalpel) {
+				return
+			}
+			o.knifeOn = false
+			if w := o.wound(o.plan.Wound); w != nil {
+				w.Drawn = 1
+			}
 		}
 		if o.crossPending {
 			o.crossPending = false

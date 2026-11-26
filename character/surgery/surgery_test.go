@@ -160,6 +160,79 @@ func TestScalpelStartsAfterPointOneSecondWindup(t *testing.T) {
 	}
 }
 
+func TestLostScalpelReleasesTheCut(t *testing.T) {
+	scope := new(unit.MatchState)
+	ctx, out := testContext(1, scope)
+	a := &surgeon{booted: true}
+	foe := unit.Snapshot{ID: 2, Slot: 1, Role: unit.RoleFighter, HP: 100, X: 80, AimPriority: 15}
+	s := unit.Sense{Time: 1, Field: unit.HexField(), Self: unit.Snapshot{ID: 1, Slot: 0, Role: unit.RoleFighter, HP: 100, X: -80},
+		Nearby: []unit.Snapshot{foe}}
+	a.Handle(ctx, s)
+	take(out)
+	s.Time = 1.1
+	a.Handle(ctx, s)
+	if !spawnedScalpel(take(out)) {
+		t.Fatal("no scalpel")
+	}
+	o := unit.StateFor[clinic](scope).operation(1)
+	if !o.knifeOn || o.stage != cutting {
+		t.Fatal("scalpel should be in flight")
+	}
+
+	s.Time = 1.2
+	s.Nearby = []unit.Snapshot{foe, {ID: 11, Kind: KindScalpel, OwnerID: 1, Role: unit.RoleProjectile}}
+	a.Handle(ctx, s)
+	take(out)
+	if !o.knifeOn || o.stage != cutting {
+		t.Fatal("a visible scalpel must keep the surgeon planted")
+	}
+
+	s.Time = 1.3
+	s.Nearby = []unit.Snapshot{foe}
+	a.Handle(ctx, s)
+	take(out)
+	if o.knifeOn || o.stage == cutting {
+		t.Fatalf("lost scalpel stuck the cut: knife=%v stage=%d", o.knifeOn, o.stage)
+	}
+	if o.stage != winding {
+		t.Fatalf("first lost scalpel should still allow the cross cut, stage=%d", o.stage)
+	}
+
+	s.Time = 1.4
+	a.Handle(ctx, s)
+	if !spawnedScalpel(take(out)) || !o.knifeOn {
+		t.Fatal("cross scalpel did not launch")
+	}
+	s.Time = 1.5
+	s.Nearby = []unit.Snapshot{foe}
+	a.Handle(ctx, s)
+	cmds := take(out)
+	if o.knifeOn || o.stage < approaching {
+		t.Fatalf("second lost scalpel did not release into sewing: knife=%v stage=%d", o.knifeOn, o.stage)
+	}
+	if !releasedStand(cmds, 1) {
+		t.Fatalf("sewing did not drop stand: %v", cmds)
+	}
+}
+
+func spawnedScalpel(cmds []unit.Cmd) bool {
+	for _, cmd := range cmds {
+		if spawn, ok := cmd.(unit.Spawn); ok && spawn.Kind == KindScalpel {
+			return true
+		}
+	}
+	return false
+}
+
+func releasedStand(cmds []unit.Cmd, id uint64) bool {
+	for _, cmd := range cmds {
+		if stand, ok := cmd.(unit.Stand); ok && stand.UnitID == id && !stand.Hold {
+			return true
+		}
+	}
+	return false
+}
+
 func TestCrossCutIsPerpendicularEqualLengthAndCentered(t *testing.T) {
 	a, b := point{-100, 0}, point{100, 0}
 	plan, ok := planCrossKnife(unit.HexField(), a, b)

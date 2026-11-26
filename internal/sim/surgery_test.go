@@ -189,3 +189,41 @@ func TestObserverReplaysSurgeryScalpelWithoutPrivatePlan(t *testing.T) {
 	}
 	t.Fatal("observer never replayed the scalpel")
 }
+
+func TestSurgeryReleasesStandWhenScalpelIsRemoved(t *testing.T) {
+	m := NewHeadlessMatchSeeded(73)
+	m.skipProbe = true
+	m.SetSlot(0, character.KindSurgery)
+	m.SetSlot(1, character.KindDummy)
+	m.Start()
+	t.Cleanup(m.End)
+
+	removed, quiet := 0, 0
+	for tick := 0; tick < 60*20 && quiet < 15; tick++ {
+		m.Tick()
+		m.mu.Lock()
+		surgeon := fighterSlot(m, 0)
+		var knives []*unit
+		for _, u := range m.units {
+			if u != nil && !u.stopped && u.kind == character.KindScalpel && u.owner == surgeon.id {
+				knives = append(knives, u)
+			}
+		}
+		for _, knife := range knives {
+			m.removeLocked(knife)
+			removed++
+		}
+		if removed > 0 && !surgeon.stand {
+			quiet++
+		} else {
+			quiet = 0
+		}
+		m.mu.Unlock()
+	}
+	if removed == 0 {
+		t.Fatal("scalpel never launched")
+	}
+	if quiet < 15 {
+		t.Fatal("surgeon stayed standing after the scalpel was removed")
+	}
+}
