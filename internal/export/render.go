@@ -25,11 +25,11 @@ type chromeProc struct {
 }
 
 func (m *Manager) run(j *Job) {
+	defer m.finish(j)
 	defer j.cancel()
 	pageURL := m.baseURL + "/?export=" + j.ID
 	if err := m.render(j, pageURL); err != nil {
 		j.fail(err)
-		return
 	}
 }
 

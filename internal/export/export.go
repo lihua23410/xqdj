@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 	"xqdj/internal/replay"
@@ -27,6 +29,12 @@ const (
 	holdStart   = 60  // 首帧静止
 	holdEnd     = 300 // 胜者定格：0.6 秒淡入 + 4.4 秒静止
 	fps         = 60
+)
+
+// 终态还要留一会儿给页面读错误；成片等下载，超时后同样收掉，避免没人来取就一直占着。
+var (
+	exportStatusKeep = 2 * time.Minute
+	exportFileKeep   = 15 * time.Minute
 )
 
 var errNoFrames = errors.New("这一场还没有可导出的帧")
@@ -56,6 +64,8 @@ type Job struct {
 	file          string
 	cancel        context.CancelFunc
 	ctx           context.Context
+	dropNow       chan struct{}
+	dropOnce      sync.Once
 }
 
 func NewManager(baseURL string, recording func() replay.Recording) *Manager {
@@ -200,6 +210,7 @@ func (m *Manager) handleStart(w http.ResponseWriter, r *http.Request) {
 		dir:           dir,
 		ctx:           ctx,
 		cancel:        cancel,
+		dropNow:       make(chan struct{}),
 	}
 	m.mu.Lock()
 	m.jobs[id] = j
@@ -231,9 +242,12 @@ func (m *Manager) handleFrames(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	j.mu.Lock()
+	frames := j.Frames
+	j.mu.Unlock()
 	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	for _, f := range j.Frames {
+	for _, f := range frames {
 		if _, err := w.Write(f); err != nil {
 			return
 		}
@@ -271,8 +285,26 @@ func (m *Manager) handleFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "还没导出完", http.StatusConflict)
 		return
 	}
+	f, err := os.Open(file)
+	if err != nil {
+		http.Error(w, "成片不在了", http.StatusNotFound)
+		return
+	}
+	st, err := f.Stat()
+	if err != nil {
+		f.Close()
+		http.Error(w, "成片不在了", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "video/mp4")
+	w.Header().Set("Content-Length", strconv.FormatInt(st.Size(), 10))
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="xqdj-%s.mp4"`, j.ID))
-	http.ServeFile(w, r, file)
+	n, err := io.Copy(w, f)
+	f.Close()
+	if err != nil || n != st.Size() {
+		return
+	}
+	m.removeJob(j)
 }
 
 func (j *Job) snapshot() map[string]any {
@@ -365,11 +397,106 @@ func (m *Manager) handleMeta(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	j.mu.Lock()
+	initial, presentations, tl := j.Initial, j.Presentations, j.Timeline
+	j.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(struct {
 		Initial       json.RawMessage       `json:"initial,omitempty"`
 		Presentations []replay.Presentation `json:"presentations"`
 		Timeline      timeline              `json:"timeline"`
-	}{j.Initial, j.Presentations, j.Timeline})
+	}{initial, presentations, tl})
+}
+
+// finish 在渲染协程退出时调用。帧数据此刻不再被导出页读取，先放开；
+// 失败和取消立刻删掉临时目录，成片则保留到下载或超时。
+func (m *Manager) finish(j *Job) {
+	j.releasePayload()
+	j.mu.Lock()
+	phase, dir, file := j.phase, j.dir, j.file
+	j.mu.Unlock()
+	if phase != "done" {
+		if dir != "" {
+			_ = os.RemoveAll(dir)
+			j.mu.Lock()
+			if j.dir == dir {
+				j.dir = ""
+				j.file = ""
+			}
+			j.mu.Unlock()
+		}
+		m.armDrop(j, exportStatusKeep)
+		return
+	}
+	if dir != "" && file != "" {
+		removeIntermediates(dir, file)
+	}
+	m.armDrop(j, exportFileKeep)
+}
+
+func (j *Job) releasePayload() {
+	j.mu.Lock()
+	j.Frames = nil
+	j.Initial = nil
+	j.Presentations = nil
+	j.mu.Unlock()
+}
+
+func removeIntermediates(dir, keep string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	base := filepath.Base(keep)
+	for _, e := range entries {
+		if e.Name() == base {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
+	}
+}
+
+func (m *Manager) armDrop(j *Job, after time.Duration) {
+	j.mu.Lock()
+	if j.dropNow == nil {
+		j.dropNow = make(chan struct{})
+	}
+	ch := j.dropNow
+	j.mu.Unlock()
+	go func() {
+		timer := time.NewTimer(after)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ch:
+		}
+		m.removeJob(j)
+	}()
+}
+
+func (m *Manager) removeJob(j *Job) {
+	j.dropOnce.Do(func() {
+		j.mu.Lock()
+		if j.dropNow != nil {
+			close(j.dropNow)
+		}
+		j.mu.Unlock()
+	})
+	j.mu.Lock()
+	dir := j.dir
+	j.dir = ""
+	j.file = ""
+	j.Frames = nil
+	j.Initial = nil
+	j.Presentations = nil
+	j.mu.Unlock()
+	if dir != "" {
+		_ = os.RemoveAll(dir)
+	}
+	m.mu.Lock()
+	if m.jobs[j.ID] == j {
+		delete(m.jobs, j.ID)
+	}
+	m.mu.Unlock()
 }
