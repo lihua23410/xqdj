@@ -576,6 +576,129 @@ func TestTouchDuringHowlDoesNotDouble(t *testing.T) {
 	}
 }
 
+func TestAllyMinionAndTeammateAdvancePhase(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	w := bootedWolf()
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+	moon := moonSnap(1)
+	minion := unit.Snapshot{ID: 3, Role: unit.RoleMinion, Mortal: true, Slot: 0, X: 8, Y: 0, Radius: 14}
+	w.Handle(ctx, unit.Sense{Time: 1, Self: selfAt(120, 0), Nearby: []unit.Snapshot{moon, minion}})
+	if got := lastPhase(drain(out)); got != 1 {
+		t.Fatalf("ally minion phase=%v", got)
+	}
+
+	mate := unit.Snapshot{ID: 4, Role: unit.RoleFighter, Slot: 0, X: 8, Y: 0, Radius: 18}
+	w.Handle(ctx, unit.Sense{Time: 1.1, Self: selfAt(120, 0), Nearby: []unit.Snapshot{moon, minion, mate}})
+	if got := lastPhase(drain(out)); got != 2 {
+		t.Fatalf("teammate phase=%v", got)
+	}
+
+	ghost := unit.Snapshot{ID: 5, Role: unit.RoleMinion, Mortal: true, Nonsolid: true, Slot: 0, X: 8, Y: 0, Radius: 14}
+	clone := unit.Snapshot{ID: 6, Role: unit.RoleClone, Slot: 0, X: 8, Y: 0, Radius: 18}
+	w.Handle(ctx, unit.Sense{Time: 1.2, Self: selfAt(120, 0), Nearby: []unit.Snapshot{moon, minion, mate, ghost, clone}})
+	if cmds := drain(out); hasPhase(cmds) {
+		t.Fatalf("nonsolid minion and clone should not count: %v", cmds)
+	}
+}
+
+func TestBiteEndRestartsDryTimer(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := dashingWolf()
+	w.phaseAt = 0
+	w.biteUntil = 8
+	w.slot = 0
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+
+	w.Handle(ctx, unit.WallHit{Time: 8.3, NX: 1, NY: 0})
+	if w.biting() || w.phase != 0 || abs(w.phaseAt-8.3) > 1e-9 {
+		t.Fatalf("phaseAt=%v biting=%v phase=%d", w.phaseAt, w.biting(), w.phase)
+	}
+	_ = drain(out)
+
+	w.Handle(ctx, unit.Sense{Time: 10, Self: selfAt(0, 0)})
+	if w.howling {
+		t.Fatal("frenzy end must restart the 10s dry timer")
+	}
+	_ = drain(out)
+
+	w.Handle(ctx, unit.Sense{Time: 18.2, Self: selfAt(0, 0)})
+	if w.howling {
+		t.Fatal("not yet 10s after frenzy")
+	}
+	_ = drain(out)
+
+	w.Handle(ctx, unit.Sense{Time: 18.3, Self: selfAt(0, 0)})
+	if !w.howling {
+		t.Fatal("howl 10s after frenzy end")
+	}
+}
+
+func TestWallAndBiteSameTickCounts(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := dashingWolf()
+	w.biteArc = true
+	w.dashArmed = true
+	w.biteDmg = wolfBiteBase
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+
+	w.Handle(ctx, unit.WallHit{Time: 3, NX: 1, NY: 0})
+	_ = drain(out)
+	// 命中自毁在 Sense 之前就被收掉，本拍附近没有撕咬弧。
+	w.Handle(ctx, unit.Sense{Time: 3 + 1.0/60, Self: selfAt(40, 0)})
+	if w.biteHits != 1 || w.biteDmg != wolfBiteBase {
+		t.Fatalf("same-tick hit hits=%d dmg=%v", w.biteHits, w.biteDmg)
+	}
+	_ = drain(out)
+
+	w.Handle(ctx, unit.Sense{Time: 3.1, Self: selfAt(40, 0)})
+	if w.biteHits != 1 {
+		t.Fatalf("cut counted again hits=%d", w.biteHits)
+	}
+}
+
+func TestWallCutWithoutHitDoesNotCount(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := dashingWolf()
+	w.biteArc = true
+	w.dashArmed = true
+	w.biteDmg = wolfBiteBase
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+
+	w.Handle(ctx, unit.WallHit{Time: 3, NX: 1, NY: 0})
+	_ = drain(out)
+	w.Handle(ctx, unit.Sense{Time: 3 + 1.0/60, Self: selfAt(40, 0), Nearby: []unit.Snapshot{biteArcSnap()}})
+	if w.biteHits != 0 {
+		t.Fatalf("arc still up hits=%d", w.biteHits)
+	}
+	_ = drain(out)
+
+	w.Handle(ctx, unit.Sense{Time: 3.1, Self: selfAt(40, 0)})
+	if w.biteHits != 0 {
+		t.Fatalf("own cut counted hits=%d", w.biteHits)
+	}
+}
+
+func TestDashEndSameSenseKeepsTheHit(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	w := dashingWolf()
+	w.biteArc = true
+	w.dashArmed = true
+	w.biteDmg = wolfBiteBase
+	w.dashX, w.dashY = 0, 0
+	ctx := unit.Context{ID: 1, Kind: KindWolf, Out: out}
+
+	w.Handle(ctx, unit.Sense{Time: 2, Self: selfAt(wolfDashLen, 0)})
+	if w.biteHits != 1 || w.bite != biteLock {
+		t.Fatalf("hits=%d bite=%d", w.biteHits, w.bite)
+	}
+	_ = drain(out)
+
+	w.Handle(ctx, unit.Sense{Time: 2.05, Self: selfAt(wolfDashLen, 0)})
+	if w.biteHits != 1 {
+		t.Fatalf("end cut counted hits=%d", w.biteHits)
+	}
+}
+
 func TestNoHowlDuringBite(t *testing.T) {
 	out := make(chan unit.Cmd, 32)
 	w := dashingWolf()

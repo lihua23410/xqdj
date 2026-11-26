@@ -126,6 +126,8 @@ type 狼人 struct {
 	biteArc    bool
 	dashArmed  bool
 	biteCut    bool
+	biteLate   bool // 撞墙收冲刺先于本拍 Sense
+	biteLateAt float64
 	lockUntil  float64
 	dashLeft   float64
 	dashX      float64
@@ -216,7 +218,7 @@ func (w *狼人) checkTouches(ctx unit.Context, s unit.Sense) {
 		}
 		for i := range s.Nearby {
 			o := &s.Nearby[i]
-			if !unit.Hittable(*o, s.Self.Slot) {
+			if !phaseTouch(*o) {
 				continue
 			}
 			if touching(*o, *moon) {
@@ -326,6 +328,9 @@ func (w *狼人) onWall(ctx unit.Context, e unit.WallHit) {
 	if w.bite != biteDash {
 		return
 	}
+	// 撞墙比同拍 Sense 先到。先记下，别让 biteCut 把已经命中的撕咬弧算成自己摘的。
+	w.biteLate = true
+	w.biteLateAt = e.Time
 	w.endSegment(ctx, e.Time, true, e.NX, e.NY)
 }
 
@@ -334,15 +339,16 @@ func (w *狼人) endSegment(ctx unit.Context, t float64, wall bool, nx, ny float
 		return
 	}
 	if t+1e-9 >= w.biteUntil {
-		w.finishBite(ctx, wall, nx, ny)
+		w.finishBite(ctx, t, wall, nx, ny)
 		return
 	}
 	w.beginLock(ctx, t)
 }
 
-func (w *狼人) finishBite(ctx unit.Context, wall bool, nx, ny float64) {
+func (w *狼人) finishBite(ctx unit.Context, t float64, wall bool, nx, ny float64) {
 	w.bite = biteNone
 	w.phase = 0
+	w.phaseAt = t
 	w.dropBiteArc(ctx)
 	w.emitPhase(ctx)
 	w.holdPass(ctx, false)
@@ -376,6 +382,14 @@ func (w *狼人) landBite() {
 
 func (w *狼人) noteBite(id uint64, s unit.Sense) {
 	has := unit.HasOwned(s, id, KindWolfBite)
+	if w.biteLate {
+		late := w.biteLateAt
+		w.biteLate = false
+		// 场上一拍 1/60s，撞墙时刻比同拍 Sense 早一拍。弧已经不在就是命中自毁。
+		if w.biteArc && !has && s.Time <= late+1.0/60+1e-9 {
+			w.landBite()
+		}
+	}
 	if w.biteCut {
 		if !has {
 			w.biteCut = false
@@ -423,7 +437,7 @@ func (w *狼人) tickBite(ctx unit.Context, s unit.Sense) {
 		w.updateAim(s)
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 		if s.Time+1e-9 >= w.biteUntil {
-			w.finishBite(ctx, false, 0, 0)
+			w.finishBite(ctx, s.Time, false, 0, 0)
 			return
 		}
 		if s.Time+1e-9 >= w.lockUntil {
@@ -545,6 +559,14 @@ func enemyOf(s unit.Sense) *unit.Snapshot {
 
 func touching(a, b unit.Snapshot) bool {
 	return math.Hypot(a.X-b.X, a.Y-b.Y) <= a.Radius+b.Radius+1e-6
+}
+
+// phaseTouch 实心战斗机或活随从。同槽队友和己方活随从也算；Hittable 会把整槽丢掉。
+func phaseTouch(o unit.Snapshot) bool {
+	if o.Nonsolid {
+		return false
+	}
+	return o.Role == unit.RoleFighter || o.Mortal
 }
 
 func (w *狼人) cruiseAlongAim() (float64, float64) {
