@@ -60,8 +60,13 @@ func (s *spectator) write(h *hub) {
 
 func (h *hub) remove(c *websocket.Conn) {
 	h.mu.Lock()
+	defer h.mu.Unlock()
+	s, ok := h.clients[c]
+	if !ok {
+		return
+	}
 	delete(h.clients, c)
-	h.mu.Unlock()
+	close(s.send)
 }
 
 func offer(ch chan []byte, msg []byte) {
@@ -80,6 +85,11 @@ func offer(ch chan []byte, msg []byte) {
 }
 
 func (h *hub) send(s *spectator, msg []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, ok := h.clients[s.conn]; !ok {
+		return
+	}
 	offer(s.send, msg)
 }
 
