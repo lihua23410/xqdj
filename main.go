@@ -23,10 +23,16 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// outbound 是写给一个观众的一条消息。keep 为真时是战报：后面的快照不能把它挤掉。
+type outbound struct {
+	body []byte
+	keep bool
+}
+
 // spectator 单独写连接。广播只保留最新一帧，慢的页面不会堵住比赛和其他观众。
 type spectator struct {
 	conn *websocket.Conn
-	send chan []byte
+	send chan outbound
 }
 
 type hub struct {
@@ -39,7 +45,7 @@ func newHub() *hub {
 }
 
 func (h *hub) add(c *websocket.Conn) *spectator {
-	s := &spectator{conn: c, send: make(chan []byte, 1)}
+	s := &spectator{conn: c, send: make(chan outbound, 1)}
 	h.mu.Lock()
 	h.clients[c] = s
 	h.mu.Unlock()
@@ -50,7 +56,7 @@ func (h *hub) add(c *websocket.Conn) *spectator {
 func (s *spectator) write(h *hub) {
 	for msg := range s.send {
 		_ = s.conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-		if err := s.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+		if err := s.conn.WriteMessage(websocket.TextMessage, msg.body); err != nil {
 			_ = s.conn.Close()
 			h.remove(s.conn)
 			return
@@ -69,22 +75,27 @@ func (h *hub) remove(c *websocket.Conn) {
 	close(s.send)
 }
 
-func offer(ch chan []byte, msg []byte) {
+func offer(ch chan outbound, msg outbound) {
+	select {
+	case ch <- msg:
+		return
+	default:
+	}
+	select {
+	case old := <-ch:
+		if old.keep && !msg.keep {
+			ch <- old
+			return
+		}
+	default:
+	}
 	select {
 	case ch <- msg:
 	default:
-		select {
-		case <-ch:
-		default:
-		}
-		select {
-		case ch <- msg:
-		default:
-		}
 	}
 }
 
-func (h *hub) send(s *spectator, msg []byte) {
+func (h *hub) enqueue(s *spectator, msg outbound) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if _, ok := h.clients[s.conn]; !ok {
@@ -93,11 +104,20 @@ func (h *hub) send(s *spectator, msg []byte) {
 	offer(s.send, msg)
 }
 
+func (h *hub) send(s *spectator, msg []byte) {
+	h.enqueue(s, outbound{body: msg})
+}
+
+func (h *hub) sendKept(s *spectator, msg []byte) {
+	h.enqueue(s, outbound{body: msg, keep: true})
+}
+
 func (h *hub) broadcast(msg []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	frame := outbound{body: msg}
 	for _, s := range h.clients {
-		offer(s.send, msg)
+		offer(s.send, frame)
 	}
 }
 
@@ -204,8 +224,9 @@ func main() {
 					Trace string `json:"trace"`
 				}{Type: "log", Recap: recap, Trace: trace})
 				if err == nil {
-					h.send(s, b)
+					h.sendKept(s, b)
 				}
+				continue
 			}
 			h.broadcast(match.SnapshotJSON())
 		}
