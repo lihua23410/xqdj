@@ -306,6 +306,9 @@ func (h *勇者) pickup(ctx unit.Context, s unit.Sense) {
 		default:
 			continue
 		}
+		if o.OwnerID != ctx.ID {
+			continue
+		}
 		if *flag {
 			continue
 		}
@@ -511,11 +514,12 @@ func (h *勇者) tickSaint(ctx unit.Context, s unit.Sense) {
 	}
 }
 
-// tickSlimes 定期在随机可行走点冒一只史莱姆，场上最多 slimeMax 只。
+// tickSlimes 定期在随机可行走点冒一只史莱姆，自己的最多 slimeMax 只。
+// 只数自己名下的：镜像局里对方的史莱姆也在视野里，算进去两边就共用这 4 只。
 func (h *勇者) tickSlimes(ctx unit.Context, s unit.Sense) {
 	alive := 0
 	for i := range s.Nearby {
-		if s.Nearby[i].Kind == KindSlime {
+		if s.Nearby[i].Kind == KindSlime && s.Nearby[i].OwnerID == ctx.ID {
 			alive++
 		}
 	}

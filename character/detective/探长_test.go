@@ -423,6 +423,66 @@ func TestObsessionBulletIsTwenty(t *testing.T) {
 	}
 }
 
+func TestStaggeredTrialsDoNotRestoreImmunePool(t *testing.T) {
+	st := &unit.MatchState{}
+	ctxA, outA := pipe(st, 1)
+	ctxB, outB := pipe(st, 2)
+	foe := unit.Snapshot{ID: 5, X: 80, Radius: 18, Role: unit.RoleFighter, Slot: 1, Absorb: 12}
+	selfA := unit.Snapshot{ID: 1, Radius: 18, Role: unit.RoleFighter, Slot: 0}
+	selfB := unit.Snapshot{ID: 2, Radius: 18, Role: unit.RoleFighter, Slot: 0}
+	a := &探长{ready: true, slot: 0, touching: map[contact]struct{}{}, born: ctxA}
+	b := &探长{ready: true, slot: 0, touching: map[contact]struct{}{}, born: ctxB}
+	senseA := unit.Sense{Time: 0, Self: selfA, Nearby: []unit.Snapshot{foe}}
+	a.phase = phaseTrial
+	a.trialUntil = 3
+	a.holdTrial(ctxA, senseA)
+	if a.absorbSaved[5] != 12 || !hasAbsorb(drain(outA), 5, immunePool) {
+		t.Fatalf("先审判应记下原护盾并罩上免疫，saved=%v", a.absorbSaved)
+	}
+
+	foe.Absorb = immunePool
+	senseB := unit.Sense{Time: 1.0 / 60, Self: selfB, Nearby: []unit.Snapshot{foe}}
+	b.phase = phaseTrial
+	b.trialUntil = 3 + 1.0/60
+	b.holdTrial(ctxB, senseB)
+	if _, ok := b.absorbSaved[5]; ok || hasAbsorb(drain(outB), 5, immunePool) {
+		t.Fatalf("后审判不该把 1e9 免疫盾记成原护盾，saved=%v", b.absorbSaved)
+	}
+
+	foe.Absorb = 12
+	senseB.Time = 3
+	senseB.Nearby = []unit.Snapshot{foe}
+	b.holdTrial(ctxB, senseB)
+	if b.absorbSaved[5] != 12 {
+		t.Fatalf("免疫盾撤掉后应记下真正的护盾，saved=%v", b.absorbSaved[5])
+	}
+	drain(outB)
+	b.finishTrial(ctxB, senseB)
+	if got, ok := lastAbsorb(drain(outB), 5); !ok || got != 12 {
+		t.Fatalf("结束后应恢复 12，实际 %v", got)
+	}
+}
+
+func hasAbsorb(cmds []unit.Cmd, id uint64, amount float64) bool {
+	for _, c := range cmds {
+		if s, ok := c.(unit.SetAbsorb); ok && s.UnitID == id && s.Amount == amount {
+			return true
+		}
+	}
+	return false
+}
+
+func lastAbsorb(cmds []unit.Cmd, id uint64) (float64, bool) {
+	var got float64
+	ok := false
+	for _, c := range cmds {
+		if s, okc := c.(unit.SetAbsorb); okc && s.UnitID == id {
+			got, ok = s.Amount, true
+		}
+	}
+	return got, ok
+}
+
 func pipe(st *unit.MatchState, id uint64) (unit.Context, chan unit.Cmd) {
 	out := make(chan unit.Cmd, 128)
 	return unit.Context{State: st, ID: id, Kind: KindDetective, Out: out, Stream: 3}, out

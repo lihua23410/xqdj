@@ -402,6 +402,11 @@ func (a *探长) holdTrial(ctx unit.Context, s unit.Sense) {
 		if _, ok := a.absorbSaved[o.ID]; ok {
 			continue
 		}
+		// 同队另一个探长先开了审判，这一拍身上的是免疫盾不是原护盾。
+		// 记下来的话，后结束的那位会把它永久写回去。
+		if o.Absorb == immunePool {
+			continue
+		}
 		a.absorbSaved[o.ID] = o.Absorb
 		ctx.Out <- unit.SetAbsorb{UnitID: o.ID, Amount: immunePool}
 	}

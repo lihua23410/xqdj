@@ -392,7 +392,9 @@ func (b *泡泡) onCollision(ctx unit.Context, e unit.Collision) {
 		return
 	}
 	if e.Other.Kind == KindBubble {
-		b.merge(ctx, e.Other, e.Time)
+		if e.Other.Slot == b.slot {
+			b.merge(ctx, e.Other, e.Time)
+		}
 		return
 	}
 	switch e.Other.Role {
@@ -460,7 +462,8 @@ func bubbleMoveSpeed(radius float64, ammo int) float64 {
 }
 
 func (b *泡泡) merge(ctx unit.Context, other unit.Snapshot, now float64) {
-	if b.radius+0.25 < other.Radius || (math.Abs(b.radius-other.Radius) < 0.25 && ctx.ID < other.ID) {
+	// 对方至少大 0.25 就由它来吞。差恰好 0.25 时两边都用 <，会互相 Despawn。
+	if b.radius+0.25 <= other.Radius || (math.Abs(b.radius-other.Radius) < 0.25 && ctx.ID < other.ID) {
 		return
 	}
 	book, ok := readBubbleBook(ctx, other.ID)
@@ -517,10 +520,12 @@ func (b *泡泡) pop(ctx unit.Context, other unit.Snapshot) {
 		if !unit.Hittable(*o, b.slot) {
 			continue
 		}
-		if d := math.Hypot(o.X-b.x, o.Y-b.y); d < best {
-			best = d
-			aimX, aimY = (o.X-b.x)/d, (o.Y-b.y)/d
+		dist := math.Hypot(o.X-b.x, o.Y-b.y)
+		if dist < 1e-6 || dist >= best {
+			continue
 		}
+		best = dist
+		aimX, aimY = (o.X-b.x)/dist, (o.Y-b.y)/dist
 	}
 	for i, a := range b.ammo {
 		bx, by := a.VX, a.VY
