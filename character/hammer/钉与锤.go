@@ -132,14 +132,15 @@ func init() {
 		Kind:    KindDoll,
 		Role:    unit.RoleMinion,
 		Radius:  dollRadius,
-		MaxHP:   100, // 占位，生成后由 SetHP 覆盖
+		MaxHP:   100, // 占位。人偶第一拍用出生血量盖掉，不能等主人看见再改
 		Speed:   0,
 		Vision:  0,
 		Fighter: false,
 		Mortal:  true,
 		Look:    unit.Look{Color: dollColor, Overlay: true, FX: []string{"hammer-doll"}},
-	}, func(unit.SpawnInfo) unit.Actor {
-		return &人偶{}
+	}, func(info unit.SpawnInfo) unit.Actor {
+		job, _ := info.Data.(dollBirth)
+		return &人偶{hp: job.hp}
 	})
 }
 
@@ -160,9 +161,7 @@ type 钉与锤 struct {
 	started       bool
 
 	// 人偶
-	dollsSpawned  bool
-	pendingDollHP float64
-	dollHPs       map[uint64]float64
+	dollsSpawned bool
 }
 
 func (h *钉与锤) Handle(ctx unit.Context, ev unit.Event) {
@@ -195,7 +194,6 @@ func (h *钉与锤) Handle(ctx unit.Context, ev unit.Event) {
 		h.tryFireNail(ctx, s)
 	}
 	h.trySpawnDolls(ctx, s)
-	h.trackDolls(ctx, s)
 	h.settleDolls(ctx, s)
 }
 
@@ -353,17 +351,14 @@ func (h *钉与锤) trySpawnDolls(ctx unit.Context, s unit.Sense) {
 		return
 	}
 	h.dollsSpawned = true
-	if h.dollHPs == nil {
-		h.dollHPs = map[uint64]float64{}
-	}
 	dollHP := enemyHP / 2
 	if dollHP < 1 {
 		dollHP = 1
 	}
-	h.pendingDollHP = dollHP
 	for _, pos := range dollPositions {
 		ctx.Out <- ctx.Born(unit.Spawn{
 			Kind:    KindDoll,
+			Data:    dollBirth{hp: dollHP},
 			X:       pos[0],
 			Y:       pos[1],
 			OwnerID: ctx.ID,
@@ -372,45 +367,6 @@ func (h *钉与锤) trySpawnDolls(ctx unit.Context, s unit.Sense) {
 		ctx.Out <- unit.FX{
 			Name: "doll-spawn", Kind: ctx.Kind,
 			X: pos[0], Y: pos[1], Slot: s.Self.Slot,
-		}
-	}
-}
-
-// trackDolls：给新生人偶设 HP。打在人偶上的转伤由本体在感知里发出。
-func (h *钉与锤) trackDolls(ctx unit.Context, s unit.Sense) {
-	if h.dollHPs == nil {
-		h.dollHPs = map[uint64]float64{}
-	}
-
-	if h.pendingDollHP > 0 {
-		for i := range s.Nearby {
-			o := &s.Nearby[i]
-			if o.OwnerID == ctx.ID && o.Kind == KindDoll {
-				if _, exists := h.dollHPs[o.ID]; !exists {
-					ctx.Out <- unit.SetHP{
-						UnitID: o.ID,
-						HP:     h.pendingDollHP,
-						MaxHP:  h.pendingDollHP,
-					}
-					h.dollHPs[o.ID] = h.pendingDollHP
-				}
-			}
-		}
-		if len(h.dollHPs) >= 3 {
-			h.pendingDollHP = 0
-		}
-	}
-
-	alive := map[uint64]bool{}
-	for i := range s.Nearby {
-		o := &s.Nearby[i]
-		if o.OwnerID == ctx.ID && o.Kind == KindDoll {
-			alive[o.ID] = true
-		}
-	}
-	for id := range h.dollHPs {
-		if !alive[id] {
-			delete(h.dollHPs, id)
 		}
 	}
 }
@@ -670,12 +626,21 @@ func (n *钉) markStruck(id uint64) {
 
 // ========== 替身人偶 ==========
 
+type dollBirth struct {
+	hp float64
+}
+
 type 人偶 struct {
 	booted bool
 	dieAt  float64
+	hp     float64 // 出生血量，敌方当时血量的一半
 }
 
 func (d *人偶) Handle(ctx unit.Context, ev unit.Event) {
+	// 两段式伤害必须确认才会扣血。只听感知的话提议一直挂在 pendingDmg，人偶不掉血，转伤也不封顶。
+	if unit.AcceptHit(ctx, ev) {
+		return
+	}
 	s, ok := ev.(unit.Sense)
 	if !ok {
 		return
@@ -684,6 +649,11 @@ func (d *人偶) Handle(ctx unit.Context, ev unit.Event) {
 		d.booted = true
 		d.dieAt = s.Time + dollLife
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
+		// 人偶间距约 242.5，主人视野只有 200。血量若等主人看见再写，出视野就会丢记录，下次进来被设回满。
+		// 所以只在人偶自己的第一拍写一次。
+		if d.hp > 0 {
+			ctx.Out <- unit.SetHP{UnitID: ctx.ID, HP: d.hp, MaxHP: d.hp}
+		}
 	}
 	if s.Time+1e-9 >= d.dieAt {
 		ctx.Out <- unit.Despawn{UnitID: ctx.ID}

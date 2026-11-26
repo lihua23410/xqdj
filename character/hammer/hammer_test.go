@@ -172,6 +172,98 @@ func TestDollHoldsPassAndExpires(t *testing.T) {
 	}
 }
 
+func TestDollConfirmsHit(t *testing.T) {
+	out := make(chan unit.Cmd, 4)
+	d := &人偶{}
+	ctx := unit.Context{ID: 10, Kind: KindDoll, Out: out}
+	d.Handle(ctx, unit.IncomingDamage{Token: 7, From: 3, Amount: 12})
+	cmds := drain(out)
+	if len(cmds) != 1 {
+		t.Fatalf("confirm=%v", cmds)
+	}
+	c, ok := cmds[0].(unit.ConfirmDamage)
+	if !ok || c.Token != 7 || c.UnitID != 10 || c.Amount != 12 {
+		t.Fatalf("confirm=%v", cmds)
+	}
+}
+
+func TestDollSetsHPOnce(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	d := unit.NewActor(KindDoll, unit.SpawnInfo{Data: dollBirth{hp: 40}}).(*人偶)
+	ctx := unit.Context{ID: 10, Kind: KindDoll, Out: out}
+	self := unit.Snapshot{ID: 10, Kind: KindDoll, Role: unit.RoleMinion, Slot: 1, Mortal: true, Radius: dollRadius, HP: 100, MaxHP: 100}
+	d.Handle(ctx, unit.Sense{Time: 30, Self: self})
+	boot := drain(out)
+	hp := lastSetHP(boot, 10)
+	if hp == nil || hp.HP != 40 || hp.MaxHP != 40 {
+		t.Fatalf("birth hp=%v cmds=%v", hp, boot)
+	}
+	if p := lastPass(boot); p == nil || p.UnitID != 10 || !p.Hold {
+		t.Fatalf("doll should hold Pass: %v", boot)
+	}
+
+	hurt := self
+	hurt.HP, hurt.MaxHP = 18, 40
+	d.Handle(ctx, unit.Sense{Time: 31, Self: hurt})
+	if lastSetHP(drain(out), 10) != nil {
+		t.Fatal("later sense must not refill doll")
+	}
+	d.Handle(ctx, unit.IncomingDamage{Token: 1, Amount: 7})
+	confirm := drain(out)
+	if c, ok := confirm[0].(unit.ConfirmDamage); !ok || c.Amount != 7 || c.UnitID != 10 {
+		t.Fatalf("confirm=%v", confirm)
+	}
+	hurt.HP = 11
+	d.Handle(ctx, unit.Sense{Time: 32, Self: hurt})
+	if lastSetHP(drain(out), 10) != nil {
+		t.Fatal("damage must stick; sense must not refill")
+	}
+}
+
+func TestDollHPIgnoresVisionGaps(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	h := &钉与锤{nailReadyAt: 999, ritualReadyAt: 999}
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 1, Kind: KindHammer, Out: out}
+	enemy := foe(0, 0)
+	enemy.HP = 80
+	h.Handle(ctx, unit.Sense{Time: dollSpawnTime, Self: me(0, 0), Nearby: []unit.Snapshot{enemy}})
+	cmds := drain(out)
+	var births []unit.Spawn
+	for _, c := range cmds {
+		if sp, ok := c.(unit.Spawn); ok && sp.Kind == KindDoll {
+			births = append(births, sp)
+		}
+	}
+	if len(births) != 3 {
+		t.Fatalf("want 3 dolls, got %d cmds=%v", len(births), cmds)
+	}
+	for _, sp := range births {
+		job, ok := sp.Data.(dollBirth)
+		if !ok || job.hp != 40 {
+			t.Fatalf("birth data=%#v", sp.Data)
+		}
+	}
+	if lastSetHP(cmds, 0) != nil {
+		t.Fatalf("owner must not set hp at spawn: %v", cmds)
+	}
+
+	doll := unit.Snapshot{
+		ID: 10, Kind: KindDoll, Role: unit.RoleMinion, Slot: 1, Mortal: true,
+		OwnerID: 1, HP: 40, MaxHP: 40, Radius: dollRadius, X: 140,
+	}
+	h.Handle(ctx, unit.Sense{Time: 31, Self: me(0, 0), Nearby: []unit.Snapshot{enemy, doll}})
+	if hasSetHP(drain(out)) {
+		t.Fatal("seeing a doll must not rewrite its hp")
+	}
+	h.Handle(ctx, unit.Sense{Time: 32, Self: me(400, 0), Nearby: []unit.Snapshot{enemy}})
+	drain(out)
+	doll.HP = 12
+	h.Handle(ctx, unit.Sense{Time: 33, Self: me(140, 0), Nearby: []unit.Snapshot{enemy, doll}})
+	if hasSetHP(drain(out)) {
+		t.Fatal("re-entering vision must not refill doll")
+	}
+}
+
 func TestArcCopiesDollHitOncePerTouch(t *testing.T) {
 	matchState := &unit.MatchState{}
 
@@ -768,6 +860,26 @@ func countSpawn(cmds []unit.Cmd, kind string) int {
 		}
 	}
 	return n
+}
+
+func lastSetHP(cmds []unit.Cmd, id uint64) *unit.SetHP {
+	var hp *unit.SetHP
+	for _, c := range cmds {
+		if v, ok := c.(unit.SetHP); ok && (id == 0 || v.UnitID == id) {
+			cp := v
+			hp = &cp
+		}
+	}
+	return hp
+}
+
+func hasSetHP(cmds []unit.Cmd) bool {
+	for _, c := range cmds {
+		if _, ok := c.(unit.SetHP); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func lastPass(cmds []unit.Cmd) *unit.Pass {
