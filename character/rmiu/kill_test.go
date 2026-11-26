@@ -140,6 +140,30 @@ func TestLowHPSpeedNotInherited(t *testing.T) {
 	}
 }
 
+func TestLaterBodyKeepsKillTable(t *testing.T) {
+	matchState := &unit.MatchState{}
+	resetMiuKillState(matchState)
+	shared := stateFor(matchState)
+	shared.miuMu.Lock()
+	shared.miuBonus[10] = killBonusPer
+	shared.miuLastAttacker[2] = 10
+	shared.miuClaimed[2] = true
+	shared.miuMu.Unlock()
+
+	out := make(chan unit.Cmd, 16)
+	r := &R缪{}
+	ctx := unit.Context{State: matchState, ID: 7, Kind: KindRMiu, Stream: 3, Out: out}
+	r.Handle(ctx, unit.Sense{Time: 30, Self: bodySelf(0, 0, miuHP, 0, 0)})
+	_ = drain(out)
+
+	shared.miuMu.Lock()
+	bonus, attacker, claimed := shared.miuBonus[10], shared.miuLastAttacker[2], shared.miuClaimed[2]
+	shared.miuMu.Unlock()
+	if bonus != killBonusPer || attacker != 10 || !claimed {
+		t.Fatalf("later body cleared the table: bonus=%v attacker=%d claimed=%v", bonus, attacker, claimed)
+	}
+}
+
 func mathAbs(v float64) float64 {
 	if v < 0 {
 		return -v

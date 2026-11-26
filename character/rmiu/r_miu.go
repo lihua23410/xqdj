@@ -293,7 +293,6 @@ func (r *R缪) Handle(ctx unit.Context, ev unit.Event) {
 	rememberSpeeds(&r.seenSp, s)
 	if !r.booted {
 		r.booted = true
-		resetMiuKillState(ctx.State)
 		r.speed = miuBaseSpeed
 		r.spawnMinions(ctx, s)
 		r.meleeReadyAt = s.Time
