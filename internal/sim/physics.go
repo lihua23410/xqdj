@@ -513,3 +513,39 @@ func closestOnOBB(p vec, a, b vec, halfW float64) vec {
 func distPointOBB(p vec, a, b vec, halfW float64) float64 {
 	return p.sub(closestOnOBB(p, a, b, halfW)).len()
 }
+
+// obbInsideExit is the shortest way out of the oriented box from a to b.
+// dir points out through the nearest face; depth is how far p sits behind it.
+// Equal distances keep the +perp side, matching a body centered in the wall.
+func obbInsideExit(p, a, b vec, halfW float64) (dir vec, depth float64) {
+	ab := b.sub(a)
+	alen := ab.len()
+	if alen < 1e-12 {
+		return vec{0, 1}, halfW
+	}
+	u := ab.norm()
+	n := perp(u)
+	rel := p.sub(a)
+	lx := rel.dot(u)
+	ly := rel.dot(n)
+	type face struct {
+		depth float64
+		dir   vec
+	}
+	faces := [...]face{
+		{halfW - ly, n},
+		{halfW + ly, n.mul(-1)},
+		{lx, u.mul(-1)},
+		{alen - lx, u},
+	}
+	best := faces[0]
+	for _, f := range faces[1:] {
+		if f.depth < best.depth {
+			best = f
+		}
+	}
+	if best.dir.len2() < 1e-12 {
+		return vec{0, 1}, halfW
+	}
+	return best.dir.norm(), best.depth
+}

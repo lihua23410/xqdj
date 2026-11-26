@@ -2561,7 +2561,7 @@ func barrierNormal(cc vec, w *barrier) vec {
 	q := closestOnOBB(cc, w.a, w.b, w.radius)
 	n := q.sub(cc)
 	if n.len2() < 1e-12 {
-		n = perp(w.b.sub(w.a))
+		n, _ = obbInsideExit(cc, w.a, w.b, w.radius)
 	}
 	if n.len2() < 1e-12 {
 		return vec{0, 1}
@@ -2974,9 +2974,11 @@ func (m *Match) pushOutOBB(u *unit, w *barrier, cc vec, cr float64) {
 	q := closestOnOBB(cc, w.a, w.b, w.radius)
 	n := cc.sub(q)
 	if n.len2() < 1e-12 {
-		n = perp(w.b.sub(w.a))
-	}
-	if n.len2() < 1e-12 {
+		out, depth := obbInsideExit(cc, w.a, w.b, w.radius)
+		if out.len2() < 1e-12 {
+			return
+		}
+		u.p = u.p.add(out.mul(depth + need))
 		return
 	}
 	u.p = u.p.add(n.norm().mul(need - d))

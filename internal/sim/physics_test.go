@@ -7,6 +7,40 @@ import (
 	_ "xqdj/character"
 )
 
+func TestPushOutOBBExitsNearFace(t *testing.T) {
+	m := NewMatch()
+	defer m.End()
+	w := &barrier{a: vec{0, 0}, b: vec{100, 0}, radius: 30, square: true, hard: true}
+	need := 18 + skin
+	u := &unit{p: vec{50, -10}, radius: 18, face: vec{1, 0}}
+	m.pushOutOBB(u, w, u.p, u.radius)
+	if math.Abs(u.p.X-50) > 1e-6 || math.Abs(u.p.Y-(-30-need)) > 1e-6 {
+		t.Fatalf("minus side pushed to %+v, want y %v", u.p, -30-need)
+	}
+	u.p = vec{50, 10}
+	m.pushOutOBB(u, w, u.p, u.radius)
+	if math.Abs(u.p.X-50) > 1e-6 || math.Abs(u.p.Y-(30+need)) > 1e-6 {
+		t.Fatalf("plus side pushed to %+v, want y %v", u.p, 30+need)
+	}
+	u.p = vec{50, -40}
+	m.pushOutOBB(u, w, u.p, u.radius)
+	if u.p.Y >= -30 {
+		t.Fatalf("outside overlap was pushed into the wall: %+v", u.p)
+	}
+}
+
+func TestBarrierNormalInsideUsesNearFace(t *testing.T) {
+	w := &barrier{a: vec{0, 0}, b: vec{100, 0}, radius: 30}
+	n := barrierNormal(vec{50, -10}, w)
+	if n.Y > -0.9 {
+		t.Fatalf("normal %+v, want -Y", n)
+	}
+	n = barrierNormal(vec{50, 10}, w)
+	if n.Y < 0.9 {
+		t.Fatalf("normal %+v, want +Y", n)
+	}
+}
+
 func TestReflectIncidentEqualsReflected(t *testing.T) {
 	n := vec{1, 0}
 	v := vec{1, 1}
