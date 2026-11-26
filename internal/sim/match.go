@@ -2230,26 +2230,42 @@ func (m *Match) nailToWallLocked(u *unit, c unitpkg.Spawn) {
 }
 
 func (m *Match) spinWallsLocked(dt float64) {
+	moved := false
 	for _, w := range m.walls {
 		w.prevA, w.prevB = w.a, w.b
-		moved := false
+		wallMoved := false
 		if w.spin != 0 {
 			w.ang += w.spin * dt
-			moved = true
+			wallMoved = true
 		}
 		if w.vx != 0 || w.vy != 0 {
 			w.pivot = w.pivot.add(vec{w.vx, w.vy}.mul(dt))
-			moved = true
+			wallMoved = true
 		}
-		if !moved {
+		if !wallMoved {
 			continue
 		}
+		moved = true
 		w.pose()
 		m.carryNailsLocked(w)
 		m.shoveWallLocked(w)
 		m.ramWallLocked(w)
 	}
 	m.slamWallsLocked()
+	// 物理步里的场边约束已经做完。运动墙这一拍还能把人挤出去，发出去之前再收回场内。
+	if moved {
+		m.constrainFieldLocked()
+	}
+}
+
+func (m *Match) constrainFieldLocked() {
+	for _, id := range m.order {
+		u := m.units[id]
+		if u == nil || !u.solid || u.passWalls || u.shell || u.attach {
+			continue
+		}
+		m.constrainOutlineLocked(u, vec{})
+	}
 }
 
 func (m *Match) flushPendingLocked() {

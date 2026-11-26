@@ -227,6 +227,59 @@ func TestSlamSweptCatchesTunnel(t *testing.T) {
 	}
 }
 
+func TestMovingWallShoveStaysInsideField(t *testing.T) {
+	for _, motion := range []string{"slide", "spin"} {
+		t.Run(motion, func(t *testing.T) {
+			m := newWallMatch(t)
+			defer m.End()
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			owner := fighterByKind(m, character.KindWaller)
+			enemy := fighterByKind(m, character.KindRanged)
+			owner.p = vec{}
+			owner.setVel(vec{})
+			nx, ny := math.Cos(math.Pi/6), math.Sin(math.Pi/6)
+			apo := m.spec.extent * math.Sqrt(3) / 2
+			d := apo - enemy.radius - 2
+			enemy.p = vec{nx * d, ny * d}
+			enemy.setVel(vec{})
+			if !m.spec.outline.Contains(enemy.p.X, enemy.p.Y, enemy.radius) {
+				t.Fatalf("fixture starts outside %+v", enemy.p)
+			}
+			halfW := 8.0
+			halfLen := 50.0
+			wallD := d + 3 - halfW
+			c := vec{nx * wallD, ny * wallD}
+			tx, ty := -ny, nx
+			m.placeWallLocked(unitpkg.PlaceWall{
+				OwnerID: owner.id, Slot: owner.slot, Kind: owner.kind,
+				X1: c.X - tx*halfLen, Y1: c.Y - ty*halfLen,
+				X2: c.X + tx*halfLen, Y2: c.Y + ty*halfLen,
+				Radius: halfW, Life: -1,
+			})
+			cmd := unitpkg.SetWallMotion{WallID: m.walls[0].id}
+			if motion == "spin" {
+				cmd.Spin = 0.45 / DT
+			} else {
+				step := 4.0
+				cmd.VX, cmd.VY = nx*step/DT, ny*step/DT
+			}
+			m.setWallMotionLocked(cmd)
+			m.spinWallsLocked(DT)
+			if !m.spec.outline.Contains(enemy.p.X, enemy.p.Y, enemy.radius) {
+				t.Fatalf("%s left unit outside %+v", motion, enemy.p)
+			}
+			if motion == "slide" {
+				got := enemy.p.X*nx + enemy.p.Y*ny
+				limit := apo - enemy.radius - skin
+				if math.Abs(got-limit) > 0.2 {
+					t.Fatalf("shove stopped at %v, field edge %v", got, limit)
+				}
+			}
+		})
+	}
+}
+
 func TestPassOwnerDoesNotBounceSelf(t *testing.T) {
 	m := newWallMatch(t)
 	defer m.End()
