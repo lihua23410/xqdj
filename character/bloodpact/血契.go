@@ -57,7 +57,8 @@ const (
 	pounceSpeed = 400.0
 	pounceDur   = 0.5
 
-	// 熔断线：HP ≤ 10 时耗血技能全熄（放招那一刻判定）。所以永远不会烧死自己。
+	// 熔断线：剩余 HP ≤ 10 时耗血技能全熄。剩余要扣掉这一拍已经记账的消耗，
+	// 否则收线（8）和召蝠（3）同帧各看原始血量，(10, 11] 会合计烧掉 11 把自己打死。
 	blackoutHP = 10.0
 
 	// 血线：距离 > 320——场地直径 560 的 4/7——绷断；断一条只断那条，
@@ -429,7 +430,7 @@ func (b *血契) tryPounce(ctx unit.Context, s unit.Sense) {
 	if len(b.lines) > 0 || b.wilted(s) {
 		return
 	}
-	if s.Self.HP <= blackoutHP {
+	if b.belowFuse(s.Self.HP) {
 		return
 	}
 	if s.Time+1e-9 < b.pounceAt {
@@ -503,7 +504,7 @@ func (b *血契) reel(ctx unit.Context, s unit.Sense) {
 		if mainD < reelSaveFrom {
 			return
 		}
-		if s.Time+1e-9 < b.reelAt || s.Self.HP <= blackoutHP {
+		if s.Time+1e-9 < b.reelAt || b.belowFuse(s.Self.HP) {
 			return
 		}
 		b.reelAt = s.Time + reelCD
@@ -545,11 +546,16 @@ func reelHold(selfR, otherR float64) float64 {
 	return selfR + otherR + reelCushion
 }
 
+// belowFuse 这一拍已经记账的消耗算进去之后，还在不在熔断线上。
+func (b *血契) belowFuse(hp float64) bool {
+	return hp-b.pay <= blackoutHP
+}
+
 // tryCallBats 血蝠：烧 3 血、CD 5s、场上至多 3 只。有没有血线都召。蝙蝠是活随从——它咬敌方
 // 战斗机的伤走血线回流（来源不挑），所以这笔投资的回报是从敌人身上抽血。
-// 和饿扑/收线一样受熔断管：HP ≤ 10 时召不动。
+// 和饿扑/收线一样受熔断管：扣掉本拍已记账的血之后 HP ≤ 10 时召不动。
 func (b *血契) tryCallBats(ctx unit.Context, s unit.Sense) {
-	if s.Self.HP <= blackoutHP {
+	if b.belowFuse(s.Self.HP) {
 		return
 	}
 	if s.Time+1e-9 < b.batAt {
