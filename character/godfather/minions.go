@@ -9,6 +9,7 @@ type leaveDrive struct {
 	on              bool
 	pauseUntil      float64
 	fadeUntil       float64
+	deadline        float64
 	dx, dy, x, y, r float64
 }
 
@@ -22,6 +23,7 @@ func (l *leaveDrive) begin(ctx unit.Context, now float64) {
 	}
 	l.on = true
 	l.pauseUntil = now + leavePause
+	l.deadline = now + leaveLimit
 	l.dx, l.dy = ctx.Field.NearestEdgeDir(l.x, l.y)
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 	ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
@@ -38,6 +40,11 @@ func (l *leaveDrive) handle(ctx unit.Context, ev unit.Event) bool {
 			return true
 		}
 		if !e.Kind.Edge() {
+			// 还在往墙上推才转向。已经顺着墙面走时，同一条法线再来一拍不能把方向弹回去。
+			if l.dx*e.NX+l.dy*e.NY < -0.05 {
+				l.dx, l.dy = reflectDir(l.dx, l.dy, e.NX, e.NY)
+				ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: l.dx * leaveSpeed, VY: l.dy * leaveSpeed}
+			}
 			return true
 		}
 		if l.dx*e.NX+l.dy*e.NY <= 0.35 {
@@ -49,8 +56,13 @@ func (l *leaveDrive) handle(ctx unit.Context, ev unit.Event) bool {
 			Name: "leave", Kind: KindGodfather, UnitID: ctx.ID,
 			X: l.x, Y: l.y, Slot: 0,
 		}
+		return true
 	case unit.Sense:
 		l.note(e.Self.X, e.Self.Y, e.Self.Radius)
+		if l.fadeUntil == 0 && e.Time+1e-9 >= l.deadline {
+			ctx.Out <- unit.Despawn{UnitID: ctx.ID}
+			return true
+		}
 		if e.Time+1e-9 < l.pauseUntil {
 			ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: 0, VY: 0}
 			return true
@@ -65,8 +77,9 @@ func (l *leaveDrive) handle(ctx unit.Context, ev unit.Event) bool {
 		}
 		ctx.Out <- unit.Pass{UnitID: ctx.ID, Hold: true}
 		ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: l.dx * leaveSpeed, VY: l.dy * leaveSpeed}
+		return true
 	}
-	return true
+	return false
 }
 
 type 暗杀者 struct {
@@ -84,10 +97,10 @@ type 暗杀者 struct {
 }
 
 func (a *暗杀者) Handle(ctx unit.Context, ev unit.Event) {
-	if a.leave.handle(ctx, ev) {
+	if unit.AcceptHit(ctx, ev) {
 		return
 	}
-	if unit.AcceptHit(ctx, ev) {
+	if a.leave.handle(ctx, ev) {
 		return
 	}
 	switch e := ev.(type) {
@@ -196,10 +209,10 @@ type 狙击者 struct {
 }
 
 func (a *狙击者) Handle(ctx unit.Context, ev unit.Event) {
-	if a.leave.handle(ctx, ev) {
+	if unit.AcceptHit(ctx, ev) {
 		return
 	}
-	if unit.AcceptHit(ctx, ev) {
+	if a.leave.handle(ctx, ev) {
 		return
 	}
 	s, ok := ev.(unit.Sense)

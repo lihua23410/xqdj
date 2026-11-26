@@ -323,6 +323,73 @@ func TestLeavePauseThenDashToNearestEdge(t *testing.T) {
 	}
 }
 
+func TestLeaveStillTakesDamage(t *testing.T) {
+	for _, name := range []string{KindAssassin, KindSniper} {
+		t.Run(name, func(t *testing.T) {
+			out := make(chan unit.Cmd, 16)
+			ctx := unit.Context{ID: 3, Kind: name, Out: out}
+			self := unit.Snapshot{ID: 3, Role: unit.RoleMinion, Slot: 0, X: 80, Y: 0, Radius: minionRadius, Mortal: true}
+			var actor unit.Actor
+			switch name {
+			case KindAssassin:
+				actor = &暗杀者{owner: 1, slot: 0, attacks: 0}
+			default:
+				actor = &狙击者{owner: 1, slot: 0, shots: 0, booted: true, aimFrom: -sniperAim}
+			}
+			nearby := []unit.Snapshot{enemyAt(120, 0)}
+			actor.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: nearby})
+			_ = drain(out)
+			actor.Handle(ctx, unit.IncomingDamage{Token: 4, From: 2, Amount: 9, Time: 0.05})
+			if !hasConfirm(drain(out), 4) {
+				t.Fatal("leaving minion swallowed the hit")
+			}
+		})
+	}
+}
+
+func TestLeaveReflectsOffInnerWallAndDoesNotFlipBack(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	a := &暗杀者{owner: 1, slot: 0, attacks: 0}
+	ctx := unit.Context{ID: 3, Kind: KindAssassin, Out: out}
+	self := unit.Snapshot{ID: 3, Role: unit.RoleMinion, Slot: 0, X: 80, Y: 0, Radius: minionRadius, Mortal: true}
+	a.Handle(ctx, unit.Sense{Time: 0, Self: self})
+	_ = drain(out)
+	a.Handle(ctx, unit.Sense{Time: leavePause, Self: self})
+	_ = drain(out)
+	dx, dy := nearestEdgeDir(unit.HexField(), 80, 0)
+	hit := unit.WallHit{Time: leavePause + 0.05, NX: -dx, NY: -dy, Kind: unit.WallHard}
+	a.Handle(ctx, hit)
+	cmds := drain(out)
+	if lastFX(cmds, "leave") != nil {
+		t.Fatal("inner wall should not count as leaving the field")
+	}
+	v := lastVel(cmds)
+	if v == nil || math.Abs(v.VX-(-dx*leaveSpeed)) > 1e-6 || math.Abs(v.VY-(-dy*leaveSpeed)) > 1e-6 {
+		t.Fatalf("reflect vel=%v want %v,%v", v, -dx*leaveSpeed, -dy*leaveSpeed)
+	}
+	a.Handle(ctx, hit)
+	if v := lastVel(drain(out)); v != nil {
+		t.Fatalf("second hit on the same face should not reverse again: %v", v)
+	}
+}
+
+func TestLeaveDespawnsWhenTheExitStaysBlocked(t *testing.T) {
+	out := make(chan unit.Cmd, 8)
+	a := &暗杀者{owner: 1, slot: 0, attacks: 0}
+	ctx := unit.Context{ID: 3, Kind: KindAssassin, Out: out}
+	self := unit.Snapshot{ID: 3, Role: unit.RoleMinion, Slot: 0, X: 80, Y: 0, Radius: minionRadius, Mortal: true}
+	a.Handle(ctx, unit.Sense{Time: 0, Self: self})
+	_ = drain(out)
+	a.Handle(ctx, unit.Sense{Time: leaveLimit - 0.05, Self: self})
+	if lastDespawn(drain(out)) != nil {
+		t.Fatal("still inside the leave window")
+	}
+	a.Handle(ctx, unit.Sense{Time: leaveLimit, Self: self})
+	if lastDespawn(drain(out)) == nil {
+		t.Fatal("blocked leave should despawn at the deadline")
+	}
+}
+
 func TestLeaveFadesOnFieldEdge(t *testing.T) {
 	out := make(chan unit.Cmd, 16)
 	a := &暗杀者{owner: 1, slot: 0, attacks: 0}
@@ -368,6 +435,15 @@ func TestDealerVisionCoversDrugOverlap(t *testing.T) {
 	if s.Vision < minionRadius+drugRadius {
 		t.Fatalf("vision=%v want >= %v", s.Vision, minionRadius+drugRadius)
 	}
+}
+
+func hasConfirm(cmds []unit.Cmd, token uint64) bool {
+	for _, c := range cmds {
+		if v, ok := c.(unit.ConfirmDamage); ok && v.Token == token {
+			return true
+		}
+	}
+	return false
 }
 
 func hasPass(cmds []unit.Cmd) bool {

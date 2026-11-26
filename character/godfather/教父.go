@@ -59,6 +59,7 @@ const (
 	leavePause = 0.15
 	leaveSpeed = 720.0
 	leaveFade  = 0.2
+	leaveLimit = 3.0 // 场内硬墙绕不开时到点离场，避免一直占着兵位
 
 	minionCap  = 3
 	openFirst  = 1.0
