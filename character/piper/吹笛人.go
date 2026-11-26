@@ -24,8 +24,10 @@ const (
 	ratCap      = 6    // 场上最多几只老鼠
 	ratSpawnGap = 48.0 // 老鼠从球边多远冒出来（落在待命环外，不让它一出生就挤本体）
 
-	deliverR = 40.0 // 叼着赃物的老鼠进这个圈算入洞
-	lootHeal = 3.0  // 每入洞一件，本体回这么多血
+	// 返程老鼠停在主人球面外 ratRingGap，中心距是双方半径加这一圈。
+	// steer 在离目标不到 ratBrake 时刹停，圈要包住这个点，不然它停在圈外，只能靠本体撞上去才入洞。
+	deliverR = bodyRadius + ratRadius + ratRingGap + ratBrake
+	lootHeal = 3.0 // 每入洞一件，本体回这么多血
 
 	plagueKind  = "瘟疫"
 	plagueR     = 50.0  // 老鼠倒下时这一圈内叠瘟疫
@@ -125,10 +127,7 @@ func (a *吹笛人) collect(ctx unit.Context, s unit.Sense) int {
 			continue
 		}
 		n++
-		v := ratView{x: o.X, y: o.Y}
-		if len(o.Marks) > 0 {
-			v.mark = o.Marks[0].Kind
-		}
+		v := ratView{x: o.X, y: o.Y, mark: carriedKind(o.Marks)}
 		if v.mark != "" && math.Hypot(o.X-s.Self.X, o.Y-s.Self.Y) <= deliverR {
 			ctx.Out <- unit.Despawn{UnitID: o.ID}
 			// 赃物进屋，本体回一口血（引擎自己封顶，也不会触发 hit-stop）。
@@ -164,7 +163,7 @@ func (a *吹笛人) pulseNear(ctx unit.Context, s unit.Sense) {
 	var rats []unit.Snapshot
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if o.Kind == KindRat && o.OwnerID == ctx.ID && len(o.Marks) == 0 {
+		if o.Kind == KindRat && o.OwnerID == ctx.ID && carriedKind(o.Marks) == "" {
 			rats = append(rats, *o)
 		}
 	}
@@ -384,6 +383,20 @@ func (a *吹笛人) stackPlague(ctx unit.Context, id uint64) {
 // stuckTo 老鼠是否还贴着这个敌人。中心距 ≤ 双方半径 + 追赶余量，不拿死 40 去卡移动中的球。
 func stuckTo(rat, o unit.Snapshot) bool {
 	return math.Hypot(rat.X-o.X, rat.Y-o.Y) <= o.Radius+rat.Radius+plagueStick
+}
+
+// carriedKind 嘴里那件赃物。叼来的东西用被偷单位的 Kind 做标记，能在单位表里查到。
+// 瘟疫、醉意、破甲这类状态标记查不到，不能拿 Marks[0] 或「身上有没有标记」来认。
+func carriedKind(marks []unit.Mark) string {
+	for _, m := range marks {
+		if m.Kind == "" || m.Stacks <= 0 {
+			continue
+		}
+		if _, ok := unit.Lookup(m.Kind); ok {
+			return m.Kind
+		}
+	}
+	return ""
 }
 
 func markStacks(u unit.Snapshot, kind string) int {

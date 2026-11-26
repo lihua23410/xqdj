@@ -11,13 +11,15 @@ import (
 const (
 	ratRadius   = 9.0
 	ratHP       = 8.0
-	ratChase    = 260.0 // 出猎的速度
-	ratCarry    = 180.0 // 叼着东西往回跑
-	ratIdle     = 140.0 // 没敌人可贴时飘回主人脚边
-	ratRetarget = 0.5   // 隔这么久重挑一次目标
-	ratReach    = 20.0  // 离目标球面这么近就算叼住，不用贴上去
-	ratRingGap  = 18.0  // 待命时停在主人球面外这么远
-	ratStandoff = 16.0  // 贴敌时停在球面外这么远，不咬
+	ratChase    = 260.0           // 出猎的速度
+	ratCarry    = 180.0           // 叼着东西往回跑
+	ratIdle     = 140.0           // 没敌人可贴时飘回主人脚边
+	ratRetarget = 0.5             // 隔这么久重挑一次目标
+	ratReach    = 20.0            // 离目标球面这么近就算叼住，不用贴上去
+	ratRingGap  = 18.0            // 待命时停在主人球面外这么远
+	ratStandoff = 16.0            // 贴敌时停在球面外这么远，不咬
+	ratCoast    = 6.0             // 离目标越近越慢：速度不超过距离 × 这个
+	ratBrake    = 20.0 / ratCoast // 比这更近就把速度收成 0
 	ratColor    = "#8d8d8d"
 )
 
@@ -191,8 +193,8 @@ func (r *老鼠) steer(ctx unit.Context, s unit.Sense, tx, ty, speed float64) {
 	dx, dy := wx-s.Self.X, wy-s.Self.Y
 	gd := math.Hypot(tx-s.Self.X, ty-s.Self.Y)
 	if d := math.Hypot(dx, dy); d > 1e-6 {
-		sp := math.Min(speed, gd*6)
-		if sp < 20 {
+		sp := math.Min(speed, gd*ratCoast)
+		if sp < ratBrake*ratCoast {
 			sp = 0
 		}
 		vx, vy = dx/d*sp, dy/d*sp

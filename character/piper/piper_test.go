@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	_ "xqdj/character/wolf"
 	"xqdj/internal/unit"
 )
 
@@ -385,6 +386,104 @@ func TestPiperDeliversLoot(t *testing.T) {
 	h := lastHeal(cmds)
 	if h == nil || h.UnitID != 1 || math.Abs(h.Amount-lootHeal) > 1e-9 {
 		t.Fatalf("入洞该给本体回 %v 血: %+v", lootHeal, h)
+	}
+}
+
+func TestStatusMarksAreNotLoot(t *testing.T) {
+	for _, kind := range []string{plagueKind, "醉意", "破甲"} {
+		out := make(chan unit.Cmd, 32)
+		a := &吹笛人{}
+		ctx := unit.Context{ID: 1, Kind: KindPiper, Out: out}
+		rat := ratAt(11, 30, 0, kind)
+		a.Handle(ctx, unit.Sense{Time: plagueAllAt, Self: piperAt(0, 0), Nearby: []unit.Snapshot{rat}})
+		cmds := drain(out)
+		if hasDespawn(cmds, 11) || lastHeal(cmds) != nil || lastSpawn(cmds, kind) != nil {
+			t.Fatalf("%s 不该被当成赃物入洞: %v", kind, cmds)
+		}
+	}
+}
+
+func TestPlagueMarkDoesNotBlockPulseOrSpillLoot(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	a := &吹笛人{}
+	ctx := unit.Context{ID: 1, Kind: KindPiper, Out: out}
+	enemy := enemyAt(80, 0)
+	rat := ratAt(11, 80-(18+ratRadius+ratStandoff), 0, plagueKind)
+	near := []unit.Snapshot{enemy, rat}
+	a.Handle(ctx, unit.Sense{Time: 0, Self: piperAt(0, 0), Nearby: near})
+	_ = drain(out)
+	a.Handle(ctx, unit.Sense{Time: plagueHold, Self: piperAt(0, 0), Nearby: near})
+	if m := lastStack(drain(out), 2); m == nil || m.Kind != plagueKind {
+		t.Fatal("身上有瘟疫的空手老鼠仍该贴人叠瘟疫")
+	}
+
+	out = make(chan unit.Cmd, 32)
+	a = &吹笛人{}
+	ctx.Out = out
+	carrying := ratAt(12, 30, 0, plagueKind)
+	carrying.Marks = append(carrying.Marks, unit.Mark{Kind: "狼人月亮", Stacks: 1})
+	a.Handle(ctx, unit.Sense{Time: 0, Self: piperAt(0, 0), Nearby: []unit.Snapshot{enemyAt(200, 0), carrying}})
+	cmds := drain(out)
+	if !hasDespawn(cmds, 12) || lastHeal(cmds) == nil {
+		t.Fatalf("瘟疫后面的赃物仍该入洞: %v", cmds)
+	}
+	if lastSpawn(cmds, plagueKind) != nil {
+		t.Fatalf("不该把瘟疫标记生出来: %v", cmds)
+	}
+
+	a.Handle(ctx, unit.Sense{Time: 0.1, Self: piperAt(0, 0), Nearby: []unit.Snapshot{enemyAt(200, 0)}})
+	if sp := lastSpawn(drain(out), plagueKind); sp != nil {
+		t.Fatalf("入洞不该把瘟疫还回去: %+v", sp)
+	}
+}
+
+func TestDeadRatWithOnlyPlagueDoesNotSpill(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	a := &吹笛人{}
+	ctx := unit.Context{ID: 1, Kind: KindPiper, Out: out}
+	enemy := enemyAt(200, 0)
+	rat := ratAt(11, 200, 0, plagueKind)
+	a.Handle(ctx, unit.Sense{Time: plagueAllAt, Self: piperAt(0, 0), Nearby: []unit.Snapshot{enemy, rat}})
+	_ = drain(out)
+	a.Handle(ctx, unit.Sense{Time: plagueAllAt + 0.1, Self: piperAt(0, 0), Nearby: []unit.Snapshot{enemy}})
+	cmds := drain(out)
+	if lastSpawn(cmds, plagueKind) != nil {
+		t.Fatalf("老鼠身上的瘟疫不该被还成单位: %v", cmds)
+	}
+	if !hasFX(cmds, "plague") {
+		t.Fatalf("战死仍该叠瘟疫: %v", cmds)
+	}
+}
+
+func TestDeliverReachesTheReturnRing(t *testing.T) {
+	out := make(chan unit.Cmd, 32)
+	a := &吹笛人{}
+	ctx := unit.Context{ID: 1, Kind: KindPiper, Out: out}
+	ring := bodyRadius + ratRadius + ratRingGap
+	rat := ratAt(11, ring, 0, "狼人月亮")
+	a.Handle(ctx, unit.Sense{Time: 0, Self: piperAt(0, 0), Nearby: []unit.Snapshot{rat}})
+	cmds := drain(out)
+	if !hasDespawn(cmds, 11) || lastHeal(cmds) == nil {
+		t.Fatalf("停在返程环 %v 上该入洞: %v", ring, cmds)
+	}
+
+	out = make(chan unit.Cmd, 32)
+	ctx.Out = out
+	a = &吹笛人{}
+	brake := ring + ratBrake - 0.05
+	rat = ratAt(11, brake, 0, "狼人月亮")
+	a.Handle(ctx, unit.Sense{Time: 0, Self: piperAt(0, 0), Nearby: []unit.Snapshot{rat}})
+	if !hasDespawn(drain(out), 11) {
+		t.Fatalf("刹停点 %v 该还在交付圈 %v 里", brake, deliverR)
+	}
+
+	out = make(chan unit.Cmd, 32)
+	ctx.Out = out
+	a = &吹笛人{}
+	rat = ratAt(11, deliverR+1, 0, "狼人月亮")
+	a.Handle(ctx, unit.Sense{Time: 0, Self: piperAt(0, 0), Nearby: []unit.Snapshot{rat}})
+	if hasDespawn(drain(out), 11) {
+		t.Fatal("圈外的赃物不该入洞")
 	}
 }
 
