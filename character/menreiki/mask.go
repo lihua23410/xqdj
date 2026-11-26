@@ -76,6 +76,21 @@ func maskHitReady(scope *unit.MatchState, owner, target uint64, now float64) boo
 	return true
 }
 
+// maskHitCooling 只读这一拍还在不在 CD 里。不改下次出手时间，也不动充能。
+func maskHitCooling(scope *unit.MatchState, owner, target uint64, now float64) bool {
+	if owner == 0 || target == 0 {
+		return true
+	}
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	m := shared.maskHitAt[owner]
+	if m == nil {
+		return false
+	}
+	return now+1e-9 < m[target]
+}
+
 type 面具 struct {
 	owner  uint64
 	slot   int
@@ -129,6 +144,9 @@ func (a *面具) hit(ctx unit.Context, e unit.Collision) {
 		return
 	}
 	if hitTarget(e.Other, a.slot) {
+		if maskHitCooling(ctx.State, a.owner, e.Other.ID, e.Time) {
+			return
+		}
 		if !spendMask(ctx.State, a.owner, a.index) {
 			return
 		}
@@ -139,14 +157,14 @@ func (a *面具) hit(ctx unit.Context, e unit.Collision) {
 	}
 }
 
-func shotClearable(o unit.Snapshot, owner uint64) bool {
+func shotClearable(o unit.Snapshot, owner uint64, slot int) bool {
 	if o.Role != unit.RoleProjectile {
 		return false
 	}
 	if o.PassWalls || o.ArcSpan > 1e-6 {
 		return false
 	}
-	if o.OwnerID == owner {
+	if o.OwnerID == owner || o.Slot == slot {
 		return false
 	}
 	switch o.Kind {

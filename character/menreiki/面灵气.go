@@ -361,11 +361,17 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 				hit = append(hit, *o)
 			}
 		}
-		if len(hit) > 0 && spendMask(ctx.State, ctx.ID, i) {
+		var open []unit.Snapshot
+		for k := range hit {
+			if !maskHitCooling(ctx.State, ctx.ID, hit[k].ID, s.Time) {
+				open = append(open, hit[k])
+			}
+		}
+		if len(open) > 0 && spendMask(ctx.State, ctx.ID, i) {
 			dmg := maskDmg(s.Self.Faction)
-			for k := range hit {
-				if maskHitReady(ctx.State, ctx.ID, hit[k].ID, s.Time) {
-					strike(ctx, hit[k], dmg)
+			for k := range open {
+				if maskHitReady(ctx.State, ctx.ID, open[k].ID, s.Time) {
+					strike(ctx, open[k], dmg)
 				}
 			}
 		}
@@ -413,7 +419,7 @@ func (m *面灵气) orbit(ctx unit.Context, s unit.Sense) {
 func (m *面灵气) eatShots(ctx unit.Context, s unit.Sense, mx, my [3]float64, r float64) {
 	for i := range s.Nearby {
 		o := &s.Nearby[i]
-		if !shotClearable(*o, ctx.ID) {
+		if !shotClearable(*o, ctx.ID, s.Self.Slot) {
 			continue
 		}
 		for k := 0; k < 3; k++ {
@@ -490,18 +496,26 @@ func (m *面灵气) steerPale(ctx unit.Context, t float64, force bool) {
 	if !force && t+1e-9 < m.steerReady {
 		return
 	}
-	sp := math.Hypot(m.vx, m.vy)
+	dx, dy := m.ex-m.x, m.ey-m.y
+	tn := math.Hypot(dx, dy)
+	actual := math.Hypot(m.vx, m.vy)
+	var ux, uy float64
+	if actual > 1e-6 {
+		ux, uy = m.vx/actual, m.vy/actual
+	} else if tn > 1e-6 {
+		ux, uy = dx/tn, dy/tn
+	} else {
+		ux, uy = 1, 0
+	}
+	if actual > 1e-6 && tn > 1e-6 {
+		ux, uy = turnToward(ux, uy, dx/tn, dy/tn, paleTurn)
+	}
+	sp := actual
 	if m.paleOn {
 		sp = paleCruise
 	}
 	if sp < 1e-6 {
-		return
-	}
-	dx, dy := m.ex-m.x, m.ey-m.y
-	tn := math.Hypot(dx, dy)
-	ux, uy := m.vx/sp, m.vy/sp
-	if tn > 1e-6 {
-		ux, uy = turnToward(ux, uy, dx/tn, dy/tn, paleTurn)
+		sp = menreikiSpeed
 	}
 	ctx.Out <- unit.SetVelocity{UnitID: ctx.ID, VX: ux * sp, VY: uy * sp}
 	m.vx, m.vy = ux*sp, uy*sp

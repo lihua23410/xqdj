@@ -424,6 +424,167 @@ func lastStackMark(cmds []unit.Cmd, id uint64) *unit.StackMark {
 	return mk
 }
 
+func TestPaleStopRestoresCruise(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	m := &面灵气{}
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 1, Kind: KindMenreiki, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius, Faction: unit.FactionPale,
+		VX: paleCruise, VY: 0,
+	}
+	enemy := unit.Snapshot{
+		ID: 2, Role: unit.RoleFighter, Slot: 1, X: 0, Y: 200, Radius: 18,
+		AimPriority: unit.DefaultFighterAim,
+	}
+	m.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{enemy}})
+	_ = drain(out)
+
+	m.Handle(ctx, unit.WallHit{Time: 0.05, NX: -1, NY: 0})
+	self.VX, self.VY = 0, 0
+	m.Handle(ctx, unit.Sense{Time: 0.2, Self: self, Nearby: []unit.Snapshot{enemy}})
+	v := lastVel(drain(out), 1)
+	if v == nil {
+		t.Fatal("stopped pale should steer again")
+	}
+	sp := math.Hypot(v.VX, v.VY)
+	if math.Abs(sp-paleCruise) > 1e-6 || v.VY <= 0 || math.Abs(v.VX) > 1e-6 {
+		t.Fatalf("zero speed must resume cruise toward the enemy, vel=%v", v)
+	}
+}
+
+func TestPaleSlowedSteerKeepsCruise(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	m := &面灵气{}
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 1, Kind: KindMenreiki, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius, Faction: unit.FactionPale,
+		VX: paleCruise, VY: 0,
+	}
+	enemy := unit.Snapshot{
+		ID: 2, Role: unit.RoleFighter, Slot: 1, X: 200, Y: 0, Radius: 18,
+		AimPriority: unit.DefaultFighterAim,
+	}
+	m.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{enemy}})
+	_ = drain(out)
+
+	m.Handle(ctx, unit.Collision{Time: 0.05, Other: enemy})
+	self.VX, self.VY = 30, 0
+	m.Handle(ctx, unit.Sense{Time: 0.2, Self: self, Nearby: []unit.Snapshot{enemy}})
+	v := lastVel(drain(out), 1)
+	if v == nil {
+		t.Fatal("slowed pale should steer again")
+	}
+	sp := math.Hypot(v.VX, v.VY)
+	if math.Abs(sp-paleCruise) > 1e-6 || v.VX <= 0 {
+		t.Fatalf("steer must restore pale cruise, not the slowed speed, vel=%v", v)
+	}
+}
+
+func TestPurpleMaskSkipsAllyShot(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	m := &面灵气{}
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 1, Kind: KindMenreiki, Out: out}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius, Faction: unit.FactionPurple,
+	}
+	orbit := menreikiRadius + maskRadius + maskOrbitPad
+	ally := unit.Snapshot{
+		ID: 8, Role: unit.RoleProjectile, Slot: 0, OwnerID: 4,
+		X: orbit, Y: 0, Radius: 6, Kind: "火箭",
+	}
+	foe := unit.Snapshot{
+		ID: 9, Role: unit.RoleProjectile, Slot: 1, OwnerID: 2,
+		X: orbit, Y: 0, Radius: 6, Kind: "火箭",
+	}
+	own := unit.Snapshot{
+		ID: 10, Role: unit.RoleProjectile, Slot: 0, OwnerID: 1,
+		X: orbit, Y: 0, Radius: 6, Kind: "苦无",
+	}
+	m.Handle(ctx, unit.Sense{Time: 0, Self: self, Nearby: []unit.Snapshot{ally, foe, own}})
+	gone := despawnIDs(drain(out))
+	if !gone[9] {
+		t.Fatal("purple mask should clear the enemy shot")
+	}
+	if gone[8] || gone[10] {
+		t.Fatalf("ally and own shots must stay, despawned=%v", gone)
+	}
+}
+
+func TestMaskOnCooldownKeepsCharge(t *testing.T) {
+	st := &unit.MatchState{}
+	out := make(chan unit.Cmd, 32)
+	m := &面灵气{}
+	ctx := unit.Context{State: st, ID: 1, Kind: KindMenreiki, Out: out}
+	orbit := menreikiRadius + maskRadius + maskOrbitPad
+	self := unit.Snapshot{
+		ID: 1, Kind: KindMenreiki, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: menreikiRadius, Faction: unit.FactionCyan,
+	}
+	enemy := unit.Snapshot{
+		ID: 2, Role: unit.RoleFighter, Slot: 1, X: orbit, Y: 0, Radius: 18,
+	}
+	if !maskHitReady(st, 1, 2, 0) {
+		t.Fatal("seed cd")
+	}
+	m.Handle(ctx, unit.Sense{Time: 0.1, Self: self, Nearby: []unit.Snapshot{enemy}})
+	if hasDamageTo(drain(out), 2) {
+		t.Fatal("cooldown should block the hit")
+	}
+	if !maskCharged(st, 1, 0) {
+		t.Fatal("cooldown ate mask 0 charge")
+	}
+}
+
+func TestMaskCollisionOnCooldownKeepsCharge(t *testing.T) {
+	st := &unit.MatchState{}
+	out := make(chan unit.Cmd, 8)
+	armMask(st, 1, 0)
+	if !maskHitReady(st, 1, 2, 1) {
+		t.Fatal("seed cd")
+	}
+	a := &面具{owner: 1, slot: 0, index: 0}
+	ctx := unit.Context{State: st, ID: 9, Kind: KindMenreikiMask1, Out: out}
+	enemy := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, Radius: 18}
+	a.Handle(ctx, unit.Collision{Time: 1.1, Other: enemy})
+	if hasDamageTo(drain(out), 2) {
+		t.Fatal("cooldown collision should not hit")
+	}
+	if !maskCharged(st, 1, 0) {
+		t.Fatal("cooldown collision ate the charge")
+	}
+
+	a.Handle(ctx, unit.Collision{Time: 1 + maskHitCD, Other: enemy})
+	if !hasDamageTo(drain(out), 2) {
+		t.Fatal("after cooldown the saved charge should hit")
+	}
+	if spendMask(st, 1, 0) {
+		t.Fatal("the hit should have spent the charge")
+	}
+}
+
+func maskCharged(scope *unit.MatchState, owner uint64, i int) bool {
+	if i < 0 || i > 2 {
+		return false
+	}
+	shared := stateFor(scope)
+	shared.liveMu.Lock()
+	defer shared.liveMu.Unlock()
+	return shared.maskReady[owner][i]
+}
+
+func despawnIDs(cmds []unit.Cmd) map[uint64]bool {
+	got := map[uint64]bool{}
+	for _, c := range cmds {
+		if d, ok := c.(unit.Despawn); ok {
+			got[d.UnitID] = true
+		}
+	}
+	return got
+}
+
 func lastNamed(cmds []unit.Cmd, name string) *unit.FX {
 	var fx *unit.FX
 	for _, c := range cmds {
