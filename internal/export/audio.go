@@ -76,12 +76,14 @@ func mixEvents(ctx context.Context, ffmpeg string, events []audioEvent, mix []fl
 		if ev.Stop != nil || ev.Src == "" {
 			continue
 		}
-		key := normalizeSrc(ev.Src)
+		name := normalizeSrc(ev.Src)
+		rate := eventRate(ev)
+		key := audioCacheKey(name, rate, keepsPitch(ev))
 		decoded, ok := cache[key]
 		if !ok {
-			buf, err := decodeAudio(ctx, ffmpeg, key, ev.Rate, ev.PreservesPitch)
+			buf, err := decodeAudio(ctx, ffmpeg, name, rate, ev.PreservesPitch)
 			if err != nil {
-				return fmt.Errorf("%s: %w", key, err)
+				return fmt.Errorf("%s: %w", name, err)
 			}
 			decoded = buf
 			cache[key] = decoded
@@ -90,10 +92,7 @@ func mixEvents(ctx context.Context, ffmpeg string, events []audioEvent, mix []fl
 		if start < 0 || start >= len(mix)/2 {
 			continue
 		}
-		skip := int(ev.Offset * audioRate)
-		if skip < 0 {
-			skip = 0
-		}
+		skip := sampleSkip(ev.Offset, rate)
 		if skip*2 >= len(decoded) {
 			continue
 		}
@@ -137,17 +136,82 @@ func normalizeSrc(raw string) string {
 	return raw
 }
 
+func eventRate(ev audioEvent) float64 {
+	if ev.Rate <= 0 || math.IsNaN(ev.Rate) || math.IsInf(ev.Rate, 0) {
+		return 1
+	}
+	return ev.Rate
+}
+
+func keepsPitch(ev audioEvent) bool {
+	return ev.PreservesPitch == nil || *ev.PreservesPitch
+}
+
+func audioCacheKey(name string, rate float64, keepPitch bool) string {
+	return name + "\x00" + strconv.FormatFloat(rate, 'f', 4, 64) + "\x00" + strconv.FormatBool(keepPitch)
+}
+
+// sampleSkip 把媒体时间轴上的 offset 换算成变速后 PCM 的采样位置。
+// currentTime 不随倍速缩短，atempo / asetrate 的结果会缩短，所以要除掉 rate。
+func sampleSkip(offset, rate float64) int {
+	if offset <= 0 || math.IsNaN(offset) || math.IsInf(offset, 0) {
+		return 0
+	}
+	if rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
+		rate = 1
+	}
+	n := int(offset / rate * audioRate)
+	if n < 0 {
+		return 0
+	}
+	return n
+}
+
+// rateFilter 对齐浏览器 playbackRate。
+// preservesPitch 为真时用 atempo 只改速度；atempo 单级只接受 0.5–2，超出就拆开接上。
+// 为假时用 asetrate，音高和速度一起变。
+func rateFilter(rate float64, keepPitch bool) string {
+	if rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) || math.Abs(rate-1) <= 0.001 {
+		return ""
+	}
+	if !keepPitch {
+		return fmt.Sprintf("aformat=sample_rates=%d,asetrate=%d,aresample=%d", audioRate, int(math.Round(float64(audioRate)*rate)), audioRate)
+	}
+	return atempoChain(rate)
+}
+
+func atempoChain(rate float64) string {
+	var parts []string
+	r := rate
+	for i := 0; i < 16 && r > 2; i++ {
+		parts = append(parts, "atempo=2")
+		r /= 2
+	}
+	for i := 0; i < 16 && r < 0.5; i++ {
+		parts = append(parts, "atempo=0.5")
+		r /= 0.5
+	}
+	if r < 0.5 {
+		r = 0.5
+	} else if r > 2 {
+		r = 2
+	}
+	parts = append(parts, "atempo="+strconv.FormatFloat(r, 'f', 6, 64))
+	return strings.Join(parts, ",")
+}
+
 func decodeAudio(ctx context.Context, ffmpeg, name string, rate float64, preservesPitch *bool) ([]float32, error) {
 	data, err := readAudioFile(name)
 	if err != nil {
 		return nil, err
 	}
+	return decodePCM(ctx, ffmpeg, data, rate, preservesPitch)
+}
+
+func decodePCM(ctx context.Context, ffmpeg string, data []byte, rate float64, preservesPitch *bool) ([]float32, error) {
 	args := []string{"-hide_banner", "-loglevel", "error", "-i", "-", "-f", "f32le", "-acodec", "pcm_f32le", "-ac", "2", "-ar", strconv.Itoa(audioRate)}
-	if rate > 0 && math.Abs(rate-1) > 0.001 {
-		keepPitch := preservesPitch == nil || *preservesPitch
-		if keepPitch && rate >= 0.5 && rate <= 2 {
-			args = append(args, "-filter:a", "atempo="+strconv.FormatFloat(rate, 'f', 3, 64))
-		}
+	if filter := rateFilter(rate, preservesPitch == nil || *preservesPitch); filter != "" {
+		args = append(args, "-filter:a", filter)
 	}
 	args = append(args, "-")
 	cmd := exec.CommandContext(ctx, ffmpeg, args...)

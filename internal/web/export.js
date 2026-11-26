@@ -113,8 +113,7 @@
         });
         this.__exportVoice = audioEvents.length - 1;
         this.__exportPlaying = true;
-        this.__exportAnchorFrame = frameNo;
-        this.__exportAnchorTime = offset;
+        this.__exportLastFrame = frameNo;
         playingMedia.add(this);
         try {
           if (!Object.prototype.hasOwnProperty.call(this, "paused")) {
@@ -137,19 +136,29 @@
     return Promise.resolve();
   };
 
-  // 音频不会真的走时钟，currentTime 由导出帧号推进；这样暂停/恢复时
-  // 混音里的 offset 才是角色实际听到的位置。
+  function mediaRate(el) {
+    const rate = Number(el.playbackRate);
+    return Number.isFinite(rate) && rate > 0 ? rate : 1;
+  }
+
+  // 音频不会真的走时钟。currentTime 是媒体时间轴，要比墙上的帧快 playbackRate 倍，
+  // 否则 2 倍速的狼嚎还没播完就会被下一次 play 当成仍在播放而丢掉。
   function tickMedia() {
     for (const el of playingMedia) {
-      const t = (el.__exportAnchorTime || 0) + (frameNo - el.__exportAnchorFrame) / FPS;
+      const rate = mediaRate(el);
+      const last = Number.isFinite(el.__exportLastFrame) ? el.__exportLastFrame : frameNo;
+      const dt = (frameNo - last) / FPS;
+      let t = (el.currentTime || 0) + (dt > 0 ? dt * rate : 0);
+      el.__exportLastFrame = frameNo;
       const d = el.duration;
       if (Number.isFinite(d) && d > 0 && t >= d && !el.loop) {
         el.__exportPlaying = false;
         playingMedia.delete(el);
-        try { el.currentTime = d; } catch (e) { /* ignore */ }
-      } else {
-        try { el.currentTime = el.loop && Number.isFinite(d) && d > 0 ? t % d : t; } catch (e) { /* ignore */ }
+        t = d;
+      } else if (el.loop && Number.isFinite(d) && d > 0) {
+        t %= d;
       }
+      try { el.currentTime = t; } catch (e) { /* ignore */ }
     }
   }
 
