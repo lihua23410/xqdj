@@ -116,6 +116,67 @@ func TestLuckyBulletRollsDamageAndAppliesPermanentSlow(t *testing.T) {
 	}
 }
 
+func TestBombShotVisionCoversTheBlast(t *testing.T) {
+	spec, ok := unit.Lookup(KindSlotBombShot)
+	if !ok {
+		t.Fatal("bomb shot is not registered")
+	}
+	const body = slotRadius
+	wallReach := bombRadius + body
+	directReach := bombShotRadius + body + bombRadius + body
+	if spec.Vision+1e-9 < wallReach || spec.Vision+1e-9 < directReach {
+		t.Fatalf("bomb vision=%v, want at least %v so the blast can see both a wall ring and a direct-hit splash", spec.Vision, directReach)
+	}
+}
+
+func TestBombWallBlastDamagesOnlyTheRing(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	b := &slotBullet{owner: 1, slot: 0, kind: KindSlotBombShot}
+	ctx := unit.Context{ID: 9, Kind: KindSlotBombShot, Out: out}
+	b.Handle(ctx, unit.Sense{Nearby: []unit.Snapshot{
+		{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 0, Y: 70, Radius: 18},
+		{ID: 3, Role: unit.RoleFighter, Slot: 1, X: 200, Y: 0, Radius: 18},
+		{ID: 4, Role: unit.RoleFighter, Slot: 0, X: 10, Y: 0, Radius: 18},
+	}})
+	b.Handle(ctx, unit.WallHit{X: 0, Y: 0})
+	cmds := drain(out)
+	if hits, total := damageTo(cmds, 2); hits != 1 || total != bombDamage {
+		t.Fatalf("wall blast hits=%d total=%v, want one %v hit", hits, total, bombDamage)
+	}
+	if hits, total := damageTo(cmds, 3); hits != 0 || total != 0 {
+		t.Fatalf("outside the ring hits=%d total=%v, want none", hits, total)
+	}
+	if hits, total := damageTo(cmds, 4); hits != 0 || total != 0 {
+		t.Fatalf("ally hits=%d total=%v, want none", hits, total)
+	}
+	if !hasDespawn(cmds, 9) {
+		t.Fatal("bomb should despawn after the wall blast")
+	}
+}
+
+func TestBombDirectHitSplashesOnce(t *testing.T) {
+	out := make(chan unit.Cmd, 16)
+	b := &slotBullet{owner: 1, slot: 0, kind: KindSlotBombShot}
+	ctx := unit.Context{ID: 9, Kind: KindSlotBombShot, Out: out}
+	impact := unit.Snapshot{ID: 2, Role: unit.RoleFighter, Slot: 1, X: 0, Y: 0, Radius: 18}
+	b.Handle(ctx, unit.Sense{Nearby: []unit.Snapshot{
+		impact,
+		{ID: 3, Role: unit.RoleFighter, Slot: 1, X: 0, Y: 80, Radius: 18},
+		{ID: 4, Role: unit.RoleFighter, Slot: 1, X: 180, Y: 0, Radius: 18},
+	}})
+	b.Handle(ctx, unit.Collision{Time: 1, Other: impact})
+	cmds := drain(out)
+	if hits, total := damageTo(cmds, 2); hits != 1 || total != bombDamage {
+		t.Fatalf("direct target hits=%d total=%v, want one %v hit", hits, total, bombDamage)
+	}
+	if hits, total := damageTo(cmds, 3); hits != 1 || total != bombDamage {
+		t.Fatalf("splash target hits=%d total=%v, want one %v hit", hits, total, bombDamage)
+	}
+	if hits, total := damageTo(cmds, 4); hits != 0 || total != 0 {
+		t.Fatalf("outside splash hits=%d total=%v, want none", hits, total)
+	}
+}
+
 func TestBombTransfersToEnemyOnCollision(t *testing.T) {
 	out := make(chan unit.Cmd, 8)
 	m := &slotMachine{slot: 0, now: 5, bombHeld: true, bombAt: 20}
@@ -188,4 +249,23 @@ func hasSpawn(cmds []unit.Cmd, kind string) bool {
 		}
 	}
 	return false
+}
+
+func hasDespawn(cmds []unit.Cmd, id uint64) bool {
+	for _, cmd := range cmds {
+		if d, ok := cmd.(unit.Despawn); ok && d.UnitID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func damageTo(cmds []unit.Cmd, id uint64) (hits int, total float64) {
+	for _, cmd := range cmds {
+		if d, ok := cmd.(unit.Damage); ok && d.To == id {
+			hits++
+			total += d.Amount
+		}
+	}
+	return hits, total
 }

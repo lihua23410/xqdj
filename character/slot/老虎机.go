@@ -66,7 +66,11 @@ const (
 	bombMark        = "老虎机炸弹"
 	bombMarkIcon    = "/ball/老虎机/fx/炸弹.png"
 
-	bombRadius = 82.0
+	bombRadius     = 82.0
+	bombShotRadius = 10.0
+	// 范围爆炸只打得到 Sense.Nearby 里的人。撞墙时炸点在弹心；
+	// 直击时炸点在对方身上，还要再罩住一圈溅射和双方体积。
+	bombVision = bombRadius + bombShotRadius + slotRadius*2
 	shotRadius = 7.0
 
 	cherryBallRadius = 14.0
@@ -94,21 +98,22 @@ func init() {
 		return &cherryBall{owner: info.OwnerID, slot: info.Slot, at: -1}
 	})
 
-	registerShot := func(kind string, radius float64, color string) {
+	registerShot := func(kind string, radius float64, color string, vision float64) {
 		p.Register(unit.Spec{
 			Kind: kind, Role: unit.RoleProjectile, Radius: radius, MaxHP: 1,
-			Speed: 1, Look: unit.Look{Color: color, Trail: true, FX: []string{"slot-bullet"}},
+			Speed: 1, Vision: vision,
+			Look: unit.Look{Color: color, Trail: true, FX: []string{"slot-bullet"}},
 		}, func(info unit.SpawnInfo) unit.Actor {
 			return &slotBullet{owner: info.OwnerID, slot: info.Slot, kind: kind}
 		})
 	}
-	registerShot(KindSlotCherryShot, 6, "#e62255")
-	registerShot(KindSlotWatermelonShot, 7, "#3fca68")
-	registerShot(KindSlotCrownShot, 9, "#ffd33d")
-	registerShot(KindSlotLuckyShot, 8, "#ff3d4d")
-	registerShot(KindSlotBombShot, 10, "#55505f")
-	registerShot(KindSlotCoinShot, 7, "#ffd84a")
-	registerShot(KindSlotJackpotShot, 18, "#ff304e")
+	registerShot(KindSlotCherryShot, 6, "#e62255", 0)
+	registerShot(KindSlotWatermelonShot, 7, "#3fca68", 0)
+	registerShot(KindSlotCrownShot, 9, "#ffd33d", 0)
+	registerShot(KindSlotLuckyShot, 8, "#ff3d4d", 0)
+	registerShot(KindSlotBombShot, bombShotRadius, "#55505f", bombVision)
+	registerShot(KindSlotCoinShot, 7, "#ffd84a", 0)
+	registerShot(KindSlotJackpotShot, 18, "#ff304e", 0)
 }
 
 type slotMachine struct {
@@ -337,7 +342,7 @@ func symbolShot(symbol int) (string, float64, float64) {
 	case symbolLucky7:
 		return KindSlotLuckyShot, 560, 8
 	case symbolBomb:
-		return KindSlotBombShot, 380, 10
+		return KindSlotBombShot, 380, bombShotRadius
 	case symbolCoin:
 		return KindSlotCoinShot, 500, 7
 	}
