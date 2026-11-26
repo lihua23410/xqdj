@@ -155,6 +155,9 @@ type 藤姬 struct {
 	// 幻役最后一拍的位置：它被别处打死时，气绝要留在原地。
 	dollX, dollY float64
 
+	// 这一拍已经撤掉的幻役。快照里还看得到它，但不能当成「场上已有」。
+	goneDoll uint64
+
 	// 吃小怪的 CD：上来先压满一拍，开局不白吃。
 	devourAt float64
 }
@@ -169,6 +172,7 @@ func (f *藤姬) Handle(ctx unit.Context, ev unit.Event) {
 }
 
 func (f *藤姬) tick(ctx unit.Context, s unit.Sense) {
+	f.goneDoll = 0
 	if !f.booted {
 		f.booted = true
 		f.rng = unit.NewRNG(ctx.Stream)
@@ -259,13 +263,14 @@ func (f *藤姬) devourTarget(s unit.Sense) *unit.Snapshot {
 
 // addLayers 给当前持有人加 n 层的池子，标记和加伤跟着走。
 // 池子在队友身上时不在这里改标记：那是看守的活，两边都写会叠双。
+// 幻役没有看守，层数和加伤得在这里跟上，否则气绝仍按旧层数还包。
 func (f *藤姬) addLayers(ctx unit.Context, s unit.Sense, n int) {
 	if f.holder == 0 {
 		return
 	}
 	f.pool += float64(n) * tosePoolPerLayer
 	ctx.Out <- unit.SetAbsorb{UnitID: f.holder, Amount: f.pool}
-	if f.holder == ctx.ID {
+	if f.holder == ctx.ID || f.doll {
 		f.retune(ctx, f.holder)
 	}
 	f.flash(ctx, s, f.holder)
@@ -276,6 +281,7 @@ func (f *藤姬) addLayers(ctx unit.Context, s unit.Sense, n int) {
 func (f *藤姬) moveTo(ctx unit.Context, s unit.Sense, target uint64, pool float64) {
 	if old := f.holder; old != 0 && old != target {
 		if f.doll {
+			f.goneDoll = old
 			f.scream(ctx, s, old)
 			ctx.Out <- unit.Despawn{UnitID: old}
 		}
@@ -351,6 +357,7 @@ func (f *藤姬) syncHolder(ctx unit.Context, s unit.Sense) {
 	if f.doll {
 		// 幻役失去藤色：整包按掉之前那几层还给藤姬，然后气绝。
 		n := f.layers
+		f.goneDoll = f.holder
 		f.scream(ctx, s, f.holder)
 		ctx.Out <- unit.ClearMarks{UnitID: f.holder, Kind: toseKind}
 		ctx.Out <- unit.Despawn{UnitID: f.holder}
@@ -394,7 +401,12 @@ func (f *藤姬) quietWhileDoll(ctx unit.Context, s unit.Sense) {
 }
 
 // summon 召唤一个幻役，登记要交给它的整包（现有 + extra 层）。
+// 场上还有活着的幻役就不再召：新的那只接不到这包，只会留一具废体。
+// 这一拍刚气绝或被换走的那只不算，快照里它还在，但身体已经撤了。
 func (f *藤姬) summon(ctx unit.Context, s unit.Sense, extra int) {
+	if id := f.findDoll(ctx.ID, s); id != 0 && id != f.goneDoll {
+		return
+	}
 	ang := f.rng.Float64() * 2 * math.Pi
 	x := s.Self.X + math.Cos(ang)*(fujiRadius+dollRadius+4)
 	y := s.Self.Y + math.Sin(ang)*(fujiRadius+dollRadius+4)

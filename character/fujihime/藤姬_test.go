@@ -356,6 +356,178 @@ func TestTransferKeepsRemainingPool(t *testing.T) {
 	}
 }
 
+func TestGrantToDollRetunesThenDeathReturnsNewLayers(t *testing.T) {
+	out := make(chan unit.Cmd, 256)
+	f := &藤姬{}
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 1, Kind: KindFujihime, Out: out, Stream: 7}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindFujihime, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: fujiRadius, HP: fujiHP, MaxHP: fujiHP,
+	}
+	per := tosePoolPerLayer
+	start := 3
+	f.holder, f.doll = 9, true
+	f.pool, f.layers = float64(start)*per, start
+	f.nextGrant = 1e9
+	doll := unit.Snapshot{
+		ID: 9, Kind: KindFujihimeDoll, Role: unit.RoleMinion, Slot: 0, OwnerID: 1,
+		X: 40, Y: 0, Radius: dollRadius, HP: dollHP, MaxHP: dollHP,
+		Absorb: float64(start) * per,
+	}
+	s := unit.Sense{Time: 40, Self: self, Nearby: []unit.Snapshot{doll}}
+	f.addLayers(ctx, s, 1)
+	cmds := drain(out)
+
+	wantLayers := start + 1
+	wantPool := float64(wantLayers) * per
+	if f.layers != wantLayers || f.pool != wantPool {
+		t.Fatalf("再结付一层后 layers=%d pool=%v", f.layers, f.pool)
+	}
+	if !hasCmd(cmds, func(c unit.SetAbsorb) bool { return c.UnitID == 9 && c.Amount == wantPool }) {
+		t.Fatalf("池子该涨到 %v: %v", wantPool, cmds)
+	}
+	if !hasCmd(cmds, func(c unit.StackMark) bool {
+		return c.UnitID == 9 && c.Kind == toseKind && c.Delta == 1
+	}) {
+		t.Fatalf("幻役层数该 +1: %v", cmds)
+	}
+	if !hasCmd(cmds, func(c unit.SetDamageBonus) bool {
+		return c.UnitID == 9 && c.Amount == float64(wantLayers)*toseDamagePerLayer
+	}) {
+		t.Fatalf("幻役加伤该跟着到 %v: %v", float64(wantLayers)*toseDamagePerLayer, cmds)
+	}
+
+	// 池子掉回结付前的量：新的一层必须算进气绝归还，不能被旧层数吞掉。
+	doll.Absorb = float64(start) * per
+	f.Handle(ctx, unit.Sense{Time: 40.1, Self: self, Nearby: []unit.Snapshot{doll}})
+	cmds = drain(out)
+	if f.holder != 1 || f.layers != wantLayers || f.pool != wantPool {
+		t.Fatalf("该按 %d 层归还：holder=%d layers=%d pool=%v", wantLayers, f.holder, f.layers, f.pool)
+	}
+	if !hasCmd(cmds, func(c unit.SetAbsorb) bool { return c.UnitID == 1 && c.Amount == wantPool }) {
+		t.Fatalf("归还池子该是 %v: %v", wantPool, cmds)
+	}
+}
+
+func TestAddLayersOnAllyLeavesMarksToKeeper(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	f := &藤姬{}
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 1, Kind: KindFujihime, Out: out, Stream: 7}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindFujihime, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: fujiRadius, HP: fujiHP, MaxHP: fujiHP,
+	}
+	ally := unit.Snapshot{
+		ID: 2, Kind: "队友", Role: unit.RoleFighter, Slot: 0,
+		X: 90, Y: 0, Radius: fujiRadius, HP: 100, MaxHP: 100,
+	}
+	per := tosePoolPerLayer
+	f.holder, f.pool, f.layers = 2, 2*per, 2
+	f.addLayers(ctx, unit.Sense{Time: 10, Self: self, Nearby: []unit.Snapshot{ally}}, 1)
+	cmds := drain(out)
+	if f.layers != 2 || f.pool != 3*per {
+		t.Fatalf("队友的层数归看守，藤姬只涨池：layers=%d pool=%v", f.layers, f.pool)
+	}
+	if !hasCmd(cmds, func(c unit.SetAbsorb) bool { return c.UnitID == 2 && c.Amount == 3*per }) {
+		t.Fatalf("队友池子该涨到 3 层: %v", cmds)
+	}
+	if hasCmd(cmds, func(c unit.StackMark) bool { return true }) {
+		t.Fatalf("队友的标记不该由藤姬再写一遍: %v", cmds)
+	}
+	if hasCmd(cmds, func(c unit.SetDamageBonus) bool { return true }) {
+		t.Fatalf("队友的加伤不该由藤姬再写一遍: %v", cmds)
+	}
+}
+
+func TestSummonSkipsLiveDoll(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	f := &藤姬{rng: unit.NewRNG(1), pool: 6 * tosePoolPerLayer, layers: 6}
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 1, Kind: KindFujihime, Out: out, Stream: 7}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindFujihime, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: fujiRadius,
+	}
+	doll := unit.Snapshot{
+		ID: 9, Kind: KindFujihimeDoll, Role: unit.RoleMinion, Slot: 0, OwnerID: 1,
+		X: 40, Y: 0, Radius: dollRadius,
+	}
+	f.summon(ctx, unit.Sense{Time: 30, Self: self, Nearby: []unit.Snapshot{doll}}, toseDollLayers)
+	cmds := drain(out)
+	if hasCmd(cmds, func(c unit.Spawn) bool { return c.Kind == KindFujihimeDoll }) {
+		t.Fatalf("活着的幻役不该再召一具: %v", cmds)
+	}
+	if f.waitDoll != 0 {
+		t.Fatalf("不该再登记一包交接 waitDoll=%v", f.waitDoll)
+	}
+}
+
+func TestSummonReplacesDollDroppedThisBeat(t *testing.T) {
+	out := make(chan unit.Cmd, 64)
+	f := &藤姬{rng: unit.NewRNG(1), pool: 6 * tosePoolPerLayer, layers: 6, goneDoll: 9}
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 1, Kind: KindFujihime, Out: out, Stream: 7}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindFujihime, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: fujiRadius,
+	}
+	doll := unit.Snapshot{
+		ID: 9, Kind: KindFujihimeDoll, Role: unit.RoleMinion, Slot: 0, OwnerID: 1,
+		X: 40, Y: 0, Radius: dollRadius,
+	}
+	f.summon(ctx, unit.Sense{Time: 30, Self: self, Nearby: []unit.Snapshot{doll}}, toseDollLayers)
+	cmds := drain(out)
+	if !hasCmd(cmds, func(c unit.Spawn) bool { return c.Kind == KindFujihimeDoll && c.OwnerID == 1 }) {
+		t.Fatalf("这一拍刚撤掉的幻役不该挡住补召: %v", cmds)
+	}
+	want := f.pool + float64(toseDollLayers)*tosePoolPerLayer
+	if f.waitDoll != want {
+		t.Fatalf("新幻役该接手 %v，waitDoll=%v", want, f.waitDoll)
+	}
+}
+
+func TestSixthGrantDoesNotStackDolls(t *testing.T) {
+	out := make(chan unit.Cmd, 256)
+	f := &藤姬{}
+	ctx := unit.Context{State: &unit.MatchState{}, ID: 1, Kind: KindFujihime, Out: out, Stream: 7}
+	self := unit.Snapshot{
+		ID: 1, Kind: KindFujihime, Role: unit.RoleFighter, Slot: 0,
+		X: 0, Y: 0, Radius: fujiRadius, HP: fujiHP, MaxHP: fujiHP,
+	}
+	per := tosePoolPerLayer
+	f.grants = 5
+	f.holder, f.doll = 9, true
+	f.pool, f.layers = 5*per, 5
+	doll := unit.Snapshot{
+		ID: 9, Kind: KindFujihimeDoll, Role: unit.RoleMinion, Slot: 0, OwnerID: 1,
+		X: 40, Y: 0, Radius: dollRadius, HP: dollHP, MaxHP: dollHP, Absorb: 5 * per,
+	}
+	f.Handle(ctx, unit.Sense{Time: 25, Self: self, Nearby: []unit.Snapshot{doll}})
+	cmds := drain(out)
+	spawned := 0
+	for _, c := range cmds {
+		if sp, ok := c.(unit.Spawn); ok && sp.Kind == KindFujihimeDoll {
+			spawned++
+		}
+	}
+	despawned := hasCmd(cmds, func(c unit.Despawn) bool { return c.UnitID == 9 })
+	if despawned {
+		if spawned != 1 {
+			t.Fatalf("换走旧幻役后该补一只，实际 %d: %v", spawned, cmds)
+		}
+		return
+	}
+	if spawned != 0 {
+		t.Fatalf("活着的幻役不该再召一具: %v", cmds)
+	}
+	if f.layers != 6 || f.pool != 6*per || f.holder != 9 {
+		t.Fatalf("再结付该停在幻役身上并补到 6 层：holder=%d layers=%d pool=%v", f.holder, f.layers, f.pool)
+	}
+	if !hasCmd(cmds, func(c unit.SetDamageBonus) bool {
+		return c.UnitID == 9 && c.Amount == 6*toseDamagePerLayer
+	}) {
+		t.Fatalf("幻役加伤该到 6 层: %v", cmds)
+	}
+}
+
 func TestDollKilledElsewhereStillScreams(t *testing.T) {
 	out := make(chan unit.Cmd, 256)
 	f := &藤姬{}
