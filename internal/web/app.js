@@ -277,7 +277,24 @@ window.arena = {
   },
   playAudio: (src, opts) => {
     const voice = window.arena.audio(src, opts);
-    voice.play();
+    if (opts && opts.loop) {
+      voice.play();
+      return voice;
+    }
+    // 一次性声音播完就退出仲裁表。循环声由调用方 dispose，复用声池不走这里。
+    const kill = voice.kill;
+    const release = () => {
+      if (voice.released) return;
+      voice.released = true;
+      voice.audio.removeEventListener("ended", release);
+      voice.audio.removeEventListener("error", release);
+      kill.call(voice);
+      soundVoices.delete(voice);
+    };
+    voice.kill = function () { release(); };
+    voice.audio.addEventListener("ended", release, { once: true });
+    voice.audio.addEventListener("error", release, { once: true });
+    if (!voice.play()) release();
     return voice;
   },
   lookOf,
@@ -703,21 +720,14 @@ function playWallFx(fx, scale, cx, cy, fading) {
 const IMMEDIATE_AUDIO = new Set(["attack", "gear", "cruise", "scream", "verse", "carve", "revive"]);
 
 function playSoundFX(fx) {
-  if (!fx) return;
+  if (!fx || !fx.name) return false;
+  if (fx.name !== "shot" && !IMMEDIATE_AUDIO.has(fx.name)) return false;
   const base = lookOf(fx.kind).base;
-  if (!base || !fx.name) return;
-  if (fx.name === "shot") {
-    const hook = window.shotFX && window.shotFX[base] && window.shotFX[base].shot;
-    if (typeof hook === "function") {
-      hook(fx, { x: 0, y: 0, kind: fx.kind, scale: 1, cx: 0, cy: 0, time: 0, audioOnly: true });
-    }
-    return;
-  }
-  if (!IMMEDIATE_AUDIO.has(fx.name)) return;
+  if (!base) return false;
   const hook = window.shotFX && window.shotFX[base] && window.shotFX[base][fx.name];
-  if (typeof hook === "function") {
-    hook(fx, { x: 0, y: 0, kind: fx.kind, scale: 1, cx: 0, cy: 0, time: 0, audioOnly: true });
-  }
+  if (typeof hook !== "function") return false;
+  hook(fx, { x: 0, y: 0, kind: fx.kind, scale: 1, cx: 0, cy: 0, time: 0, audioOnly: true });
+  return true;
 }
 
 function playEffects(effects, scale, cx, cy) {
@@ -757,12 +767,13 @@ function playEffects(effects, scale, cx, cy) {
       burst(x, y, kind, fx.name === "impact" ? 14 : 8);
       playDefaultSfx("impact");
     } else if (!ENGINE_FX.has(fx.name)) {
-      // 普通对局的 attack/shot 已在 onmessage 里按到达顺序播过；导出页没有 WS，仍在这里播。
-      if (!EXPORT && IMMEDIATE_AUDIO.has(fx.name)) continue;
+      // 即时音效在 onmessage 里按到达顺序播过才会带 __sounded。没播成（新单位皮肤还没换上）的留到这里补。
+      const sounded = !EXPORT && fx.__sounded;
+      if (sounded && IMMEDIATE_AUDIO.has(fx.name)) continue;
       const base = lookOf(kind).base;
       const hook = base && window.shotFX && window.shotFX[base] && window.shotFX[base][fx.name];
       if (typeof hook === "function") {
-        if (!EXPORT && fx.name === "shot") hook(fx, { ...ctx, visualOnly: true });
+        if (sounded && fx.name === "shot") hook(fx, { ...ctx, visualOnly: true });
         else hook(fx, ctx);
       } else if (fx.name) {
         // #region agent log
@@ -933,8 +944,11 @@ function onSocketMessage(ev) {
   if (msg && msg.phase === "select" && !!msg.team !== teamPage) {
     send({ type: "mode", team: teamPage });
   }
+  if (msg.looks) state.looks = msg.looks;
   if (Array.isArray(msg.effects)) {
-    for (const fx of msg.effects) playSoundFX(fx);
+    for (const fx of msg.effects) {
+      if (playSoundFX(fx)) fx.__sounded = true;
+    }
   }
   const leavingPaper = window.__sawPaper && !msg.paper;
   window.__sawPaper = !!msg.paper;
@@ -2011,14 +2025,17 @@ function renderArena() {
   const now = performance.now();
   const time = effectTime();
   for (const u of state.units || []) {
-    seen.add(String(u.id));
     if (!(u.radius > 0)) {
       const stale = document.getElementById(`u-${u.id}`);
-      if (stale) stale.remove();
+      if (stale) {
+        unmountLookFX(stale);
+        stale.remove();
+      }
       const tag = document.getElementById(`hp-${u.id}`);
       if (tag) tag.remove();
       continue;
     }
+    seen.add(String(u.id));
     const look = lookOf(u.kind);
     let el = document.getElementById(`u-${u.id}`);
     const layer = look.overlay && overEl ? overEl : unitsEl;
@@ -2184,7 +2201,10 @@ function renderArena() {
         continue;
       }
       const id = child.id.slice(2);
-      if (!seen.has(id)) child.remove();
+      if (!seen.has(id)) {
+        if (child.classList.contains("ball")) unmountLookFX(child);
+        child.remove();
+      }
     }
   }
 
