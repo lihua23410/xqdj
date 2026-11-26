@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,6 +24,7 @@ type chromeProc struct {
 	port      int
 	profile   string
 	log       *os.File
+	closeOnce sync.Once
 }
 
 func (m *Manager) run(j *Job) {
@@ -147,7 +150,10 @@ func launchChrome(ctx context.Context, bin, jobDir string) (*chromeProc, error) 
 		fmt.Sprintf("--remote-debugging-port=%d", port),
 		"about:blank",
 	}
-	cmd := exec.CommandContext(ctx, bin, args...)
+	// 取消导出不能绑在进程上。CommandContext 在 Windows 上只 TerminateProcess
+	// 主进程，Browser.close 还没发出去，渲染子进程就变成孤儿并锁住 Profile。
+	cmd := exec.Command(bin, args...)
+	prepareChromeProcess(cmd)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {
@@ -179,38 +185,59 @@ func (c *chromeProc) close() {
 	if c == nil {
 		return
 	}
+	c.closeOnce.Do(c.shutdown)
+}
+
+func (c *chromeProc) shutdown() {
 	if c.page != nil {
 		c.page.close()
 	}
+	asked := false
 	if c.browserWS != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		if b, err := dialCDP(c.browserWS); err == nil {
-			_ = b.call(ctx, "Browser.close", nil, nil)
+			asked = b.call(ctx, "Browser.close", nil, nil) == nil
 			b.close()
 		}
 		cancel()
 	}
-	done := make(chan struct{})
-	go func() {
-		if c.cmd != nil {
-			_ = c.cmd.Wait()
+	pid := 0
+	if c.cmd != nil && c.cmd.Process != nil {
+		pid = c.cmd.Process.Pid
+	}
+	if asked && pid != 0 {
+		deadline := time.Now().Add(3 * time.Second)
+		for chromeStillRunning(pid) && time.Now().Before(deadline) {
+			time.Sleep(20 * time.Millisecond)
 		}
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		if c.cmd != nil && c.cmd.Process != nil {
-			_ = c.cmd.Process.Kill()
-		}
-		<-done
+	}
+	// 先收进程树再 Wait。句柄还在时按 PID 杀掉的是原来的进程，不会误伤复用这个数字的新进程。
+	// 主进程已经退出时，渲染子进程的父 PID 仍指向它，也要一起收掉，否则 Profile 删不掉。
+	if pid != 0 {
+		finishChromeTree(pid, true)
+	}
+	if c.cmd != nil {
+		_ = c.cmd.Wait()
 	}
 	if c.log != nil {
 		_ = c.log.Close()
 	}
-	if c.profile != "" {
-		_ = os.RemoveAll(c.profile)
+	removeProfile(c.profile)
+}
+
+func removeProfile(dir string) {
+	if dir == "" {
+		return
 	}
+	var err error
+	for i := 0; i < 30; i++ {
+		err = os.RemoveAll(dir)
+		if err == nil || os.IsNotExist(err) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	log.Printf("导出：浏览器 Profile 仍被占用，删不掉 %s: %v", dir, err)
 }
 
 func freePort() (int, error) {
