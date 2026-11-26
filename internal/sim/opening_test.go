@@ -1,8 +1,11 @@
 package sim
 
 import (
+	"bytes"
 	"encoding/json"
+	"sync"
 	"testing"
+	"time"
 	"xqdj/character"
 	"xqdj/internal/replay"
 )
@@ -61,6 +64,82 @@ func TestQueueOpeningIsGenericAndOwnsPayload(t *testing.T) {
 	m.FinishOpening(third)
 	if len(r.Presentations) != 2 || r.Presentations[0].ID != first {
 		t.Fatal("new match mutated archived presentations")
+	}
+}
+
+func TestLiveBeatHoldsOpeningAcrossStart(t *testing.T) {
+	opening := replay.Presentation{Pack: character.KindKnight, Type: "banner", Duration: 30, Data: json.RawMessage(`{"message":"hold"}`)}
+	for trial := 0; trial < 30; trial++ {
+		m := NewMatchSeeded(uint64(trial + 1))
+		m.SetSlot(0, character.KindDummy)
+		m.SetSlot(1, character.KindDummy)
+		if _, err := m.QueueOpening(opening); err != nil {
+			t.Fatal(err)
+		}
+		stop := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					m.liveBeat()
+				}
+			}
+		}()
+		time.Sleep(2 * time.Millisecond)
+		m.Start()
+		time.Sleep(2 * time.Millisecond)
+		close(stop)
+		wg.Wait()
+
+		m.mu.Lock()
+		held := !m.openingUntil.IsZero() && time.Now().Before(m.openingUntil)
+		tm := m.time
+		frames := len(m.record)
+		m.mu.Unlock()
+		m.End()
+		if !held || tm != 0 || frames != 0 {
+			t.Fatalf("trial %d held=%v time=%v frames=%d", trial, held, tm, frames)
+		}
+	}
+}
+
+func TestLiveBeatRecordsOnlyAfterOpening(t *testing.T) {
+	m := NewMatchSeeded(4)
+	m.SetSlot(0, character.KindDummy)
+	m.SetSlot(1, character.KindDummy)
+	id, err := m.QueueOpening(replay.Presentation{Pack: character.KindKnight, Type: "banner", Duration: 30, Data: json.RawMessage(`{"message":"hold"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Start()
+	defer m.End()
+	snap := m.liveBeat()
+	var live struct {
+		Time          float64
+		Presentations []replay.Presentation
+	}
+	if err = json.Unmarshal(snap, &live); err != nil {
+		t.Fatal(err)
+	}
+	if live.Time != 0 || len(live.Presentations) != 1 || live.Presentations[0].ID != id {
+		t.Fatalf("opening snap time=%v presentations=%+v", live.Time, live.Presentations)
+	}
+	if m.time != 0 || len(m.RecordFrames()) != 0 {
+		t.Fatal("beat during opening recorded a frame")
+	}
+	m.FinishOpening(id)
+	m.liveBeat()
+	frames := m.RecordFrames()
+	if m.time != DT || len(frames) != 1 {
+		t.Fatalf("first beat after opening time=%v frames=%d", m.time, len(frames))
+	}
+	if bytes.Contains(frames[0], []byte(`"presentations"`)) {
+		t.Fatal("opening leaked into the first battle frame")
 	}
 }
 

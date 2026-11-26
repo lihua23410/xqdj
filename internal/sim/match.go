@@ -883,6 +883,10 @@ func (m *Match) End() {
 func (m *Match) Tick() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.tickLocked()
+}
+
+func (m *Match) tickLocked() {
 	m.paperFrame = false
 	if m.phase != PhaseRunning {
 		return
@@ -3153,22 +3157,27 @@ func (m *Match) Loop(broadcast func([]byte), halt <-chan struct{}) {
 		case <-halt:
 			return
 		case <-ticker.C:
-			if m.holdingOpening() {
-				broadcast(m.SnapshotJSON())
-				continue
-			}
-			m.Tick()
-			m.mu.Lock()
-			snap := m.snapshotJSONLocked(true)
-			recorded := snap
-			if m.takeOpeningLocked() != nil {
-				recorded = m.snapshotJSONLocked(false)
-			}
-			m.recordSnapshotLocked(recorded)
-			m.mu.Unlock()
-			broadcast(snap)
+			broadcast(m.liveBeat())
 		}
 	}
+}
+
+// liveBeat 在同一把锁里决定本拍继续压住开场，还是推进并录制真局。
+// Start 只能整段发生在这把锁之外，不能在判断之后、Tick 之前把演出武装起来。
+func (m *Match) liveBeat() []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.holdingOpeningLocked() {
+		return m.snapshotJSONLocked(true)
+	}
+	m.tickLocked()
+	snap := m.snapshotJSONLocked(true)
+	recorded := snap
+	if m.takeOpeningLocked() != nil {
+		recorded = m.snapshotJSONLocked(false)
+	}
+	m.recordSnapshotLocked(recorded)
+	return snap
 }
 
 // recordSnapshot 把本拍观众快照留在本场里。只从 Loop 调用，保证一场只有一条时间线。

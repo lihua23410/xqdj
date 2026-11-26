@@ -43,6 +43,10 @@ func (m *Match) takeOpeningLocked() []replay.Presentation {
 func (m *Match) holdingOpening() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.holdingOpeningLocked()
+}
+
+func (m *Match) holdingOpeningLocked() bool {
 	if m.openingUntil.IsZero() {
 		return false
 	}
