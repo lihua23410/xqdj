@@ -191,7 +191,7 @@ type 铭刻 struct {
 
 	traceAt   []float64 // 时痕每层的到期时刻
 	guardAt   []float64 // 长守每层的到期时刻（池子另记）
-	guardPool float64   // 长守的额外血量池（引擎 Absorb）
+	guardPool float64   // 长守剩余护盾。每拍先对齐 Absorb，再按层削减或叠加。
 
 	rec  record
 	have bool
@@ -218,6 +218,8 @@ func (a *铭刻) tick(ctx unit.Context, s unit.Sense) {
 	a.x, a.y = s.Self.X, s.Self.Y
 	a.hp, a.maxHP = s.Self.HP, s.Self.MaxHP
 	a.faceX, a.faceY = s.Self.FaceX, s.Self.FaceY
+	// 挨打扣的是引擎里的 Absorb。池子不跟这一拍的话，掉层或补盾会按满额旧账把盾写回去。
+	a.guardPool = s.Self.Absorb
 	if !a.booted {
 		a.boot(ctx, s)
 	}

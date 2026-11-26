@@ -319,10 +319,58 @@ func TestGuardGivesExtraHealthPool(t *testing.T) {
 	if len(r.a.guardAt) != 1 {
 		t.Fatalf("长守该记一层到期时刻，实得 %d", len(r.a.guardAt))
 	}
-	// 到点之后整层掉光，池子清零。
+	// 到点之后整层掉光，池子清零。引擎里的护盾还在，削的是这一条。
+	r.self.Absorb = guardPool
+	r.a.plan = nil
+	r.a.winStart = windowStart(1 + buffLife + 0.1)
 	r.sense(1 + buffLife + 0.1)
 	if r.a.guardPool > 1e-9 || len(r.a.guardAt) != 0 {
 		t.Fatalf("长守过期后池子该清零，实得 pool=%v layers=%d", r.a.guardPool, len(r.a.guardAt))
+	}
+}
+
+func TestBrokenGuardDoesNotRespawn(t *testing.T) {
+	r := newRig(t)
+	r.a.guardAt = []float64{20, 25}
+	r.a.guardPool = 30
+	r.self.Absorb = 0
+	r.a.plan = nil
+	r.a.winStart = windowStart(20)
+
+	cmds := r.sense(20)
+	if math.Abs(r.a.guardPool) > 1e-9 || len(r.a.guardAt) != 1 {
+		t.Fatalf("被打空的第一层到期后该只掉层、池子保持 0，实得 pool=%v layers=%d", r.a.guardPool, len(r.a.guardAt))
+	}
+	if hasCmd(cmds, func(c unit.SetAbsorb) bool { return c.Amount > 1e-9 }) {
+		t.Fatalf("被打空的长守到期不该刷回护盾: %v", cmds)
+	}
+
+	// 真实剩余被打掉 10 点时，掉层只从剩下的盾里削，不从满额旧账里削。
+	r.a.guardAt = []float64{30, 40}
+	r.a.guardPool = 30
+	r.self.Absorb = 20
+	r.a.plan = nil
+	r.a.winStart = windowStart(30)
+	cmds = r.sense(30)
+	if math.Abs(r.a.guardPool-5) > 1e-9 {
+		t.Fatalf("该从真实剩余 20 削掉一层，实得 %v", r.a.guardPool)
+	}
+	if !hasCmd(cmds, func(c unit.SetAbsorb) bool { return math.Abs(c.Amount-5) < 1e-9 }) {
+		t.Fatalf("该写下剩余 5: %v", cmds)
+	}
+
+	// 盾已经是 0 时再补一张，只加这一层的 15，不把被打掉的旧盾加回来。
+	r.a.guardPool = 30
+	r.self.Absorb = 0
+	r.a.hand = []uint8{cardGuard}
+	r.a.plan = []float64{31}
+	r.a.lastPlayAt = 0
+	cmds = r.sense(31)
+	if math.Abs(r.a.guardPool-guardPool) > 1e-9 {
+		t.Fatalf("补盾该只剩新的一层 %v，实得 %v", guardPool, r.a.guardPool)
+	}
+	if !hasCmd(cmds, func(c unit.SetAbsorb) bool { return math.Abs(c.Amount-guardPool) < 1e-9 }) {
+		t.Fatalf("补盾该写下 %v: %v", guardPool, cmds)
 	}
 }
 
