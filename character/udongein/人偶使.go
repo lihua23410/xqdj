@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"xqdj/internal/unit"
 )
 
@@ -200,7 +201,7 @@ type 人偶使 struct {
 	liveDolls int
 
 	job      job
-	abortGen int
+	abortGen atomic.Int64
 	fsSeq    uint32
 
 	deck     []uint8
@@ -260,7 +261,7 @@ func (a *人偶使) endRush(ctx unit.Context, now float64) {
 	a.restoreCruise(ctx)
 	a.job = job{}
 	a.lockUntil = now
-	a.abortGen++
+	a.abortGen.Add(1)
 }
 
 func (a *人偶使) enterBreak() {
@@ -411,6 +412,8 @@ func (a *人偶使) lockUntilAt(now float64, sk uint8) {
 }
 
 func (a *人偶使) ensureRNG(ctx unit.Context) {
+	a.cardMu.Lock()
+	defer a.cardMu.Unlock()
 	if a.rng == nil {
 		a.rng = unit.NewRNG(ctx.Stream)
 	}
@@ -568,6 +571,11 @@ func faceOf(a *人偶使, s unit.Sense, enemy unit.Snapshot) (float64, float64) 
 }
 
 func randDir(a *人偶使) (float64, float64) {
+	a.cardMu.Lock()
+	defer a.cardMu.Unlock()
+	if a.rng == nil {
+		return 1, 0
+	}
 	ang := a.rng.Float64() * 2 * math.Pi
 	return math.Cos(ang), math.Sin(ang)
 }

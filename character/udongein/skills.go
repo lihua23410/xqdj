@@ -166,7 +166,7 @@ func (a *人偶使) castSpell24(ctx unit.Context, s unit.Sense, enemy unit.Snaps
 		py := s.Self.Y + math.Sin(ang)*spell24Ring
 		spawnDollAt(ctx, s, px, py, dollSpec{
 			mode: dollStrike, pose: poseAh, ang: ang, follow: true,
-			until: s.Time + spell24Wind + spell24Life, bornGen: a.abortGen,
+			until: s.Time + spell24Wind + spell24Life, bornGen: int(a.abortGen.Load()),
 		})
 	}
 	a.rush(ctx, ux, uy, spell24Rush)

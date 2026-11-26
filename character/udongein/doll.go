@@ -193,7 +193,7 @@ func (d *人偶) onSense(ctx unit.Context, s unit.Sense) {
 		d.beginRecall(ctx)
 	}
 	if d.spec.follow {
-		if o := ownerOf(ctx.State, d.owner); o != nil && o.abortGen != d.spec.bornGen {
+		if o := ownerOf(ctx.State, d.owner); o != nil && o.abortGen.Load() != int64(d.spec.bornGen) {
 			d.spec.follow = false
 			d.spec.until = 0
 			d.spec.arriveAt = 0
@@ -626,6 +626,7 @@ type 人偶炸弹 struct {
 	slot  int
 	dead  bool
 	x, y  float64
+	hits  []unit.Snapshot
 }
 
 func newBomb(info unit.SpawnInfo) *人偶炸弹 {
@@ -645,6 +646,10 @@ func (b *人偶炸弹) Handle(ctx unit.Context, ev unit.Event) {
 		b.x, b.y = e.Self.X, e.Self.Y
 		pose := poseAi
 		ctx.Out <- unit.FX{Name: "pose", Kind: ctx.Kind, UnitID: ctx.ID, Amount: float64(pose), Slot: b.slot}
+		if b.spec.kind == bombSeek && len(b.hits) > 0 {
+			b.explode(ctx, e.Self.X, e.Self.Y, b.withHits(e))
+			return
+		}
 		if b.spec.kind == bombSeek {
 			dx, dy := b.spec.tx-e.Self.X, b.spec.ty-e.Self.Y
 			if math.Hypot(dx, dy) <= bombR+8 {
@@ -657,13 +662,45 @@ func (b *人偶炸弹) Handle(ctx unit.Context, ev unit.Event) {
 		}
 		if unit.Hittable(e.Other, b.slot) {
 			if b.spec.kind == bombSeek {
-				b.explode(ctx, b.x, b.y, unit.Sense{Self: unit.Snapshot{X: b.x, Y: b.y}, Nearby: []unit.Snapshot{e.Other}})
+				b.noteHit(e.Other)
 				return
 			}
 			deal(ctx, b.owner, e.Other.ID, b.spec.dmg)
 			b.die(ctx)
 		}
 	}
+}
+
+func (b *人偶炸弹) noteHit(o unit.Snapshot) {
+	for i := range b.hits {
+		if b.hits[i].ID == o.ID {
+			b.hits[i] = o
+			return
+		}
+	}
+	b.hits = append(b.hits, o)
+}
+
+func (b *人偶炸弹) withHits(s unit.Sense) unit.Sense {
+	if len(b.hits) == 0 {
+		return s
+	}
+	near := make([]unit.Snapshot, len(s.Nearby), len(s.Nearby)+len(b.hits))
+	copy(near, s.Nearby)
+	for i := range b.hits {
+		seen := false
+		for j := range near {
+			if near[j].ID == b.hits[i].ID {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			near = append(near, b.hits[i])
+		}
+	}
+	s.Nearby = near
+	return s
 }
 
 func (b *人偶炸弹) explode(ctx unit.Context, x, y float64, s unit.Sense) {

@@ -140,6 +140,8 @@ func (a *人偶使) pickCast(s unit.Sense, enemy *unit.Snapshot) uint8 {
 	if len(cands) == 0 {
 		return SkillNone
 	}
+	a.cardMu.Lock()
+	defer a.cardMu.Unlock()
 	if a.rng == nil {
 		return cands[0]
 	}
