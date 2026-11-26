@@ -1092,28 +1092,14 @@ func (m *Match) installFieldLocked() {
 
 func (m *Match) liveFieldLocked() unitpkg.Field {
 	f := m.spec.toUnitField()
-	hard := make([]*barrier, 0, 1)
+	f.Walls = nil
 	for _, w := range m.walls {
-		if w.hard && w.field {
-			hard = append(hard, w)
-		}
-	}
-	hi := 0
-	for i := range f.Walls {
-		if !f.Walls[i].Kind.Hard() || hi >= len(hard) {
-			continue
-		}
-		w := hard[hi]
-		hi++
-		f.Walls[i].X1, f.Walls[i].Y1 = w.a.X, w.a.Y
-		f.Walls[i].X2, f.Walls[i].Y2 = w.b.X, w.b.Y
-	}
-	for _, w := range m.walls {
+		kind := unitpkg.WallCapsule
 		if w.hard {
-			continue
+			kind = unitpkg.WallHard
 		}
 		f.Walls = append(f.Walls, unitpkg.FieldWall{
-			Kind: unitpkg.WallCapsule,
+			Kind: kind,
 			X1:   w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
 			Radius: w.radius,
 		})

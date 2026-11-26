@@ -388,3 +388,50 @@ func TestWideHexBootsOppositeVortices(t *testing.T) {
 		t.Fatalf("spin=%v want %v", bar.spin, wantSpin)
 	}
 }
+
+func TestLiveFieldDropsBrokenCapsuleAndKeepsPlacedHardWall(t *testing.T) {
+	m := NewMatchSeeded(1)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.spec.caps = []fieldCapSpec{{x1: -40, y1: 0, x2: 40, y2: 0, radius: 8}}
+	m.installFieldLocked()
+	if n := countFieldCapsules(m.liveFieldLocked(), -40, 40); n != 1 {
+		t.Fatalf("capsule copies=%d", n)
+	}
+	var id uint64
+	for _, w := range m.walls {
+		if !w.hard && math.Abs(w.a.X+40) < 1e-6 {
+			id = w.id
+		}
+	}
+	m.breakWallLocked(id, false)
+	if n := countFieldCapsules(m.liveFieldLocked(), -40, 40); n != 0 {
+		t.Fatalf("broken capsule still in the live field, copies=%d", n)
+	}
+	m.placeWallLocked(unitpkg.PlaceWall{
+		X1: 0, Y1: -30, X2: 0, Y2: 30, Radius: 10, Hard: true, Life: -1,
+	})
+	f := m.liveFieldLocked()
+	found := false
+	for _, w := range f.Walls {
+		if w.Kind.Hard() && math.Abs(w.X1) < 1e-6 && math.Abs(w.Y1+30) < 1e-6 && math.Abs(w.Y2-30) < 1e-6 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("placed hard wall missing: %+v", f.Walls)
+	}
+	if f.Walkable(0, 0, 18) {
+		t.Fatal("the placed hard wall should block the center")
+	}
+}
+
+func countFieldCapsules(f unitpkg.Field, x1, x2 float64) int {
+	n := 0
+	for _, w := range f.Walls {
+		if w.Kind.Capsule() && math.Abs(w.X1-x1) < 1e-6 && math.Abs(w.X2-x2) < 1e-6 {
+			n++
+		}
+	}
+	return n
+}
