@@ -468,6 +468,7 @@ function runLookGuides(scale, cx, cy, seen) {
     time: effectTime(),
     effects: state.effects || [],
     units: state.units || [],
+    walls: state.walls || [],
     ensureGuide,
     placeSeg,
     seenGuides: seen,

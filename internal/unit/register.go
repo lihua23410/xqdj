@@ -6,6 +6,8 @@ type Spec struct {
 	Radius         float64
 	MaxHP          float64
 	Speed          float64
+	Acceleration   float64 // Positive values replace cruise recovery with continuous acceleration.
+	TurnSpeedLoss  float64 // Fraction of speed lost at 180°, prorated by the turn angle.
 	Vision         float64
 	ObserveThreats bool
 	Fighter        bool

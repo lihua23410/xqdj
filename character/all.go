@@ -59,6 +59,7 @@ import (
 	"xqdj/character/tachi"
 	"xqdj/character/tanyongchen"
 	"xqdj/character/threshold"
+	"xqdj/character/tide"
 	"xqdj/character/tokei"
 	"xqdj/character/tokei_inscribed"
 	"xqdj/character/twin"
@@ -269,6 +270,7 @@ const (
 	KindTan                = 谭泳辰.KindTan
 	KindTanKunaiShot       = 谭泳辰.KindTanKunaiShot
 	KindThreshold          = 阈值.KindThreshold
+	KindTide               = tide.KindTide
 	KindTokei              = 时计.KindTokei
 	KindTokeiArc           = 时计.KindTokeiArc
 	KindTokeiMoment        = 时计.KindTokeiMoment

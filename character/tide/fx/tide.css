@@ -1,0 +1,90 @@
+.ball.look-tide {
+  overflow: visible;
+  background:
+    radial-gradient(ellipse at 32% 24%, #ecffff 0 6%, #8ce8ee 12%, transparent 28%),
+    radial-gradient(ellipse at 68% 74%, #3ecce055 0 18%, transparent 45%),
+    radial-gradient(ellipse at 44% 38%, #34a6b8, #0c5874 56%, #052236 86%);
+  border: 1.5px solid #82d4e2;
+  box-shadow:
+    inset -3px -5px 10px #021828c4,
+    inset 2px 2px 6px #c6ffff52,
+    0 0 10px #57d5de66;
+}
+
+.tide-art {
+  position: absolute;
+  inset: -38%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.tide-art svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.tide-art .tide-swirl-a {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: rotate(var(--tide-rot-a, 0rad));
+}
+
+.tide-art .tide-swirl-b {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: rotate(var(--tide-rot-b, 0rad));
+}
+
+.tide-art .tide-bow {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: rotate(var(--tide-ang, 0rad));
+  opacity: var(--tide-bow-op, 0);
+}
+
+.tide-art .tide-shield-ring {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: scale(var(--tide-shield-scale, 0.94));
+  opacity: var(--tide-shield-op, 0);
+}
+
+.tide-art .tide-shield-ring path {
+  stroke-width: var(--tide-shield-w, 1.8px);
+}
+
+.ball.look-tide.tide-surfing {
+  border-color: #d6ffff;
+  box-shadow:
+    inset -3px -5px 10px #04253ac4,
+    inset 0 0 9px #bffff780,
+    0 0 16px #8bf7f0b8;
+}
+
+.ball.look-tide.tide-ebbing {
+  border-color: #7ee3ff;
+  box-shadow:
+    inset -2px -4px 12px #021226e0,
+    0 0 16px #46b6ffaa;
+}
+
+.ball.look-tide.tide-shedding .tide-shield-ring {
+  filter: brightness(1.5) drop-shadow(0 0 7px #e8ffff);
+}
+
+.guide.tide-floor {
+  border: 0;
+  border-radius: 0;
+  transform: none;
+  background: none;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.guide.tide-floor canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

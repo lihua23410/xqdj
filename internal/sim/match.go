@@ -48,6 +48,9 @@ type unit struct {
 	threats         []unitpkg.Threat
 	cruise          float64
 	cruiseFS        *cruiseFS
+	acceleration    float64
+	turnSpeedLoss   float64
+	accelerationDir vec
 	velM            float64 // 已经乘进当前速度的巡航 M，出生为 1
 	fsList          []impulseFS
 	decelT          float64
@@ -729,8 +732,8 @@ func (m *Match) startLocked(scheduledID string) {
 			}
 			p := m.placeLocked(spec.Radius, side, spots, sep)
 			ang := m.rng.Float64() * 2 * math.Pi
-			v := vec{math.Cos(ang) * spec.Speed, math.Sin(ang) * spec.Speed}
-			m.spawnFighterLocked(kind, side, seat, p, v)
+			dir := vec{math.Cos(ang), math.Sin(ang)}
+			m.spawnFighterLocked(kind, side, seat, p, dir.mul(spec.Speed), dir)
 			spots = append(spots, spawnSpot{p: p, r: spec.Radius, side: side})
 		}
 	}
@@ -975,7 +978,16 @@ func (m *Match) decelerateLocked(dt float64) {
 	const rise = drop / 2
 	for _, id := range m.order {
 		u := m.units[id]
-		if u == nil || !u.solid || u.cruiseFS == nil {
+		if u == nil || !u.solid {
+			continue
+		}
+		if u.acceleration > 0 {
+			if !u.stun && !u.stand && !u.skipDecel() {
+				u.setVel(u.v.add(u.accelerationDir.mul(u.acceleration * u.cruiseMul() * dt)))
+			}
+			continue
+		}
+		if u.cruiseFS == nil {
 			continue
 		}
 		if u.skipDecel() {
@@ -1158,9 +1170,12 @@ func (m *Match) killLocked(u *unit) {
 	close(u.stop)
 }
 
-func (m *Match) spawnFighterLocked(kind string, slot, seat int, p, v vec) {
+func (m *Match) spawnFighterLocked(kind string, slot, seat int, p, v, dir vec) {
 	u := m.addUnitLocked(kind, p, v, 0, slot)
 	if u != nil {
+		if u.acceleration > 0 {
+			u.accelerationDir = dir
+		}
 		u.seat = seat
 		m.noteBirthLocked(u)
 	}
@@ -1212,6 +1227,8 @@ func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot 
 		vision:         spec.Vision,
 		observeThreats: spec.ObserveThreats,
 		cruise:         spec.Speed,
+		acceleration:   spec.Acceleration,
+		turnSpeedLoss:  spec.TurnSpeedLoss,
 		velM:           1,
 		actor:          actor,
 		inbox:          newActorInbox(m.actorWork),
@@ -1239,6 +1256,9 @@ func (m *Match) addUnitWithDataLocked(kind string, p, v vec, owner uint64, slot 
 		u.hp = spec.StartHP
 	}
 	u.zeroOwnedKind = spec.ZeroVelocityWhileOwned
+	if u.acceleration > 0 {
+		u.accelerationDir = v.norm()
+	}
 	if spec.Role == unitpkg.RoleFighter || spec.Cruise {
 		u.cruiseFS = newCruiseFS(v, spec.Speed)
 		u.syncCruise()
@@ -1272,6 +1292,25 @@ func (u *unit) aimFace() {
 func (u *unit) setVel(v vec) {
 	if u.velocityLocked {
 		v = vec{}
+	}
+	if u.acceleration > 0 && v.len2() > 1e-12 {
+		u.accelerationDir = v.norm()
+		if u.turnSpeedLoss > 0 && u.v.len2() > 1e-12 && len(u.fsList) == 0 {
+			cross := u.v.X*v.Y - u.v.Y*v.X
+			angle := math.Atan2(math.Abs(cross), u.v.dot(v))
+			v = v.mul(math.Max(0, 1-u.turnSpeedLoss*angle/math.Pi))
+		}
+	}
+	u.v = v
+	u.aimFace()
+}
+
+func (u *unit) setVelNoTurnLoss(v vec) {
+	if u.velocityLocked {
+		v = vec{}
+	}
+	if u.acceleration > 0 && v.len2() > 1e-12 {
+		u.accelerationDir = v.norm()
 	}
 	u.v = v
 	u.aimFace()
@@ -1576,7 +1615,7 @@ func (m *Match) applyCmdLocked(cmd unitpkg.Cmd) {
 		if u == nil || u.stopped || !u.solid {
 			return
 		}
-		u.setVel(u.v.add(vec{c.AX, c.AY}.mul(DT)))
+		u.setVelNoTurnLoss(u.v.add(vec{c.AX, c.AY}.mul(DT)))
 	case unitpkg.Teleport:
 		u := m.units[c.UnitID]
 		if u == nil || u.stopped {
@@ -2486,7 +2525,7 @@ func (m *Match) wallViewsLocked() []unitpkg.WallView {
 		out = append(out, unitpkg.WallView{
 			ID: w.id, OwnerID: w.owner, Slot: w.slot,
 			X1: w.a.X, Y1: w.a.Y, X2: w.b.X, Y2: w.b.Y,
-			Radius: w.radius, VisionBlock: w.visionBlock,
+			Radius: w.radius, Square: w.square, VisionBlock: w.visionBlock,
 		})
 	}
 	return out

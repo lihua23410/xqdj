@@ -216,6 +216,7 @@ winrate.md               无头对战胜率（生成物；改一只球后可用 
 | `tachi` | `太刀` | 140 | 9999 |
 | `tanyongchen` | `谭泳辰老先生` | 165 | 9999 |
 | `threshold` | `阈值` | 148 | 9999 |
+| `tide` | `潮` | 持续加速 | 9999 |
 | `tokei` | `时计` | 170 | 9999 |
 | `tokei_inscribed` | `时计·铭刻` | 165 | 400 |
 | `twin` | `无下限术士` | 200 | 9999 |
@@ -558,7 +559,7 @@ window.lookFX.glitch = {
 };
 ```
 
-`tick` 的 `ctx` 有 `now`、`scale`、`cx`、`cy`、`units`、`fxRoot`、`spawnGhost`。`guide` 的 `ctx` 有 `scale`、`cx`、`cy`、`units`、`ensureGuide`、`placeSeg`、`seenGuides`。
+`tick` 的 `ctx` 有 `now`、`scale`、`cx`、`cy`、`units`、`fxRoot`、`spawnGhost`。`guide` 的 `ctx` 有 `scale`、`cx`、`cy`、`units`、`walls`、`ensureGuide`、`placeSeg`、`seenGuides`。
 
 4. 把短名填进该 kind 的 `Look.FX`。随从可以和主人不同皮肤（残影用 `"glitch-still"`）。
 5. **`window.lookFX` 的短名是全局的**，不按包隔离。不要和别的球撞。`Look.FX` 里已经占用：`archer`、`arrow`、`assassin`、`axe`、`bloodpact`、`bloodpact-bat`、`bond`、`cage`、`chair`、`chamber-lock`、`charcoal`、`chroma`、`crescent`、`dealer`、`drug`、`engine`、`fisher`、`fisher-fish`、`fisher-flood`、`fisher-pond`、`gallows`、`glitch`、`glitch-still`、`godfather`、`hammer`、`hammer-doll`、`hero`、`hero-friend`、`hero-relic`、`hero-slime`、`integrated`、`integrated-shot`、`knight`、`knight-arc`、`maggot`、`maggot-baby`、`maggot-egg`、`maggot-fly`、`mask1`、`mask2`、`mask3`、`meander`、`meander-lit`、`meander-ring`、`mezhou-me`、`mezhou-void`、`mezhou-zhou`、`minion`、`miu`、`miu-arc`、`miu-shot`、`moon`、`nail`、`ningyushi`、`ningyushi-beam`、`ningyushi-bomb`、`ningyushi-doll`、`ningyushi-shot`、`ospf`、`ospf-node`、`ospf-shot`、`pastor`、`pastor-glyph`、`piper`、`prisoner`、`pull`、`push`、`radar`、`radar-shell`、`radar-shell-sm`、`radar-vet`、`rat`、`reaper`、`relay`、`relay-node`、`relay-shot`、`rocket`、`shadow`、`sickle`、`slash`、`sniper`、`sot`、`sot-stain`、`sot-wine`、`subpoena`、`tachi`、`tan-bell`、`tan-domain`、`tan-kunai`、`tan-milk`、`tanyongchen`、`ticket`、`tokei`、`tokei-moment`、`veteran`、`volcano-crater`、`volcano-lava`、`vortex`、`waller`、`warden`、`warden-shard`、`warden-shield`、`wolf`、`wolf-arc`、`xiaoyaoge`、`xiaoyaoge-gift`、`youth`、`youth-shot`。一次性特效的名字按包隔离，皮肤短名不会。

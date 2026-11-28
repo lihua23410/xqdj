@@ -37,7 +37,7 @@ type Snapshot struct {
 	Absorb float64 `json:"absorb,omitempty"`
 }
 
-// WallView 是感知里看见的一截墙。不含寿命和伤害，只够认主人、端点和粗细。
+// WallView 是感知里的一截墙，包含归属和形状，不含寿命和伤害。
 type WallView struct {
 	ID      uint64
 	OwnerID uint64
@@ -45,6 +45,7 @@ type WallView struct {
 	X1, Y1  float64
 	X2, Y2  float64
 	Radius  float64
+	Square  bool
 	// VisionBlock 挡视线：只影响 Seek/SeekIf 的索敌检测。场地预放墙不带，永远透明。
 	VisionBlock bool
 }
